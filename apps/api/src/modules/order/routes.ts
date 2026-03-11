@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
-import { canTransition } from '@shopbot/shared';
+import { canTransition } from '@sellgram/shared';
 import { notifyOrderStatus } from '../../bot/bot-manager.js';
 
 const updateStatusSchema = z.object({

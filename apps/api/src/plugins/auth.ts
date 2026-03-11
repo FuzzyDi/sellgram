@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fp from 'fastify-plugin';
 import { verifyAccessToken } from '../lib/jwt.js';
-import type { JwtPayload } from '@shopbot/shared';
+import type { JwtPayload } from '@sellgram/shared';
 
 declare module 'fastify' {
   interface FastifyInstance {

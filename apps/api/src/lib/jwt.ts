@@ -1,6 +1,6 @@
 import * as jose from 'jose';
 import { getConfig } from '../config/index.js';
-import type { JwtPayload } from '@shopbot/shared';
+import type { JwtPayload } from '@sellgram/shared';
 
 function getSecretKey(): Uint8Array {
   return new TextEncoder().encode(getConfig().JWT_SECRET);

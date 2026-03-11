@@ -126,8 +126,7 @@ sellgram/
 
 ## Current Notes
 
-- Package names still use the internal `@shopbot/*` naming convention.
-- The root package name in [package.json](package.json) is still `shopbot`.
+- Workspace packages use the `@sellgram/*` scope.
 - GitHub Actions CI is configured in [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ## Demo Access

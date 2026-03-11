@@ -1,6 +1,6 @@
 ﻿import { FastifyInstance } from 'fastify';
 import prisma from '../../lib/prisma.js';
-import { PLANS, type PlanCode } from '@shopbot/shared';
+import { PLANS, type PlanCode } from '@sellgram/shared';
 import { getConfig } from '../../config/index.js';
 
 export default async function subscriptionRoutes(fastify: FastifyInstance) {
