@@ -15,4 +15,4 @@ coverage/
 artifacts/
 .cloudflared/
 deploy/production/ssl/
-{packages/
+[{]packages/
