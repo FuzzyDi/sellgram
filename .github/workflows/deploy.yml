@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy Windows
 
 on:
   workflow_dispatch:
@@ -7,14 +7,18 @@ on:
         description: Git ref to deploy
         required: false
         default: main
+      skip_build:
+        description: Skip docker build on server
+        required: false
+        default: "false"
 
 concurrency:
-  group: production-deploy
+  group: production-deploy-windows
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy to production
+    name: Deploy to Windows Server
     runs-on: ubuntu-latest
     environment: production
 
@@ -34,24 +38,45 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Sync project to server
+      - name: Build deployment archive
         run: |
-          rsync -az --delete \
-            --exclude ".git" \
-            --exclude "node_modules" \
-            --exclude "artifacts" \
-            --exclude ".cloudflared" \
-            --exclude "deploy/production/ssl" \
-            -e "ssh -p ${{ secrets.SSH_PORT }}" \
-            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOY_PATH }}/"
+          tar \
+            --exclude=".git" \
+            --exclude="node_modules" \
+            --exclude="artifacts" \
+            --exclude=".cloudflared" \
+            --exclude="deploy/production/ssl" \
+            -czf sellgram-deploy.tgz .
+
+      - name: Upload deployment archive
+        run: |
+          scp -P "${{ secrets.SSH_PORT }}" sellgram-deploy.tgz "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:sellgram-deploy.tgz"
 
       - name: Upload production env file
         run: |
-          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "mkdir -p '${{ vars.DEPLOY_PATH }}/deploy/production'"
-          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "cat > '${{ vars.DEPLOY_PATH }}/deploy/production/.env.prod'" <<'EOF'
+          cat > .env.prod <<'EOF'
           ${{ secrets.PROD_ENV_FILE }}
           EOF
+          scp -P "${{ secrets.SSH_PORT }}" .env.prod "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:sellgram.env.prod"
 
-      - name: Run production deploy script
+      - name: Deploy on Windows server
         run: |
-          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "cd '${{ vars.DEPLOY_PATH }}/deploy/production' && sudo bash ./deploy.sh"
+          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" '
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "
+              $ErrorActionPreference = \"Stop\"
+              $deployPath = \"${{ vars.DEPLOY_PATH }}\"
+              $archivePath = Join-Path $HOME \"sellgram-deploy.tgz\"
+              $envUploadPath = Join-Path $HOME \"sellgram.env.prod\"
+              New-Item -ItemType Directory -Force -Path $deployPath | Out-Null
+              tar -xzf $archivePath -C $deployPath
+              Copy-Item $envUploadPath (Join-Path $deployPath \"deploy/production/.env.prod\") -Force
+              Set-Location $deployPath
+              if (\"${{ inputs.skip_build }}\" -eq \"true\") {
+                & powershell -NoProfile -ExecutionPolicy Bypass -File \"deploy/production/Deploy-Windows.ps1\" -EnvFile \".env.prod\" -SkipBuild
+              } else {
+                & powershell -NoProfile -ExecutionPolicy Bypass -File \"deploy/production/Deploy-Windows.ps1\" -EnvFile \".env.prod\"
+              }
+              Remove-Item $archivePath -Force -ErrorAction SilentlyContinue
+              Remove-Item $envUploadPath -Force -ErrorAction SilentlyContinue
+            "
+          '
