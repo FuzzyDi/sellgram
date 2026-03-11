@@ -1,0 +1,1 @@
+*/5 * * * * cd /opt/sellgram/deploy/production && ./monitor-health.sh >> /var/log/sellgram-health.log 2>&1

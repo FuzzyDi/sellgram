@@ -1,0 +1,18 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useEffect, useState } from 'react';
+import { api } from '../api/client';
+import { BottomNav } from './Catalog';
+import { useMiniI18n } from '../i18n';
+export default function Loyalty() {
+    const { tr, locale } = useMiniI18n();
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    useEffect(() => {
+        api.getLoyalty().then(setData).catch(() => { }).finally(() => setLoading(false));
+    }, []);
+    if (loading) {
+        return (_jsxs("div", { style: { padding: 16 }, children: [_jsx("div", { className: "skeleton", style: { height: 28, width: 100, marginBottom: 16 } }), _jsx("div", { className: "skeleton", style: { height: 160, borderRadius: 20 } })] }));
+    }
+    const txns = data?.transactions || [];
+    return (_jsxs("div", { className: "anim-fade", style: { paddingBottom: 'calc(var(--nav-h) + 12px)' }, children: [_jsx("div", { className: "glass", style: { position: 'sticky', top: 0, zIndex: 20, padding: 16, borderBottom: '0.5px solid var(--divider)' }, children: _jsx("h1", { style: { fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }, children: tr('Баллы', 'Ballar') }) }), _jsxs("div", { className: "anim-scale", style: { margin: '12px 12px 16px', padding: '28px 24px', borderRadius: 20, background: 'linear-gradient(145deg, #00875a, #00b96b)', color: '#fff', textAlign: 'center', position: 'relative', overflow: 'hidden' }, children: [_jsx("div", { style: { position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.1)' } }), _jsx("div", { style: { position: 'absolute', bottom: -30, left: -10, width: 60, height: 60, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' } }), _jsx("p", { style: { fontSize: 14, opacity: 0.85, fontWeight: 500 }, children: tr('Ваш баланс', 'Balansingiz') }), _jsx("p", { style: { fontSize: 48, fontWeight: 800, marginTop: 4, letterSpacing: -1 }, children: data?.balance || 0 }), _jsx("p", { style: { fontSize: 14, opacity: 0.75, marginTop: 2 }, children: tr('баллов', 'ball') }), data?.config?.isEnabled && data?.config?.pointValue && _jsxs("p", { style: { fontSize: 12, opacity: 0.6, marginTop: 10 }, children: ["1 ", tr('балл', 'ball'), " = ", data.config.pointValue, " ", tr('сум', "so'm"), " \u2022 ", tr('используйте при оформлении', 'buyurtmada ishlating')] })] }), txns.length > 0 && (_jsxs("div", { style: { padding: '0 12px' }, children: [_jsx("h3", { style: { fontWeight: 700, fontSize: 16, marginBottom: 10, padding: '0 4px' }, children: tr('История', 'Tarix') }), txns.map((t, i) => (_jsxs("div", { className: `anim-fade anim-d${Math.min(i, 5)}`, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: 'var(--sec)', borderRadius: 'var(--radius)', marginBottom: 6 }, children: [_jsxs("div", { children: [_jsx("p", { style: { fontSize: 14, fontWeight: 500 }, children: t.description }), _jsx("p", { style: { color: 'var(--hint)', fontSize: 12, marginTop: 2 }, children: new Date(t.createdAt).toLocaleDateString(locale) })] }), _jsxs("span", { style: { fontWeight: 700, fontSize: 16, color: t.points > 0 ? 'var(--success)' : 'var(--danger)' }, children: [t.points > 0 ? '+' : '', t.points] })] }, i)))] })), txns.length === 0 && (_jsx("div", { style: { textAlign: 'center', padding: '32px 16px', color: 'var(--hint)' }, children: _jsx("p", { style: { fontSize: 14 }, children: tr('Баллы начисляются за завершённые заказы', 'Ballar yakunlangan buyurtmalar uchun beriladi') }) })), _jsx(BottomNav, { active: "loyalty" })] }));
+}

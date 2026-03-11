@@ -1,0 +1,592 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Plan {
+  FREE
+  PRO
+  BUSINESS
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  PREPARING
+  READY
+  SHIPPED
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+}
+
+enum PaymentProvider {
+  CASH
+  MANUAL_TRANSFER
+  CLICK
+  PAYME
+  UZUM
+  STRIPE
+  CUSTOM
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum DeliveryType {
+  PICKUP
+  LOCAL
+  NATIONAL
+}
+
+enum LoyaltyTxnType {
+  EARN
+  REDEEM
+  ADJUST
+  EXPIRE
+}
+
+enum POStatus {
+  DRAFT
+  ORDERED
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+// ============================================================
+// TENANT & AUTH
+// ============================================================
+
+model Tenant {
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique
+  plan          Plan      @default(FREE)
+  planExpiresAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  users          User[]
+  stores         Store[]
+  products       Product[]
+  categories     Category[]
+  customers      Customer[]
+  orders         Order[]
+  deliveryZones  DeliveryZone[]
+  loyaltyConfig  LoyaltyConfig?
+  purchaseOrders PurchaseOrder[]
+  invoices       Invoice[]
+  paymentMethods StorePaymentMethod[]
+  broadcasts     BroadcastCampaign[]
+
+  @@map("tenants")
+}
+
+model User {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email           String   @unique
+  passwordHash    String
+  name            String
+  role            UserRole @default(OWNER)
+  adminTelegramId BigInt?  // For receiving order notifications in Telegram
+  telegramLinkCode String?
+  telegramLinkCodeExpiresAt DateTime?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  broadcastsCreated BroadcastCampaign[] @relation("BroadcastCreatedBy")
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+// ============================================================
+// STORE (Telegram Bot)
+// ============================================================
+
+model Store {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  botToken       String   // AES-256-GCM encrypted
+  botUsername     String?
+  webhookSecret  String   @default(cuid())
+  welcomeMessage String?  @default("Добро пожаловать! 🛍️ Нажмите кнопку ниже, чтобы открыть магазин.")
+  miniAppUrl     String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  orders         Order[]
+  deliveryZones  DeliveryZone[]
+  paymentMethods StorePaymentMethod[]
+  broadcasts     BroadcastCampaign[]
+
+  @@index([tenantId])
+  @@map("stores")
+}
+
+// ============================================================
+// CATALOG
+// ============================================================
+
+model Category {
+  id        String     @id @default(cuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  slug      String
+  sortOrder Int        @default(0)
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+
+  products Product[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("categories")
+}
+
+model Product {
+  id            String          @id @default(cuid())
+  tenantId      String
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryId    String?
+  category      Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name          String
+  description   String?
+  price         Decimal         @db.Decimal(12, 2)
+  costPrice     Decimal?        @db.Decimal(12, 2)
+  currency      String          @default("UZS")
+  sku           String?
+  stockQty      Int             @default(0)
+  lowStockAlert Int             @default(5)
+  isActive      Boolean         @default(true)
+  sortOrder     Int             @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  images     ProductImage[]
+  variants   ProductVariant[]
+  orderItems OrderItem[]
+  poItems    PurchaseOrderItem[]
+
+  @@index([tenantId])
+  @@index([tenantId, categoryId])
+  @@index([tenantId, isActive])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int     @default(0)
+
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  sku       String?
+  price     Decimal? @db.Decimal(12, 2)
+  stockQty  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  orderItems OrderItem[]
+
+  @@map("product_variants")
+}
+
+// ============================================================
+// CUSTOMERS
+// ============================================================
+
+model Customer {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  telegramId    BigInt
+  telegramUser  String?
+  firstName     String?
+  lastName      String?
+  phone         String?
+  loyaltyPoints Int      @default(0)
+  totalSpent    Decimal  @default(0) @db.Decimal(12, 2)
+  ordersCount   Int      @default(0)
+  tags          String[] @default([])
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orders      Order[]
+  loyaltyTxns LoyaltyTransaction[]
+  cartItems   CartItem[]
+  broadcastRecipients BroadcastRecipient[]
+
+  @@unique([tenantId, telegramId])
+  @@index([tenantId])
+  @@map("customers")
+}
+
+// ============================================================
+// CART (server-side)
+// ============================================================
+
+model CartItem {
+  id         String          @id @default(cuid())
+  customerId String
+  customer   Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  storeId    String
+  productId  String
+  variantId  String?
+  qty        Int             @default(1)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([customerId, storeId, productId, variantId])
+  @@index([customerId, storeId])
+  @@map("cart_items")
+}
+
+// ============================================================
+// ORDERS
+// ============================================================
+
+model Order {
+  id              String        @id @default(cuid())
+  tenantId        String
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId         String
+  store           Store         @relation(fields: [storeId], references: [id])
+  orderNumber     Int
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  status          OrderStatus   @default(NEW)
+  paymentMethod   PaymentMethod @default(CASH_ON_DELIVERY)
+  paymentMethodId String?
+  paymentMethodRef StorePaymentMethod? @relation("OrderToStorePaymentMethod", fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  paymentMethodCode String?
+  paymentMethodTitle String?
+  paymentMeta    Json?
+  paymentStatus   PaymentStatus @default(PENDING)
+
+  // Delivery
+  deliveryType    DeliveryType
+  deliveryZoneId  String?
+  deliveryZone    DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
+  deliveryAddress String?
+  deliveryPrice   Decimal?      @db.Decimal(12, 2)
+  trackingNumber  String?
+
+  // Totals
+  subtotal          Decimal @db.Decimal(12, 2)
+  discount          Decimal @default(0) @db.Decimal(12, 2)
+  loyaltyDiscount   Decimal @default(0) @db.Decimal(12, 2)
+  loyaltyPointsUsed Int     @default(0)
+  total             Decimal @db.Decimal(12, 2)
+
+  note         String?
+  cancelReason String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items        OrderItem[]
+  statusHistory OrderStatusLog[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([paymentMethodId])
+  @@index([tenantId, storeId])
+  @@index([tenantId, customerId])
+  @@index([tenantId, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String          @id @default(cuid())
+  orderId   String
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product         @relation(fields: [productId], references: [id])
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+  name      String
+  variantName String?
+  price     Decimal         @db.Decimal(12, 2)
+  qty       Int
+  total     Decimal         @db.Decimal(12, 2)
+
+  @@map("order_items")
+}
+
+model OrderStatusLog {
+  id        String       @id @default(cuid())
+  orderId   String
+  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus OrderStatus?
+  toStatus  OrderStatus
+  changedBy String?
+  note      String?
+  createdAt DateTime     @default(now())
+
+  @@index([orderId])
+  @@map("order_status_logs")
+}
+
+// ============================================================
+// DELIVERY
+// ============================================================
+
+model DeliveryZone {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId   String?
+  store     Store?  @relation(fields: [storeId], references: [id])
+  name      String
+  price     Decimal @db.Decimal(12, 2)
+  freeFrom  Decimal? @db.Decimal(12, 2)
+  etaMin    Int?    // minutes
+  etaMax    Int?
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  orders Order[]
+
+  @@index([tenantId])
+  @@map("delivery_zones")
+}
+
+// ============================================================
+// LOYALTY
+// ============================================================
+
+model LoyaltyConfig {
+  id                String  @id @default(cuid())
+  tenantId          String  @unique
+  tenant            Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  isEnabled         Boolean @default(false)
+  pointsPerUnit     Int     @default(1)
+  unitAmount        Int     @default(1000)    // 1 point per 1000 UZS
+  pointValue        Int     @default(100)     // 1 point = 100 UZS
+  maxDiscountPct    Int     @default(30)
+  minPointsToRedeem Int     @default(100)
+
+  @@map("loyalty_configs")
+}
+
+model LoyaltyTransaction {
+  id           String         @id @default(cuid())
+  customerId   String
+  customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tenantId     String
+  type         LoyaltyTxnType
+  points       Int
+  balanceAfter Int
+  orderId      String?
+  description  String?
+  createdAt    DateTime       @default(now())
+
+  @@index([customerId])
+  @@index([tenantId])
+  @@map("loyalty_transactions")
+}
+
+// ============================================================
+// PROCUREMENT
+// ============================================================
+
+model PurchaseOrder {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  poNumber     Int
+  supplierName String
+  status       POStatus @default(DRAFT)
+  currency     String   @default("USD")
+  fxRate       Decimal? @db.Decimal(12, 6)
+  shippingCost Decimal  @default(0) @db.Decimal(12, 2)
+  customsCost  Decimal  @default(0) @db.Decimal(12, 2)
+  totalCost    Decimal  @default(0) @db.Decimal(12, 2)
+  totalLanded  Decimal  @default(0) @db.Decimal(12, 2)
+  note         String?
+  orderedAt    DateTime?
+  receivedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items PurchaseOrderItem[]
+
+  @@index([tenantId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  qty             Int
+  unitCost        Decimal       @db.Decimal(12, 2)
+  totalCost       Decimal       @db.Decimal(12, 2)
+  qtyReceived     Int           @default(0)
+
+  @@map("purchase_order_items")
+}
+
+// ============================================================
+// BILLING (manual invoices)
+// ============================================================
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  CANCELLED
+  EXPIRED
+}
+
+enum BroadcastStatus {
+  DRAFT
+  SENT
+  FAILED
+}
+
+enum BroadcastTargetType {
+  ALL
+  SELECTED
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  tenantId    String
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan        Plan
+  amount      Decimal       @db.Decimal(12, 2)
+  currency    String        @default("UZS")
+  status      InvoiceStatus @default(PENDING)
+  paymentRef  String?       // Transaction ID from bank transfer
+  paymentNote String?       // Owner's note about payment
+  confirmedBy String?       // Admin user ID who confirmed
+  confirmedAt DateTime?
+  expiresAt   DateTime      // Invoice expires after 48h
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model StorePaymentMethod {
+  id           String          @id @default(cuid())
+  tenantId     String
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId      String
+  store        Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  provider     PaymentProvider @default(CUSTOM)
+  code         String
+  title        String
+  description  String?
+  instructions String?
+  isActive     Boolean         @default(true)
+  isDefault    Boolean         @default(false)
+  sortOrder    Int             @default(0)
+  meta         Json?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  orders Order[] @relation("OrderToStorePaymentMethod")
+
+  @@unique([storeId, code])
+  @@index([tenantId, storeId, isActive])
+  @@map("store_payment_methods")
+}
+
+model BroadcastCampaign {
+  id              String              @id @default(cuid())
+  tenantId        String
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId         String
+  store           Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  createdBy       User                @relation("BroadcastCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  title           String?
+  message         String
+  targetType      BroadcastTargetType
+  status          BroadcastStatus     @default(DRAFT)
+  totalRecipients Int                 @default(0)
+  sentCount       Int                 @default(0)
+  failedCount     Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  sentAt          DateTime?
+
+  recipients BroadcastRecipient[]
+
+  @@index([tenantId, storeId, createdAt])
+  @@map("broadcast_campaigns")
+}
+
+model BroadcastRecipient {
+  id         String            @id @default(cuid())
+  campaignId String
+  campaign   BroadcastCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  telegramId BigInt
+  success    Boolean           @default(false)
+  error      String?
+  sentAt     DateTime?
+
+  @@unique([campaignId, customerId])
+  @@index([campaignId, success])
+  @@map("broadcast_recipients")
+}
+
+model SystemAdmin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("system_admins")
+}

@@ -1,0 +1,11 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useEffect, useState } from 'react';
+import { adminApi } from '../api/client';
+export default function Customers() {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    useEffect(() => {
+        adminApi.getCustomers().then(setData).finally(() => setLoading(false));
+    }, []);
+    return (_jsxs("div", { children: [_jsx("h2", { className: "text-2xl font-bold mb-6", children: "\uD83D\uDC65 \u041A\u043B\u0438\u0435\u043D\u0442\u044B" }), loading ? _jsx("p", { className: "text-gray-400", children: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430..." }) : (_jsxs("div", { className: "bg-white rounded-xl border border-gray-200 overflow-hidden", children: [_jsxs("table", { className: "w-full text-sm", children: [_jsx("thead", { children: _jsxs("tr", { className: "text-left text-gray-500 border-b bg-gray-50", children: [_jsx("th", { className: "px-4 py-3", children: "\u041A\u043B\u0438\u0435\u043D\u0442" }), _jsx("th", { className: "px-4 py-3", children: "Telegram" }), _jsx("th", { className: "px-4 py-3", children: "\u0417\u0430\u043A\u0430\u0437\u043E\u0432" }), _jsx("th", { className: "px-4 py-3", children: "\u041F\u043E\u0442\u0440\u0430\u0447\u0435\u043D\u043E" }), _jsx("th", { className: "px-4 py-3", children: "\u0411\u0430\u043B\u043B\u044B" })] }) }), _jsx("tbody", { children: data?.items?.map((c) => (_jsxs("tr", { className: "border-b last:border-0 hover:bg-gray-50", children: [_jsxs("td", { className: "px-4 py-3", children: [_jsxs("p", { className: "font-medium", children: [c.firstName, " ", c.lastName] }), c.phone && _jsx("p", { className: "text-xs text-gray-500", children: c.phone })] }), _jsx("td", { className: "px-4 py-3 text-gray-500", children: c.telegramUser ? `@${c.telegramUser}` : c.telegramId }), _jsx("td", { className: "px-4 py-3", children: c.ordersCount }), _jsxs("td", { className: "px-4 py-3 font-medium", children: [Number(c.totalSpent).toLocaleString(), " UZS"] }), _jsxs("td", { className: "px-4 py-3", children: ["\u2B50 ", c.loyaltyPoints] })] }, c.id))) })] }), data && _jsxs("div", { className: "px-4 py-3 text-sm text-gray-500 border-t", children: ["\u0412\u0441\u0435\u0433\u043E: ", data.total] })] }))] }));
+}

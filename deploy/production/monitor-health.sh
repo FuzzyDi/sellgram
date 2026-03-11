@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env.prod"
+
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
+
+HEALTH_URL="${MONITOR_HEALTH_URL:-http://localhost:${NGINX_HTTP_PORT:-8080}/health}"
+TIMEOUT_SEC="${MONITOR_TIMEOUT_SEC:-10}"
+STATE_DIR="${MONITOR_STATE_DIR:-$SCRIPT_DIR/.monitor}"
+STATE_FILE="$STATE_DIR/health.state"
+STATUS="down"
+BODY=""
+
+mkdir -p "$STATE_DIR"
+
+if BODY="$(curl --silent --show-error --max-time "$TIMEOUT_SEC" "$HEALTH_URL")"; then
+  if printf '%s' "$BODY" | grep -q '"status":"ok"'; then
+    STATUS="up"
+  fi
+fi
+
+PREV_STATUS=""
+if [ -f "$STATE_FILE" ]; then
+  PREV_STATUS="$(cat "$STATE_FILE")"
+fi
+
+printf '%s' "$STATUS" > "$STATE_FILE"
+
+notify() {
+  local message="$1"
+  if [ -n "${MONITOR_TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${MONITOR_TELEGRAM_CHAT_ID:-}" ]; then
+    curl --silent --show-error --max-time 15 \
+      -X POST "https://api.telegram.org/bot${MONITOR_TELEGRAM_BOT_TOKEN}/sendMessage" \
+      -d "chat_id=${MONITOR_TELEGRAM_CHAT_ID}" \
+      --data-urlencode "text=${message}" >/dev/null
+  fi
+}
+
+TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+if [ "$STATUS" = "down" ]; then
+  echo "[$TIMESTAMP] healthcheck failed for $HEALTH_URL"
+  if [ "$PREV_STATUS" != "down" ]; then
+    notify "SellGram healthcheck is DOWN: ${HEALTH_URL} (${TIMESTAMP})"
+  fi
+  exit 1
+fi
+
+echo "[$TIMESTAMP] healthcheck ok for $HEALTH_URL"
+if [ "$PREV_STATUS" = "down" ]; then
+  notify "SellGram healthcheck recovered: ${HEALTH_URL} (${TIMESTAMP})"
+fi

@@ -1,0 +1,1 @@
+0 3 * * * cd /opt/sellgram/deploy/production && BACKUP_DIR=/opt/sellgram/backups ./backup-db.sh >> /var/log/sellgram-backup.log 2>&1
