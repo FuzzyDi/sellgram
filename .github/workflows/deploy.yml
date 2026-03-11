@@ -18,8 +18,10 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy to Windows Server
-    runs-on: ubuntu-latest
+    name: Deploy on self-hosted Windows runner
+    runs-on:
+      - self-hosted
+      - windows
     environment: production
 
     steps:
@@ -27,56 +29,38 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+          path: repo
 
-      - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add server to known_hosts
+      - name: Sync repository to deployment path
+        shell: powershell
         run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          $ErrorActionPreference = "Stop"
+          $source = Join-Path $env:GITHUB_WORKSPACE "repo"
+          $target = "${{ vars.DEPLOY_PATH }}"
 
-      - name: Build deployment archive
-        run: |
-          tar \
-            --exclude=".git" \
-            --exclude="node_modules" \
-            --exclude="artifacts" \
-            --exclude=".cloudflared" \
-            --exclude="deploy/production/ssl" \
-            -czf sellgram-deploy.tgz .
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
 
-      - name: Upload deployment archive
-        run: |
-          scp -P "${{ secrets.SSH_PORT }}" sellgram-deploy.tgz "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:sellgram-deploy.tgz"
+          robocopy $source $target /MIR /XD ".git" "node_modules" "artifacts" ".cloudflared" "deploy\production\ssl"
+          if ($LASTEXITCODE -gt 7) {
+            throw "robocopy failed with exit code $LASTEXITCODE"
+          }
 
-      - name: Upload production env file
+      - name: Write production env file
+        shell: powershell
         run: |
-          cat > .env.prod <<'EOF'
+          $ErrorActionPreference = "Stop"
+          $target = Join-Path "${{ vars.DEPLOY_PATH }}" "deploy\production\.env.prod"
+          [System.IO.File]::WriteAllText($target, @'
           ${{ secrets.PROD_ENV_FILE }}
-          EOF
-          scp -P "${{ secrets.SSH_PORT }}" .env.prod "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:sellgram.env.prod"
+          '@.TrimStart(), [System.Text.Encoding]::UTF8)
 
-      - name: Deploy on Windows server
+      - name: Run Windows deployment script
+        shell: powershell
         run: |
-          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" '
-            powershell -NoProfile -ExecutionPolicy Bypass -Command "
-              $ErrorActionPreference = \"Stop\"
-              $deployPath = \"${{ vars.DEPLOY_PATH }}\"
-              $archivePath = Join-Path $HOME \"sellgram-deploy.tgz\"
-              $envUploadPath = Join-Path $HOME \"sellgram.env.prod\"
-              New-Item -ItemType Directory -Force -Path $deployPath | Out-Null
-              tar -xzf $archivePath -C $deployPath
-              Copy-Item $envUploadPath (Join-Path $deployPath \"deploy/production/.env.prod\") -Force
-              Set-Location $deployPath
-              if (\"${{ inputs.skip_build }}\" -eq \"true\") {
-                & powershell -NoProfile -ExecutionPolicy Bypass -File \"deploy/production/Deploy-Windows.ps1\" -EnvFile \".env.prod\" -SkipBuild
-              } else {
-                & powershell -NoProfile -ExecutionPolicy Bypass -File \"deploy/production/Deploy-Windows.ps1\" -EnvFile \".env.prod\"
-              }
-              Remove-Item $archivePath -Force -ErrorAction SilentlyContinue
-              Remove-Item $envUploadPath -Force -ErrorAction SilentlyContinue
-            "
-          '
+          $ErrorActionPreference = "Stop"
+          Set-Location "${{ vars.DEPLOY_PATH }}"
+          if ("${{ inputs.skip_build }}" -eq "true") {
+            powershell -NoProfile -ExecutionPolicy Bypass -File "deploy\production\Deploy-Windows.ps1" -EnvFile ".env.prod" -SkipBuild
+          } else {
+            powershell -NoProfile -ExecutionPolicy Bypass -File "deploy\production\Deploy-Windows.ps1" -EnvFile ".env.prod"
+          }
