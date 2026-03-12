@@ -1,8 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma.js';
-import { PLANS, type PlanCode } from '@sellgram/shared';
+import { PLANS, type PlanCode } from '@shopbot/shared';
 
-type LimitKey = Extract<keyof (typeof PLANS)['FREE']['limits'], string>;
+type LimitKey = keyof (typeof PLANS)['FREE']['limits'];
 
 export function planGuard(limitKey: LimitKey) {
   return async function (request: FastifyRequest, reply: FastifyReply) {

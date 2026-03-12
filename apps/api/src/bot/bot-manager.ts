@@ -1,6 +1,6 @@
 import { Bot, webhookCallback, InlineKeyboard, Keyboard } from 'grammy';
 import type { FastifyInstance } from 'fastify';
-import type { OrderStatusType } from '@sellgram/shared';
+import type { OrderStatusType } from '@shopbot/shared';
 import prisma from '../lib/prisma.js';
 import { decrypt } from '../lib/encrypt.js';
 

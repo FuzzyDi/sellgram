@@ -7,61 +7,6 @@ export function setAuthData(initData, storeId) {
     _initData = initData;
     _storeId = storeId;
 }
-function normalizeImageUrl(url) {
-    if (!url)
-        return url;
-    if (url.startsWith('/uploads/'))
-        return url;
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-        try {
-            const parsed = new URL(url);
-            const parts = parsed.pathname.split('/').filter(Boolean);
-            if (parts.length === 0)
-                return url;
-            // Keep full path after host, including bucket if present:
-            // /sellgram/products/a.webp -> /uploads/sellgram/products/a.webp
-            return `/uploads/${parts.join('/')}`;
-        }
-        catch {
-            return url;
-        }
-    }
-    return `/uploads/${url.replace(/^\/+/, '')}`;
-}
-function normalizeCatalog(data) {
-    if (!data || !Array.isArray(data.products))
-        return data;
-    return {
-        ...data,
-        products: data.products.map((p) => ({
-            ...p,
-            images: Array.isArray(p.images)
-                ? p.images.map((img) => ({ ...img, url: normalizeImageUrl(img?.url) }))
-                : [],
-        })),
-    };
-}
-function normalizeProduct(data) {
-    if (!data)
-        return data;
-    return {
-        ...data,
-        images: Array.isArray(data.images)
-            ? data.images.map((img) => ({ ...img, url: normalizeImageUrl(img?.url) }))
-            : [],
-    };
-}
-function normalizeCart(data) {
-    if (!data || !Array.isArray(data.items))
-        return data;
-    return {
-        ...data,
-        items: data.items.map((item) => ({
-            ...item,
-            image: normalizeImageUrl(item?.image),
-        })),
-    };
-}
 async function request(path, options) {
     const headers = {
         'X-Telegram-Init-Data': _initData,
@@ -79,9 +24,9 @@ async function request(path, options) {
     return data.data;
 }
 export const api = {
-    getCatalog: async () => normalizeCatalog(await request('/shop/catalog')),
-    getProduct: async (id) => normalizeProduct(await request(`/shop/products/${id}`)),
-    getCart: async () => normalizeCart(await request('/shop/cart')),
+    getCatalog: () => request('/shop/catalog'),
+    getProduct: (id) => request(`/shop/products/${id}`),
+    getCart: () => request('/shop/cart'),
     addToCart: (productId, variantId, qty = 1) => request('/shop/cart/items', {
         method: 'POST',
         body: JSON.stringify({ productId, variantId, qty }),

@@ -1,145 +1,97 @@
-# SellGram
+# 🤖 ShopBot — Telegram Store Bot SaaS Platform
 
-SellGram is a Telegram-first commerce platform for running a store inside Telegram.
+> Build and run your online store entirely inside Telegram.
 
-The repository is a `pnpm` monorepo with:
-- `apps/api` - Fastify API, Telegram bot integration, background jobs
-- `apps/admin` - React admin panel
-- `apps/miniapp` - Telegram Mini App storefront
-- `packages/shared` - shared types and constants
-- `packages/prisma` - Prisma schema and seed scripts
+## Architecture
 
-## Stack
+**Monorepo** (Turborepo + pnpm) with 3 apps:
+- `apps/api` — Fastify backend (REST API + Telegram Bot + BullMQ jobs)
+- `apps/admin` — Admin Panel (React + Vite + Tailwind + React Query)
+- `apps/miniapp` — Telegram Mini App (React + Vite + Tailwind + @tma.js/sdk)
 
-- Node.js 20
-- pnpm 9
-- Turborepo
-- TypeScript
-- Fastify
-- Prisma
-- PostgreSQL
-- Redis
-- BullMQ
-- React
-- Vite
-- Tailwind CSS
-- MinIO
-
-## Requirements
-
-- Node.js 20+
-- pnpm 9+
-- Docker Desktop
+**Shared packages:**
+- `packages/shared` — Types, constants, utils
+- `packages/prisma` — Prisma schema, migrations, seed
 
 ## Quick Start
 
-```powershell
-git clone https://github.com/FuzzyDi/sellgram.git
-cd sellgram
+```bash
+# 1. Clone and install
+git clone <repo-url> shopbot && cd shopbot
 pnpm install
-Copy-Item .env.example .env
+
+# 2. Start infrastructure
 docker compose up -d
+
+# 3. Setup database
+cp .env.example .env
 pnpm db:generate
 pnpm db:migrate --name init
 pnpm db:seed
+
+# 4. Start dev
 pnpm dev
 ```
 
-## Bootstrap Script
-
-For Windows development, the fastest setup path is:
+## Full Bootstrap (recommended)
 
 ```powershell
 pnpm bootstrap
 ```
 
-This runs the bootstrap script from [scripts/bootstrap.ps1](scripts/bootstrap.ps1) and starts the local stack.
+See `docs/PLATFORM_BOOTSTRAP.md` for system-admin API, payment methods, broadcasts, and demo credentials.
 
-Useful variants:
+**URLs:**
+- API: http://localhost:3000
+- Admin: http://localhost:5173
+- Mini App: http://localhost:5174
+- MinIO Console: http://localhost:9001
 
-```powershell
-.\scripts\bootstrap.ps1 -Mode dev
-.\scripts\bootstrap.ps1 -Mode dev -SkipInstall
-.\scripts\bootstrap.ps1 -Mode dev -NoRun
-.\scripts\bootstrap.ps1 -Mode prod
+**Demo login:** admin@demo.com / admin123
+
+## Tech Stack
+
+Node.js 20 | TypeScript | Fastify 4 | Prisma 5 | PostgreSQL 16 | Redis 7 | BullMQ | Grammy | MinIO | React 18 | Vite 5 | TailwindCSS | @tma.js/sdk | Zod | JWT
+
+## Features
+
+- **Multi-tenant SaaS** — each business gets isolated data
+- **Bot-per-store** — own Telegram bot for each store
+- **Mini App** — full shopping experience inside Telegram
+- **Catalog** — products, variants, categories, images
+- **Orders** — full lifecycle with status machine (9 states)
+- **Delivery** — pickup, local zones (free-from threshold), national postal
+- **Loyalty** — earn/redeem points system
+- **Procurement** — purchase orders, FX rates, landed cost calculation
+- **Analytics** — dashboard, revenue, top products, repeat rate
+- **Daily Digest** — automated summary via Telegram to store owner
+- **Subscription** — Free / Pro / Business plans with limit enforcement
+
+## Project Structure
+
+```
+shopbot/
+├── apps/
+│   ├── api/           # Backend (Fastify + Grammy)
+│   │   ├── src/
+│   │   │   ├── modules/     # Business modules (auth, product, order, ...)
+│   │   │   ├── bot/         # Grammy bot manager
+│   │   │   ├── jobs/        # BullMQ background workers
+│   │   │   ├── plugins/     # Fastify plugins (auth, plan-guard)
+│   │   │   └── lib/         # Shared libs (prisma, redis, s3, jwt, encrypt)
+│   ├── admin/         # Admin Panel (React)
+│   └── miniapp/       # Telegram Mini App (React)
+├── packages/
+│   ├── shared/        # Shared types & constants
+│   └── prisma/        # Database schema & migrations
+├── deploy/            # Dockerfiles, nginx
+└── docs/              # Documentation
 ```
 
-More details are in [docs/PLATFORM_BOOTSTRAP.md](docs/PLATFORM_BOOTSTRAP.md).
+## Environment Variables
 
-## Local URLs
+See `.env.example` for all required variables.
 
-- API: `http://localhost:4000`
-- Admin: `http://localhost:5173`
-- Mini App: `http://localhost:5174`
-- MinIO Console: `http://localhost:9001`
-- PostgreSQL: `localhost:5433`
+## License
 
-## Environment
-
-The main template is [`.env.example`](.env.example).
-
-Important variables:
-- `DATABASE_URL`
-- `REDIS_URL`
-- `JWT_SECRET`
-- `JWT_REFRESH_SECRET`
-- `SYSTEM_JWT_SECRET`
-- `SYSTEM_ADMIN_EMAIL`
-- `SYSTEM_ADMIN_PASSWORD`
-- `S3_ENDPOINT`
-- `S3_ACCESS_KEY`
-- `S3_SECRET_KEY`
-- `S3_BUCKET`
-- `ENCRYPTION_KEY`
-- `APP_URL`
-- `ADMIN_URL`
-- `MINIAPP_URL`
-- `LANDING_URL`
-
-## Common Commands
-
-```powershell
-pnpm dev
-pnpm build
-pnpm test
-pnpm db:generate
-pnpm db:migrate --name <migration_name>
-pnpm db:seed
-pnpm db:studio
-```
-
-## Repo Layout
-
-```text
-sellgram/
-|-- apps/
-|   |-- admin/
-|   |-- api/
-|   `-- miniapp/
-|-- packages/
-|   |-- prisma/
-|   `-- shared/
-|-- deploy/
-|-- docs/
-`-- scripts/
-```
-
-## Current Notes
-
-- Workspace packages use the `@sellgram/*` scope.
-- GitHub Actions CI is configured in [.github/workflows/ci.yml](.github/workflows/ci.yml).
-
-## Demo Access
-
-- Tenant admin: `admin@demo.com / admin123`
-- System admin: values from `.env` in `SYSTEM_ADMIN_EMAIL` and `SYSTEM_ADMIN_PASSWORD`
-
-## Deployment
-
-Production deployment assets live under [deploy/production](deploy/production).
-
-Useful docs:
-- [SETUP_WINDOWS.md](SETUP_WINDOWS.md)
-- [SETUP_SELLGRAM.md](SETUP_SELLGRAM.md)
-- [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md)
-- [deploy/production/VPS_GUIDE.md](deploy/production/VPS_GUIDE.md)
+Proprietary — All rights reserved.

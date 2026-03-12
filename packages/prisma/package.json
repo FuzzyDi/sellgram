@@ -1,5 +1,5 @@
 {
-  "name": "@sellgram/prisma",
+  "name": "@shopbot/prisma",
   "version": "0.1.0",
   "private": true,
   "scripts": {

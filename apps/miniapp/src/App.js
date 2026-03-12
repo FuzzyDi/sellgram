@@ -45,10 +45,8 @@ function AppShell() {
     if (!ready) {
         return _jsx("div", { className: "flex items-center justify-center h-screen", children: _jsx("span", { children: tr('Загрузка...', 'Yuklanmoqda...') }) });
     }
-    const normalizedRoute = route.split('?')[0] || '/';
-    const [path, id] = normalizedRoute.split('/').filter(Boolean);
-    const isKnownRoute = ['product', 'cart', 'checkout', 'order', 'orders', 'loyalty'].includes(path || '');
-    return (_jsxs(_Fragment, { children: [_jsx(LanguageSwitch, {}), path === 'product' && _jsx(Product, { id: id }), path === 'cart' && _jsx(Cart, {}), path === 'checkout' && _jsx(Checkout, {}), path === 'order' && _jsx(OrderStatus, { id: id }), path === 'orders' && _jsx(MyOrders, {}), path === 'loyalty' && _jsx(Loyalty, {}), (!path || !isKnownRoute) && _jsx(Catalog, {})] }));
+    const [path, id] = route.split('/').filter(Boolean);
+    return (_jsxs(_Fragment, { children: [_jsx(LanguageSwitch, {}), path === 'product' && _jsx(Product, { id: id }), path === 'cart' && _jsx(Cart, {}), path === 'checkout' && _jsx(Checkout, {}), path === 'order' && _jsx(OrderStatus, { id: id }), path === 'orders' && _jsx(MyOrders, {}), path === 'loyalty' && _jsx(Loyalty, {}), !path && _jsx(Catalog, {})] }));
 }
 export default function App() {
     const { user } = useTelegram();

@@ -77,10 +77,10 @@ importers:
       '@prisma/client':
         specifier: ^5.14.0
         version: 5.22.0(prisma@5.22.0)
-      '@sellgram/prisma':
+      '@shopbot/prisma':
         specifier: workspace:*
         version: link:../../packages/prisma
-      '@sellgram/shared':
+      '@shopbot/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       bcrypt:
