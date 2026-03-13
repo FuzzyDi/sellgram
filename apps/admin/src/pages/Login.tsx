@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useAdminI18n } from '../i18n';
 
 interface Props {
@@ -31,23 +31,23 @@ export default function Login({ onLogin, onRegister }: Props) {
         await onLogin(email, password);
       } else {
         if (!name || !tenantName) {
-          setError(tr('Fill in all fields', "Barcha maydonlarni to'ldiring"));
+          setError(tr('Заполните все поля', "Barcha maydonlarni to'ldiring"));
           setLoading(false);
           return;
         }
         await onRegister({ email, password, name, tenantName, tenantSlug: slugify(tenantName) });
       }
     } catch (err: any) {
-      setError(err.message || tr('Error', 'Xatolik'));
+      setError(err.message || tr('Ошибка', 'Xatolik'));
     }
     setLoading(false);
   };
 
   const features = [
-    tr('Catalog management', 'Katalog boshqaruvi'),
-    tr('Order workflow', 'Buyurtma oqimi'),
-    tr('Loyalty and billing', 'Loyallik va billing'),
-    tr('Analytics and broadcasts', 'Analitika va xabarnomalar'),
+    tr('Управление каталогом', 'Katalog boshqaruvi'),
+    tr('Поток заказов', 'Buyurtma oqimi'),
+    tr('Лояльность и биллинг', 'Loyallik va billing'),
+    tr('Аналитика и рассылки', 'Analitika va xabarnomalar'),
   ];
 
   return (
@@ -64,7 +64,7 @@ export default function Login({ onLogin, onRegister }: Props) {
           Sell<span style={{ color: '#00b96b' }}>Gram</span>
         </h1>
         <p style={{ marginTop: 18, fontSize: 'clamp(17px, 2vw, 22px)', lineHeight: 1.55, color: '#9eb3c9', maxWidth: 560 }}>
-          {tr('Launch your Telegram store in minutes and manage everything from one clean console.', 'Telegram do\'koningizni bir necha daqiqada ishga tushiring va hammasini bitta qulay konsolda boshqaring.')}
+          {tr('Запустите магазин в Telegram за минуты и управляйте всем из одной удобной консоли.', 'Telegram do\'koningizni bir necha daqiqada ishga tushiring va hammasini bitta qulay konsolda boshqaring.')}
         </p>
 
         <div className="sg-grid cols-2" style={{ marginTop: 28, maxWidth: 700 }}>
@@ -87,12 +87,12 @@ export default function Login({ onLogin, onRegister }: Props) {
           </div>
 
           <h2 style={{ margin: 0, fontSize: 30, lineHeight: 1.1, fontWeight: 900, letterSpacing: -0.6 }}>
-            {mode === 'login' ? tr('Sign in', 'Kirish') : tr('Create store', "Do'kon yaratish")}
+            {mode === 'login' ? tr('Вход', 'Kirish') : tr('Создать магазин', "Do'kon yaratish")}
           </h2>
           <p style={{ margin: '8px 0 18px', color: '#607167', fontSize: 14 }}>
             {mode === 'login'
-              ? tr('Access your admin workspace.', 'Admin panelga kirish.')
-              : tr('Create account and start selling.', "Akkaunt yarating va savdoni boshlang.")}
+              ? tr('Войдите в рабочее пространство администратора.', 'Admin panelga kirish.')
+              : tr('Создайте аккаунт и начните продажи.', "Akkaunt yarating va savdoni boshlang.")}
           </p>
 
           {error && <div style={{ background: '#fff3f3', color: '#c62828', border: '1px solid #ffd9d9', padding: '10px 12px', borderRadius: 10, fontSize: 13, marginBottom: 14 }}>{error}</div>}
@@ -100,11 +100,11 @@ export default function Login({ onLogin, onRegister }: Props) {
           <form onSubmit={handleSubmit} className="sg-grid" style={{ gap: 10 }}>
             {mode === 'register' && (
               <>
-                <Field label={tr('Store name', "Do'kon nomi")}> 
-                  <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder={tr('My store', "Mening do'konim")} style={inputStyle} />
+                <Field label={tr('Название магазина', "Do'kon nomi")}>
+                  <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder={tr('Мой магазин', "Mening do'konim")} style={inputStyle} />
                 </Field>
-                <Field label={tr('Owner name', 'Ismingiz')}>
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr('John Doe', 'Ali Valiyev')} style={inputStyle} />
+                <Field label={tr('Имя владельца', 'Ismingiz')}>
+                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr('Иван Иванов', 'Ali Valiyev')} style={inputStyle} />
                 </Field>
               </>
             )}
@@ -113,19 +113,19 @@ export default function Login({ onLogin, onRegister }: Props) {
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" style={inputStyle} />
             </Field>
 
-            <Field label={tr('Password', 'Parol')}>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr('Minimum 6 chars', 'Kamida 6 belgi')} style={inputStyle} />
+            <Field label={tr('Пароль', 'Parol')}>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr('Минимум 6 символов', 'Kamida 6 belgi')} style={inputStyle} />
             </Field>
 
             <button type="submit" disabled={loading} style={{ ...submitStyle, opacity: loading ? 0.7 : 1 }}>
-              {loading ? '...' : mode === 'login' ? tr('Enter', 'Kirish') : tr('Create', 'Yaratish')}
+              {loading ? '...' : mode === 'login' ? tr('Войти', 'Kirish') : tr('Создать', 'Yaratish')}
             </button>
           </form>
 
           <p style={{ marginTop: 16, color: '#66776d', fontSize: 13, textAlign: 'center' }}>
-            {mode === 'login' ? tr('No account?', "Akkauntingiz yo'qmi?") : tr('Already have account?', 'Akkauntingiz bormi?')}{' '}
+            {mode === 'login' ? tr('Нет аккаунта?', "Akkauntingiz yo'qmi?") : tr('Уже есть аккаунт?', 'Akkauntingiz bormi?')}{' '}
             <button onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }} style={linkStyle}>
-              {mode === 'login' ? tr('Register', "Ro'yxatdan o'tish") : tr('Sign in', 'Kirish')}
+              {mode === 'login' ? tr('Регистрация', "Ro'yxatdan o'tish") : tr('Войти', 'Kirish')}
             </button>
           </p>
         </div>
