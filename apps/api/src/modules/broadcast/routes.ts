@@ -68,8 +68,21 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
           select: { customerId: true },
           distinct: ['customerId'],
         });
-        targetCustomerIds = orderCustomers.map((row) => row.customerId);
+        targetCustomerIds = orderCustomers.map((row: { customerId: string }) => row.customerId);
       }
+
+      const recipients = await prisma.customer.findMany({
+        where: {
+          tenantId: request.tenantId!,
+          id: { in: targetCustomerIds },
+          telegramId: { not: null },
+        },
+        select: {
+          telegramId: true,
+          language: true,
+          firstName: true,
+        },
+      });
 
       const campaign = await prisma.broadcastCampaign.create({
         data: {
@@ -80,41 +93,31 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
           message: body.message,
           targetType: body.targetType,
           status: 'DRAFT',
-          totalRecipients: targetCustomerIds.length,
+          totalRecipients: recipients.length,
         },
       });
 
-      const results = await sendPromoBroadcast(body.storeId, body.message, targetCustomerIds);
+      const results = await sendPromoBroadcast(body.storeId, recipients, {
+        title: body.title,
+        message: body.message,
+      });
 
-      const sentCount = results.filter((r) => r.success).length;
-      const failedCount = results.length - sentCount;
+      const sentCount = results.sent;
+      const failedCount = results.failed;
 
-      await prisma.$transaction([
-        prisma.broadcastCampaign.update({
-          where: { id: campaign.id },
-          data: {
-            status: failedCount === results.length ? 'FAILED' : 'SENT',
-            sentCount,
-            failedCount,
-            sentAt: new Date(),
-          },
-        }),
-        prisma.broadcastRecipient.createMany({
-          data: results.map((r) => ({
-            campaignId: campaign.id,
-            customerId: r.customerId,
-            telegramId: r.telegramId,
-            success: r.success,
-            error: r.error,
-            sentAt: new Date(),
-          })),
-          skipDuplicates: true,
-        }),
-      ]);
+      await prisma.broadcastCampaign.update({
+        where: { id: campaign.id },
+        data: {
+          status: failedCount === recipients.length ? 'FAILED' : 'SENT',
+          sentCount,
+          failedCount,
+          sentAt: new Date(),
+        },
+      });
 
       return {
         success: true,
-        data: { campaignId: campaign.id, total: results.length, sent: sentCount, failed: failedCount },
+        data: { campaignId: campaign.id, total: recipients.length, sent: sentCount, failed: failedCount },
       };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });

@@ -1,5 +1,5 @@
 {
-  "name": "@shopbot/prisma",
+  "name": "@sellgram/prisma",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -20,3 +20,4 @@
     "typescript": "^5.4.0"
   }
 }
+

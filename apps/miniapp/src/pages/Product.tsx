@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
@@ -101,14 +101,14 @@ export default function Product({ id }: { id: string }) {
         <div className="anim-fade anim-d5" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 14, padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--sec)' }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: inStock ? (product.stockQty > 5 ? 'var(--success)' : 'var(--warning)') : 'var(--danger)' }} />
           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--hint)' }}>
-            {!inStock ? tr('Нет в наличии', "Mavjud emas") : product.stockQty > 5 ? tr('В наличии', 'Mavjud') : tr(`Осталось ${product.stockQty} шт`, `${product.stockQty} ta qoldi`)}
+            {!inStock ? tr('Нет в наличии', 'Mavjud emas') : product.stockQty > 5 ? tr('В наличии', 'Mavjud') : tr(`Осталось ${product.stockQty} шт`, `${product.stockQty} ta qoldi`)}
           </span>
         </div>
       </div>
 
       <div className="glass" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30, padding: '10px 16px max(env(safe-area-inset-bottom, 0px), 10px)', borderTop: '0.5px solid var(--divider)' }}>
         <button onClick={addToCart} disabled={!inStock || adding} className="pressable" style={{ width: '100%', padding: 16, borderRadius: 'var(--radius)', border: 'none', fontSize: 16, fontWeight: 700, cursor: inStock ? 'pointer' : 'default', background: added ? 'var(--success)' : !inStock ? 'var(--sec)' : 'var(--btn)', color: added ? '#fff' : !inStock ? 'var(--hint)' : 'var(--btn-text)', transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)' }}>
-          {added ? tr('✓ В корзине', '✓ Savatda') : adding ? '...' : !inStock ? tr('Нет в наличии', "Mavjud emas") : `${tr('В корзину', "Savatga")} · ${Number(product.price).toLocaleString()} ${tr('сум', "so'm")}`}
+          {added ? tr('✓ В корзине', '✓ Savatda') : adding ? '...' : !inStock ? tr('Нет в наличии', 'Mavjud emas') : `${tr('В корзину', 'Savatga')} · ${Number(product.price).toLocaleString()} ${tr('сум', "so'm")}`}
         </button>
       </div>
     </div>

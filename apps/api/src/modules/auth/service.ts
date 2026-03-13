@@ -1,20 +1,30 @@
 import bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js';
 import type { RegisterInput, LoginInput } from './schema.js';
 
 const SALT_ROUNDS = 12;
 
+export class AuthServiceError extends Error {
+  code: 'EMAIL_ALREADY_REGISTERED' | 'TENANT_SLUG_TAKEN' | 'INVALID_CREDENTIALS' | 'USER_NOT_FOUND';
+
+  constructor(code: AuthServiceError['code']) {
+    super(code);
+    this.code = code;
+  }
+}
+
 export async function register(input: RegisterInput) {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
-  if (existing) throw new Error('Email already registered');
+  if (existing) throw new AuthServiceError('EMAIL_ALREADY_REGISTERED');
 
   const existingTenant = await prisma.tenant.findUnique({ where: { slug: input.tenantSlug } });
-  if (existingTenant) throw new Error('Tenant slug already taken');
+  if (existingTenant) throw new AuthServiceError('TENANT_SLUG_TAKEN');
 
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
-  const { tenant, user } = await prisma.$transaction(async (tx) => {
+  const { tenant, user } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const tenant = await tx.tenant.create({
       data: {
         name: input.tenantName,
@@ -57,10 +67,10 @@ export async function login(input: LoginInput) {
     include: { tenant: true },
   });
 
-  if (!user || !user.isActive) throw new Error('Invalid credentials');
+  if (!user || !user.isActive) throw new AuthServiceError('INVALID_CREDENTIALS');
 
   const valid = await bcrypt.compare(input.password, user.passwordHash);
-  if (!valid) throw new Error('Invalid credentials');
+  if (!valid) throw new AuthServiceError('INVALID_CREDENTIALS');
 
   const payload = { userId: user.id, tenantId: user.tenantId, role: user.role };
   const accessToken = await signAccessToken(payload);
@@ -80,7 +90,7 @@ export async function refresh(refreshTokenStr: string) {
     where: { id: payload.userId },
     include: { tenant: true },
   });
-  if (!user || !user.isActive) throw new Error('User not found');
+  if (!user || !user.isActive) throw new AuthServiceError('USER_NOT_FOUND');
 
   const newPayload = { userId: user.id, tenantId: user.tenantId, role: user.role };
   const accessToken = await signAccessToken(newPayload);

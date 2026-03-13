@@ -41,6 +41,7 @@ type Key = keyof typeof dict.ru;
 
 interface I18nValue {
   lang: Lang;
+  locale: string;
   setLang: (lang: Lang) => void;
   t: (key: Key) => string;
   tr: (ru: string, uz: string) => string;
@@ -61,12 +62,16 @@ export function AdminI18nProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.lang = next;
   };
 
-  const value = useMemo<I18nValue>(() => ({
-    lang,
-    setLang,
-    t: (key: Key) => dict[lang][key],
-    tr: (ru: string, uz: string) => (lang === 'uz' ? uz : ru),
-  }), [lang]);
+  const value = useMemo<I18nValue>(
+    () => ({
+      lang,
+      locale: lang === 'uz' ? 'uz-UZ' : 'ru-RU',
+      setLang,
+      t: (key: Key) => dict[lang][key],
+      tr: (ru: string, uz: string) => (lang === 'uz' ? uz : ru),
+    }),
+    [lang]
+  );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

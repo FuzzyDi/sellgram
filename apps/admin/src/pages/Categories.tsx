@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { adminApi } from '../api/client';
+import { adminApi } from '../api/store-admin-client';
 import Button from '../components/Button';
+import { useAdminI18n } from '../i18n';
 
 interface Category {
   id: string;
@@ -12,6 +13,7 @@ interface Category {
 }
 
 export default function Categories() {
+  const { tr } = useAdminI18n();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -28,7 +30,7 @@ export default function Categories() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const openCreate = () => { setEditingId(null); setName(''); setShowForm(true); };
   const openEdit = (c: Category) => { setEditingId(c.id); setName(c.name); setShowForm(true); };
@@ -45,41 +47,54 @@ export default function Categories() {
       setShowForm(false);
       setName('');
       load();
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) {
+      alert(err.message);
+    }
     setSaving(false);
   };
 
   const handleDelete = async (c: Category) => {
     const count = c._count?.products || 0;
     const msg = count > 0
-      ? `В категории "${c.name}" ${count} товар(ов). Товары останутся, но без категории. Удалить?`
-      : `Удалить категорию "${c.name}"?`;
+      ? tr(
+          `В категории "${c.name}" ${count} товар(ов). Товары останутся, но без категории. Удалить?`,
+          `"${c.name}" toifasida ${count} ta mahsulot bor. Mahsulotlar qoladi, lekin toifasiz bo'ladi. O'chirilsinmi?`
+        )
+      : tr(`Удалить категорию "${c.name}"?`, `"${c.name}" toifasini o'chirilsinmi?`);
+
     if (!confirm(msg)) return;
-    try { await adminApi.deleteCategory(c.id); load(); }
-    catch (err: any) { alert(err.message); }
+
+    try {
+      await adminApi.deleteCategory(c.id);
+      load();
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 className="text-2xl font-bold">📁 Категории</h2>
-        <Button onClick={openCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">+ Категория</Button>
+        <h2 className="text-2xl font-bold">📁 {tr('Категории', 'Toifalar')}</h2>
+        <Button onClick={openCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+          + {tr('Категория', 'Toifa')}
+        </Button>
       </div>
 
-      {loading ? <p className="text-gray-400">Загрузка...</p> : (
+      {loading ? <p className="text-gray-400">{tr('Загрузка...', 'Yuklanmoqda...')}</p> : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-gray-500 border-b bg-gray-50">
-              <th className="px-4 py-3">Название</th>
-              <th className="px-4 py-3">Товаров</th>
-              <th className="px-4 py-3 w-32">Действия</th>
+              <th className="px-4 py-3">{tr('Название', 'Nomi')}</th>
+              <th className="px-4 py-3">{tr('Товаров', 'Mahsulotlar')}</th>
+              <th className="px-4 py-3 w-32">{tr('Действия', 'Amallar')}</th>
             </tr></thead>
             <tbody>
               {categories.map(c => (
                 <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <span className="font-medium">{c.name}</span>
-                    {!c.isActive && <span className="ml-2 text-xs text-red-500">(скрыта)</span>}
+                    {!c.isActive && <span className="ml-2 text-xs text-red-500">({tr('скрыта', 'yashirin')})</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-500">{c._count?.products || 0}</td>
                   <td className="px-4 py-3">
@@ -90,7 +105,11 @@ export default function Categories() {
                   </td>
                 </tr>
               ))}
-              {categories.length === 0 && <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-400">Нет категорий</td></tr>}
+              {categories.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-4 py-8 text-center text-gray-400">{tr('Нет категорий', "Toifalar yo'q")}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -99,15 +118,20 @@ export default function Categories() {
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6">
-            <h3 className="font-bold mb-4">{editingId ? '✏️ Переименовать' : '📁 Новая категория'}</h3>
+            <h3 className="font-bold mb-4">{editingId ? tr('Переименовать', 'Nomini o\'zgartirish') : tr('Новая категория', 'Yangi toifa')}</h3>
             <form onSubmit={e => { e.preventDefault(); handleSave(); }}>
-              <input value={name} onChange={e => setName(e.target.value)} autoFocus
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4" placeholder="Название категории" />
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                autoFocus
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4"
+                placeholder={tr('Название категории', 'Toifa nomi')}
+              />
               <div style={{ display: 'flex', gap: 12 }}>
                 <button type="submit" disabled={saving} className="flex-1 bg-blue-600 text-white py-2 rounded-lg disabled:opacity-50">
-                  {saving ? '...' : editingId ? 'Сохранить' : 'Создать'}
+                  {saving ? '...' : editingId ? tr('Сохранить', 'Saqlash') : tr('Создать', 'Yaratish')}
                 </button>
-                <Button onClick={() => setShowForm(false)} className="px-6 py-2 bg-gray-100 rounded-lg">Отмена</Button>
+                <Button onClick={() => setShowForm(false)} className="px-6 py-2 bg-gray-100 rounded-lg">{tr('Отмена', 'Bekor qilish')}</Button>
               </div>
             </form>
           </div>

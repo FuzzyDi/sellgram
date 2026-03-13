@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
-import { uploadFile, ensureBucket, resolveBucketAndObjectPath } from '../../lib/s3.js';
+import { uploadFile, ensureBucket, resolveBucketAndObjectPath, buildProductImageObjectPath } from '../../lib/s3.js';
 import crypto from 'node:crypto';
 
 const createProductSchema = z.object({
@@ -180,7 +180,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Stock updated' };
   });
 
-  // ── Product Images ─────────────────────────────────────
+  // Product images
   fastify.post('/products/:id/images', async (request, reply) => {
     const { id } = request.params as { id: string };
 
@@ -192,7 +192,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     // Max 10 images per product
     const imageCount = await prisma.productImage.count({ where: { productId: id } });
     if (imageCount >= 10) {
-      return reply.status(400).send({ success: false, error: 'Максимум 10 фото на товар' });
+      return reply.status(400).send({ success: false, error: 'Maximum 10 images per product' });
     }
 
     const file = await request.file();
@@ -200,7 +200,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowedTypes.includes(file.mimetype)) {
-      return reply.status(400).send({ success: false, error: 'Допустимы: JPEG, PNG, WebP, GIF' });
+      return reply.status(400).send({ success: false, error: 'Allowed types: JPEG, PNG, WebP, GIF' });
     }
 
     try {
@@ -209,7 +209,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
 
       // Validate file size (5MB max)
       if (buffer.length > 5 * 1024 * 1024) {
-        return reply.status(400).send({ success: false, error: 'Максимальный размер — 5 МБ' });
+        return reply.status(400).send({ success: false, error: 'Maximum file size is 5 MB' });
       }
 
       // Resize and compress with sharp (if available)
@@ -226,10 +226,10 @@ export default async function productRoutes(fastify: FastifyInstance) {
           .webp({ quality: 82 })
           .toBuffer();
       } catch {
-        // sharp not available — upload original
+        // sharp is optional; if unavailable, upload original file
       }
 
-      const fileName = `products/${id}/${crypto.randomUUID()}.webp`;
+      const fileName = buildProductImageObjectPath(request.tenantId!, id, `${crypto.randomUUID()}.webp`);
       const url = await uploadFile(fileName, buffer, 'image/webp');
 
       const image = await prisma.productImage.create({
@@ -238,7 +238,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
 
       return { success: true, data: image };
     } catch (err: any) {
-      return reply.status(500).send({ success: false, error: 'Ошибка загрузки' });
+      return reply.status(500).send({ success: false, error: 'Upload failed' });
     }
   });
 
@@ -268,3 +268,4 @@ export default async function productRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Image deleted' };
   });
 }
+

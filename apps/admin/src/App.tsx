@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminApi, setTokens, clearTokens } from './api/client';
+import { adminApi, setTokens, clearTokens } from './api/store-admin-client';
 import Button from './components/Button';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -121,7 +121,7 @@ export default function App() {
     const token = localStorage.getItem('accessToken');
     if (token) {
       adminApi.me()
-        .then((user) => setAuth({ user, tenant: user.tenant }))
+        .then((user: any) => setAuth({ user, tenant: user.tenant }))
         .catch(() => clearTokens())
         .finally(() => setLoading(false));
     } else {
@@ -170,3 +170,5 @@ export default function App() {
     </div>
   );
 }
+
+

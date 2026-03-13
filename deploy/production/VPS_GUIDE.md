@@ -45,7 +45,7 @@ mv sellgram /opt/sellgram
 ```
 
 ## 3. Configure Production Env
-Edit [`.env.prod`](/E:/Projects/sellgram/deploy/production/.env.prod) on the server:
+Edit `.env.prod` on the server:
 
 ```bash
 cd /opt/sellgram/deploy/production
@@ -124,7 +124,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 Health endpoint:
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8088/health
 ```
 
 Expected response:
@@ -136,7 +136,7 @@ Expected response:
 If `SSL_MODE` is `self-signed` or `letsencrypt`, also test:
 
 ```bash
-curl -k https://localhost:8443/health
+curl -k https://localhost:8448/health
 ```
 
 ## 7. Telegram Webhook
@@ -236,3 +236,5 @@ MinIO bootstrap problems:
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.prod logs minio-init
 ```
+
+

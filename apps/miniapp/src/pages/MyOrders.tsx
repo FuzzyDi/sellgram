@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { BottomNav } from './Catalog';
@@ -11,13 +11,13 @@ export default function MyOrders() {
 
   const SC = useMemo(() => ({
     NEW: { emoji: '🆕', label: tr('Новый', 'Yangi'), color: 'var(--accent)' },
-    CONFIRMED: { emoji: '✅', label: tr('Подтверждён', 'Tasdiqlandi'), color: 'var(--success)' },
+    CONFIRMED: { emoji: '✅', label: tr('Подтвержден', 'Tasdiqlandi'), color: 'var(--success)' },
     PREPARING: { emoji: '👨‍🍳', label: tr('Готовится', 'Tayyorlanmoqda'), color: 'var(--warning)' },
     READY: { emoji: '📦', label: tr('Готов', 'Tayyor'), color: '#af52de' },
     SHIPPED: { emoji: '🚚', label: tr('В пути', "Yo'lda"), color: '#5856d6' },
     DELIVERED: { emoji: '📬', label: tr('Доставлен', 'Yetkazildi'), color: '#30b0c7' },
-    COMPLETED: { emoji: '🎉', label: tr('Завершён', 'Yakunlandi'), color: 'var(--success)' },
-    CANCELLED: { emoji: '❌', label: tr('Отменён', 'Bekor qilindi'), color: 'var(--danger)' },
+    COMPLETED: { emoji: '🎉', label: tr('Завершен', 'Yakunlandi'), color: 'var(--success)' },
+    CANCELLED: { emoji: '❌', label: tr('Отменен', 'Bekor qilindi'), color: 'var(--danger)' },
     REFUNDED: { emoji: '↩️', label: tr('Возврат', 'Qaytarildi'), color: 'var(--hint)' },
   }) as const, [tr]);
 
@@ -42,7 +42,7 @@ export default function MyOrders() {
       {orders.length === 0 ? (
         <div className="anim-scale" style={{ textAlign: 'center', padding: '72px 16px' }}>
           <div style={{ fontSize: 56, marginBottom: 12 }}>📦</div>
-          <p style={{ fontSize: 18, fontWeight: 600 }}>{tr('Заказов пока нет', 'Hozircha buyurtmalar yo‘q')}</p>
+          <p style={{ fontSize: 18, fontWeight: 600 }}>{tr('Заказов пока нет', "Hozircha buyurtmalar yo'q")}</p>
           <p style={{ fontSize: 14, color: 'var(--hint)', marginTop: 4 }}>{tr('Самое время сделать первый!', 'Birinchi buyurtma qilish vaqti keldi!')}</p>
         </div>
       ) : (

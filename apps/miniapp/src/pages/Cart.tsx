@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { BottomNav } from './Catalog';
@@ -44,8 +44,8 @@ export default function Cart() {
       {items.length === 0 ? (
         <div className="anim-scale" style={{ textAlign: 'center', padding: '72px 16px' }}>
           <div style={{ fontSize: 56, marginBottom: 12 }}>🛒</div>
-          <p style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{tr('Корзина пуста', 'Savat bo‘sh')}</p>
-          <p style={{ fontSize: 14, color: 'var(--hint)', marginBottom: 20 }}>{tr('Добавьте товары из каталога', 'Katalogdan mahsulot qo‘shing')}</p>
+          <p style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{tr('Корзина пуста', "Savat bo'sh")}</p>
+          <p style={{ fontSize: 14, color: 'var(--hint)', marginBottom: 20 }}>{tr('Добавьте товары из каталога', "Katalogdan mahsulot qo'shing")}</p>
           <button onClick={() => navigate('/')} className="pressable" style={{ padding: '10px 24px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--btn)', color: 'var(--btn-text)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             {tr('В каталог', 'Katalogga')}
           </button>

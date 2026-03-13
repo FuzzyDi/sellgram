@@ -1,4 +1,4 @@
-import { z } from 'zod';
+﻿import { z } from 'zod';
 
 const envSchema = z.object({
   DATABASE_URL: z.string(),
@@ -27,12 +27,12 @@ const envSchema = z.object({
   LEGAL_ENTITY_SHORT_NAME: z.string().default('SellGram'),
   LEGAL_ENTITY_ADDRESS: z.string().default('Tashkent, Uzbekistan'),
   LEGAL_ENTITY_INN: z.string().default('XXXXXXXXX'),
-  BILLING_BANK_NAME: z.string().default('Капиталбанк'),
+  BILLING_BANK_NAME: z.string().default('Kapitalbank'),
   BILLING_BANK_ACCOUNT: z.string().default('2020 8000 9051 XXXX XXXX'),
-  BILLING_RECIPIENT: z.string().default('ООО "SellGram"'),
+  BILLING_RECIPIENT: z.string().default('OOO "SellGram"'),
   BILLING_INN: z.string().default('XXXXXXXXX'),
   BILLING_MFO: z.string().default('XXXXX'),
-  BILLING_PAYMENT_NOTE: z.string().default('Оплата подписки SellGram'),
+  BILLING_PAYMENT_NOTE: z.string().default('SellGram subscription payment'),
   GA_MEASUREMENT_ID: z.string().optional(),
   YANDEX_METRIKA_ID: z.string().optional(),
   API_PORT: z.coerce.number().default(4000),

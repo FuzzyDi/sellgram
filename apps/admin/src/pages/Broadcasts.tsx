@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { adminApi } from '../api/client';
+import { adminApi } from '../api/store-admin-client';
 import Button from '../components/Button';
+import { useAdminI18n } from '../i18n';
 
 export default function Broadcasts() {
+  const { tr } = useAdminI18n();
   const [stores, setStores] = useState<any[]>([]);
   const [storeId, setStoreId] = useState('');
   const [customers, setCustomers] = useState<any[]>([]);
@@ -74,7 +76,7 @@ export default function Broadcasts() {
       setMessage('');
       setSelectedCustomerIds([]);
       await loadCampaigns(storeId);
-      alert('Campaign sent');
+      alert(tr('Campaign sent', 'Xabar yuborildi'));
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -88,44 +90,43 @@ export default function Broadcasts() {
     );
   }
 
-  if (loading) return <p className="text-gray-400">Loading broadcasts...</p>;
+  if (loading) return <p className="text-gray-400">{tr('Loading broadcasts...', 'Xabarlar yuklanmoqda...')}</p>;
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-1">Broadcasts</h2>
-      <p className="text-sm text-gray-500 mb-5">Send promotional messages to all or selected customers.</p>
+      <h2 className="text-2xl font-bold mb-1">{tr('Broadcasts', 'Xabarnomalar')}</h2>
+      <p className="text-sm text-gray-500 mb-5">{tr('Send promotional messages to all or selected customers.', 'Barcha yoki tanlangan mijozlarga xabar yuboring.')}</p>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white border rounded-xl p-4">
-          <h3 className="font-semibold mb-3">New Campaign</h3>
-          <label className="text-xs text-gray-500">Store</label>
+          <h3 className="font-semibold mb-3">{tr('New campaign', 'Yangi xabar')}</h3>
+          <label className="text-xs text-gray-500">{tr('Store', "Do'kon")}</label>
           <select value={storeId} onChange={(e) => setStoreId(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm mb-3">
             {stores.map((store) => (
               <option key={store.id} value={store.id}>{store.name}</option>
             ))}
           </select>
 
-          <label className="text-xs text-gray-500">Title (optional)</label>
+          <label className="text-xs text-gray-500">{tr('Title (optional)', 'Sarlavha (ixtiyoriy)')}</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
 
-          <label className="text-xs text-gray-500">Message</label>
-          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5}
-            className="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
+          <label className="text-xs text-gray-500">{tr('Message', 'Xabar')}</label>
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} className="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
 
           <div className="mb-3">
-            <label className="text-xs text-gray-500 block mb-1">Target Type</label>
+            <label className="text-xs text-gray-500 block mb-1">{tr('Target type', 'Qamrov turi')}</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button
                 onClick={() => setTargetType('ALL')}
                 className={`px-3 py-1.5 rounded-lg text-sm ${targetType === 'ALL' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
               >
-                All Customers
+                {tr('All customers', 'Barcha mijozlar')}
               </Button>
               <Button
                 onClick={() => setTargetType('SELECTED')}
                 className={`px-3 py-1.5 rounded-lg text-sm ${targetType === 'SELECTED' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
               >
-                Selected
+                {tr('Selected', 'Tanlanganlar')}
               </Button>
             </div>
           </div>
@@ -144,7 +145,7 @@ export default function Broadcasts() {
                   </span>
                 </label>
               ))}
-              {filteredCustomers.length === 0 && <p className="text-sm text-gray-400">No customers yet.</p>}
+              {filteredCustomers.length === 0 && <p className="text-sm text-gray-400">{tr('No customers yet.', "Hali mijozlar yo'q.")}</p>}
             </div>
           )}
 
@@ -153,26 +154,26 @@ export default function Broadcasts() {
             disabled={!canSend || sending}
             className="w-full bg-blue-600 text-white py-2 rounded-lg disabled:opacity-50"
           >
-            {sending ? 'Sending...' : 'Send Campaign'}
+            {sending ? tr('Sending...', 'Yuborilmoqda...') : tr('Send campaign', 'Yuborish')}
           </button>
         </div>
 
         <div className="bg-white border rounded-xl p-4">
-          <h3 className="font-semibold mb-3">Recent Campaigns</h3>
+          <h3 className="font-semibold mb-3">{tr('Recent campaigns', "So'nggi xabarlar")}</h3>
           <div className="space-y-3">
             {campaigns.map((campaign) => (
               <div key={campaign.id} className="border rounded-lg p-3">
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <p className="font-medium">{campaign.title || 'Untitled campaign'}</p>
+                  <p className="font-medium">{campaign.title || tr('Untitled campaign', 'Sarlavhasiz xabar')}</p>
                   <span className="text-xs px-2 py-1 rounded bg-gray-100">{campaign.status}</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">{campaign.message}</p>
                 <p className="text-xs text-gray-400 mt-2">
-                  Recipients: {campaign.totalRecipients} | Sent: {campaign.sentCount} | Failed: {campaign.failedCount}
+                  {tr('Recipients', 'Qabul qiluvchilar')}: {campaign.totalRecipients} | {tr('Sent', 'Yuborilgan')}: {campaign.sentCount} | {tr('Failed', 'Xato')}: {campaign.failedCount}
                 </p>
               </div>
             ))}
-            {campaigns.length === 0 && <p className="text-sm text-gray-400">No campaigns sent yet.</p>}
+            {campaigns.length === 0 && <p className="text-sm text-gray-400">{tr('No campaigns sent yet.', 'Hali xabar yuborilmagan.')}</p>}
           </div>
         </div>
       </div>

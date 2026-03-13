@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
@@ -12,13 +12,13 @@ export default function OrderStatus({ id }: { id: string }) {
 
   const SC = useMemo(() => ({
     NEW: { emoji: '🆕', label: tr('Новый', 'Yangi'), color: 'var(--accent)' },
-    CONFIRMED: { emoji: '✅', label: tr('Подтверждён', 'Tasdiqlandi'), color: '#34c759' },
+    CONFIRMED: { emoji: '✅', label: tr('Подтвержден', 'Tasdiqlandi'), color: '#34c759' },
     PREPARING: { emoji: '👨‍🍳', label: tr('Готовится', 'Tayyorlanmoqda'), color: '#ff9500' },
     READY: { emoji: '📦', label: tr('Готов', 'Tayyor'), color: '#af52de' },
     SHIPPED: { emoji: '🚚', label: tr('В пути', "Yo'lda"), color: '#5856d6' },
     DELIVERED: { emoji: '📬', label: tr('Доставлен', 'Yetkazildi'), color: '#30b0c7' },
-    COMPLETED: { emoji: '🎉', label: tr('Завершён', 'Yakunlandi'), color: '#34c759' },
-    CANCELLED: { emoji: '❌', label: tr('Отменён', 'Bekor qilindi'), color: '#ff3b30' },
+    COMPLETED: { emoji: '🎉', label: tr('Завершен', 'Yakunlandi'), color: '#34c759' },
+    CANCELLED: { emoji: '❌', label: tr('Отменен', 'Bekor qilindi'), color: '#ff3b30' },
     REFUNDED: { emoji: '↩️', label: tr('Возврат', 'Qaytarildi'), color: '#8e8e93' },
   }) as const, [tr]);
 

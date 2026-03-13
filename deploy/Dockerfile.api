@@ -18,6 +18,7 @@ RUN pnpm install --no-frozen-lockfile --prod=false
 COPY packages/shared/ packages/shared/
 COPY packages/prisma/ packages/prisma/
 COPY apps/api/ apps/api/
+COPY apps/landing/ /landing/
 
 # Generate Prisma client from workspace root
 RUN pnpm -w exec prisma generate --schema packages/prisma/schema.prisma

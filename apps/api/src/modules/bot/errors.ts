@@ -1,0 +1,13 @@
+export const SHOP_READ_ERROR_STATUS: Record<string, number> = {
+  PRODUCT_NOT_FOUND: 404,
+  ORDER_NOT_FOUND: 404,
+};
+
+export const CART_ERROR_STATUS: Record<string, number> = {
+  INVALID_INPUT: 400,
+  INVALID_QTY: 400,
+  PRODUCT_NOT_FOUND: 404,
+  VARIANT_NOT_FOUND: 404,
+  NOT_ENOUGH_STOCK: 400,
+  ITEM_NOT_FOUND: 404,
+};

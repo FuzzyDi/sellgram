@@ -1,4 +1,4 @@
-# 🪟 ShopBot — Запуск на Windows
+# 🪟 SellGram — Запуск на Windows
 
 ## Требования
 
@@ -32,8 +32,8 @@ docker compose version
 ## Шаг 2: Распаковка и установка
 
 ```powershell
-# Распаковать архив (или скопировать папку shopbot)
-cd C:\projects\shopbot
+# Распаковать архив (или скопировать папку sellgram)
+cd C:\projects\sellgram
 
 # Установить зависимости
 pnpm install
@@ -52,9 +52,9 @@ docker compose ps
 ```
 
 Должны быть запущены:
-- `shopbot-db` (PostgreSQL) → порт 5433
-- `shopbot-redis` (Redis) → порт 6379
-- `shopbot-minio` (MinIO) → порт 9000/9001
+- `sellgram-db` (PostgreSQL) → порт 5433
+- `sellgram-redis` (Redis) → порт 6379
+- `sellgram-minio` (MinIO) → порт 9000/9001
 
 ---
 

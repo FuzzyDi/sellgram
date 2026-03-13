@@ -1,0 +1,27 @@
+import { z } from 'zod';
+
+export const systemAdminLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+export const systemAdminTenantListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  search: z.string().trim().optional(),
+});
+
+export const systemAdminStoreListQuerySchema = z.object({
+  tenantId: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+export const systemAdminIdParamSchema = z.object({
+  id: z.string().min(1),
+});
+
+export const systemAdminUpdateTenantPlanSchema = z.object({
+  plan: z.enum(['FREE', 'PRO', 'BUSINESS']),
+  planExpiresAt: z.string().datetime().optional(),
+});

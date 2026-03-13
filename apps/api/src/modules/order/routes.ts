@@ -1,8 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
-import { canTransition } from '@shopbot/shared';
+import { canTransition } from '@sellgram/shared';
 import { notifyOrderStatus } from '../../bot/bot-manager.js';
+import { applyOrderPaymentStatus } from '../../payments/service.js';
 
 const updateStatusSchema = z.object({
   status: z.enum(['CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'REFUNDED']),
@@ -70,7 +71,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     const body = updateStatusSchema.parse(request.body);
 
     try {
-      const txResult = await prisma.$transaction(async (tx) => {
+      const txResult = await prisma.$transaction(async (tx: any) => {
         const order = await tx.order.findFirst({
           where: { id, tenantId: request.tenantId! },
           include: { items: true, customer: true },
@@ -142,7 +143,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
                 points: order.loyaltyPointsUsed,
                 balanceAfter: order.customer.loyaltyPoints + order.loyaltyPointsUsed,
                 orderId: order.id,
-                description: 'Возврат баллов: заказ отменен',
+                description: 'Loyalty points returned: order cancelled',
               },
             });
           }
@@ -169,7 +170,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
                   points: pointsEarned,
                   balanceAfter: customer.loyaltyPoints,
                   orderId: order.id,
-                  description: `Начисление за заказ #${order.orderNumber}`,
+                  description: 'Loyalty points earned for order #' + order.orderNumber,
                 },
               });
             }
@@ -230,11 +231,23 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = updatePaymentSchema.parse(request.body);
 
-    const result = await prisma.order.updateMany({
-      where: { id, tenantId: request.tenantId! },
-      data: { paymentStatus: body.paymentStatus },
-    });
-    if (result.count === 0) return reply.status(404).send({ success: false, error: 'Order not found' });
-    return { success: true, message: 'Payment status updated' };
+    try {
+      await applyOrderPaymentStatus(prisma, {
+        orderId: id,
+        tenantId: request.tenantId!,
+        status: body.paymentStatus,
+      });
+      return { success: true, message: 'Payment status updated' };
+    } catch (err: any) {
+      if (err.message === 'ORDER_NOT_FOUND') {
+        return reply.status(404).send({ success: false, error: 'Order not found' });
+      }
+      if (err.message.startsWith('BAD_PAYMENT_TRANSITION:')) {
+        const [, from, to] = err.message.split(':');
+        return reply.status(400).send({ success: false, error: `Cannot change payment status from ${from} to ${to}` });
+      }
+      return reply.status(400).send({ success: false, error: err.message });
+    }
   });
 }
+

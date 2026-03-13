@@ -14,20 +14,26 @@ function normalizeImageUrl(url?: string | null): string | null | undefined {
   if (!url) return url;
   if (url.startsWith('/uploads/')) return url;
 
+  const trimmed = url.replace(/^\/+/, '');
+  if (trimmed.startsWith('uploads/')) {
+    return `/${trimmed}`;
+  }
+
   if (url.startsWith('http://') || url.startsWith('https://')) {
     try {
       const parsed = new URL(url);
-      const parts = parsed.pathname.split('/').filter(Boolean);
-      if (parts.length === 0) return url;
+      const path = parsed.pathname.replace(/^\/+/, '');
+      if (!path) return url;
+      if (path.startsWith('uploads/')) return `/${path}`;
       // Keep full path after host, including bucket if present:
       // /sellgram/products/a.webp -> /uploads/sellgram/products/a.webp
-      return `/uploads/${parts.join('/')}`;
+      return `/uploads/${path}`;
     } catch {
       return url;
     }
   }
 
-  return `/uploads/${url.replace(/^\/+/, '')}`;
+  return `/uploads/${trimmed}`;
 }
 
 function normalizeCatalog(data: any) {
@@ -98,6 +104,7 @@ export const api = {
   removeCartItem: (id: string) =>
     request<any>(`/shop/cart/items/${id}`, { method: 'DELETE' }),
   getDeliveryZones: () => request<any>('/shop/delivery-zones'),
+  getPaymentMethods: () => request<any>('/shop/payment-methods'),
   checkout: (data: any) =>
     request<any>('/shop/checkout', {
       method: 'POST',
@@ -107,3 +114,4 @@ export const api = {
   getOrder: (id: string) => request<any>(`/shop/orders/${id}`),
   getLoyalty: () => request<any>('/shop/loyalty'),
 };
+

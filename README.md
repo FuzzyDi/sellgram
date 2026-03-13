@@ -1,4 +1,4 @@
-# 🤖 ShopBot — Telegram Store Bot SaaS Platform
+# 🤖 SellGram — Telegram Store Bot SaaS Platform
 
 > Build and run your online store entirely inside Telegram.
 
@@ -17,7 +17,7 @@
 
 ```bash
 # 1. Clone and install
-git clone <repo-url> shopbot && cd shopbot
+git clone <repo-url> sellgram && cd sellgram
 pnpm install
 
 # 2. Start infrastructure
@@ -39,10 +39,10 @@ pnpm dev
 pnpm bootstrap
 ```
 
-See `docs/PLATFORM_BOOTSTRAP.md` for system-admin API, payment methods, broadcasts, and demo credentials.
+See `docs/SYSTEM_BOOTSTRAP.md` for system-admin API, payment methods, broadcasts, and demo credentials.
 
 **URLs:**
-- API: http://localhost:3000
+- API: http://localhost:4000
 - Admin: http://localhost:5173
 - Mini App: http://localhost:5174
 - MinIO Console: http://localhost:9001
@@ -70,7 +70,7 @@ Node.js 20 | TypeScript | Fastify 4 | Prisma 5 | PostgreSQL 16 | Redis 7 | BullM
 ## Project Structure
 
 ```
-shopbot/
+sellgram/
 ├── apps/
 │   ├── api/           # Backend (Fastify + Grammy)
 │   │   ├── src/
@@ -95,3 +95,5 @@ See `.env.example` for all required variables.
 ## License
 
 Proprietary — All rights reserved.
+
+

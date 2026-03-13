@@ -1,5 +1,5 @@
 {
-  "name": "@shopbot/api",
+  "name": "@sellgram/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,8 +16,8 @@
     "sharp": "^0.33.0",
     "@fastify/rate-limit": "^9.1.0",
     "@prisma/client": "^5.14.0",
-    "@shopbot/shared": "workspace:*",
-    "@shopbot/prisma": "workspace:*",
+    "@sellgram/shared": "workspace:*",
+    "@sellgram/prisma": "workspace:*",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.7.0",
     "dotenv": "^16.4.0",
@@ -39,3 +39,4 @@
     "vitest": "^1.6.0"
   }
 }
+

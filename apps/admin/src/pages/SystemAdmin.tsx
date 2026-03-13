@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { clearSystemToken, setSystemToken, systemApi } from '../api/client';
+import { clearSystemToken, setSystemToken, systemApi } from '../api/system-admin-client';
 import Button from '../components/Button';
+import { useAdminI18n } from '../i18n';
 
 export default function SystemAdmin() {
+  const { tr } = useAdminI18n();
   const [loggedIn, setLoggedIn] = useState(!!sessionStorage.getItem('systemToken'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,9 +46,7 @@ export default function SystemAdmin() {
     setLoading(true);
     try {
       const data = await systemApi.login(email.trim(), password);
-      if (data?.token) {
-        setSystemToken(data.token);
-      }
+      if (data?.token) setSystemToken(data.token);
       setLoggedIn(true);
     } catch (err: any) {
       setLoginError(err.message);
@@ -58,6 +58,11 @@ export default function SystemAdmin() {
   function logout() {
     clearSystemToken();
     setLoggedIn(false);
+  }
+
+  function goToStoreAdmin() {
+    clearSystemToken();
+    window.location.hash = '/';
   }
 
   async function setPlan(tenantId: string, plan: 'FREE' | 'PRO' | 'BUSINESS') {
@@ -82,24 +87,15 @@ export default function SystemAdmin() {
   if (!loggedIn) {
     return (
       <div style={{ maxWidth: 420, margin: '50px auto', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 24 }}>
-        <h2 className="text-2xl font-bold mb-1">System Admin</h2>
-        <p className="text-sm text-gray-500 mb-4">Separate global control panel for the whole platform.</p>
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          className="w-full border rounded-lg px-3 py-2 text-sm mb-2"
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          className="w-full border rounded-lg px-3 py-2 text-sm mb-3"
-        />
+        <h2 className="text-2xl font-bold mb-1">{tr('Глобальный админ платформы', 'Platforma global admini')}</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          {tr('Отдельная консоль для управления платформой и подписками.', "Platforma va obunalarni boshqarish uchun alohida konsol.")}
+        </p>
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full border rounded-lg px-3 py-2 text-sm mb-2" />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr('Пароль', 'Parol')} className="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
         {loginError && <p className="text-sm text-red-600 mb-2">{loginError}</p>}
         <button onClick={login} disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded-lg disabled:opacity-50">
-          {loading ? 'Signing in...' : 'Sign In'}
+          {loading ? tr('Вход...', 'Kirilmoqda...') : tr('Войти', 'Kirish')}
         </button>
       </div>
     );
@@ -109,18 +105,25 @@ export default function SystemAdmin() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
         <div>
-          <h2 className="text-2xl font-bold">System Admin Console</h2>
-          <p className="text-sm text-gray-500">Global moderation and platform-level controls.</p>
+          <h2 className="text-2xl font-bold">{tr('Консоль глобального админа', 'Global admin konsoli')}</h2>
+          <p className="text-sm text-gray-500">
+            {tr('Контроль платформы, планов подписки и модерации платежей за подписку.', "Platforma, obuna rejasi va obuna to'lovlarini moderatsiya qilish.")}
+          </p>
         </div>
-        <Button onClick={logout} className="px-3 py-2 text-sm bg-gray-100 rounded-lg">Logout</Button>
+        <Button onClick={logout} className="px-3 py-2 text-sm bg-gray-100 rounded-lg">{tr('Выйти', 'Chiqish')}</Button>
+      </div>
+      <div className="mb-4">
+        <Button onClick={goToStoreAdmin} className="px-3 py-2 text-sm bg-white border rounded-lg">
+          {tr('Перейти в админку магазина', "Do'kon adminiga o'tish")}
+        </Button>
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-4">
         {[
-          { label: 'Tenants', value: dashboard?.tenants ?? '-' },
-          { label: 'Active Stores', value: dashboard?.activeStores ?? '-' },
-          { label: 'Pending Invoices', value: dashboard?.pendingInvoices ?? '-' },
-          { label: 'Monthly Orders', value: dashboard?.monthlyOrders ?? '-' },
+          { label: tr('Тенанты', 'Tenantlar'), value: dashboard?.tenants ?? '-' },
+          { label: tr('Активные магазины', "Faol do'konlar"), value: dashboard?.activeStores ?? '-' },
+          { label: tr('Счета на модерации', "Ko'rib chiqilayotgan hisoblar"), value: dashboard?.pendingInvoices ?? '-' },
+          { label: tr('Заказы за месяц', 'Oylik buyurtmalar'), value: dashboard?.monthlyOrders ?? '-' },
         ].map((item) => (
           <div key={item.label} className="bg-white border rounded-xl p-4">
             <p className="text-xs text-gray-500">{item.label}</p>
@@ -131,7 +134,7 @@ export default function SystemAdmin() {
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white border rounded-xl p-4">
-          <h3 className="font-semibold mb-3">Tenants</h3>
+          <h3 className="font-semibold mb-3">{tr('Тенанты', 'Tenantlar')}</h3>
           <div className="space-y-2 max-h-96 overflow-auto">
             {tenants.map((tenant) => (
               <div key={tenant.id} className="border rounded-lg p-3">
@@ -153,7 +156,7 @@ export default function SystemAdmin() {
         </div>
 
         <div className="bg-white border rounded-xl p-4">
-          <h3 className="font-semibold mb-3">Pending Invoices</h3>
+          <h3 className="font-semibold mb-3">{tr('Счета на модерации', "Ko'rib chiqilayotgan hisoblar")}</h3>
           <div className="space-y-2 max-h-56 overflow-auto mb-4">
             {invoices.map((invoice) => (
               <div key={invoice.id} className="border rounded-lg p-3">
@@ -162,17 +165,17 @@ export default function SystemAdmin() {
                   <span className="text-xs">{invoice.plan}</span>
                 </div>
                 <p className="text-sm">{Number(invoice.amount).toLocaleString()} UZS</p>
-                <p className="text-xs text-gray-500 mt-1">{invoice.paymentRef || 'No payment ref'}</p>
+                <p className="text-xs text-gray-500 mt-1">{invoice.paymentRef || tr('Нет payment ref', "Payment ref yo'q")}</p>
                 <div className="mt-2 flex gap-2">
-                  <Button onClick={() => moderateInvoice(invoice.id, 'confirm')} className="px-2 py-1 text-xs rounded bg-green-100 text-green-700">Confirm</Button>
-                  <Button onClick={() => moderateInvoice(invoice.id, 'reject')} className="px-2 py-1 text-xs rounded bg-red-100 text-red-700">Reject</Button>
+                  <Button onClick={() => moderateInvoice(invoice.id, 'confirm')} className="px-2 py-1 text-xs rounded bg-green-100 text-green-700">{tr('Подтвердить', 'Tasdiqlash')}</Button>
+                  <Button onClick={() => moderateInvoice(invoice.id, 'reject')} className="px-2 py-1 text-xs rounded bg-red-100 text-red-700">{tr('Отклонить', 'Rad etish')}</Button>
                 </div>
               </div>
             ))}
-            {invoices.length === 0 && <p className="text-sm text-gray-400">No pending invoices.</p>}
+            {invoices.length === 0 && <p className="text-sm text-gray-400">{tr('Нет счетов на модерации', "Ko'rib chiqish uchun hisob yo'q")}</p>}
           </div>
 
-          <h3 className="font-semibold mb-3">Stores</h3>
+          <h3 className="font-semibold mb-3">{tr('Магазины', "Do'konlar")}</h3>
           <div className="space-y-2 max-h-40 overflow-auto">
             {stores.map((store) => (
               <div key={store.id} className="border rounded-lg p-2">
@@ -186,3 +189,4 @@ export default function SystemAdmin() {
     </div>
   );
 }
+

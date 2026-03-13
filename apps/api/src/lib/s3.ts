@@ -2,7 +2,6 @@ import { Client as MinioClient } from 'minio';
 import { getConfig } from '../config/index.js';
 
 let s3Client: MinioClient;
-const LEGACY_S3_BUCKETS = ['sellgram', 'shopbot'] as const;
 
 export function getS3(): MinioClient {
   if (!s3Client) {
@@ -37,20 +36,34 @@ export async function uploadFile(
   await getS3().putObject(bucket, fileName, data, data.length, {
     'Content-Type': contentType,
   });
-  // Return proxy URL (served by /uploads/* route)
   return `/uploads/${fileName}`;
 }
 
 export function resolveBucketAndObjectPath(rawPath: string): { bucket: string; objectPath: string } {
   const normalized = rawPath.replace(/^\/+/, '');
   const segments = normalized.split('/').filter(Boolean);
+
+  if (!segments.length || segments.some((segment) => segment === '..')) {
+    throw new Error('Invalid object path');
+  }
+
   const defaultBucket = getConfig().S3_BUCKET;
-  const bucketCandidates = Array.from(new Set([defaultBucket, ...LEGACY_S3_BUCKETS]));
-  const maybeBucket = segments[0];
-  const explicitBucket = bucketCandidates.includes(maybeBucket as typeof bucketCandidates[number]) ? maybeBucket : null;
+  const explicitBucket = segments[0] === defaultBucket ? segments[0] : null;
+  const objectPath = explicitBucket ? segments.slice(1).join('/') : normalized;
+
+  if (!objectPath || objectPath.includes('..')) {
+    throw new Error('Invalid object path');
+  }
 
   return {
-    bucket: explicitBucket ?? defaultBucket,
-    objectPath: explicitBucket ? segments.slice(1).join('/') : normalized,
+    bucket: defaultBucket,
+    objectPath,
   };
+}
+
+export function buildProductImageObjectPath(tenantId: string, productId: string, fileName: string): string {
+  const safeTenantId = tenantId.replace(/[^a-zA-Z0-9_-]/g, '');
+  const safeProductId = productId.replace(/[^a-zA-Z0-9_-]/g, '');
+  const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '');
+  return `products/${safeTenantId}/${safeProductId}/${safeFileName}`;
 }

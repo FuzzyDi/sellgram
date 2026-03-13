@@ -2,7 +2,23 @@ import { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
 import { registerSchema, loginSchema, refreshSchema } from './schema.js';
 import * as authService from './service.js';
+import { AuthServiceError } from './service.js';
 import prisma from '../../lib/prisma.js';
+
+function mapAuthError(err: unknown) {
+  if (err instanceof AuthServiceError) {
+    if (err.code === 'EMAIL_ALREADY_REGISTERED') return { status: 400, error: 'Email already registered' };
+    if (err.code === 'TENANT_SLUG_TAKEN') return { status: 400, error: 'Tenant slug already taken' };
+    if (err.code === 'INVALID_CREDENTIALS') return { status: 401, error: 'Invalid credentials' };
+    if (err.code === 'USER_NOT_FOUND') return { status: 401, error: 'User not found' };
+  }
+
+  if (err instanceof Error) {
+    return { status: 400, error: err.message };
+  }
+
+  return { status: 400, error: 'Bad request' };
+}
 
 export default async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/auth/register', {
@@ -17,8 +33,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
       const body = registerSchema.parse(request.body);
       const result = await authService.register(body);
       return { success: true, data: result };
-    } catch (err: any) {
-      return reply.status(400).send({ success: false, error: err.message });
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
     }
   });
 
@@ -34,8 +51,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
       const body = loginSchema.parse(request.body);
       const result = await authService.login(body);
       return { success: true, data: result };
-    } catch (err: any) {
-      return reply.status(401).send({ success: false, error: err.message });
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
     }
   });
 
@@ -51,8 +69,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
       const body = refreshSchema.parse(request.body);
       const result = await authService.refresh(body.refreshToken);
       return { success: true, data: result };
-    } catch (err: any) {
-      return reply.status(401).send({ success: false, error: err.message });
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
     }
   });
 

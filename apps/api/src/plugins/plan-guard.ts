@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma.js';
-import { PLANS, type PlanCode } from '@shopbot/shared';
+import { PLANS, type PlanCode } from '@sellgram/shared';
 
 type LimitKey = keyof (typeof PLANS)['FREE']['limits'];
 
@@ -80,3 +80,4 @@ export function planGuard(limitKey: LimitKey) {
     }
   };
 }
+

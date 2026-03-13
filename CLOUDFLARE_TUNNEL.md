@@ -1,4 +1,4 @@
-# ☁️ ShopBot + Cloudflare Tunnel (Windows)
+# ☁️ SellGram + Cloudflare Tunnel (Windows)
 
 > Бесплатный HTTPS для Telegram webhook без VPS и публичного IP.
 
@@ -7,7 +7,7 @@
 ## Как это работает
 
 ```
-Telegram → https://shopbot.yourdomain.com → Cloudflare → cloudflared.exe → localhost:4000
+Telegram → https://sellgram.yourdomain.com → Cloudflare → cloudflared.exe → localhost:4000
 ```
 
 Cloudflare Tunnel создаёт зашифрованный туннель от вашего компьютера до Cloudflare.
@@ -31,8 +31,8 @@ Cloudflare Tunnel создаёт зашифрованный туннель от 
 # Проверить существующие туннели
 cloudflared tunnel list
 
-# Создать новый туннель для ShopBot
-cloudflared tunnel create shopbot
+# Создать новый туннель для SellGram
+cloudflared tunnel create sellgram
 ```
 
 Запомните **Tunnel ID** (будет что-то вроде `a1b2c3d4-e5f6-7890-abcd-ef1234567890`).
@@ -45,16 +45,16 @@ cloudflared tunnel create shopbot
 
 ```powershell
 # Замените yourdomain.com на ваш домен
-cloudflared tunnel route dns shopbot shopbot.yourdomain.com
+cloudflared tunnel route dns sellgram sellgram.yourdomain.com
 ```
 
-Это создаст CNAME-запись `shopbot.yourdomain.com` → `TUNNEL_ID.cfargotunnel.com`.
+Это создаст CNAME-запись `sellgram.yourdomain.com` → `TUNNEL_ID.cfargotunnel.com`.
 
 Если хотите несколько поддоменов:
 
 ```powershell
-cloudflared tunnel route dns shopbot admin.yourdomain.com
-cloudflared tunnel route dns shopbot app.yourdomain.com
+cloudflared tunnel route dns sellgram admin.yourdomain.com
+cloudflared tunnel route dns sellgram app.yourdomain.com
 ```
 
 ---
@@ -63,9 +63,9 @@ cloudflared tunnel route dns shopbot app.yourdomain.com
 
 Откройте (или создайте) файл конфигурации.
 
-Если у вас уже есть `config.yml` для других туннелей, вам нужен **отдельный конфиг** для ShopBot.
+Если у вас уже есть `config.yml` для других туннелей, вам нужен **отдельный конфиг** для SellGram.
 
-Создайте файл `C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\shopbot-config.yml`:
+Создайте файл `C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\sellgram-config.yml`:
 
 ### Вариант A: Один поддомен (всё через один URL)
 
@@ -75,7 +75,7 @@ credentials-file: C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\TUNNEL_ID_HERE.json
 
 ingress:
   # Всё на один домен → API на порту 4000
-  - hostname: shopbot.yourdomain.com
+  - hostname: sellgram.yourdomain.com
     service: http://localhost:4000
   # Catch-all (обязательно)
   - service: http_status:404
@@ -89,7 +89,7 @@ credentials-file: C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\TUNNEL_ID_HERE.json
 
 ingress:
   # API + Webhook
-  - hostname: shopbot.yourdomain.com
+  - hostname: sellgram.yourdomain.com
     service: http://localhost:4000
   # Admin Panel
   - hostname: admin.yourdomain.com
@@ -108,7 +108,7 @@ ingress:
 ## Шаг 4: Запуск туннеля
 
 ```powershell
-cloudflared tunnel --config C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\shopbot-config.yml run shopbot
+cloudflared tunnel --config C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\sellgram-config.yml run sellgram
 ```
 
 Должны увидеть:
@@ -121,7 +121,7 @@ INF Connection established connIndex=1 ...
 
 ```powershell
 # От администратора
-cloudflared service install --config C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\shopbot-config.yml
+cloudflared service install --config C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\sellgram-config.yml
 ```
 
 > ⚠️ Если у вас уже есть cloudflared service, то нельзя создать второй.
@@ -132,31 +132,31 @@ cloudflared service install --config C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\sho
 
 ## Шаг 5: Проверка
 
-1. Убедитесь что ShopBot запущен:
+1. Убедитесь что SellGram запущен:
    ```powershell
    # Терминал 1: Docker
    docker compose up -d
 
    # Терминал 2: API
-   cd C:\Projects\shopbot\apps\api
+   cd C:\Projects\sellgram\apps\api
    pnpm dev
    # → Server running on http://localhost:4000
 
    # Терминал 3: Admin (опционально, для dev)
-   cd C:\Projects\shopbot\apps\admin
+   cd C:\Projects\sellgram\apps\admin
    pnpm dev
    ```
 
 2. Проверьте туннель:
-   - https://shopbot.yourdomain.com/health → `{"status":"ok"}`
-   - https://shopbot.yourdomain.com → Admin Panel (если запущен)
+   - https://sellgram.yourdomain.com/health → `{"status":"ok"}`
+   - https://sellgram.yourdomain.com → Admin Panel (если запущен)
 
 ---
 
 ## Шаг 6: Если уже есть 2 туннеля на одном сервисе
 
 Если cloudflared уже запущен как сервис Windows с другими туннелями,
-лучше **добавить ShopBot в существующий конфиг**, а не создавать отдельный.
+лучше **добавить SellGram в существующий конфиг**, а не создавать отдельный.
 
 Найдите ваш текущий `config.yml`:
 ```powershell
@@ -164,7 +164,7 @@ cloudflared service install --config C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\sho
 type C:\Users\<ВАШ_ЮЗЕР>\.cloudflared\config.yml
 ```
 
-Добавьте ShopBot в существующий `ingress`:
+Добавьте SellGram в существующий `ingress`:
 
 ```yaml
 tunnel: ВАШ_СУЩЕСТВУЮЩИЙ_TUNNEL_ID
@@ -177,8 +177,8 @@ ingress:
   - hostname: existing2.yourdomain.com
     service: http://localhost:YYYY
 
-  # === Добавить ShopBot ===
-  - hostname: shopbot.yourdomain.com
+  # === Добавить SellGram ===
+  - hostname: sellgram.yourdomain.com
     service: http://localhost:4000
 
   # Catch-all (должен быть последним!)
@@ -194,7 +194,7 @@ net start cloudflared
 
 И добавьте DNS-запись:
 ```powershell
-cloudflared tunnel route dns ВАШ_TUNNEL_NAME shopbot.yourdomain.com
+cloudflared tunnel route dns ВАШ_TUNNEL_NAME sellgram.yourdomain.com
 ```
 
 ---
@@ -207,7 +207,7 @@ cloudflared tunnel route dns ВАШ_TUNNEL_NAME shopbot.yourdomain.com
 # Замените значения
 $BOT_TOKEN = "7123456789:AAHxxxxxxx"
 $STORE_ID = "id-из-admin-panel"
-$WEBHOOK_URL = "https://shopbot.yourdomain.com/webhook/$STORE_ID"
+$WEBHOOK_URL = "https://sellgram.yourdomain.com/webhook/$STORE_ID"
 
 # Установить вебхук
 curl "https://api.telegram.org/bot$BOT_TOKEN/setWebhook?url=$WEBHOOK_URL"
@@ -223,9 +223,9 @@ curl "https://api.telegram.org/bot$BOT_TOKEN/getWebhookInfo"
 После настройки туннеля обновите `.env`:
 
 ```env
-APP_URL=https://shopbot.yourdomain.com
-ADMIN_URL=https://shopbot.yourdomain.com
-MINIAPP_URL=https://shopbot.yourdomain.com/app
+APP_URL=https://sellgram.yourdomain.com
+ADMIN_URL=https://sellgram.yourdomain.com
+MINIAPP_URL=https://sellgram.yourdomain.com/app
 ```
 
 ---
@@ -255,7 +255,7 @@ MINIAPP_URL=https://shopbot.yourdomain.com/app
                │  HTTPS/SSL    │
                └───────┬───────┘
                        │
-          https://shopbot.yourdomain.com
+          https://sellgram.yourdomain.com
                        │
                ┌───────┴───────┐
                │   Telegram    │

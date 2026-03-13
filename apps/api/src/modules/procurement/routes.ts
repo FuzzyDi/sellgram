@@ -67,7 +67,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
       });
       const poNumber = (lastPO?.poNumber ?? 0) + 1;
 
-      const totalCost = body.items.reduce((sum, item) => sum + item.qty * item.unitCost, 0);
+      const totalCost = body.items.reduce((sum: number, item: any) => sum + item.qty * item.unitCost, 0);
 
       const po = await prisma.purchaseOrder.create({
         data: {
@@ -81,7 +81,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
           totalCost,
           note: body.note,
           items: {
-            create: body.items.map(item => ({
+            create: body.items.map((item: any) => ({
               productId: item.productId,
               qty: item.qty,
               unitCost: item.unitCost,
@@ -134,13 +134,13 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
     }
 
     const fxRate = Number(po.fxRate) || 1;
-    const totalForeignCost = po.items.reduce((sum, i) => sum + Number(i.totalCost), 0);
+    const totalForeignCost = po.items.reduce((sum: number, i: any) => sum + Number(i.totalCost), 0);
     const totalLocalCost = totalForeignCost * fxRate;
     const totalLanded = totalLocalCost + Number(po.shippingCost) + Number(po.customsCost);
 
     // Update each PO item + product stock + costPrice
     for (const receivedItem of items) {
-      const poItem = po.items.find(i => i.id === receivedItem.itemId);
+      const poItem = po.items.find((i: any) => i.id === receivedItem.itemId);
       if (!poItem) continue;
 
       // Update PO item

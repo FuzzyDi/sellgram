@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { useTelegram } from './hooks/useTelegram';
 import { setAuthData } from './api/client';
 import Catalog from './pages/Catalog';

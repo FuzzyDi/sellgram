@@ -1,17 +1,21 @@
 {
-  "name": "shopbot",
+  "name": "sellgram",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@9.1.0",
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "db:migrate": "pnpm --filter @shopbot/prisma run migrate",
-    "db:seed": "pnpm --filter @shopbot/prisma run seed",
-    "db:generate": "pnpm --filter @shopbot/prisma run generate",
-    "db:studio": "pnpm --filter @shopbot/prisma run studio",
+    "dev": "corepack pnpm -r --parallel --filter @sellgram/api --filter @sellgram/admin --filter @sellgram/miniapp run dev",
+    "build": "corepack pnpm -r --if-present run build",
+    "lint": "corepack pnpm -r --if-present run lint",
+    "test": "corepack pnpm --filter @sellgram/api test -- --run",
+    "dev:turbo": "turbo run dev",
+    "build:turbo": "turbo run build",
+    "lint:turbo": "turbo run lint",
+    "test:turbo": "turbo run test",
+    "db:migrate": "corepack pnpm --filter @sellgram/prisma run migrate",
+    "db:seed": "corepack pnpm --filter @sellgram/prisma run seed",
+    "db:generate": "corepack pnpm --filter @sellgram/prisma run generate",
+    "db:studio": "corepack pnpm --filter @sellgram/prisma run studio",
     "bootstrap": "powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1"
   },
   "dependencies": {
@@ -29,3 +33,4 @@
     }
   }
 }
+

@@ -126,7 +126,7 @@ async function main() {
       tenantId: tenantId,
       name: 'Demo Store Tashkent',
       botToken: encrypt(demoBotToken),
-      botUsername: 'demo_shopbot',
+      botUsername: 'demo_sellgram',
       welcomeMessage: 'Welcome to Demo Store! Open mini app and place your first order.',
       miniAppUrl: process.env.MINIAPP_URL || 'http://localhost:5174',
     },
@@ -423,7 +423,7 @@ async function main() {
 
   console.log('Seed completed successfully.');
   console.log('Admin panel: admin@demo.com / admin123');
-  console.log(`Demo bot token source: ${process.env.DEMO_BOT_TOKEN ? 'DEMO_BOT_TOKEN' : 'fallback placeholder (set DEMO_BOT_TOKEN)'}`);
+  console.log(`Demo bot token source: ${process.env.DEMO_BOT_TOKEN ? 'DEMO_BOT_TOKEN' : 'placeholder (set DEMO_BOT_TOKEN)'}`);
   console.log(`System admin: ${systemEmail} / ${systemPassword}`);
 }
 
@@ -435,4 +435,6 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+
 

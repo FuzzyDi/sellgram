@@ -31,7 +31,8 @@ jobs:
         run: pnpm build
 
       - name: Lint API and shared packages
-        run: pnpm --filter @shopbot/api lint && pnpm --filter @shopbot/shared lint
+        run: pnpm --filter @sellgram/api lint && pnpm --filter @sellgram/shared lint
 
       - name: Test API
-        run: pnpm --filter @shopbot/api exec vitest run --passWithNoTests
+        run: pnpm --filter @sellgram/api exec vitest run --passWithNoTests
+

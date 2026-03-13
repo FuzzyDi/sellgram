@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { adminApi } from '../api/client';
+import { adminApi } from '../api/store-admin-client';
+import { useAdminI18n } from '../i18n';
 
 export default function Customers() {
+  const { tr } = useAdminI18n();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -11,17 +13,17 @@ export default function Customers() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">👥 Клиенты</h2>
+      <h2 className="text-2xl font-bold mb-6">👥 {tr('Клиенты', 'Mijozlar')}</h2>
 
-      {loading ? <p className="text-gray-400">Загрузка...</p> : (
+      {loading ? <p className="text-gray-400">{tr('Загрузка...', 'Yuklanmoqda...')}</p> : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-gray-500 border-b bg-gray-50">
-              <th className="px-4 py-3">Клиент</th>
+              <th className="px-4 py-3">{tr('Клиент', 'Mijoz')}</th>
               <th className="px-4 py-3">Telegram</th>
-              <th className="px-4 py-3">Заказов</th>
-              <th className="px-4 py-3">Потрачено</th>
-              <th className="px-4 py-3">Баллы</th>
+              <th className="px-4 py-3">{tr('Заказов', 'Buyurtmalar')}</th>
+              <th className="px-4 py-3">{tr('Потрачено', 'Sarflangan')}</th>
+              <th className="px-4 py-3">{tr('Баллы', 'Ballar')}</th>
             </tr></thead>
             <tbody>
               {data?.items?.map((c: any) => (
@@ -38,7 +40,7 @@ export default function Customers() {
               ))}
             </tbody>
           </table>
-          {data && <div className="px-4 py-3 text-sm text-gray-500 border-t">Всего: {data.total}</div>}
+          {data && <div className="px-4 py-3 text-sm text-gray-500 border-t">{tr('Всего', 'Jami')}: {data.total}</div>}
         </div>
       )}
     </div>

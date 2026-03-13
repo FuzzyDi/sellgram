@@ -84,7 +84,7 @@ async function main() {
   // Auth plugin (decorates fastify.authenticate)
   await fastify.register(authPlugin);
 
-  // Multipart (file uploads — max 5MB)
+  // Multipart (file uploads, max 5MB)
   await fastify.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } });
 
   await fastify.register(rateLimit, {
@@ -100,7 +100,7 @@ async function main() {
     }),
   });
 
-  // Global error handler — prevent leaking internal errors
+  // Global error handler: prevent leaking internal errors
   fastify.setErrorHandler((error, request, reply) => {
     const statusCode = error.statusCode || 500;
 
@@ -125,7 +125,7 @@ async function main() {
     return this.toString();
   };
 
-  // ── Landing page + static pages ────────────────────────
+  // Landing page + static pages
   fastify.get('/', { config: { rateLimit: false } }, async (request, reply) => {
     const fs = await import('node:fs');
     const path = await import('node:path');
@@ -191,7 +191,7 @@ async function main() {
     timestamp: new Date().toISOString(),
   }));
 
-  // ── Admin API (/api/admin/*) ──────────────────────────────
+  // Store Admin API (/api/store-admin/*)
   const authRoutes = (await import('./modules/auth/routes.js')).default;
   const storeRoutes = (await import('./modules/store/routes.js')).default;
   const productRoutes = (await import('./modules/product/routes.js')).default;
@@ -221,53 +221,36 @@ async function main() {
       await app.register(subscriptionRoutes);
       await app.register(broadcastRoutes);
     },
-    { prefix: '/api/admin' }
+    { prefix: '/api/store-admin' }
   );
 
-  // ── Shop API (/api/shop/*) for Mini App ───────────────────
+  // Shop API (/api/shop/*) for Mini App
   const shopApiRoutes = (await import('./modules/bot/shop-api.js')).default;
+  const paymentRoutes = (await import('./modules/payment/routes.js')).default;
   await fastify.register(shopApiRoutes, { prefix: '/api' });
-  await fastify.register(systemAdminRoutes, { prefix: '/api/system' });
+  await fastify.register(paymentRoutes, { prefix: '/api' });
+  await fastify.register(systemAdminRoutes, { prefix: '/api/system-admin' });
 
-  // ── Image proxy (MinIO → public) ────────────────────────
+  // Image proxy (MinIO -> public)
   fastify.get('/uploads/*', { config: { rateLimit: false } }, async (request, reply) => {
     const rawPath = (request.params as any)['*'] as string;
     try {
       const { getS3 } = await import('./lib/s3.js');
-      const { getConfig } = await import('./config/index.js');
-      const cfg = getConfig();
       const resolved = resolveBucketAndObjectPath(rawPath);
-      const tryBuckets = rawPath === resolved.objectPath
-        ? Array.from(new Set([cfg.S3_BUCKET, resolved.bucket, 'sellgram', 'shopbot']))
-        : [resolved.bucket];
-
-      let stream: any = null;
-      let lastErr: unknown = null;
-      for (const bucket of tryBuckets) {
-        try {
-          stream = await getS3().getObject(bucket, resolved.objectPath);
-          break;
-        } catch (err) {
-          lastErr = err;
-        }
-      }
-
-      if (!stream) {
-        throw lastErr ?? new Error('Object not found');
-      }
+      const stream = await getS3().getObject(resolved.bucket, resolved.objectPath);
 
       reply.header('Cache-Control', 'public, max-age=86400');
       return reply.send(stream);
     } catch {
-      return reply.status(404).send({ error: 'Image not found' });
+      return reply.status(404).send({ success: false, error: 'Image not found' });
     }
   });
 
-  // ── Telegram Webhook ──────────────────────────────────────
+  // Telegram Webhook
   const botRoutes = (await import('./modules/bot/routes.js')).default;
   await fastify.register(botRoutes);
 
-  // ── Initialize bot instances ──────────────────────────────
+  // Initialize bot instances
   try {
     const { initBotManager } = await import('./bot/bot-manager.js');
     await initBotManager(fastify);
@@ -277,10 +260,10 @@ async function main() {
     fastify.log.error(err.stack);
   }
 
-  // ── Start ─────────────────────────────────────────────────
+  // Start
   try {
     await fastify.listen({ port: config.API_PORT, host: '0.0.0.0' });
-    fastify.log.info(`🚀 Server running on http://localhost:${config.API_PORT}`);
+    fastify.log.info(`Server running on http://localhost:${config.API_PORT}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -288,3 +271,8 @@ async function main() {
 }
 
 main();
+
+
+
+
+

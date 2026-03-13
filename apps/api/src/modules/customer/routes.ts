@@ -29,7 +29,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
     ]);
 
     // Convert BigInt to string for JSON serialization
-    const serializedItems = items.map(c => ({ ...c, telegramId: c.telegramId.toString() }));
+    const serializedItems = items.map((c: any) => ({ ...c, telegramId: c.telegramId.toString() }));
 
     return {
       success: true,
@@ -91,10 +91,11 @@ export default async function customerRoutes(fastify: FastifyInstance) {
         type: 'ADJUST',
         points,
         balanceAfter: newBalance,
-        description: description || 'Ручная корректировка',
+        description: description || 'Manual adjustment',
       },
     });
 
     return { success: true, data: { loyaltyPoints: newBalance } };
   });
 }
+

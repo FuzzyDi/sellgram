@@ -1,4 +1,4 @@
-generator client {
+﻿generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-1.1.x"]
 }
@@ -37,11 +37,19 @@ enum OrderStatus {
 
 enum PaymentMethod {
   CASH_ON_DELIVERY
+  MANUAL_TRANSFER
+  TELEGRAM
+  CLICK
+  PAYME
+  UZUM
+  STRIPE
+  CUSTOM
 }
 
 enum PaymentProvider {
   CASH
   MANUAL_TRANSFER
+  TELEGRAM
   CLICK
   PAYME
   UZUM
@@ -138,7 +146,7 @@ model Store {
   botToken       String   // AES-256-GCM encrypted
   botUsername     String?
   webhookSecret  String   @default(cuid())
-  welcomeMessage String?  @default("Добро пожаловать! 🛍️ Нажмите кнопку ниже, чтобы открыть магазин.")
+  welcomeMessage String?  @default("Welcome! Tap the button below to open the store.")
   miniAppUrl     String?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
@@ -590,3 +598,8 @@ model SystemAdmin {
 
   @@map("system_admins")
 }
+
+
+
+
+

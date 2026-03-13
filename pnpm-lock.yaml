@@ -77,10 +77,10 @@ importers:
       '@prisma/client':
         specifier: ^5.14.0
         version: 5.22.0(prisma@5.22.0)
-      '@shopbot/prisma':
+      '@sellgram/prisma':
         specifier: workspace:*
         version: link:../../packages/prisma
-      '@shopbot/shared':
+      '@sellgram/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       bcrypt:
@@ -4597,3 +4597,4 @@ snapshots:
   yocto-queue@1.2.2: {}
 
   zod@3.25.76: {}
+

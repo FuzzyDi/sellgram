@@ -1,29 +1,29 @@
-# 🛒 SellGram — Настройка доменов sellgram.uz
+﻿# рџ›’ SellGram вЂ” РќР°СЃС‚СЂРѕР№РєР° РґРѕРјРµРЅРѕРІ sellgram.uz
 
-## Архитектура доменов
+## РђСЂС…РёС‚РµРєС‚СѓСЂР° РґРѕРјРµРЅРѕРІ
 
 ```
-sellgram.uz          → Landing (лендинг для привлечения клиентов)
-                       Порт: 4000 (отдаётся API как статика)
+sellgram.uz          в†’ Landing (Р»РµРЅРґРёРЅРі РґР»СЏ РїСЂРёРІР»РµС‡РµРЅРёСЏ РєР»РёРµРЅС‚РѕРІ)
+                       РџРѕСЂС‚: 4000 (РѕС‚РґР°С‘С‚СЃСЏ API РєР°Рє СЃС‚Р°С‚РёРєР°)
 
-app.sellgram.uz      → Admin Panel (управление магазином)
-                       Порт: 5173 (Vite dev / nginx в проде)
+app.sellgram.uz      в†’ Admin Panel (СѓРїСЂР°РІР»РµРЅРёРµ РјР°РіР°Р·РёРЅРѕРј)
+                       РџРѕСЂС‚: 5173 (Vite dev / nginx РІ РїСЂРѕРґРµ)
 
-miniapp.sellgram.uz  → Telegram Mini App (магазин для покупателей)
-                       Порт: 5174 (Vite dev / nginx в проде)
+miniapp.sellgram.uz  в†’ Telegram Mini App (РјР°РіР°Р·РёРЅ РґР»СЏ РїРѕРєСѓРїР°С‚РµР»РµР№)
+                       РџРѕСЂС‚: 5174 (Vite dev / nginx РІ РїСЂРѕРґРµ)
 
-api.sellgram.uz      → API Backend (Fastify + Prisma + Grammy)
-                       Порт: 4000
+api.sellgram.uz      в†’ API Backend (Fastify + Prisma + Grammy)
+                       РџРѕСЂС‚: 4000
 
-admin.sellgram.uz    → Редирект на app.sellgram.uz
+admin.sellgram.uz    в†’ Р РµРґРёСЂРµРєС‚ РЅР° app.sellgram.uz
 ```
 
-## Шаг 1: DNS записи в Cloudflare
+## РЁР°Рі 1: DNS Р·Р°РїРёСЃРё РІ Cloudflare
 
-Домен sellgram.uz должен быть в Cloudflare. Добавьте CNAME записи:
+Р”РѕРјРµРЅ sellgram.uz РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РІ Cloudflare. Р”РѕР±Р°РІСЊС‚Рµ CNAME Р·Р°РїРёСЃРё:
 
 ```powershell
-# Создайте DNS роуты для tunnel
+# РЎРѕР·РґР°Р№С‚Рµ DNS СЂРѕСѓС‚С‹ РґР»СЏ tunnel
 cloudflared tunnel route dns sbg-local sellgram.uz
 cloudflared tunnel route dns sbg-local app.sellgram.uz
 cloudflared tunnel route dns sbg-local admin.sellgram.uz
@@ -31,55 +31,57 @@ cloudflared tunnel route dns sbg-local miniapp.sellgram.uz
 cloudflared tunnel route dns sbg-local api.sellgram.uz
 ```
 
-Или вручную в Cloudflare Dashboard:
+РР»Рё РІСЂСѓС‡РЅСѓСЋ РІ Cloudflare Dashboard:
 | Type  | Name    | Content                                  | Proxy |
 |-------|---------|------------------------------------------|-------|
-| CNAME | @       | 171cfcbf-...cfunnel.com                  | ✅    |
-| CNAME | app     | 171cfcbf-...cfunnel.com                  | ✅    |
-| CNAME | admin   | 171cfcbf-...cfunnel.com                  | ✅    |
-| CNAME | miniapp | 171cfcbf-...cfunnel.com                  | ✅    |
-| CNAME | api     | 171cfcbf-...cfunnel.com                  | ✅    |
+| CNAME | @       | 171cfcbf-...cfunnel.com                  | вњ…    |
+| CNAME | app     | 171cfcbf-...cfunnel.com                  | вњ…    |
+| CNAME | admin   | 171cfcbf-...cfunnel.com                  | вњ…    |
+| CNAME | miniapp | 171cfcbf-...cfunnel.com                  | вњ…    |
+| CNAME | api     | 171cfcbf-...cfunnel.com                  | вњ…    |
 
-## Шаг 2: Tunnel config
+## РЁР°Рі 2: Tunnel config
 
-Скопируйте `.cloudflared/config.yml` в `C:\Users\Администратор\.cloudflared\config.yml`
+РЎРєРѕРїРёСЂСѓР№С‚Рµ `.cloudflared/config.yml` РІ `C:\Users\РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ\.cloudflared\config.yml`
 
 ```powershell
-Copy-Item C:\Projects\shopbot\.cloudflared\config.yml C:\Users\Администратор\.cloudflared\config.yml -Force
+Copy-Item C:\Projects\sellgram\.cloudflared\config.yml C:\Users\РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ\.cloudflared\config.yml -Force
 ```
 
-## Шаг 3: Перезапуск tunnel
+## РЁР°Рі 3: РџРµСЂРµР·Р°РїСѓСЃРє tunnel
 
 ```powershell
-# Остановите текущий tunnel (Ctrl+C или)
+# РћСЃС‚Р°РЅРѕРІРёС‚Рµ С‚РµРєСѓС‰РёР№ tunnel (Ctrl+C РёР»Рё)
 cloudflared tunnel run sbg-local
 ```
 
-## Шаг 4: Обновите webhook бота
+## РЁР°Рі 4: РћР±РЅРѕРІРёС‚Рµ webhook Р±РѕС‚Р°
 
 ```powershell
 $BOT_TOKEN = "YOUR_BOT_TOKEN"
 $STORE_ID = "YOUR_STORE_ID"
 
-# Новый webhook URL
+# РќРѕРІС‹Р№ webhook URL
 Invoke-RestMethod "https://api.telegram.org/bot$BOT_TOKEN/setWebhook?url=https://api.sellgram.uz/webhook/$STORE_ID"
 
-# Обновить miniAppUrl
-$token = (Invoke-RestMethod -Method POST -Uri "http://localhost:4000/api/admin/auth/login" -ContentType "application/json" -Body '{"email":"admin@demo.com","password":"admin123"}').data.accessToken
+# РћР±РЅРѕРІРёС‚СЊ miniAppUrl
+$token = (Invoke-RestMethod -Method POST -Uri "http://localhost:4000/api/store-admin/auth/login" -ContentType "application/json" -Body '{"email":"admin@demo.com","password":"admin123"}').data.accessToken
 
-Invoke-RestMethod -Method PATCH -Uri "http://localhost:4000/api/admin/stores/$STORE_ID" -ContentType "application/json" -Headers @{Authorization="Bearer $token"} -Body "{`"miniAppUrl`":`"https://miniapp.sellgram.uz?storeId=$STORE_ID`"}"
+Invoke-RestMethod -Method PATCH -Uri "http://localhost:4000/api/store-admin/stores/$STORE_ID" -ContentType "application/json" -Headers @{Authorization="Bearer $token"} -Body "{`"miniAppUrl`":`"https://miniapp.sellgram.uz?storeId=$STORE_ID`"}"
 ```
 
-## Шаг 5: Перезапуск
+## РЁР°Рі 5: РџРµСЂРµР·Р°РїСѓСЃРє
 
 ```powershell
-cd C:\Projects\shopbot
+cd C:\Projects\sellgram
 pnpm dev
 ```
 
-## Проверка
+## РџСЂРѕРІРµСЂРєР°
 
-- https://sellgram.uz → Лендинг
-- https://app.sellgram.uz → Админка (логин)
-- https://api.sellgram.uz/health → {"status":"ok"}
-- Telegram бот → /start → "Открыть магазин" → https://miniapp.sellgram.uz
+- https://sellgram.uz в†’ Р›РµРЅРґРёРЅРі
+- https://app.sellgram.uz в†’ РђРґРјРёРЅРєР° (Р»РѕРіРёРЅ)
+- https://api.sellgram.uz/health в†’ {"status":"ok"}
+- Telegram Р±РѕС‚ в†’ /start в†’ "РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ" в†’ https://miniapp.sellgram.uz
+
+

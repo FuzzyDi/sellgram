@@ -1,13 +1,24 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
+
+type PaymentMethod = {
+  id: string;
+  provider: string;
+  code: string;
+  title: string;
+  description?: string | null;
+  instructions?: string | null;
+  isDefault?: boolean;
+};
 
 export default function Checkout() {
   const { tr } = useMiniI18n();
   const [zones, setZones] = useState<any[]>([]);
   const [cart, setCart] = useState<any>(null);
   const [loyalty, setLoyalty] = useState<any>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [form, setForm] = useState({
     deliveryType: 'PICKUP',
     deliveryZoneId: '',
@@ -15,6 +26,7 @@ export default function Checkout() {
     contactPhone: '',
     note: '',
     loyaltyPointsToUse: 0,
+    paymentMethodId: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
@@ -23,16 +35,35 @@ export default function Checkout() {
     api.getDeliveryZones().then(setZones).catch(() => {});
     api.getCart().then(setCart).catch(() => {});
     api.getLoyalty().then(setLoyalty).catch(() => {});
+    api.getPaymentMethods()
+      .then((methods: PaymentMethod[]) => {
+        const list = Array.isArray(methods) ? methods : [];
+        setPaymentMethods(list);
+        const defaultMethod = list.find((m) => m.isDefault) || list[0];
+        if (defaultMethod) {
+          setForm((prev) => ({ ...prev, paymentMethodId: defaultMethod.id }));
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const selectedPaymentMethod = useMemo(
+    () => paymentMethods.find((method) => method.id === form.paymentMethodId) || null,
+    [paymentMethods, form.paymentMethodId]
+  );
 
   const zone = zones.find((z) => z.id === form.deliveryZoneId);
   const subtotal = cart?.subtotal || 0;
-  const deliveryFee = form.deliveryType === 'LOCAL' && zone
-    ? (zone.freeFrom && subtotal >= Number(zone.freeFrom) ? 0 : Number(zone.price))
-    : 0;
-  const discount = usePoints && loyalty?.config
-    ? Math.min(form.loyaltyPointsToUse * loyalty.config.pointValue, subtotal * 0.3)
-    : 0;
+  const deliveryFee =
+    form.deliveryType === 'LOCAL' && zone
+      ? zone.freeFrom && subtotal >= Number(zone.freeFrom)
+        ? 0
+        : Number(zone.price)
+      : 0;
+  const discount =
+    usePoints && loyalty?.config
+      ? Math.min(form.loyaltyPointsToUse * loyalty.config.pointValue, subtotal * 0.3)
+      : 0;
   const total = subtotal + deliveryFee - discount;
 
   const submit = async () => {
@@ -40,9 +71,17 @@ export default function Checkout() {
       alert(tr('Укажите адрес', 'Manzilni kiriting'));
       return;
     }
+    if (!form.paymentMethodId) {
+      alert(tr('Выберите способ оплаты', "To'lov usulini tanlang"));
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const order = await api.checkout({ ...form, loyaltyPointsToUse: usePoints ? form.loyaltyPointsToUse : 0 });
+      const order = await api.checkout({
+        ...form,
+        loyaltyPointsToUse: usePoints ? form.loyaltyPointsToUse : 0,
+      });
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       navigate(`/order/${order.id}`);
     } catch (err: any) {
@@ -102,12 +141,48 @@ export default function Checkout() {
 
         {form.deliveryType === 'LOCAL' && (
           <Section title={tr('Адрес', 'Manzil')}>
-            <textarea value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} rows={2} style={inputStyle} placeholder={tr('Улица, дом, квартира', 'Ko‘cha, uy, xonadon')} />
+            <textarea value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} rows={2} style={inputStyle} placeholder={tr('Улица, дом, квартира', 'Kocha, uy, xonadon')} />
           </Section>
         )}
 
         <Section title={tr('Телефон', 'Telefon')}>
           <input type="tel" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} style={inputStyle} placeholder="+998 90 123 45 67" />
+        </Section>
+
+        <Section title={tr('Способ оплаты', "To'lov usuli")}>
+          {paymentMethods.length === 0 ? (
+            <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius-sm)', padding: '12px 14px', color: 'var(--hint)', fontSize: 14 }}>
+              {tr('Способы оплаты не настроены', "To'lov usullari sozlanmagan")}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {paymentMethods.map((method) => (
+                <button
+                  key={method.id}
+                  onClick={() => setForm((prev) => ({ ...prev, paymentMethodId: method.id }))}
+                  className="pressable"
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: form.paymentMethodId === method.id ? 'var(--btn)' : 'var(--sec)',
+                    color: form.paymentMethodId === method.id ? 'var(--btn-text)' : 'var(--text)',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{method.title}</div>
+                  {method.description && <div style={{ marginTop: 2, fontSize: 12, opacity: 0.85 }}>{method.description}</div>}
+                </button>
+              ))}
+            </div>
+          )}
+          {selectedPaymentMethod?.instructions && (
+            <div style={{ marginTop: 8, background: 'rgba(0,135,90,0.08)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontSize: 13 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{tr('Инструкция по оплате', "To'lov bo'yicha ko'rsatma")}</div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{selectedPaymentMethod.instructions}</div>
+            </div>
+          )}
         </Section>
 
         <Section title={tr('Комментарий', 'Izoh')}>
@@ -140,7 +215,7 @@ export default function Checkout() {
       </div>
 
       <div className="glass" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30, padding: '10px 16px max(env(safe-area-inset-bottom, 0px), 10px)', borderTop: '0.5px solid var(--divider)' }}>
-        <button onClick={submit} disabled={submitting} className="pressable" style={{ width: '100%', padding: 16, borderRadius: 'var(--radius)', border: 'none', fontSize: 16, fontWeight: 700, cursor: 'pointer', background: submitting ? 'var(--hint)' : 'var(--success)', color: '#fff', transition: 'all 0.2s' }}>
+        <button onClick={submit} disabled={submitting || paymentMethods.length === 0} className="pressable" style={{ width: '100%', padding: 16, borderRadius: 'var(--radius)', border: 'none', fontSize: 16, fontWeight: 700, cursor: 'pointer', background: submitting ? 'var(--hint)' : 'var(--success)', color: '#fff', transition: 'all 0.2s' }}>
           {submitting ? tr('Оформляем...', 'Yuborilmoqda...') : `${tr('Подтвердить', 'Tasdiqlash')} · ${total.toLocaleString()} ${tr('сум', "so'm")}`}
         </button>
       </div>

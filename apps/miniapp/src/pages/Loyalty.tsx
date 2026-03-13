@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { BottomNav } from './Catalog';
 import { useMiniI18n } from '../i18n';
@@ -55,7 +55,7 @@ export default function Loyalty() {
 
       {txns.length === 0 && (
         <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--hint)' }}>
-          <p style={{ fontSize: 14 }}>{tr('Баллы начисляются за завершённые заказы', 'Ballar yakunlangan buyurtmalar uchun beriladi')}</p>
+          <p style={{ fontSize: 14 }}>{tr('Баллы начисляются за завершенные заказы', 'Ballar yakunlangan buyurtmalar uchun beriladi')}</p>
         </div>
       )}
 

@@ -90,14 +90,14 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     });
 
     // Fetch product details
-    const productIds = topProducts.map(p => p.productId);
+    const productIds = topProducts.map((p: any) => p.productId);
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
       select: { id: true, name: true, price: true, stockQty: true },
     });
 
-    const result = topProducts.map(tp => {
-      const product = products.find(p => p.id === tp.productId);
+    const result = topProducts.map((tp: any) => {
+      const product = products.find((p: any) => p.id === tp.productId);
       return {
         product,
         totalQty: tp._sum.qty,

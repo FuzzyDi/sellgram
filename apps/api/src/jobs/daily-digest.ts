@@ -24,11 +24,7 @@ export function createDailyDigestWorker(): Worker {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const [
-          todayOrders,
-          todayRevenue,
-          newCustomers,
-        ] = await Promise.all([
+        const [todayOrders, todayRevenue, newCustomers] = await Promise.all([
           prisma.order.count({
             where: { tenantId: store.tenantId, storeId: store.id, createdAt: { gte: today } },
           }),
@@ -46,29 +42,29 @@ export function createDailyDigestWorker(): Worker {
           }),
         ]);
 
-        // Low stock products: stockQty > 0 AND stockQty <= lowStockAlert
         const allProducts = await prisma.product.findMany({
           where: { tenantId: store.tenantId, isActive: true },
           select: { name: true, stockQty: true, lowStockAlert: true },
         });
+
         const lowStockProducts = allProducts
-          .filter(p => p.stockQty > 0 && p.stockQty <= p.lowStockAlert)
+          .filter((p: { stockQty: number; lowStockAlert: number }) => p.stockQty > 0 && p.stockQty <= p.lowStockAlert)
           .slice(0, 5);
 
         const revenue = Number(todayRevenue._sum.total) || 0;
 
         const digest = [
-          `📊 Дневной отчёт — ${new Date().toLocaleDateString('ru-RU')}`,
+          `?? Daily report - ${new Date().toLocaleDateString('uz-UZ')}`,
           '',
-          `💰 Выручка: ${revenue.toLocaleString()} UZS`,
-          `📦 Заказов сегодня: ${todayOrders}`,
-          `👤 Новых клиентов: ${newCustomers}`,
+          `?? Revenue: ${revenue.toLocaleString()} UZS`,
+          `?? Orders today: ${todayOrders}`,
+          `?? New customers: ${newCustomers}`,
         ];
 
         if (lowStockProducts.length > 0) {
-          digest.push('', '⚠️ Мало на складе:');
-          lowStockProducts.forEach(p => {
-            digest.push(`  • ${p.name}: ${p.stockQty} шт`);
+          digest.push('', '?? Low stock:');
+          lowStockProducts.forEach((p: any) => {
+            digest.push(`  � ${p.name}: ${p.stockQty} pcs`);
           });
         }
 
