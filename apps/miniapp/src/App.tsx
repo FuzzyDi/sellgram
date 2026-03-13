@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTelegram } from './hooks/useTelegram';
 import { setAuthData } from './api/client';
 import Catalog from './pages/Catalog';
@@ -17,11 +17,13 @@ function resolveDefaultLang(code?: string): Lang {
 
 function useRoute() {
   const [route, setRoute] = useState(window.location.hash.slice(1) || '/');
+
   useEffect(() => {
     const handler = () => setRoute(window.location.hash.slice(1) || '/');
     window.addEventListener('hashchange', handler);
     return () => window.removeEventListener('hashchange', handler);
   }, []);
+
   return route;
 }
 
@@ -31,10 +33,51 @@ export function navigate(path: string) {
 
 function LanguageSwitch() {
   const { lang, setLang } = useMiniI18n();
+
   return (
-    <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 99, background: 'rgba(15,23,42,0.78)', backdropFilter: 'blur(8px)', borderRadius: 999, padding: 3, display: 'flex', gap: 4 }}>
-      <button onClick={() => setLang('ru')} style={{ border: 'none', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: lang === 'ru' ? '#fff' : '#94a3b8', background: lang === 'ru' ? '#00875a' : 'transparent' }}>RU</button>
-      <button onClick={() => setLang('uz')} style={{ border: 'none', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: lang === 'uz' ? '#fff' : '#94a3b8', background: lang === 'uz' ? '#00875a' : 'transparent' }}>UZ</button>
+    <div
+      style={{
+        position: 'fixed',
+        top: 10,
+        right: 10,
+        zIndex: 99,
+        background: 'rgba(16, 33, 23, 0.82)',
+        borderRadius: 999,
+        padding: 3,
+        display: 'flex',
+        gap: 4,
+      }}
+    >
+      <button
+        onClick={() => setLang('ru')}
+        style={{
+          border: 'none',
+          borderRadius: 999,
+          padding: '4px 10px',
+          fontSize: 11,
+          fontWeight: 800,
+          color: lang === 'ru' ? '#fff' : '#aab9b0',
+          background: lang === 'ru' ? '#00875a' : 'transparent',
+          cursor: 'pointer',
+        }}
+      >
+        RU
+      </button>
+      <button
+        onClick={() => setLang('uz')}
+        style={{
+          border: 'none',
+          borderRadius: 999,
+          padding: '4px 10px',
+          fontSize: 11,
+          fontWeight: 800,
+          color: lang === 'uz' ? '#fff' : '#aab9b0',
+          background: lang === 'uz' ? '#00875a' : 'transparent',
+          cursor: 'pointer',
+        }}
+      >
+        UZ
+      </button>
     </div>
   );
 }
@@ -53,7 +96,11 @@ function AppShell() {
   }, [initData, webApp]);
 
   if (!ready) {
-    return <div className="flex items-center justify-center h-screen"><span>{tr('Загрузка...', 'Yuklanmoqda...')}</span></div>;
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <span>{tr('Загрузка...', 'Yuklanmoqda...')}</span>
+      </div>
+    );
   }
 
   const normalizedRoute = route.split('?')[0] || '/';
@@ -77,6 +124,7 @@ function AppShell() {
 export default function App() {
   const { user } = useTelegram();
   const defaultLang = useMemo(() => resolveDefaultLang(user?.language_code), [user?.language_code]);
+
   return (
     <MiniI18nProvider defaultLang={defaultLang}>
       <AppShell />

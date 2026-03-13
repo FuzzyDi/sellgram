@@ -1,182 +1,201 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="uz">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SellGram</title>
-  <meta name="description" content="SellGram: Telegram do'konini tez ishga tushiring." />
+  <meta name="description" content="SellGram: Telegram ichida do'kon ochish va boshqarish platformasi" />
   <style>
     :root {
-      --bg: #f5f7f4;
-      --card: #ffffff;
-      --text: #1f2a1f;
-      --muted: #5f6d5f;
-      --accent: #00875a;
-      --accent-2: #00a96f;
-      --border: #dbe4db;
-      --radius: 16px;
+      --bg: #f2f6f3;
+      --panel: #ffffff;
+      --panel-soft: #f7fbf8;
+      --text: #15231a;
+      --muted: #5d6d63;
+      --line: #dbe6df;
+      --brand: #00875a;
+      --brand-2: #00b376;
+      --radius: 18px;
+      --shadow: 0 20px 50px rgba(14, 42, 24, 0.08);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: "Segoe UI", Tahoma, sans-serif;
+      font-family: "Manrope", "IBM Plex Sans", "Segoe UI", sans-serif;
       color: var(--text);
       background:
-        radial-gradient(1200px 500px at 80% -200px, #dff4ea 0%, transparent 60%),
-        radial-gradient(800px 400px at -10% 100px, #eef9f2 0%, transparent 50%),
+        radial-gradient(900px 320px at 0% -120px, #d6f0e2 0%, transparent 65%),
+        radial-gradient(900px 340px at 100% -140px, #e4f7ee 0%, transparent 66%),
         var(--bg);
       line-height: 1.5;
     }
 
-    .wrap { max-width: 1120px; margin: 0 auto; padding: 20px; }
+    .wrap { max-width: 1160px; margin: 0 auto; padding: 22px; }
 
     .top {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 16px;
-      margin-bottom: 28px;
+      gap: 14px;
+      margin-bottom: 24px;
     }
 
     .brand {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 10px;
-      font-weight: 800;
+      font-weight: 900;
       font-size: 24px;
-      letter-spacing: -0.4px;
+      letter-spacing: -0.5px;
     }
 
-    .logo {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      color: white;
+    .brand-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
       display: grid;
       place-items: center;
+      color: #fff;
       font-weight: 900;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
     }
 
     .lang {
       display: inline-flex;
-      background: #e8efea;
       border-radius: 999px;
+      background: #e8f0eb;
       padding: 4px;
       gap: 4px;
     }
 
     .lang button {
       border: none;
-      background: transparent;
-      padding: 8px 14px;
       border-radius: 999px;
+      padding: 8px 14px;
       cursor: pointer;
-      font-weight: 700;
-      color: #435243;
+      font-size: 12px;
+      font-weight: 800;
+      color: #415045;
+      background: transparent;
     }
 
     .lang button.active {
-      background: #0f172a;
+      background: #0f1f16;
       color: #fff;
     }
 
     .hero {
-      background: var(--card);
-      border: 1px solid var(--border);
+      background: var(--panel);
+      border: 1px solid var(--line);
       border-radius: calc(var(--radius) + 4px);
+      box-shadow: var(--shadow);
       padding: 44px;
       display: grid;
       grid-template-columns: 1.2fr 1fr;
-      gap: 28px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
-      margin-bottom: 22px;
+      gap: 26px;
+      margin-bottom: 16px;
     }
 
     .hero h1 {
-      font-size: clamp(30px, 5vw, 50px);
-      line-height: 1.08;
+      font-size: clamp(32px, 5vw, 54px);
+      line-height: 1.05;
+      letter-spacing: -0.9px;
       margin-bottom: 14px;
-      letter-spacing: -0.8px;
     }
 
     .hero p {
       color: var(--muted);
-      margin-bottom: 22px;
       font-size: 18px;
+      margin-bottom: 22px;
       max-width: 560px;
     }
 
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
     .btn {
-      border: none;
       text-decoration: none;
-      cursor: pointer;
       border-radius: 12px;
       padding: 13px 20px;
-      font-weight: 700;
+      font-size: 14px;
+      font-weight: 800;
+      border: 1px solid transparent;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      cursor: pointer;
     }
 
     .btn.primary {
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
       color: #fff;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
     }
 
     .btn.ghost {
-      border: 1px solid var(--border);
+      color: #26362b;
       background: #fff;
-      color: #2a382a;
+      border-color: var(--line);
     }
 
-    .card {
-      border: 1px solid var(--border);
+    .step {
+      border: 1px solid var(--line);
       border-radius: var(--radius);
-      background: #f9fcf9;
+      background: var(--panel-soft);
       padding: 18px;
-      margin-bottom: 10px;
     }
 
-    .card h3 { margin-bottom: 6px; font-size: 18px; }
-    .card p { color: var(--muted); font-size: 14px; }
+    .step h3 { font-size: 17px; margin-bottom: 6px; }
+    .step p { font-size: 14px; color: var(--muted); margin: 0; }
 
     .features {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 12px;
-      margin-bottom: 22px;
+      margin: 12px 0 20px;
     }
 
     .feature {
-      background: var(--card);
-      border: 1px solid var(--border);
+      background: var(--panel);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
       padding: 18px;
     }
 
     .feature .icon { font-size: 22px; margin-bottom: 8px; }
-    .feature h4 { margin-bottom: 6px; font-size: 16px; }
-    .feature p { color: var(--muted); font-size: 14px; }
+    .feature h4 { font-size: 16px; margin-bottom: 6px; }
+    .feature p { font-size: 14px; color: var(--muted); }
+
+    .links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .links a {
+      font-size: 13px;
+      font-weight: 700;
+      color: #214b36;
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: #fff;
+    }
 
     .bottom {
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 10px;
+      flex-wrap: wrap;
       color: var(--muted);
       font-size: 13px;
-      padding: 10px 2px;
+      padding: 8px 2px;
     }
 
-    @media (max-width: 900px) {
-      .hero { grid-template-columns: 1fr; padding: 24px; }
+    @media (max-width: 920px) {
+      .hero { grid-template-columns: 1fr; padding: 28px; }
       .features { grid-template-columns: 1fr; }
     }
   </style>
@@ -184,7 +203,7 @@
 <body>
   <div class="wrap">
     <header class="top">
-      <div class="brand"><div class="logo">S</div>SellGram</div>
+      <div class="brand"><span class="brand-badge">S</span>SellGram</div>
       <div class="lang">
         <button id="lang-uz" class="active" type="button">UZ</button>
         <button id="lang-ru" type="button">RU</button>
@@ -197,23 +216,22 @@
         <p data-i18n="hero_desc"></p>
         <div class="actions">
           <a class="btn primary" href="https://app.sellgram.uz" data-i18n="cta_primary"></a>
-          <a class="btn ghost" href="/guide" data-i18n="cta_secondary"></a>
+          <a class="btn ghost" href="/guide.html" data-i18n="cta_secondary"></a>
         </div>
       </div>
-
       <div>
-        <div class="card">
+        <article class="step">
           <h3 data-i18n="step1_title"></h3>
           <p data-i18n="step1_desc"></p>
-        </div>
-        <div class="card">
+        </article>
+        <article class="step" style="margin-top:10px">
           <h3 data-i18n="step2_title"></h3>
           <p data-i18n="step2_desc"></p>
-        </div>
-        <div class="card">
+        </article>
+        <article class="step" style="margin-top:10px">
           <h3 data-i18n="step3_title"></h3>
           <p data-i18n="step3_desc"></p>
-        </div>
+        </article>
       </div>
     </section>
 
@@ -235,6 +253,12 @@
       </article>
     </section>
 
+    <div class="links">
+      <a href="/privacy.html" data-i18n="link_privacy"></a>
+      <a href="/terms.html" data-i18n="link_terms"></a>
+      <a href="/guide.html" data-i18n="link_guide"></a>
+    </div>
+
     <footer class="bottom">
       <span>© <span id="year"></span> SellGram</span>
       <span data-i18n="footer_right"></span>
@@ -245,41 +269,47 @@
     const dict = {
       uz: {
         hero_title: "Telegram ichida do'konni 5 daqiqada ishga tushiring",
-        hero_desc: "SellGram bilan katalog, savat, buyurtma va mijoz bilan ishlashni bitta platformada boshqaring.",
+        hero_desc: "SellGram katalog, savat, buyurtma va mijozlar bilan ishlashni bitta panelda boshqaradi.",
         cta_primary: "Do'kon yaratish",
-        cta_secondary: "Qo'llanma",
+        cta_secondary: "Qadam-baqadam qo'llanma",
         step1_title: "1. Botni ulang",
         step1_desc: "Bot token kiriting va do'konni faollashtiring.",
-        step2_title: "2. Mahsulot kiriting",
-        step2_desc: "Toifa, narx, rasm va qoldiqni boshqaring.",
-        step3_title: "3. Savdoni boshlang",
-        step3_desc: "Mijoz Telegram ichida buyurtma beradi, siz panelda nazorat qilasiz.",
+        step2_title: "2. Mahsulot joylang",
+        step2_desc: "Toifa, narx, rasm va qoldiqni kiriting.",
+        step3_title: "3. Sotuvni boshlang",
+        step3_desc: "Mijoz Telegram ichida buyurtma beradi, siz paneldan nazorat qilasiz.",
         f1_title: "Miniapp katalog",
-        f1_desc: "Mijozlar uchun qulay mahsulot ko'rinishi va tez savat.",
+        f1_desc: "Mijoz uchun qulay katalog, tez savat va buyurtma.",
         f2_title: "Buyurtma oqimi",
-        f2_desc: "Yangi, tayyorlanmoqda, yuborildi va yakunlandi statuslari.",
-        f3_title: "Loyallik va to'lovlar",
-        f3_desc: "Ballar, qo'lda to'lov va egaga mos sozlamalar.",
-        footer_right: "UZ va RU tillari to'liq qo'llab-quvvatlanadi",
+        f2_desc: "Yangi, tayyorlanmoqda, yetkazildi holatlari bo'yicha boshqaruv.",
+        f3_title: "Loyallik va to'lov",
+        f3_desc: "Ballar tizimi va do'kon egasi uchun moslashuvchan to'lov sozlamalari.",
+        link_privacy: "Maxfiylik siyosati",
+        link_terms: "Foydalanuvchi kelishuvi",
+        link_guide: "Bot ulash qo'llanmasi",
+        footer_right: "UZ va RU tillari to'liq qo'llab-quvvatlanadi"
       },
       ru: {
         hero_title: "Запустите магазин в Telegram за 5 минут",
-        hero_desc: "С SellGram вы управляете каталогом, корзиной, заказами и клиентами в одной платформе.",
+        hero_desc: "SellGram объединяет каталог, корзину, заказы и клиентов в одной панели управления.",
         cta_primary: "Создать магазин",
-        cta_secondary: "Руководство",
+        cta_secondary: "Пошаговое руководство",
         step1_title: "1. Подключите бота",
-        step1_desc: "Укажите токен бота и активируйте магазин.",
+        step1_desc: "Укажите bot token и активируйте магазин.",
         step2_title: "2. Добавьте товары",
-        step2_desc: "Управляйте категориями, ценами, фото и остатками.",
+        step2_desc: "Заполните категории, цены, фото и остатки.",
         step3_title: "3. Начните продажи",
-        step3_desc: "Клиент заказывает в Telegram, вы управляете процессом в панели.",
+        step3_desc: "Клиент оформляет заказ в Telegram, вы контролируете процесс в панели.",
         f1_title: "Каталог miniapp",
-        f1_desc: "Удобная витрина для клиента и быстрый заказ.",
+        f1_desc: "Удобная витрина, быстрый заказ и оформление прямо в Telegram.",
         f2_title: "Поток заказов",
-        f2_desc: "Статусы: новый, готовится, отправлен и завершен.",
+        f2_desc: "Статусы заказа, доставка и контроль в реальном времени.",
         f3_title: "Лояльность и оплата",
-        f3_desc: "Баллы, ручная оплата и настройки под владельца.",
-        footer_right: "Полная поддержка языков UZ и RU",
+        f3_desc: "Баллы и гибкие способы оплаты, которые настраивает владелец.",
+        link_privacy: "Политика конфиденциальности",
+        link_terms: "Пользовательское соглашение",
+        link_guide: "Как подключить бота",
+        footer_right: "Полная поддержка языков UZ и RU"
       }
     };
 

@@ -1,235 +1,218 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Как создать Telegram-бот — SellGram</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'DM Sans',system-ui,sans-serif;background:#fafbf8;color:#1a2118;line-height:1.7;-webkit-font-smoothing:antialiased}
-.wrap{max-width:720px;margin:0 auto;padding:40px 20px 80px}
-a{color:#00875a;font-weight:600}
-.back{display:inline-flex;align-items:center;gap:6px;font-size:14px;margin-bottom:24px}
-h1{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin-bottom:8px}
-.intro{font-size:17px;color:#5a6656;margin-bottom:40px;line-height:1.7}
-h2{font-size:22px;font-weight:800;margin:40px 0 16px;display:flex;align-items:center;gap:12px}
-h2 .num{width:36px;height:36px;border-radius:50%;background:#00875a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-h3{font-size:17px;font-weight:700;margin:20px 0 8px}
-p{font-size:15px;color:#3a4638;margin-bottom:12px}
-.step-box{background:#fff;border:1px solid #eaefe4;border-radius:16px;padding:24px;margin-bottom:16px}
-.step-box p{margin-bottom:8px}
-.chat{background:#1a2118;border-radius:14px;padding:20px;margin:16px 0;font-family:'SF Mono',monospace;font-size:14px;overflow-x:auto}
-.chat .msg{padding:8px 14px;border-radius:12px;margin-bottom:8px;max-width:85%;line-height:1.5}
-.msg-user{background:#2b5278;color:#fff;margin-left:auto;text-align:right}
-.msg-bot{background:#2a3a2c;color:#e8f5e9}
-.msg-bot strong{color:#00b96b}
-.highlight{background:#e6f5ee;border-left:4px solid #00875a;padding:14px 18px;border-radius:0 12px 12px 0;margin:16px 0}
-.highlight p{margin:0;color:#1a2118}
-.warning{background:#fef3cd;border-left:4px solid #ff9500;padding:14px 18px;border-radius:0 12px 12px 0;margin:16px 0}
-.warning p{margin:0;color:#664d03}
-.copy-box{background:#f1f3ec;border:1px solid #dce3d6;border-radius:10px;padding:12px 16px;font-family:'SF Mono',monospace;font-size:14px;margin:12px 0;position:relative;word-break:break-all}
-.copy-btn{position:absolute;top:8px;right:8px;background:#00875a;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600}
-.copy-btn:hover{background:#00a86b}
-img,.screenshot{max-width:100%;border-radius:12px;margin:12px 0;border:1px solid #eaefe4}
-.steps-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:32px}
-.steps-nav a{padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600;background:#f1f3ec;color:#5a6656;transition:all .2s}
-.steps-nav a:hover{background:#e6f5ee;color:#00875a}
-ol{padding-left:24px;margin-bottom:12px}
-li{margin-bottom:8px;font-size:15px;color:#3a4638}
-.time{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:#5a6656;background:#f1f3ec;padding:3px 10px;border-radius:20px;margin-left:8px}
-.final-box{background:linear-gradient(145deg,#00875a,#00a86b);border-radius:16px;padding:32px;color:#fff;text-align:center;margin-top:40px}
-.final-box h3{color:#fff;margin-bottom:8px}
-.final-box p{color:rgba(255,255,255,.85);margin-bottom:20px}
-.final-box a{background:#fff;color:#00875a;padding:12px 28px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;display:inline-block}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SellGram - Руководство по подключению бота</title>
+  <style>
+    :root {
+      --bg: #f2f6f3;
+      --panel: #fff;
+      --text: #15231a;
+      --muted: #5f6f64;
+      --line: #d9e5de;
+      --brand: #00875a;
+      --brand-2: #00b376;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Manrope", "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 320px at 10% -140px, #d8f0e2 0%, transparent 65%),
+        var(--bg);
+      line-height: 1.6;
+    }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 22px; }
+    .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 900; }
+    .badge { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; display:grid; place-items:center; font-weight:900; }
+    .lang { display: inline-flex; border-radius: 999px; background: #e8f0eb; padding: 4px; gap: 4px; }
+    .lang button { border: none; border-radius: 999px; padding: 8px 14px; font-weight: 800; font-size: 12px; cursor: pointer; background: transparent; color: #425247; }
+    .lang button.active { background: #102117; color: #fff; }
+
+    .back { display: inline-block; color: var(--brand); text-decoration: none; font-weight: 700; margin-bottom: 12px; }
+
+    h1 { font-size: 34px; line-height: 1.1; letter-spacing: -0.8px; margin-bottom: 10px; }
+    .lead { color: var(--muted); margin-bottom: 20px; }
+
+    .step {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 12px;
+    }
+
+    .step h2 { font-size: 22px; margin-bottom: 10px; letter-spacing: -0.3px; }
+    .step p, .step li { color: #2f3e33; font-size: 15px; }
+    .step ul, .step ol { padding-left: 20px; margin-top: 8px; }
+    .step li { margin-bottom: 6px; }
+
+    .code {
+      margin-top: 10px;
+      background: #f4f8f5;
+      border: 1px solid #dce6e0;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-family: "Consolas", "Menlo", monospace;
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    .cta {
+      margin-top: 20px;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 22px;
+      text-align: center;
+    }
+
+    .cta a {
+      margin-top: 10px;
+      display: inline-block;
+      text-decoration: none;
+      background: #fff;
+      color: #0e3f2b;
+      font-weight: 800;
+      border-radius: 10px;
+      padding: 10px 16px;
+    }
+  </style>
 </head>
 <body>
-<div class="wrap">
+  <div class="wrap">
+    <header class="top">
+      <div class="brand"><span class="badge">S</span>SellGram</div>
+      <div class="lang">
+        <button id="lang-uz" type="button">UZ</button>
+        <button id="lang-ru" class="active" type="button">RU</button>
+      </div>
+    </header>
 
-<a href="/" class="back">← Вернуться на главную</a>
+    <a class="back" href="/index.html" data-i18n="back"></a>
+    <h1 data-i18n="title"></h1>
+    <p class="lead" data-i18n="lead"></p>
 
-<h1>Как создать Telegram-бот для магазина</h1>
-<p class="intro">Пошаговая инструкция: от создания бота до первого заказа. Весь процесс занимает 5-10 минут.</p>
+    <section class="step">
+      <h2 data-i18n="s1_title"></h2>
+      <ol>
+        <li data-i18n="s1_i1"></li>
+        <li data-i18n="s1_i2"></li>
+        <li data-i18n="s1_i3"></li>
+      </ol>
+    </section>
 
-<div class="steps-nav">
-  <a href="#step1">1. Создать бота</a>
-  <a href="#step2">2. Регистрация</a>
-  <a href="#step3">3. Подключить бота</a>
-  <a href="#step4">4. Добавить товары</a>
-  <a href="#step5">5. Запустить!</a>
-</div>
+    <section class="step">
+      <h2 data-i18n="s2_title"></h2>
+      <ol>
+        <li data-i18n="s2_i1"></li>
+        <li data-i18n="s2_i2"></li>
+        <li data-i18n="s2_i3"></li>
+      </ol>
+      <div class="code">https://app.sellgram.uz</div>
+    </section>
 
-<!-- STEP 1 -->
-<h2 id="step1"><span class="num">1</span> Создайте Telegram-бота <span class="time">⏱ 2 мин</span></h2>
+    <section class="step">
+      <h2 data-i18n="s3_title"></h2>
+      <ol>
+        <li data-i18n="s3_i1"></li>
+        <li data-i18n="s3_i2"></li>
+        <li data-i18n="s3_i3"></li>
+      </ol>
+      <p style="margin-top:10px" data-i18n="s3_hint"></p>
+    </section>
 
-<div class="step-box">
-  <h3>1.1 Откройте @BotFather</h3>
-  <p>Это официальный бот Telegram для создания других ботов. Откройте его:</p>
-  <div class="copy-box">
-    https://t.me/BotFather
-    <button class="copy-btn" onclick="copy(this)">Скопировать</button>
-  </div>
-  <p>Нажмите <strong>START</strong> если открываете впервые.</p>
-</div>
+    <section class="step">
+      <h2 data-i18n="s4_title"></h2>
+      <ul>
+        <li data-i18n="s4_i1"></li>
+        <li data-i18n="s4_i2"></li>
+        <li data-i18n="s4_i3"></li>
+      </ul>
+    </section>
 
-<div class="step-box">
-  <h3>1.2 Создайте нового бота</h3>
-  <p>Отправьте команду:</p>
-  <div class="chat">
-    <div class="msg msg-user">/newbot</div>
-    <div class="msg msg-bot"><strong>BotFather:</strong><br>Alright, a new bot. How are we going to call it?<br>Please choose a name for your bot.</div>
-  </div>
-  <p>Введите <strong>название вашего магазина</strong>. Это имя будет показываться в чате. Например:</p>
-  <div class="chat">
-    <div class="msg msg-user">Мой Магазин</div>
-    <div class="msg msg-bot"><strong>BotFather:</strong><br>Good. Now let's choose a username for your bot.<br>It must end in 'bot'. Like this, for example: TetrisBot or tetris_bot.</div>
-  </div>
-</div>
-
-<div class="step-box">
-  <h3>1.3 Придумайте username бота</h3>
-  <p>Username должен заканчиваться на <code>bot</code>. Это будет ссылка на вашего бота: <code>t.me/ваш_username</code></p>
-  <div class="chat">
-    <div class="msg msg-user">moy_magazin_bot</div>
-    <div class="msg msg-bot"><strong>BotFather:</strong><br>Done! Congratulations on your new bot.<br><br>Use this token to access the HTTP API:<br><strong>7123456789:AAH_ваш_уникальный_токен_бота</strong><br><br>Keep your token secure and store it safely.</div>
-  </div>
-
-  <div class="highlight">
-    <p>🔑 <strong>Скопируйте токен!</strong> Это длинная строка вида <code>7123456789:AAH...</code> — она понадобится на следующем шаге. Не делитесь ею ни с кем.</p>
-  </div>
-</div>
-
-<div class="step-box">
-  <h3>1.4 (Необязательно) Настройте бота</h3>
-  <p>Пока вы в BotFather, можно сразу:</p>
-  <ol>
-    <li>Отправить <code>/setdescription</code> → выбрать бота → ввести описание магазина</li>
-    <li>Отправить <code>/setuserpic</code> → выбрать бота → загрузить логотип</li>
-  </ol>
-  <p>Это можно сделать и позже.</p>
-</div>
-
-<!-- STEP 2 -->
-<h2 id="step2"><span class="num">2</span> Зарегистрируйтесь в SellGram <span class="time">⏱ 1 мин</span></h2>
-
-<div class="step-box">
-  <h3>2.1 Откройте панель управления</h3>
-  <div class="copy-box">
-    https://app.sellgram.uz
-    <button class="copy-btn" onclick="copy(this)">Скопировать</button>
+    <div class="cta">
+      <p data-i18n="cta_text"></p>
+      <a href="https://app.sellgram.uz" data-i18n="cta_btn"></a>
+    </div>
   </div>
 
-  <h3>2.2 Нажмите «Зарегистрироваться»</h3>
-  <p>Заполните:</p>
-  <ol>
-    <li><strong>Название магазина</strong> — как хотите назвать свой бизнес</li>
-    <li><strong>Ваше имя</strong> — имя администратора</li>
-    <li><strong>Email</strong> — для входа в панель управления</li>
-    <li><strong>Пароль</strong> — минимум 6 символов</li>
-  </ol>
-  <p>Нажмите <strong>«Создать магазин — Бесплатно»</strong>.</p>
-</div>
+  <script>
+    const dict = {
+      uz: {
+        back: '← Asosiy sahifaga qaytish',
+        title: 'Telegram botni SellGram ga qanday ulash kerak',
+        lead: 'Qisqa qo\'llanma: bot yaratish, panelga ulash va birinchi buyurtmani olish.',
+        s1_title: '1. BotFather da bot yarating',
+        s1_i1: '@BotFather ni oching va /newbot yuboring.',
+        s1_i2: 'Bot nomi va username kiriting (username oxiri bot bilan tugashi kerak).',
+        s1_i3: 'Berilgan bot tokenni nusxalab oling.',
+        s2_title: '2. SellGram admin paneliga kiring',
+        s2_i1: 'app.sellgram.uz ga o\'ting va ro\'yxatdan o\'ting/yoki tizimga kiring.',
+        s2_i2: 'Sozlamalar bo\'limini oching.',
+        s2_i3: 'Do\'konni tahrirlab bot tokenni kiriting.',
+        s3_title: '3. Botni tekshiring',
+        s3_i1: 'Telegram da o\'z botingizga kiring.',
+        s3_i2: '/start yuboring.',
+        s3_i3: '"Do\'konni ochish" tugmasi chiqishini tekshiring.',
+        s3_hint: 'Agar ishlamasa, tokenni qayta tekshiring va do\'kon sozlamasini saqlang.',
+        s4_title: '4. Savdoni ishga tushirish',
+        s4_i1: 'Toifa va mahsulotlarni qo\'shing.',
+        s4_i2: 'Yetkazib berish va to\'lov usullarini sozlang.',
+        s4_i3: 'Bot havolasini mijozlarga yuboring.',
+        cta_text: 'Do\'kon tayyor bo\'lsa, boshqaruv paneliga o\'ting.',
+        cta_btn: 'Admin panelni ochish'
+      },
+      ru: {
+        back: '← Вернуться на главную',
+        title: 'Как подключить Telegram-бота к SellGram',
+        lead: 'Короткая инструкция: создайте бота, подключите в панели и получите первый заказ.',
+        s1_title: '1. Создайте бота в BotFather',
+        s1_i1: 'Откройте @BotFather и отправьте /newbot.',
+        s1_i2: 'Укажите имя и username бота (username должен заканчиваться на bot).',
+        s1_i3: 'Скопируйте выданный bot token.',
+        s2_title: '2. Войдите в панель SellGram',
+        s2_i1: 'Откройте app.sellgram.uz и зарегистрируйтесь/войдите.',
+        s2_i2: 'Перейдите в раздел настроек.',
+        s2_i3: 'Откройте магазин на редактирование и вставьте bot token.',
+        s3_title: '3. Проверьте бота',
+        s3_i1: 'Откройте бота в Telegram.',
+        s3_i2: 'Отправьте /start.',
+        s3_i3: 'Проверьте, что появилась кнопка "Открыть магазин".',
+        s3_hint: 'Если не работает, перепроверьте token и повторно сохраните настройки магазина.',
+        s4_title: '4. Запустите продажи',
+        s4_i1: 'Добавьте категории и товары.',
+        s4_i2: 'Настройте доставку и способы оплаты.',
+        s4_i3: 'Отправьте ссылку на бота клиентам.',
+        cta_text: 'Если магазин уже готов, переходите в панель управления.',
+        cta_btn: 'Открыть админ-панель'
+      }
+    };
 
-<!-- STEP 3 -->
-<h2 id="step3"><span class="num">3</span> Подключите бота к SellGram <span class="time">⏱ 2 мин</span></h2>
+    const qs = (s) => document.querySelector(s);
+    const qsa = (s) => document.querySelectorAll(s);
 
-<div class="step-box">
-  <h3>3.1 Откройте Настройки</h3>
-  <p>После входа в панель управления, нажмите <strong>⚙️ Настройки</strong> в левом меню.</p>
+    function setLang(lang) {
+      const t = dict[lang] || dict.ru;
+      localStorage.setItem('sellgram_landing_lang', lang);
+      document.documentElement.lang = lang;
+      qsa('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (key && t[key]) el.textContent = t[key];
+      });
+      qs('#lang-uz').classList.toggle('active', lang === 'uz');
+      qs('#lang-ru').classList.toggle('active', lang === 'ru');
+    }
 
-  <h3>3.2 Редактируйте магазин</h3>
-  <p>Найдите ваш магазин и нажмите <strong>✏️ Редактировать</strong>.</p>
+    qs('#lang-uz').addEventListener('click', () => setLang('uz'));
+    qs('#lang-ru').addEventListener('click', () => setLang('ru'));
 
-  <h3>3.3 Вставьте токен бота</h3>
-  <p>В поле <strong>«Токен бота»</strong> вставьте токен, который вы получили от BotFather на шаге 1.3.</p>
-
-  <div class="warning">
-    <p>⚠️ <strong>Важно:</strong> Вставляйте токен полностью, включая цифры и буквы после двоеточия. Пример: <code>7123456789:AAH_ваш_уникальный_токен</code></p>
-  </div>
-
-  <h3>3.4 Сохраните</h3>
-  <p>Нажмите <strong>«Сохранить»</strong>. Бот подключён!</p>
-
-  <div class="highlight">
-    <p>✅ Теперь откройте вашего бота в Telegram и отправьте <code>/start</code>. Вы должны увидеть приветственное сообщение с кнопкой «Открыть магазин».</p>
-  </div>
-</div>
-
-<!-- STEP 4 -->
-<h2 id="step4"><span class="num">4</span> Добавьте товары <span class="time">⏱ 5 мин</span></h2>
-
-<div class="step-box">
-  <h3>4.1 Создайте категории</h3>
-  <p>В панели управления откройте <strong>📁 Категории</strong> → <strong>+ Категория</strong>.</p>
-  <p>Создайте категории для ваших товаров. Например: «Обувь», «Одежда», «Электроника».</p>
-
-  <h3>4.2 Добавьте товар</h3>
-  <p>Откройте <strong>🏷️ Товары</strong> → <strong>+ Добавить</strong>.</p>
-  <p>Заполните:</p>
-  <ol>
-    <li><strong>Название</strong> — Кроссовки Nike Air Max</li>
-    <li><strong>Цена</strong> — 450000</li>
-    <li><strong>Количество на складе</strong> — 10</li>
-    <li><strong>Категория</strong> — выберите из списка</li>
-    <li><strong>Описание</strong> — размеры, материал, цвет</li>
-  </ol>
-  <p>Нажмите <strong>«Создать товар»</strong>.</p>
-
-  <h3>4.3 Загрузите фотографии</h3>
-  <p>После создания товара нажмите <strong>✏️</strong> на нём → пролистайте вниз до <strong>📷 Фотографии</strong>.</p>
-  <p>Нажмите «Добавить» и выберите фото с телефона или компьютера.</p>
-
-  <div class="highlight">
-    <p>📸 <strong>Советы по фото:</strong></p>
-    <p>• Квадратные фото (1:1) выглядят лучше всего<br>• Максимум 5 МБ на фото, до 10 фото на товар<br>• Фото автоматически сжимаются до оптимального размера</p>
-  </div>
-</div>
-
-<!-- STEP 5 -->
-<h2 id="step5"><span class="num">5</span> Запустите магазин! <span class="time">⏱ 1 мин</span></h2>
-
-<div class="step-box">
-  <h3>5.1 Проверьте магазин</h3>
-  <p>Откройте вашего бота в Telegram → нажмите <code>/start</code> → <strong>«Открыть магазин»</strong>.</p>
-  <p>Вы должны увидеть каталог с вашими товарами. Попробуйте добавить товар в корзину и оформить тестовый заказ.</p>
-
-  <h3>5.2 Поделитесь ссылкой</h3>
-  <p>Ваша ссылка на магазин:</p>
-  <div class="copy-box">
-    https://t.me/ваш_бот_username
-    <button class="copy-btn" onclick="copy(this)">Скопировать</button>
-  </div>
-  <p>Разместите её:</p>
-  <ol>
-    <li>В описании Instagram / Telegram-канала</li>
-    <li>В сторис и постах</li>
-    <li>На визитках и упаковке (QR-код)</li>
-    <li>В рассылке клиентам</li>
-  </ol>
-
-  <h3>5.3 Обрабатывайте заказы</h3>
-  <p>Когда покупатель оформит заказ, вы увидите его в разделе <strong>📦 Заказы</strong> панели управления.</p>
-  <p>Меняйте статус: <strong>Подтверждён → Собирается → Готов → В пути → Доставлен</strong>.</p>
-  <p>Покупатель автоматически получит уведомление в Telegram на каждом этапе.</p>
-</div>
-
-<div class="final-box">
-  <h3>🎉 Готово!</h3>
-  <p>Ваш Telegram-магазин работает. Начните привлекать покупателей!</p>
-  <a href="https://app.sellgram.uz">Открыть панель управления</a>
-</div>
-
-</div>
-
-<script>
-function copy(btn) {
-  const text = btn.parentElement.childNodes[0].textContent.trim();
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = 'Готово!';
-    setTimeout(() => btn.textContent = 'Скопировать', 1500);
-  });
-}
-</script>
+    const saved = localStorage.getItem('sellgram_landing_lang');
+    const browserLang = (navigator.language || '').toLowerCase();
+    setLang(saved || (browserLang.startsWith('uz') ? 'uz' : 'ru'));
+  </script>
 </body>
 </html>

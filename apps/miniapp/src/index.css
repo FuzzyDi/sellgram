@@ -3,40 +3,47 @@
 @tailwind utilities;
 
 :root {
-  --bg: var(--tg-theme-bg-color, #ffffff);
-  --text: var(--tg-theme-text-color, #1c1c1e);
-  --hint: var(--tg-theme-hint-color, #8e8e93);
+  --bg: var(--tg-theme-bg-color, #f4f8f5);
+  --text: var(--tg-theme-text-color, #15231a);
+  --hint: var(--tg-theme-hint-color, #6a7a70);
   --link: var(--tg-theme-link-color, #00875a);
   --btn: var(--tg-theme-button-color, #00875a);
   --btn-text: var(--tg-theme-button-text-color, #ffffff);
-  --sec: var(--tg-theme-secondary-bg-color, #f5f5f0);
-  --header: var(--tg-theme-header-bg-color, #00875a);
+  --sec: var(--tg-theme-secondary-bg-color, #eef4ef);
+  --header: var(--tg-theme-header-bg-color, #f4f8f5);
   --subtitle: var(--tg-theme-subtitle-text-color, var(--hint));
   --accent: var(--tg-theme-accent-text-color, var(--link));
-  --destructive: var(--tg-theme-destructive-text-color, #ff3b30);
+  --accent-light: rgba(0, 135, 90, 0.12);
+  --destructive: var(--tg-theme-destructive-text-color, #d93535);
+  --danger: var(--destructive);
   --section: var(--tg-theme-section-bg-color, var(--bg));
   --section-header: var(--tg-theme-section-header-text-color, var(--hint));
 
-  /* Derived */
-  --success: #34c759;
-  --warning: #ff9500;
-  --divider: var(--tg-theme-section-separator-color, rgba(60,60,67,0.06));
-  --radius: 14px;
-  --radius-sm: 10px;
-  --nav-h: 56px;
+  --success: #2cbf78;
+  --warning: #f39c12;
+  --divider: var(--tg-theme-section-separator-color, rgba(32, 58, 41, 0.08));
+  --radius: 16px;
+  --radius-sm: 12px;
+  --nav-h: 58px;
 }
 
 * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
 *::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; }
 
+html, body, #root {
+  min-height: 100%;
+}
+
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(900px 280px at 0% -140px, rgba(0, 135, 90, 0.10), transparent 60%),
+    radial-gradient(900px 300px at 100% -160px, rgba(0, 179, 118, 0.10), transparent 64%),
+    var(--bg);
   color: var(--text);
-  font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  font-family: "Manrope", "IBM Plex Sans", "SF Pro Display", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
-  line-height: 1.4;
+  line-height: 1.42;
   overflow-x: hidden;
 }
 
@@ -46,41 +53,47 @@ img { display: block; max-width: 100%; }
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
+  from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
 }
+
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% { background-position: -220% 0; }
+  100% { background-position: 220% 0; }
 }
 
-.anim-fade { animation: fadeUp 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.anim-scale { animation: scaleIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.anim-fade { animation: fadeUp 0.33s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.anim-scale { animation: scaleIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .anim-d1 { animation-delay: 40ms; }
 .anim-d2 { animation-delay: 80ms; }
 .anim-d3 { animation-delay: 120ms; }
 .anim-d4 { animation-delay: 160ms; }
 .anim-d5 { animation-delay: 200ms; }
 
-.pressable { transition: transform 0.12s ease, opacity 0.12s ease; }
-.pressable:active { transform: scale(0.975); opacity: 0.85; }
-
-.glass {
-  background: var(--bg);
-  /* Fallback: use solid bg if backdrop-filter not supported */
+.pressable {
+  transition: transform 0.12s ease, opacity 0.12s ease, box-shadow 0.2s ease;
 }
+
+.pressable:active {
+  transform: scale(0.975);
+  opacity: 0.88;
+}
+
+.glass { background: color-mix(in srgb, var(--bg) 90%, transparent); }
+
 @supports (backdrop-filter: blur(1px)) {
   .glass {
-    background: color-mix(in srgb, var(--bg) 88%, transparent);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    backdrop-filter: saturate(170%) blur(18px);
+    -webkit-backdrop-filter: saturate(170%) blur(18px);
   }
 }
 
 .skeleton {
-  background: linear-gradient(90deg, var(--sec) 25%, var(--divider) 50%, var(--sec) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  background: linear-gradient(90deg, var(--sec) 25%, #d9e5de 50%, var(--sec) 75%);
+  background-size: 220% 100%;
+  animation: shimmer 1.4s infinite;
   border-radius: var(--radius);
 }

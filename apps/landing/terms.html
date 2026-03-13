@@ -1,77 +1,159 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Пользовательское соглашение - {{LEGAL_ENTITY_SHORT_NAME}}</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'DM Sans',system-ui,sans-serif;background:#fafbf8;color:#1a2118;line-height:1.7;-webkit-font-smoothing:antialiased}
-.wrap{max-width:720px;margin:0 auto;padding:40px 20px 80px}
-a{color:#00875a}
-h1{font-size:28px;font-weight:800;margin-bottom:8px;letter-spacing:-.02em}
-.date{font-size:14px;color:#5a6656;margin-bottom:32px}
-h2{font-size:20px;font-weight:700;margin:32px 0 12px}
-p,li{font-size:15px;color:#3a4638;margin-bottom:12px}
-ul,ol{padding-left:20px}
-.back{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:#00875a;margin-bottom:24px}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SellGram - Пользовательское соглашение</title>
+  <style>
+    :root {
+      --bg: #f2f6f3;
+      --panel: #fff;
+      --text: #17241b;
+      --muted: #5d6c62;
+      --line: #d9e5de;
+      --brand: #00875a;
+      --brand-2: #00b376;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Manrope", "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+    }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 22px; }
+    .top { display:flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .brand { display:inline-flex; align-items:center; gap:10px; font-weight:900; font-size:22px; }
+    .badge { width:34px; height:34px; border-radius:10px; background: linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; display:grid; place-items:center; font-weight:900; }
+    .lang { display:inline-flex; border-radius:999px; background:#e8f0eb; padding:4px; gap:4px; }
+    .lang button { border:none; border-radius:999px; padding:8px 14px; font-size:12px; font-weight:800; cursor:pointer; background:transparent; color:#425247; }
+    .lang button.active { background:#102117; color:#fff; }
+
+    .card { background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+    .back { display:inline-block; color:var(--brand); text-decoration:none; font-weight:700; margin-bottom:12px; }
+    h1 { font-size: 32px; line-height:1.1; margin-bottom: 6px; letter-spacing:-0.7px; }
+    .date { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    h2 { font-size: 20px; margin: 18px 0 8px; }
+    p, li { font-size: 15px; color: #2f3e33; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+  </style>
 </head>
 <body>
-<div class="wrap">
-<a href="/" class="back">← Вернуться на главную</a>
-<h1>Пользовательское соглашение</h1>
-<p class="date">Дата вступления в силу: 1 марта 2026 года</p>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand"><span class="badge">S</span>SellGram</div>
+      <div class="lang">
+        <button id="lang-uz" type="button">UZ</button>
+        <button id="lang-ru" class="active" type="button">RU</button>
+      </div>
+    </header>
 
-<p>Настоящее Соглашение регулирует использование платформы {{LEGAL_ENTITY_SHORT_NAME}}, предоставляемой {{LEGAL_ENTITY_NAME}} (далее — «Оператор», «Сервис»).</p>
+    <article class="card">
+      <a class="back" href="/index.html" data-i18n="back"></a>
+      <h1 data-i18n="title"></h1>
+      <p class="date" data-i18n="date"></p>
 
-<h2>1. Общие положения</h2>
-<p>{{LEGAL_ENTITY_SHORT_NAME}} — платформа для создания интернет-магазинов в Telegram. Регистрируясь и используя сервис, пользователь принимает условия настоящего Соглашения.</p>
+      <p data-i18n="intro"></p>
 
-<h2>2. Что предоставляет сервис</h2>
-<p>Сервис предоставляет:</p>
-<ul>
-<li>создание Telegram-бота с каталогом товаров и Mini App;</li>
-<li>панель управления товарами, заказами, клиентами и настройками магазина;</li>
-<li>инструменты уведомлений, доставки, loyalty и базовой аналитики;</li>
-<li>ручной биллинг и управление тарифом аккаунта.</li>
-</ul>
+      <h2 data-i18n="s1"></h2>
+      <p data-i18n="s1_p"></p>
 
-<h2>3. Регистрация и аккаунт</h2>
-<p>Для использования сервиса необходимо зарегистрировать аккаунт, указав действующий email и пароль. Пользователь несет ответственность за сохранность своих учетных данных и действия, совершенные через его аккаунт.</p>
+      <h2 data-i18n="s2"></h2>
+      <ul>
+        <li data-i18n="s2_i1"></li>
+        <li data-i18n="s2_i2"></li>
+        <li data-i18n="s2_i3"></li>
+      </ul>
 
-<h2>4. Тарифы и оплата</h2>
-<p>Сервис может предоставляться по бесплатному и платным тарифам. Стоимость платных тарифов публикуется на страницах сервиса. Оплата производится по реквизитам, указанным в интерфейсе биллинга. Тариф активируется после подтверждения оплаты.</p>
+      <h2 data-i18n="s3"></h2>
+      <ul>
+        <li data-i18n="s3_i1"></li>
+        <li data-i18n="s3_i2"></li>
+        <li data-i18n="s3_i3"></li>
+      </ul>
 
-<h2>5. Обязанности пользователя</h2>
-<p>Пользователь обязуется:</p>
-<ul>
-<li>не использовать сервис для продажи запрещенных товаров и услуг;</li>
-<li>соблюдать применимое законодательство и требования Telegram;</li>
-<li>предоставлять корректную информацию о товарах, оплате и доставке;</li>
-<li>самостоятельно исполнять обязательства перед своими покупателями.</li>
-</ul>
+      <h2 data-i18n="s4"></h2>
+      <p data-i18n="s4_p"></p>
 
-<h2>6. Ограничение ответственности</h2>
-<p>{{LEGAL_ENTITY_SHORT_NAME}} является технической платформой. Оператор не несет ответственности за качество товаров, исполнение заказов, возвраты, действия продавца или покупателя, а также за косвенные убытки, возникшие в связи с использованием сервиса. Сервис предоставляется «как есть».</p>
+      <h2 data-i18n="s5"></h2>
+      <p data-i18n="s5_p"></p>
 
-<h2>7. Ограничения использования</h2>
-<p>Запрещается использовать сервис для продажи контрафактной продукции, наркотических веществ, оружия и иных товаров или услуг, запрещенных законодательством или правилами платформ, через которые работает магазин.</p>
+      <h2 data-i18n="s6"></h2>
+      <p data-i18n="s6_p"></p>
+    </article>
+  </div>
 
-<h2>8. Прекращение доступа</h2>
-<p>Пользователь может прекратить использование сервиса в любой момент. Оператор вправе ограничить или прекратить доступ к сервису при нарушении условий Соглашения, требований безопасности или закона.</p>
+  <script>
+    const dict = {
+      uz: {
+        back: '← Asosiy sahifaga qaytish',
+        title: 'Foydalanuvchi kelishuvi',
+        date: 'Kuchga kirish sanasi: 14 mart 2026 yil',
+        intro: 'Ushbu kelishuv SellGram platformasidan foydalanish shartlarini belgilaydi.',
+        s1: '1. Xizmat mohiyati',
+        s1_p: 'SellGram Telegram ichida do\'kon yuritish uchun texnik platforma hisoblanadi.',
+        s2: '2. Platforma nimani taqdim etadi',
+        s2_i1: 'Do\'kon admin paneli: mahsulot, buyurtma, mijoz, sozlamalar.',
+        s2_i2: 'Miniapp va Telegram bot bilan ishlash uchun infratuzilma.',
+        s2_i3: 'Tarif va obuna boshqaruvi.',
+        s3: '3. Foydalanuvchi majburiyatlari',
+        s3_i1: 'Qonun va platforma qoidalariga rioya qilish.',
+        s3_i2: 'Tovar va xizmatlar bo\'yicha to\'g\'ri ma\'lumot berish.',
+        s3_i3: 'Mijozlar oldidagi savdo majburiyatlarini mustaqil bajarish.',
+        s4: '4. To\'lovlar va javobgarlik',
+        s4_p: 'SellGram do\'konning savdo mablag\'larini o\'zi qabul qilmaydi. To\'lov usullarini do\'kon egasi mustaqil sozlaydi.',
+        s5: '5. Cheklov va to\'xtatish',
+        s5_p: 'Qoidabuzarlik holatida hisobga kirish vaqtincha cheklanishi yoki to\'xtatilishi mumkin.',
+        s6: '6. Aloqa',
+        s6_p: 'Yordam: support@sellgram.uz | Billing: billing@sellgram.uz'
+      },
+      ru: {
+        back: '← Вернуться на главную',
+        title: 'Пользовательское соглашение',
+        date: 'Дата вступления в силу: 14 марта 2026 года',
+        intro: 'Настоящее соглашение регулирует условия использования платформы SellGram.',
+        s1: '1. Суть сервиса',
+        s1_p: 'SellGram является технической платформой для управления магазином в Telegram.',
+        s2: '2. Что предоставляет платформа',
+        s2_i1: 'Панель управления магазином: товары, заказы, клиенты, настройки.',
+        s2_i2: 'Инфраструктуру для miniapp и Telegram-бота.',
+        s2_i3: 'Управление тарифом и подпиской.',
+        s3: '3. Обязанности пользователя',
+        s3_i1: 'Соблюдать применимое законодательство и правила платформ.',
+        s3_i2: 'Публиковать достоверную информацию о товарах и услугах.',
+        s3_i3: 'Самостоятельно исполнять обязательства перед покупателями.',
+        s4: '4. Оплата и ответственность',
+        s4_p: 'SellGram не принимает торговые средства магазина на себя. Способы оплаты настраиваются владельцем магазина.',
+        s5: '5. Ограничение и прекращение доступа',
+        s5_p: 'При нарушении правил доступ к аккаунту может быть ограничен или приостановлен.',
+        s6: '6. Контакты',
+        s6_p: 'Поддержка: support@sellgram.uz | Billing: billing@sellgram.uz'
+      }
+    };
 
-<h2>9. Изменения условий</h2>
-<p>Мы можем изменять условия настоящего Соглашения. Актуальная редакция публикуется на этой странице. Продолжение использования сервиса после обновления означает согласие с новой редакцией.</p>
+    const qs = (s) => document.querySelector(s);
+    const qsa = (s) => document.querySelectorAll(s);
 
-<h2>10. Реквизиты и контакты</h2>
-<p><strong>Оператор:</strong> {{LEGAL_ENTITY_NAME}}</p>
-<p><strong>Адрес:</strong> {{LEGAL_ENTITY_ADDRESS}}</p>
-<p><strong>ИНН:</strong> {{LEGAL_ENTITY_INN}}</p>
-<p><strong>Поддержка:</strong> <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a></p>
-<p><strong>Биллинг:</strong> <a href="mailto:{{BILLING_EMAIL}}">{{BILLING_EMAIL}}</a></p>
-<p>Telegram: <a href="https://t.me/sellgram_uz">@sellgram_uz</a></p>
-</div>
+    function setLang(lang) {
+      const t = dict[lang] || dict.ru;
+      localStorage.setItem('sellgram_landing_lang', lang);
+      document.documentElement.lang = lang;
+      qsa('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (key && t[key]) el.textContent = t[key];
+      });
+      qs('#lang-uz').classList.toggle('active', lang === 'uz');
+      qs('#lang-ru').classList.toggle('active', lang === 'ru');
+    }
+
+    qs('#lang-uz').addEventListener('click', () => setLang('uz'));
+    qs('#lang-ru').addEventListener('click', () => setLang('ru'));
+
+    const saved = localStorage.getItem('sellgram_landing_lang');
+    const browserLang = (navigator.language || '').toLowerCase();
+    setLang(saved || (browserLang.startsWith('uz') ? 'uz' : 'ru'));
+  </script>
 </body>
 </html>
