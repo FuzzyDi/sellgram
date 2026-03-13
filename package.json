@@ -16,7 +16,8 @@
     "db:seed": "corepack pnpm --filter @sellgram/prisma run seed",
     "db:generate": "corepack pnpm --filter @sellgram/prisma run generate",
     "db:studio": "corepack pnpm --filter @sellgram/prisma run studio",
-    "bootstrap": "powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1"
+    "bootstrap": "powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1",
+    "doctor:prod": "bash deploy/production/post-deploy-checklist.sh"
   },
   "dependencies": {
     "react": "^18.3.0",
@@ -33,4 +34,3 @@
     }
   }
 }
-
