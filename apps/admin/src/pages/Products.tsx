@@ -1,6 +1,5 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
-import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
 
 interface Product {
@@ -16,7 +15,10 @@ interface Product {
   images?: { id: string; url: string }[];
 }
 
-interface Category { id: string; name: string }
+interface Category {
+  id: string;
+  name: string;
+}
 
 interface FormData {
   name: string;
@@ -69,21 +71,27 @@ export default function Products() {
       const data = await adminApi.getProducts(params);
       setProducts(data.items || []);
       setTotal(data.total || 0);
-    } catch {}
-    setLoading(false);
+    } catch {
+      setProducts([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
   }, [search]);
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       const data = await adminApi.getCategories();
       setCategories(Array.isArray(data) ? data : data.items || []);
-    } catch {}
-  };
+    } catch {
+      setCategories([]);
+    }
+  }, []);
 
   useEffect(() => {
     loadProducts();
     loadCategories();
-  }, []);
+  }, [loadProducts, loadCategories]);
 
   const openCreate = useCallback(() => {
     setForm(emptyForm);
@@ -93,11 +101,13 @@ export default function Products() {
     setShowForm(true);
   }, []);
 
-  const openEdit = useCallback(async (p: Product) => {
-    let fullProduct = p;
+  const openEdit = useCallback(async (product: Product) => {
+    let fullProduct = product;
     try {
-      fullProduct = await adminApi.getProduct(p.id);
-    } catch {}
+      fullProduct = await adminApi.getProduct(product.id);
+    } catch {
+      // fallback to list data
+    }
 
     setForm({
       name: fullProduct.name,
@@ -118,8 +128,8 @@ export default function Products() {
     setShowForm(true);
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (!form.name || !form.price) {
+  const saveProduct = useCallback(async () => {
+    if (!form.name.trim() || !form.price) {
       setError(tr('Заполните название и цену', 'Nomi va narxini kiriting'));
       return;
     }
@@ -129,12 +139,13 @@ export default function Products() {
 
     try {
       const payload: any = {
-        name: form.name,
+        name: form.name.trim(),
         price: parseFloat(form.price),
         stockQty: parseInt(form.stockQty, 10) || 0,
         lowStockAlert: parseInt(form.lowStockAlert, 10) || 5,
         isActive: form.isActive,
       };
+
       if (form.sku) payload.sku = form.sku;
       payload.description = form.description || null;
       if (form.costPrice) payload.costPrice = parseFloat(form.costPrice);
@@ -149,252 +160,375 @@ export default function Products() {
       }
 
       setShowForm(false);
-      loadProducts();
+      await loadProducts();
     } catch (err: any) {
       setError(err.message || tr('Ошибка сохранения', 'Saqlashda xatolik'));
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
   }, [editingId, form, loadProducts, tr]);
 
-  const handleDelete = useCallback(async (id: string, name: string) => {
-    if (!confirm(tr(`Удалить "${name}"?`, `"${name}" o'chirilsinmi?`))) return;
-    try {
-      await adminApi.deleteProduct(id);
-      loadProducts();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  }, [loadProducts, tr]);
+  const removeProduct = useCallback(
+    async (id: string, name: string) => {
+      if (!confirm(tr(`Удалить "${name}"?`, `"${name}" o'chirilsinmi?`))) return;
+      try {
+        await adminApi.deleteProduct(id);
+        await loadProducts();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    },
+    [loadProducts, tr]
+  );
 
-  const handleCreateCategory = useCallback(async () => {
-    if (!catName.trim()) return;
+  const createCategory = useCallback(async () => {
+    const nextName = catName.trim();
+    if (!nextName) return;
     try {
-      await adminApi.createCategory({ name: catName });
+      await adminApi.createCategory({ name: nextName });
       setCatName('');
       setShowCatForm(false);
-      loadCategories();
+      await loadCategories();
     } catch (err: any) {
       alert(err.message);
     }
-  }, [catName]);
+  }, [catName, loadCategories]);
 
-  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || !editingId) return;
+  const uploadImages = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || !editingId) return;
 
-    setUploading(true);
-    for (const file of Array.from(files)) {
-      try {
-        const img = await adminApi.uploadProductImage(editingId, file);
-        setEditImages((prev) => [...prev, img]);
-      } catch (err: any) {
-        alert(`${tr('Ошибка загрузки', 'Yuklash xatosi')} ${file.name}: ${err.message}`);
+      setUploading(true);
+      for (const file of Array.from(files)) {
+        try {
+          const image = await adminApi.uploadProductImage(editingId, file);
+          setEditImages((prev) => [...prev, image]);
+        } catch (err: any) {
+          alert(`${tr('Ошибка загрузки', 'Yuklash xatosi')} ${file.name}: ${err.message}`);
+        }
       }
-    }
-    setUploading(false);
+      setUploading(false);
 
-    loadProducts();
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [editingId, loadProducts, tr]);
+      await loadProducts();
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    },
+    [editingId, loadProducts, tr]
+  );
 
-  const handleDeleteImage = useCallback(async (imageId: string) => {
-    if (!editingId) return;
-    try {
-      await adminApi.deleteProductImage(editingId, imageId);
-      setEditImages((prev) => prev.filter((i) => i.id !== imageId));
-      loadProducts();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  }, [editingId, loadProducts]);
+  const removeImage = useCallback(
+    async (imageId: string) => {
+      if (!editingId) return;
+      try {
+        await adminApi.deleteProductImage(editingId, imageId);
+        setEditImages((prev) => prev.filter((i) => i.id !== imageId));
+        await loadProducts();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    },
+    [editingId, loadProducts]
+  );
 
-  const updateForm = (field: keyof FormData) => (e: any) => {
-    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  const updateForm = (field: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const value = e.target instanceof HTMLInputElement && e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 className="text-2xl font-bold">🏷️ {tr('Товары', 'Mahsulotlar')}</h2>
-        <Button onClick={openCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">+ {tr('Добавить', "Qo'shish")}</Button>
-      </div>
+    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div>
+          <h2 className="sg-title">{tr('Товары', 'Mahsulotlar')}</h2>
+          <p className="sg-subtitle">{tr('Каталог магазина и остатки', "Do'kon katalogi va ombor qoldiqlari")}</p>
+        </div>
+        <button className="sg-btn primary" type="button" onClick={openCreate}>
+          + {tr('Добавить', "Qo'shish")}
+        </button>
+      </header>
 
-      <div style={{ marginBottom: 16 }}>
-        <form onSubmit={(e) => { e.preventDefault(); loadProducts(); }} style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={tr('Поиск по названию или SKU...', 'Nomi yoki SKU bo\'yicha qidirish...')}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <button type="submit" className="px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200">🔍</button>
-        </form>
-      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          loadProducts();
+        }}
+        style={{ display: 'flex', gap: 8 }}
+      >
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={tr('Поиск по названию или SKU...', "Nomi yoki SKU bo'yicha qidirish...")}
+          className="w-full"
+          style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px' }}
+        />
+        <button className="sg-btn ghost" type="submit">
+          {tr('Найти', 'Qidirish')}
+        </button>
+      </form>
 
-      {loading ? <p className="text-gray-400">{tr('Загрузка...', 'Yuklanmoqda...')}</p> : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-gray-500 border-b bg-gray-50">
-              <th className="px-4 py-3">{tr('Фото', 'Rasm')}</th>
-              <th className="px-4 py-3">{tr('Товар', 'Mahsulot')}</th>
-              <th className="px-4 py-3">{tr('Категория', 'Toifa')}</th>
-              <th className="px-4 py-3">{tr('Цена', 'Narx')}</th>
-              <th className="px-4 py-3">{tr('Склад', 'Ombor')}</th>
-              <th className="px-4 py-3">{tr('Статус', 'Holat')}</th>
-              <th className="px-4 py-3 w-24">{tr('Действия', 'Amallar')}</th>
-            </tr></thead>
+      {loading ? (
+        <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
+      ) : (
+        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <table className="sg-table">
+            <thead>
+              <tr>
+                <th>{tr('Фото', 'Rasm')}</th>
+                <th>{tr('Товар', 'Mahsulot')}</th>
+                <th>{tr('Категория', 'Toifa')}</th>
+                <th>{tr('Цена', 'Narx')}</th>
+                <th>{tr('Склад', 'Ombor')}</th>
+                <th>{tr('Статус', 'Holat')}</th>
+                <th>{tr('Действия', 'Amallar')}</th>
+              </tr>
+            </thead>
             <tbody>
-              {products.map((p) => (
-                <tr key={p.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div style={{ width: 40, height: 40, borderRadius: 6, background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                      {p.images?.[0]?.url ? <img src={p.images[0].url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span>📦</span>}
+              {products.map((product) => (
+                <tr key={product.id}>
+                  <td>
+                    <div
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 8,
+                        background: '#eef3f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {product.images?.[0]?.url ? (
+                        <img src={product.images[0].url} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{ color: '#708077' }}>-</span>
+                      )}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{p.name}</p>
-                    {p.description && <p className="text-xs text-gray-400 mt-0.5" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</p>}
-                    {p.sku && <p className="text-xs text-gray-500">{p.sku}</p>}
+                  <td>
+                    <div style={{ fontWeight: 700 }}>{product.name}</div>
+                    {product.description && <div style={{ fontSize: 12, color: '#64756b' }}>{product.description}</div>}
+                    {product.sku && <div style={{ fontSize: 12, color: '#7a8a81' }}>{product.sku}</div>}
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{p.category?.name || '—'}</td>
-                  <td className="px-4 py-3 font-medium">{Number(p.price).toLocaleString()} UZS</td>
-                  <td className="px-4 py-3">
-                    <span className={p.stockQty <= p.lowStockAlert ? 'text-red-500 font-medium' : ''}>{p.stockQty} {tr('шт', 'dona')}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs ${p.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {p.isActive ? tr('Активен', 'Faol') : tr('Скрыт', 'Yashirin')}
+                  <td>{product.category?.name || '-'}</td>
+                  <td style={{ fontWeight: 700 }}>{Number(product.price).toLocaleString()} UZS</td>
+                  <td>
+                    <span style={{ color: product.stockQty <= product.lowStockAlert ? '#c0392b' : 'inherit', fontWeight: 700 }}>
+                      {product.stockQty} {tr('шт', 'dona')}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <Button onClick={() => openEdit(p)} className="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100">✏️</Button>
-                      <Button onClick={() => handleDelete(p.id, p.name)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">🗑️</Button>
+                  <td>
+                    <span
+                      className="sg-badge"
+                      style={{
+                        background: product.isActive ? '#e8f7ef' : '#eef1f0',
+                        color: product.isActive ? '#0b7f57' : '#5f6d64',
+                      }}
+                    >
+                      {product.isActive ? tr('Активен', 'Faol') : tr('Скрыт', 'Yashirin')}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="sg-btn ghost" type="button" onClick={() => openEdit(product)}>
+                        {tr('Изменить', 'Tahrirlash')}
+                      </button>
+                      <button className="sg-btn danger" type="button" onClick={() => removeProduct(product.id, product.name)}>
+                        {tr('Удалить', "O'chirish")}
+                      </button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {products.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">{tr('Товаров нет', "Mahsulotlar yo'q")}</td></tr>}
+              {products.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', color: '#6b7a71' }}>
+                    {tr('Товаров нет', "Mahsulotlar yo'q")}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-          {total > 0 && <div className="px-4 py-3 text-sm text-gray-500 border-t">{tr('Всего', 'Jami')}: {total}</div>}
+          {total > 0 && (
+            <div style={{ padding: '12px 14px', borderTop: '1px solid #edf2ee', color: '#5f6d64', fontSize: 13 }}>
+              {tr('Всего', 'Jami')}: {total}
+            </div>
+          )}
         </div>
       )}
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
-            <h3 className="text-lg font-bold mb-4">{editingId ? tr('Редактировать товар', 'Mahsulotni tahrirlash') : tr('Новый товар', 'Yangi mahsulot')}</h3>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+          <div className="sg-card" style={{ width: '100%', maxWidth: 860, maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>
+              {editingId ? tr('Редактировать товар', 'Mahsulotni tahrirlash') : tr('Новый товар', 'Yangi mahsulot')}
+            </h3>
+            <p className="sg-subtitle">{tr('Управляйте карточкой товара и медиа', "Mahsulot kartasi va media fayllarni boshqaring")}</p>
 
-            {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">{error}</div>}
+            {error && (
+              <div style={{ marginTop: 10, background: '#fff2f2', color: '#b52d2d', border: '1px solid #ffd6d6', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+                {error}
+              </div>
+            )}
 
-            <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
-              <div className="space-y-3">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveProduct();
+              }}
+              className="sg-grid"
+              style={{ gap: 12, marginTop: 12 }}
+            >
+              <div className="sg-grid cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{tr('Название', 'Nomi')} *</label>
-                  <input value={form.name} onChange={updateForm('name')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder={tr('Плов машинный', 'Masalliqli osh')} />
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('Название', 'Nomi')} *</label>
+                  <input value={form.name} onChange={updateForm('name')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{tr('Цена (UZS)', 'Narx (UZS)')} *</label>
-                    <input type="number" value={form.price} onChange={updateForm('price')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="35000" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{tr('Себестоимость', 'Tannarx')}</label>
-                    <input type="number" value={form.costPrice} onChange={updateForm('costPrice')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
-                    <input value={form.sku} onChange={updateForm('sku')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="PLV-001" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{tr('Ед. измерения', 'O\'lchov birligi')}</label>
-                    <input value={form.unit} onChange={updateForm('unit')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder={tr('шт', 'dona')} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{tr('На складе', 'Omborda')}</label>
-                    <input type="number" value={form.stockQty} onChange={updateForm('stockQty')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{tr('Мин. остаток', 'Min. qoldiq')}</label>
-                    <input type="number" value={form.lowStockAlert} onChange={updateForm('lowStockAlert')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                  </div>
-                </div>
-
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <label className="block text-sm font-medium text-gray-700">{tr('Категория', 'Toifa')}</label>
-                    <Button onClick={() => setShowCatForm(!showCatForm)} className="text-xs text-blue-600 hover:underline">+ {tr('Создать категорию', 'Toifa yaratish')}</Button>
-                  </div>
-                  {showCatForm && (
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                      <input value={catName} onChange={(e) => setCatName(e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm" placeholder={tr('Название категории', 'Toifa nomi')} />
-                      <Button onClick={handleCreateCategory} className="px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg">✓</Button>
-                    </div>
-                  )}
-                  <select value={form.categoryId} onChange={updateForm('categoryId')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                    <option value="">{tr('Без категории', 'Toifasiz')}</option>
-                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('SKU', 'SKU')}</label>
+                  <input value={form.sku} onChange={updateForm('sku')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{tr('Описание', 'Tavsif')}</label>
-                  <textarea value={form.description} onChange={updateForm('description')} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder={tr('Описание товара...', 'Mahsulot tavsifi...')} />
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input type="checkbox" checked={form.isActive} onChange={updateForm('isActive')} className="rounded" id="isActive" />
-                  <label htmlFor="isActive" className="text-sm text-gray-700">{tr('Активен (виден покупателям)', 'Faol (mijozlarga ko\'rinadi)')}</label>
-                </div>
-
-                {editingId && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">📷 {tr('Фотографии', 'Rasmlar')}</label>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                      {editImages.map((img) => (
-                        <div key={img.id} style={{ position: 'relative', width: 80, height: 80, borderRadius: 8, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
-                          <img src={img.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteImage(img.id)}
-                            style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(239,68,68,0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                      <label style={{ width: 80, height: 80, borderRadius: 8, border: '2px dashed #d1d5db', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#f9fafb' }}>
-                        <span style={{ fontSize: 24 }}>📷</span>
-                        <span style={{ fontSize: 10, color: '#9ca3af' }}>{uploading ? '...' : tr('Добавить', "Qo'shish")}</span>
-                        <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} style={{ display: 'none' }} />
-                      </label>
-                    </div>
-                  </div>
-                )}
-
-                {!editingId && <p className="text-xs text-gray-400">💡 {tr('Фото можно добавить после создания товара', 'Rasmni mahsulot yaratilgandan keyin qo\'shasiz')}</p>}
               </div>
 
-              <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-                <button type="submit" disabled={saving} className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
-                  {saving ? tr('Сохранение...', 'Saqlanmoqda...') : editingId ? tr('Сохранить', 'Saqlash') : tr('Создать товар', 'Mahsulot yaratish')}
+              <div className="sg-grid cols-3">
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('Цена (UZS)', 'Narx (UZS)')} *</label>
+                  <input type="number" value={form.price} onChange={updateForm('price')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('Себестоимость', 'Tannarx')}</label>
+                  <input type="number" value={form.costPrice} onChange={updateForm('costPrice')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('Ед. измерения', "O'lchov birligi")}</label>
+                  <input value={form.unit} onChange={updateForm('unit')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
+                </div>
+              </div>
+
+              <div className="sg-grid cols-3">
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('Остаток', 'Qoldiq')}</label>
+                  <input type="number" value={form.stockQty} onChange={updateForm('stockQty')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('Мин. остаток', 'Min. qoldiq')}</label>
+                  <input type="number" value={form.lowStockAlert} onChange={updateForm('lowStockAlert')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('Категория', 'Toifa')}</label>
+                  <select value={form.categoryId} onChange={updateForm('categoryId')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}>
+                    <option value="">{tr('Без категории', 'Toifasiz')}</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <button className="sg-btn ghost" type="button" onClick={() => setShowCatForm((prev) => !prev)}>
+                  + {tr('Создать категорию', 'Toifa yaratish')}
                 </button>
-                <Button onClick={() => setShowForm(false)} className="px-6 py-2.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">{tr('Отмена', 'Bekor qilish')}</Button>
+                {showCatForm && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <input
+                      value={catName}
+                      onChange={(e) => setCatName(e.target.value)}
+                      className="w-full"
+                      style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                      placeholder={tr('Название категории', 'Toifa nomi')}
+                    />
+                    <button className="sg-btn primary" type="button" onClick={createCategory}>
+                      {tr('Создать', 'Yaratish')}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('Описание', 'Tavsif')}</label>
+                <textarea
+                  value={form.description}
+                  onChange={updateForm('description')}
+                  rows={3}
+                  className="w-full"
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }}
+                />
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                <input type="checkbox" checked={form.isActive} onChange={updateForm('isActive')} />
+                {tr('Активен (виден покупателям)', "Faol (mijozlarga ko'rinadi)")}
+              </label>
+
+              {editingId && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>{tr('Фотографии', 'Rasmlar')}</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {editImages.map((image) => (
+                      <div key={image.id} style={{ width: 88, height: 88, borderRadius: 10, overflow: 'hidden', position: 'relative', border: '1px solid #dce4de' }}>
+                        <img src={image.url} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(image.id)}
+                          style={{
+                            position: 'absolute',
+                            right: 4,
+                            top: 4,
+                            background: '#d93535',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: 20,
+                            height: 20,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          x
+                        </button>
+                      </div>
+                    ))}
+                    <label
+                      style={{
+                        width: 88,
+                        height: 88,
+                        borderRadius: 10,
+                        border: '2px dashed #ced9d2',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        color: '#5f6d64',
+                        fontSize: 12,
+                      }}
+                    >
+                      {uploading ? tr('Загрузка...', 'Yuklanmoqda...') : tr('Добавить', "Qo'shish")}
+                      <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={uploadImages} style={{ display: 'none' }} />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {!editingId && <p className="sg-subtitle">{tr('Фото можно добавить после создания товара', "Rasmni mahsulot yaratilgandan keyin qo'shish mumkin")}</p>}
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button className="sg-btn primary" type="submit" disabled={saving}>
+                  {saving
+                    ? tr('Сохранение...', 'Saqlanmoqda...')
+                    : editingId
+                    ? tr('Сохранить', 'Saqlash')
+                    : tr('Создать товар', 'Mahsulot yaratish')}
+                </button>
+                <button className="sg-btn ghost" type="button" onClick={() => setShowForm(false)}>
+                  {tr('Отмена', 'Bekor qilish')}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

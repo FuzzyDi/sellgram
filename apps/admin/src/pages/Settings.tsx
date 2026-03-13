@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
-import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
 
 export default function Settings() {
@@ -25,14 +24,14 @@ export default function Settings() {
   async function load() {
     setLoading(true);
     try {
-      const [s, z, l] = await Promise.all([
+      const [storeList, zoneList, loyaltyConfig] = await Promise.all([
         adminApi.getStores(),
         adminApi.getDeliveryZones(),
         adminApi.getLoyaltyConfig(),
       ]);
-      setStores(Array.isArray(s) ? s : []);
-      setZones(Array.isArray(z) ? z : []);
-      setLoyalty(l);
+      setStores(Array.isArray(storeList) ? storeList : []);
+      setZones(Array.isArray(zoneList) ? zoneList : []);
+      setLoyalty(loyaltyConfig);
     } finally {
       setLoading(false);
     }
@@ -69,12 +68,15 @@ export default function Settings() {
   async function saveStore() {
     try {
       if (editingStoreId) {
-        const data: any = { name: storeForm.name, welcomeMessage: storeForm.welcomeMessage };
-        if (storeForm.botToken) data.botToken = storeForm.botToken;
-        await adminApi.updateStore(editingStoreId, data);
+        const payload: any = {
+          name: storeForm.name,
+          welcomeMessage: storeForm.welcomeMessage,
+        };
+        if (storeForm.botToken) payload.botToken = storeForm.botToken;
+        await adminApi.updateStore(editingStoreId, payload);
       } else {
         if (!storeForm.name || !storeForm.botToken) {
-          alert(tr('Нужны название магазина и bot token', 'Do\'kon nomi va bot token kerak'));
+          alert(tr('Нужны название магазина и bot token', "Do'kon nomi va bot token kerak"));
           return;
         }
         await adminApi.createStore(storeForm);
@@ -105,15 +107,15 @@ export default function Settings() {
 
   async function saveZone() {
     try {
-      const data: any = {
+      const payload: any = {
         name: zoneForm.name,
         price: Number(zoneForm.price),
         freeFrom: zoneForm.freeFrom ? Number(zoneForm.freeFrom) : null,
       };
       if (editingZoneId) {
-        await adminApi.updateDeliveryZone(editingZoneId, data);
+        await adminApi.updateDeliveryZone(editingZoneId, payload);
       } else {
-        await adminApi.createDeliveryZone({ ...data, storeId: zoneForm.storeId || stores[0]?.id });
+        await adminApi.createDeliveryZone({ ...payload, storeId: zoneForm.storeId || stores[0]?.id });
       }
       setShowZoneForm(false);
       await load();
@@ -123,7 +125,7 @@ export default function Settings() {
   }
 
   async function deleteZone(id: string) {
-    if (!confirm(tr('Удалить эту зону?', 'Bu hudud o\'chirilsinmi?'))) return;
+    if (!confirm(tr('Удалить эту зону?', "Bu hudud o'chirilsinmi?"))) return;
     try {
       await adminApi.deleteDeliveryZone(id);
       await load();
@@ -141,170 +143,309 @@ export default function Settings() {
     }
   }
 
-  if (loading) return <p className="text-gray-400">{tr('Загрузка настроек...', 'Sozlamalar yuklanmoqda...')}</p>;
+  if (loading) return <p className="sg-subtitle">{tr('Загрузка настроек...', 'Sozlamalar yuklanmoqda...')}</p>;
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6">{tr('Настройки', 'Sozlamalar')}</h2>
+    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <header>
+        <h2 className="sg-title">{tr('Настройки', 'Sozlamalar')}</h2>
+        <p className="sg-subtitle">{tr('Магазины, доставка, лояльность и Telegram-привязка', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
+      </header>
 
-      <div className="bg-white rounded-xl border p-4 mb-6">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+      <div className="sg-card soft">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <p className="font-semibold">{tr('Привязка Telegram-админа', 'Telegram adminini bog\'lash')}</p>
-            <p className="text-sm text-gray-500">{tr('Сгенерируйте код и отправьте в бота: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}</p>
+            <p style={{ margin: 0, fontWeight: 800 }}>{tr('Привязка Telegram-админа', "Telegram adminini bog'lash")}</p>
+            <p className="sg-subtitle" style={{ marginTop: 4 }}>
+              {tr('Сгенерируйте код и отправьте боту: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
+            </p>
           </div>
-          <Button onClick={generateTelegramLinkCode} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm">
+          <button className="sg-btn primary" type="button" onClick={generateTelegramLinkCode}>
             {telegramLinkLoading ? tr('Генерация...', 'Yaratilmoqda...') : tr('Сгенерировать код', 'Kod yaratish')}
-          </Button>
+          </button>
         </div>
 
         {telegramLinkData && (
-          <div className="mt-3 p-3 rounded-lg bg-slate-50 border">
-            <p className="text-sm">{tr('Код', 'Kod')}: <span className="font-mono font-bold">{telegramLinkData.code}</span></p>
-            <p className="text-xs text-gray-500 mt-1">{tr('Истекает', 'Amal qilish muddati')}: {new Date(telegramLinkData.expiresAt).toLocaleString(locale)}</p>
-            <p className="text-xs text-gray-500 mt-1">{tr('Команда', 'Buyruq')}: <span className="font-mono">{telegramLinkData.command}</span></p>
+          <div className="sg-card" style={{ marginTop: 12 }}>
+            <p style={{ margin: 0, fontSize: 14 }}>
+              {tr('Код', 'Kod')}: <b style={{ fontFamily: 'monospace' }}>{telegramLinkData.code}</b>
+            </p>
+            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#65746b' }}>
+              {tr('Истекает', 'Amal qilish muddati')}: {new Date(telegramLinkData.expiresAt).toLocaleString(locale)}
+            </p>
+            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#65746b' }}>
+              {tr('Команда', 'Buyruq')}: <span style={{ fontFamily: 'monospace' }}>{telegramLinkData.command}</span>
+            </p>
           </div>
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#f3f4f6', borderRadius: 8, padding: 4, width: 'fit-content' }}>
-        {[
-          { key: 'stores', label: tr('Магазины', 'Do\'konlar') },
-          { key: 'zones', label: tr('Доставка', 'Yetkazib berish') },
-          { key: 'loyalty', label: tr('Лояльность', 'Loyallik') },
-        ].map((t: any) => (
-          <Button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 rounded-md text-sm ${tab === t.key ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500'}`}>
-            {t.label}
-          </Button>
-        ))}
+      <div className="sg-pill-row">
+        <button className={`sg-pill ${tab === 'stores' ? 'active' : ''}`} type="button" onClick={() => setTab('stores')}>
+          {tr('Магазины', "Do'konlar")}
+        </button>
+        <button className={`sg-pill ${tab === 'zones' ? 'active' : ''}`} type="button" onClick={() => setTab('zones')}>
+          {tr('Доставка', 'Yetkazib berish')}
+        </button>
+        <button className={`sg-pill ${tab === 'loyalty' ? 'active' : ''}`} type="button" onClick={() => setTab('loyalty')}>
+          {tr('Лояльность', 'Loyallik')}
+        </button>
       </div>
 
       {tab === 'stores' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <p className="text-sm text-gray-500">{tr('Один магазин = один Telegram-бот', 'Bitta do\'kon = bitta Telegram bot')}</p>
-            <Button onClick={openCreateStore} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">+ {tr('Магазин', "Do'kon")}</Button>
+        <section className="sg-grid" style={{ gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <p className="sg-subtitle" style={{ margin: 0 }}>
+              {tr('Один магазин = один Telegram-бот', "Bitta do'kon = bitta Telegram bot")}
+            </p>
+            <button className="sg-btn primary" type="button" onClick={openCreateStore}>
+              + {tr('Магазин', "Do'kon")}
+            </button>
           </div>
 
           {stores.map((store) => (
-            <div key={store.id} className="bg-white rounded-xl border p-4 mb-3">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <p className="font-bold">{store.name}</p>
-                  {store.botUsername && <p className="text-sm text-blue-500">@{store.botUsername}</p>}
-                </div>
-                <Button onClick={() => openEditStore(store)} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">{tr('Изменить', 'Tahrirlash')}</Button>
+            <article key={store.id} className="sg-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div>
+                <p style={{ margin: 0, fontWeight: 800 }}>{store.name}</p>
+                {store.botUsername && <p style={{ margin: '4px 0 0', color: '#2e7d64', fontSize: 13 }}>@{store.botUsername}</p>}
               </div>
-            </div>
+              <button className="sg-btn ghost" type="button" onClick={() => openEditStore(store)}>
+                {tr('Изменить', 'Tahrirlash')}
+              </button>
+            </article>
           ))}
-        </div>
+
+          {stores.length === 0 && <p className="sg-subtitle">{tr('Магазинов пока нет', "Hozircha do'konlar yo'q")}</p>}
+        </section>
       )}
 
       {tab === 'zones' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <p className="text-sm text-gray-500">{tr('Зоны и тарифы доставки', 'Yetkazib berish hududlari va tariflar')}</p>
-            <Button onClick={openCreateZone} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">+ {tr('Зона', 'Hudud')}</Button>
+        <section className="sg-grid" style={{ gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <p className="sg-subtitle" style={{ margin: 0 }}>
+              {tr('Зоны и тарифы доставки', 'Yetkazib berish hududlari va tariflar')}
+            </p>
+            <button className="sg-btn primary" type="button" onClick={openCreateZone}>
+              + {tr('Зона', 'Hudud')}
+            </button>
           </div>
 
-          <div className="bg-white rounded-xl border overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <table className="sg-table">
               <thead>
-                <tr className="text-left text-gray-500 border-b bg-gray-50">
-                  <th className="px-4 py-3">{tr('Зона', 'Hudud')}</th>
-                  <th className="px-4 py-3">{tr('Цена', 'Narx')}</th>
-                  <th className="px-4 py-3">{tr('Бесплатно от', 'Bepul chegarasi')}</th>
-                  <th className="px-4 py-3">{tr('Действия', 'Amallar')}</th>
+                <tr>
+                  <th>{tr('Зона', 'Hudud')}</th>
+                  <th>{tr('Цена', 'Narx')}</th>
+                  <th>{tr('Бесплатно от', 'Bepul chegarasi')}</th>
+                  <th>{tr('Действия', 'Amallar')}</th>
                 </tr>
               </thead>
               <tbody>
                 {zones.map((zone) => (
-                  <tr key={zone.id} className="border-b hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">{zone.name}</td>
-                    <td className="px-4 py-3">{Number(zone.price).toLocaleString()} UZS</td>
-                    <td className="px-4 py-3 text-gray-500">{zone.freeFrom ? `${Number(zone.freeFrom).toLocaleString()} UZS` : '-'}</td>
-                    <td className="px-4 py-3">
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <Button onClick={() => openEditZone(zone)} className="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded">{tr('Изменить', 'Tahrirlash')}</Button>
-                        <Button onClick={() => deleteZone(zone.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded">{tr('Удалить', "O'chirish")}</Button>
+                  <tr key={zone.id}>
+                    <td style={{ fontWeight: 700 }}>{zone.name}</td>
+                    <td>{Number(zone.price).toLocaleString()} UZS</td>
+                    <td>{zone.freeFrom ? `${Number(zone.freeFrom).toLocaleString()} UZS` : '-'}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="sg-btn ghost" type="button" onClick={() => openEditZone(zone)}>
+                          {tr('Изменить', 'Tahrirlash')}
+                        </button>
+                        <button className="sg-btn danger" type="button" onClick={() => deleteZone(zone.id)}>
+                          {tr('Удалить', "O'chirish")}
+                        </button>
                       </div>
                     </td>
                   </tr>
                 ))}
+                {zones.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', color: '#6b7a71' }}>
+                      {tr('Зоны доставки не настроены', 'Yetkazib berish hududlari sozlanmagan')}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       )}
 
       {tab === 'loyalty' && loyalty && (
-        <div className="bg-white rounded-xl border p-6 max-w-lg">
-          <h3 className="font-bold mb-4">{tr('Программа лояльности', 'Loyallik dasturi')}</h3>
-          <form onSubmit={(e) => { e.preventDefault(); saveLoyalty(); }}>
-            <div className="space-y-4">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }} className="text-sm">
-                <input type="checkbox" checked={!!loyalty.isEnabled} onChange={(e) => setLoyalty({ ...loyalty, isEnabled: e.target.checked })} /> {tr('Включена', 'Yoqilgan')}
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">{tr('Сумма шага', 'Qadam summasi')}</label>
-                  <input type="number" value={loyalty.unitAmount || 1000} onChange={(e) => setLoyalty({ ...loyalty, unitAmount: +e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">{tr('Баллов за шаг', 'Qadam uchun ball')}</label>
-                  <input type="number" value={loyalty.pointsPerUnit || 1} onChange={(e) => setLoyalty({ ...loyalty, pointsPerUnit: +e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                </div>
+        <section className="sg-card" style={{ maxWidth: 720 }}>
+          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Программа лояльности', 'Loyallik dasturi')}</h3>
+          <p className="sg-subtitle">{tr('Начисления баллов и лимиты скидки', 'Ball berish qoidalari va chegirma limitlari')}</p>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveLoyalty();
+            }}
+            className="sg-grid"
+            style={{ gap: 12, marginTop: 10 }}
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+              <input
+                type="checkbox"
+                checked={!!loyalty.isEnabled}
+                onChange={(e) => setLoyalty({ ...loyalty, isEnabled: e.target.checked })}
+              />
+              {tr('Включена', 'Yoqilgan')}
+            </label>
+
+            <div className="sg-grid cols-2">
+              <div>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Сумма шага', 'Qadam summasi')}</label>
+                <input
+                  type="number"
+                  value={loyalty.unitAmount || 1000}
+                  onChange={(e) => setLoyalty({ ...loyalty, unitAmount: +e.target.value })}
+                  className="w-full"
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">{tr('Цена 1 балла', '1 ball qiymati')}</label>
-                  <input type="number" value={loyalty.pointValue || 100} onChange={(e) => setLoyalty({ ...loyalty, pointValue: +e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">{tr('Макс. скидка %', 'Maks. chegirma %')}</label>
-                  <input type="number" value={loyalty.maxDiscountPct || 30} onChange={(e) => setLoyalty({ ...loyalty, maxDiscountPct: +e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Баллов за шаг', 'Qadam uchun ball')}</label>
+                <input
+                  type="number"
+                  value={loyalty.pointsPerUnit || 1}
+                  onChange={(e) => setLoyalty({ ...loyalty, pointsPerUnit: +e.target.value })}
+                  className="w-full"
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                />
               </div>
-              <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg">{tr('Сохранить', 'Saqlash')}</button>
             </div>
+
+            <div className="sg-grid cols-2">
+              <div>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Цена 1 балла', '1 ball qiymati')}</label>
+                <input
+                  type="number"
+                  value={loyalty.pointValue || 100}
+                  onChange={(e) => setLoyalty({ ...loyalty, pointValue: +e.target.value })}
+                  className="w-full"
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Макс. скидка %', 'Maks. chegirma %')}</label>
+                <input
+                  type="number"
+                  value={loyalty.maxDiscountPct || 30}
+                  onChange={(e) => setLoyalty({ ...loyalty, maxDiscountPct: +e.target.value })}
+                  className="w-full"
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                />
+              </div>
+            </div>
+
+            <button className="sg-btn primary" type="submit">
+              {tr('Сохранить', 'Saqlash')}
+            </button>
           </form>
-        </div>
+        </section>
       )}
 
       {showStoreForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <h3 className="font-bold mb-4">{editingStoreId ? tr('Редактировать магазин', 'Do\'konni tahrirlash') : tr('Новый магазин', 'Yangi do\'kon')}</h3>
-            <input value={storeForm.name} onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm mb-2" placeholder={tr('Название магазина', 'Do\'kon nomi')} />
-            <input value={storeForm.botToken} onChange={(e) => setStoreForm({ ...storeForm, botToken: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm mb-2" placeholder="Bot token" />
-            <textarea value={storeForm.welcomeMessage} onChange={(e) => setStoreForm({ ...storeForm, welcomeMessage: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" rows={2} placeholder={tr('Приветственное сообщение', 'Xush kelibsiz xabari')} />
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button onClick={saveStore} className="flex-1 bg-blue-600 text-white py-2 rounded-lg">{tr('Сохранить', 'Saqlash')}</button>
-              <Button onClick={() => setShowStoreForm(false)} className="px-4 py-2 bg-gray-100 rounded-lg">{tr('Отмена', 'Bekor qilish')}</Button>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+          <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
+              {editingStoreId ? tr('Редактировать магазин', "Do'konni tahrirlash") : tr('Новый магазин', "Yangi do'kon")}
+            </h3>
+
+            <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
+              <input
+                value={storeForm.name}
+                onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })}
+                className="w-full"
+                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                placeholder={tr('Название магазина', "Do'kon nomi")}
+              />
+              <input
+                value={storeForm.botToken}
+                onChange={(e) => setStoreForm({ ...storeForm, botToken: e.target.value })}
+                className="w-full"
+                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                placeholder="Bot token"
+              />
+              <textarea
+                value={storeForm.welcomeMessage}
+                onChange={(e) => setStoreForm({ ...storeForm, welcomeMessage: e.target.value })}
+                rows={3}
+                className="w-full"
+                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }}
+                placeholder={tr('Приветственное сообщение', 'Xush kelibsiz xabari')}
+              />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="sg-btn primary" type="button" onClick={saveStore}>
+                  {tr('Сохранить', 'Saqlash')}
+                </button>
+                <button className="sg-btn ghost" type="button" onClick={() => setShowStoreForm(false)}>
+                  {tr('Отмена', 'Bekor qilish')}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {showZoneForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <h3 className="font-bold mb-4">{editingZoneId ? tr('Редактировать зону', 'Hududni tahrirlash') : tr('Новая зона', 'Yangi hudud')}</h3>
-            {!editingZoneId && (
-              <select value={zoneForm.storeId} onChange={(e) => setZoneForm({ ...zoneForm, storeId: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm mb-2">
-                {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-              </select>
-            )}
-            <input value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm mb-2" placeholder={tr('Название зоны', 'Hudud nomi')} />
-            <input type="number" value={zoneForm.price} onChange={(e) => setZoneForm({ ...zoneForm, price: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm mb-2" placeholder={tr('Цена', 'Narx')} />
-            <input type="number" value={zoneForm.freeFrom} onChange={(e) => setZoneForm({ ...zoneForm, freeFrom: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder={tr('Бесплатно от', 'Bepul chegarasi')} />
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button onClick={saveZone} className="flex-1 bg-blue-600 text-white py-2 rounded-lg">{tr('Сохранить', 'Saqlash')}</button>
-              <Button onClick={() => setShowZoneForm(false)} className="px-4 py-2 bg-gray-100 rounded-lg">{tr('Отмена', 'Bekor qilish')}</Button>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+          <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
+              {editingZoneId ? tr('Редактировать зону', 'Hududni tahrirlash') : tr('Новая зона', 'Yangi hudud')}
+            </h3>
+
+            <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
+              {!editingZoneId && (
+                <select
+                  value={zoneForm.storeId}
+                  onChange={(e) => setZoneForm({ ...zoneForm, storeId: e.target.value })}
+                  className="w-full"
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                >
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <input
+                value={zoneForm.name}
+                onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
+                className="w-full"
+                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                placeholder={tr('Название зоны', 'Hudud nomi')}
+              />
+              <input
+                type="number"
+                value={zoneForm.price}
+                onChange={(e) => setZoneForm({ ...zoneForm, price: e.target.value })}
+                className="w-full"
+                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                placeholder={tr('Цена', 'Narx')}
+              />
+              <input
+                type="number"
+                value={zoneForm.freeFrom}
+                onChange={(e) => setZoneForm({ ...zoneForm, freeFrom: e.target.value })}
+                className="w-full"
+                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                placeholder={tr('Бесплатно от', 'Bepul chegarasi')}
+              />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="sg-btn primary" type="button" onClick={saveZone}>
+                  {tr('Сохранить', 'Saqlash')}
+                </button>
+                <button className="sg-btn ghost" type="button" onClick={() => setShowZoneForm(false)}>
+                  {tr('Отмена', 'Bekor qilish')}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

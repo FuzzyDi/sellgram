@@ -8,41 +8,60 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    adminApi.getCustomers().then(setData).finally(() => setLoading(false));
+    adminApi
+      .getCustomers()
+      .then(setData)
+      .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6">👥 {tr('Клиенты', 'Mijozlar')}</h2>
+    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <header>
+        <h2 className="sg-title">{tr('Клиенты', 'Mijozlar')}</h2>
+        <p className="sg-subtitle">{tr('Сводка по базе клиентов вашего магазина', "Do'koningiz mijozlari bo'yicha umumiy ko'rinish")}</p>
+      </header>
 
-      {loading ? <p className="text-gray-400">{tr('Загрузка...', 'Yuklanmoqda...')}</p> : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-gray-500 border-b bg-gray-50">
-              <th className="px-4 py-3">{tr('Клиент', 'Mijoz')}</th>
-              <th className="px-4 py-3">Telegram</th>
-              <th className="px-4 py-3">{tr('Заказов', 'Buyurtmalar')}</th>
-              <th className="px-4 py-3">{tr('Потрачено', 'Sarflangan')}</th>
-              <th className="px-4 py-3">{tr('Баллы', 'Ballar')}</th>
-            </tr></thead>
+      {loading ? (
+        <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
+      ) : (
+        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <table className="sg-table">
+            <thead>
+              <tr>
+                <th>{tr('Клиент', 'Mijoz')}</th>
+                <th>Telegram</th>
+                <th>{tr('Заказов', 'Buyurtmalar')}</th>
+                <th>{tr('Потрачено', 'Sarflangan')}</th>
+                <th>{tr('Баллы', 'Ballar')}</th>
+              </tr>
+            </thead>
             <tbody>
-              {data?.items?.map((c: any) => (
-                <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{c.firstName} {c.lastName}</p>
-                    {c.phone && <p className="text-xs text-gray-500">{c.phone}</p>}
+              {data?.items?.map((customer: any) => (
+                <tr key={customer.id}>
+                  <td>
+                    <div style={{ fontWeight: 700 }}>{customer.firstName} {customer.lastName}</div>
+                    {customer.phone && <div style={{ fontSize: 12, color: '#6c7b72' }}>{customer.phone}</div>}
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{c.telegramUser ? `@${c.telegramUser}` : c.telegramId}</td>
-                  <td className="px-4 py-3">{c.ordersCount}</td>
-                  <td className="px-4 py-3 font-medium">{Number(c.totalSpent).toLocaleString()} UZS</td>
-                  <td className="px-4 py-3">⭐ {c.loyaltyPoints}</td>
+                  <td>{customer.telegramUser ? `@${customer.telegramUser}` : customer.telegramId || '-'}</td>
+                  <td>{customer.ordersCount || 0}</td>
+                  <td style={{ fontWeight: 700 }}>{Number(customer.totalSpent || 0).toLocaleString()} UZS</td>
+                  <td>{customer.loyaltyPoints || 0}</td>
                 </tr>
               ))}
+              {(data?.items || []).length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', color: '#6b7a71' }}>
+                    {tr('Пока нет клиентов', 'Hozircha mijozlar yo‘q')}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-          {data && <div className="px-4 py-3 text-sm text-gray-500 border-t">{tr('Всего', 'Jami')}: {data.total}</div>}
+          <div style={{ padding: '12px 14px', borderTop: '1px solid #edf2ee', color: '#5f6d64', fontSize: 13 }}>
+            {tr('Всего клиентов', 'Jami mijozlar')}: {data?.total || 0}
+          </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }
