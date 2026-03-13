@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+п»їimport React, { useEffect, useState } from 'react';
 import { clearSystemToken, setSystemToken, systemApi } from '../api/system-admin-client';
 import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
@@ -38,7 +38,7 @@ export default function SystemAdmin() {
   }
 
   useEffect(() => {
-    if (loggedIn) load();
+    if (loggedIn) void load();
   }, [loggedIn]);
 
   async function login() {
@@ -86,107 +86,122 @@ export default function SystemAdmin() {
 
   if (!loggedIn) {
     return (
-      <div style={{ maxWidth: 420, margin: '50px auto', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 24 }}>
-        <h2 className="text-2xl font-bold mb-1">{tr('Глобальный админ платформы', 'Platforma global admini')}</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          {tr('Отдельная консоль для управления платформой и подписками.', "Platforma va obunalarni boshqarish uchun alohida konsol.")}
-        </p>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full border rounded-lg px-3 py-2 text-sm mb-2" />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr('Пароль', 'Parol')} className="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
-        {loginError && <p className="text-sm text-red-600 mb-2">{loginError}</p>}
-        <button onClick={login} disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded-lg disabled:opacity-50">
-          {loading ? tr('Вход...', 'Kirilmoqda...') : tr('Войти', 'Kirish')}
-        </button>
-      </div>
+      <section className="sg-page" style={{ maxWidth: 460, margin: '20px auto' }}>
+        <h2 className="sg-title" style={{ fontSize: 28 }}>{tr('Global system admin', 'Global tizim admini')}</h2>
+        <p className="sg-subtitle">{tr('Separate console for platform governance and subscription moderation.', 'Platformani boshqarish va obuna moderatsiyasi uchun alohida konsol.')}</p>
+
+        <div className="sg-grid" style={{ marginTop: 14 }}>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full border rounded-lg px-3 py-2 text-sm" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr('Password', 'Parol')} className="w-full border rounded-lg px-3 py-2 text-sm" />
+          {loginError && <p style={{ color: '#b91c1c', fontSize: 13 }}>{loginError}</p>}
+          <button onClick={login} disabled={loading} className="sg-btn primary" style={{ width: '100%' }}>
+            {loading ? tr('Signing in...', 'Kirilmoqda...') : tr('Sign in', 'Kirish')}
+          </button>
+        </div>
+      </section>
     );
   }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10 }}>
         <div>
-          <h2 className="text-2xl font-bold">{tr('Консоль глобального админа', 'Global admin konsoli')}</h2>
-          <p className="text-sm text-gray-500">
-            {tr('Контроль платформы, планов подписки и модерации платежей за подписку.', "Platforma, obuna rejasi va obuna to'lovlarini moderatsiya qilish.")}
-          </p>
+          <h2 className="sg-title">{tr('System admin console', 'Tizim admin konsoli')}</h2>
+          <p className="sg-subtitle">{tr('Platform governance, subscription plans and invoice moderation.', 'Platformani boshqarish, obuna rejalari va invoice moderatsiyasi.')}</p>
         </div>
-        <Button onClick={logout} className="px-3 py-2 text-sm bg-gray-100 rounded-lg">{tr('Выйти', 'Chiqish')}</Button>
-      </div>
-      <div className="mb-4">
-        <Button onClick={goToStoreAdmin} className="px-3 py-2 text-sm bg-white border rounded-lg">
-          {tr('Перейти в админку магазина', "Do'kon adminiga o'tish")}
-        </Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button onClick={goToStoreAdmin} className="sg-btn ghost">
+            {tr('Store admin panel', "Do'kon admin paneli")}
+          </Button>
+          <Button onClick={logout} className="sg-btn danger">
+            {tr('Sign out', 'Chiqish')}
+          </Button>
+        </div>
+      </header>
+
+      <div className="sg-grid cols-4">
+        <article className="sg-card">
+          <div className="sg-kpi-label">{tr('Tenants', 'Tenantlar')}</div>
+          <div className="sg-kpi-value">{dashboard?.tenants ?? '-'}</div>
+        </article>
+        <article className="sg-card">
+          <div className="sg-kpi-label">{tr('Active stores', "Faol do'konlar")}</div>
+          <div className="sg-kpi-value">{dashboard?.activeStores ?? '-'}</div>
+        </article>
+        <article className="sg-card">
+          <div className="sg-kpi-label">{tr('Pending invoices', "Ko'rib chiqilayotgan invoice")}</div>
+          <div className="sg-kpi-value">{dashboard?.pendingInvoices ?? '-'}</div>
+        </article>
+        <article className="sg-card">
+          <div className="sg-kpi-label">{tr('Monthly orders', 'Oylik buyurtmalar')}</div>
+          <div className="sg-kpi-value">{dashboard?.monthlyOrders ?? '-'}</div>
+        </article>
       </div>
 
-      <div className="grid grid-cols-4 gap-3 mb-4">
-        {[
-          { label: tr('Тенанты', 'Tenantlar'), value: dashboard?.tenants ?? '-' },
-          { label: tr('Активные магазины', "Faol do'konlar"), value: dashboard?.activeStores ?? '-' },
-          { label: tr('Счета на модерации', "Ko'rib chiqilayotgan hisoblar"), value: dashboard?.pendingInvoices ?? '-' },
-          { label: tr('Заказы за месяц', 'Oylik buyurtmalar'), value: dashboard?.monthlyOrders ?? '-' },
-        ].map((item) => (
-          <div key={item.label} className="bg-white border rounded-xl p-4">
-            <p className="text-xs text-gray-500">{item.label}</p>
-            <p className="text-2xl font-bold mt-1">{item.value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white border rounded-xl p-4">
-          <h3 className="font-semibold mb-3">{tr('Тенанты', 'Tenantlar')}</h3>
-          <div className="space-y-2 max-h-96 overflow-auto">
+      <div className="sg-grid cols-2">
+        <article className="sg-card">
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Tenants', 'Tenantlar')}</h3>
+          <div className="sg-grid" style={{ marginTop: 12, maxHeight: 480, overflow: 'auto' }}>
             {tenants.map((tenant) => (
-              <div key={tenant.id} className="border rounded-lg p-3">
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div key={tenant.id} className="sg-card soft" style={{ padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                   <div>
-                    <p className="font-medium">{tenant.name}</p>
-                    <p className="text-xs text-gray-500">{tenant.slug}</p>
+                    <p style={{ margin: 0, fontWeight: 700 }}>{tenant.name}</p>
+                    <p style={{ margin: 0, color: '#708076', fontSize: 12 }}>{tenant.slug}</p>
                   </div>
-                  <span className="text-xs px-2 py-1 rounded bg-gray-100">{tenant.plan}</span>
+                  <span className="sg-badge" style={{ background: '#eef2ff', color: '#3730a3' }}>{tenant.plan}</span>
                 </div>
-                <div className="mt-2 flex gap-2">
-                  <Button onClick={() => setPlan(tenant.id, 'FREE')} className="px-2 py-1 text-xs rounded bg-gray-100">FREE</Button>
-                  <Button onClick={() => setPlan(tenant.id, 'PRO')} className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">PRO</Button>
-                  <Button onClick={() => setPlan(tenant.id, 'BUSINESS')} className="px-2 py-1 text-xs rounded bg-purple-100 text-purple-700">BUSINESS</Button>
+                <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <Button onClick={() => setPlan(tenant.id, 'FREE')} className="sg-btn ghost">FREE</Button>
+                  <Button onClick={() => setPlan(tenant.id, 'PRO')} className="sg-btn ghost">PRO</Button>
+                  <Button onClick={() => setPlan(tenant.id, 'BUSINESS')} className="sg-btn ghost">BUSINESS</Button>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </article>
 
-        <div className="bg-white border rounded-xl p-4">
-          <h3 className="font-semibold mb-3">{tr('Счета на модерации', "Ko'rib chiqilayotgan hisoblar")}</h3>
-          <div className="space-y-2 max-h-56 overflow-auto mb-4">
-            {invoices.map((invoice) => (
-              <div key={invoice.id} className="border rounded-lg p-3">
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <p className="font-medium">{invoice.tenant?.name || invoice.tenantId}</p>
-                  <span className="text-xs">{invoice.plan}</span>
+        <article className="sg-grid" style={{ gap: 12 }}>
+          <section className="sg-card">
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Invoices moderation', 'Invoice moderatsiyasi')}</h3>
+            <div className="sg-grid" style={{ marginTop: 12, maxHeight: 270, overflow: 'auto' }}>
+              {invoices.map((invoice) => (
+                <div key={invoice.id} className="sg-card soft" style={{ padding: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <p style={{ margin: 0, fontWeight: 700 }}>{invoice.tenant?.name || invoice.tenantId}</p>
+                    <span className="sg-badge" style={{ background: '#f3f4f6', color: '#374151' }}>{invoice.plan}</span>
+                  </div>
+                  <p style={{ margin: '6px 0 0', fontWeight: 700 }}>{Number(invoice.amount).toLocaleString()} UZS</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: '#738178' }}>{invoice.paymentRef || tr('No payment ref', "Payment ref yo'q")}</p>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                    <Button onClick={() => moderateInvoice(invoice.id, 'confirm')} className="sg-btn primary">
+                      {tr('Confirm', 'Tasdiqlash')}
+                    </Button>
+                    <Button onClick={() => moderateInvoice(invoice.id, 'reject')} className="sg-btn danger">
+                      {tr('Reject', 'Rad etish')}
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-sm">{Number(invoice.amount).toLocaleString()} UZS</p>
-                <p className="text-xs text-gray-500 mt-1">{invoice.paymentRef || tr('Нет payment ref', "Payment ref yo'q")}</p>
-                <div className="mt-2 flex gap-2">
-                  <Button onClick={() => moderateInvoice(invoice.id, 'confirm')} className="px-2 py-1 text-xs rounded bg-green-100 text-green-700">{tr('Подтвердить', 'Tasdiqlash')}</Button>
-                  <Button onClick={() => moderateInvoice(invoice.id, 'reject')} className="px-2 py-1 text-xs rounded bg-red-100 text-red-700">{tr('Отклонить', 'Rad etish')}</Button>
-                </div>
-              </div>
-            ))}
-            {invoices.length === 0 && <p className="text-sm text-gray-400">{tr('Нет счетов на модерации', "Ko'rib chiqish uchun hisob yo'q")}</p>}
-          </div>
+              ))}
+              {invoices.length === 0 && <p className="sg-subtitle">{tr('No invoices pending moderation', "Ko'rib chiqilayotgan invoice yo'q")}</p>}
+            </div>
+          </section>
 
-          <h3 className="font-semibold mb-3">{tr('Магазины', "Do'konlar")}</h3>
-          <div className="space-y-2 max-h-40 overflow-auto">
-            {stores.map((store) => (
-              <div key={store.id} className="border rounded-lg p-2">
-                <p className="text-sm font-medium">{store.name}</p>
-                <p className="text-xs text-gray-500">{store.tenant?.name || '-'}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+          <section className="sg-card">
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Stores', "Do'konlar")}</h3>
+            <div className="sg-grid" style={{ marginTop: 12, maxHeight: 190, overflow: 'auto' }}>
+              {stores.map((store) => (
+                <div key={store.id} className="sg-card soft" style={{ padding: 10 }}>
+                  <p style={{ margin: 0, fontWeight: 700 }}>{store.name}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: '#738178' }}>{store.tenant?.name || '-'}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </article>
       </div>
-    </div>
+
+      {loading && <p className="sg-subtitle">{tr('Updating...', 'Yangilanmoqda...')}</p>}
+    </section>
   );
 }
-

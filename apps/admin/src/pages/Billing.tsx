@@ -1,9 +1,13 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
 
-const planColors: Record<string, string> = { FREE: '#6b7280', PRO: '#00875a', BUSINESS: '#7c3aed' };
+const planColors: Record<string, string> = {
+  FREE: '#6b7280',
+  PRO: '#00875a',
+  BUSINESS: '#7c3aed',
+};
 
 export default function Billing() {
   const { tr, locale } = useAdminI18n();
@@ -11,17 +15,20 @@ export default function Billing() {
   const [plans, setPlans] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [showInvoice, setShowInvoice] = useState<any>(null);
   const [paymentRef, setPaymentRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const statusMap = {
-    PENDING: { label: tr('Ожидает оплаты', 'To\'lov kutilmoqda'), color: '#f59e0b' },
-    PAID: { label: tr('Оплачен', "To'langan"), color: '#34c759' },
-    CANCELLED: { label: tr('Отклонён', 'Rad etilgan'), color: '#ef4444' },
-    EXPIRED: { label: tr('Истёк', 'Muddati tugagan'), color: '#6b7280' },
-  } as Record<string, { label: string; color: string }>;
+  const statusMap = useMemo(
+    () =>
+      ({
+        PENDING: { label: tr('Pending payment', "To'lov kutilmoqda"), color: '#f59e0b' },
+        PAID: { label: tr('Paid', "To'langan"), color: '#34c759' },
+        CANCELLED: { label: tr('Rejected', 'Rad etilgan'), color: '#ef4444' },
+        EXPIRED: { label: tr('Expired', 'Muddati tugagan'), color: '#6b7280' },
+      }) as Record<string, { label: string; color: string }>,
+    [tr]
+  );
 
   const load = useCallback(async () => {
     const [s, p, inv] = await Promise.all([
@@ -35,7 +42,9 @@ export default function Billing() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const handleUpgrade = async (plan: string) => {
     setSubmitting(true);
@@ -45,7 +54,7 @@ export default function Billing() {
         setShowInvoice(result);
         setPaymentRef('');
       } else {
-        load();
+        await load();
       }
     } catch (err: any) {
       alert(err.message);
@@ -58,51 +67,60 @@ export default function Billing() {
     setSubmitting(true);
     try {
       await adminApi.submitInvoicePayment(showInvoice.invoice.id, paymentRef.trim());
-      alert(tr('Данные оплаты отправлены. Ожидайте подтверждения.', 'To\'lov ma\'lumotlari yuborildi. Tasdiq kutilmoqda.'));
+      alert(tr('Payment details submitted. Await moderation.', "To'lov ma'lumotlari yuborildi. Tasdiq kutilmoqda."));
       setShowInvoice(null);
-      load();
+      await load();
     } catch (err: any) {
       alert(err.message);
     }
     setSubmitting(false);
   };
 
-  if (loading) return <p className="text-gray-400">{tr('Загрузка...', 'Yuklanmoqda...')}</p>;
+  if (loading) return <section className="sg-page"><p className="sg-subtitle">{tr('Loading...', 'Yuklanmoqda...')}</p></section>;
 
   const currentPlan = sub?.plan || 'FREE';
   const usage = sub?.usage || {};
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6">💳 {tr('Тарифы и биллинг', 'Tariflar va billing')}</h2>
+    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <header>
+        <h2 className="sg-title">{tr('Plans and billing', 'Tariflar va billing')}</h2>
+        <p className="sg-subtitle">{tr('Subscription limits, upgrades and invoice moderation', 'Obuna limitlari, upgrade va invoice moderatsiyasi')}</p>
+      </header>
 
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e5e7eb', padding: 24, marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div className="sg-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <div>
-            <p className="text-sm text-gray-500">{tr('Текущий тариф', 'Joriy tarif')}</p>
-            <p className="text-2xl font-bold" style={{ color: planColors[currentPlan] }}>{plans?.[currentPlan]?.name || currentPlan}</p>
-            {sub?.planExpiresAt && <p className="text-xs text-gray-400 mt-1">{tr('Активен до', 'Amal qilish muddati')}: {new Date(sub.planExpiresAt).toLocaleDateString(locale)}</p>}
+            <p className="sg-kpi-label">{tr('Current plan', 'Joriy tarif')}</p>
+            <p className="sg-kpi-value" style={{ color: planColors[currentPlan], margin: 0 }}>{plans?.[currentPlan]?.name || currentPlan}</p>
+            {sub?.planExpiresAt && (
+              <p className="sg-subtitle" style={{ marginTop: 6 }}>
+                {tr('Active until', 'Amal qilish muddati')}: {new Date(sub.planExpiresAt).toLocaleDateString(locale)}
+              </p>
+            )}
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="sg-grid cols-2" style={{ marginTop: 14 }}>
           {[
-            { key: 'stores', label: tr('Магазины', "Do'konlar"), icon: '🏪' },
-            { key: 'products', label: tr('Товары', 'Mahsulotlar'), icon: '🏷️' },
-            { key: 'ordersThisMonth', label: tr('Заказы (мес)', 'Buyurtmalar (oy)'), icon: '📦' },
-            { key: 'deliveryZones', label: tr('Зоны', 'Hududlar'), icon: '🚚' },
+            { key: 'stores', label: tr('Stores', "Do'konlar") },
+            { key: 'products', label: tr('Products', 'Mahsulotlar') },
+            { key: 'ordersThisMonth', label: tr('Orders (month)', 'Buyurtmalar (oy)') },
+            { key: 'deliveryZones', label: tr('Delivery zones', 'Hududlar') },
           ].map((item) => {
             const u = usage[item.key];
             if (!u) return null;
             const pct = u.limit === -1 ? 0 : Math.min(100, (u.current / u.limit) * 100);
             return (
-              <div key={item.key} style={{ background: '#f9fafb', borderRadius: 12, padding: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span className="text-sm font-medium">{item.icon} {item.label}</span>
-                  <span className="text-sm text-gray-500">{u.current}/{u.limit === -1 ? '∞' : u.limit}</span>
+              <div key={item.key} className="sg-card soft" style={{ padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>{item.label}</span>
+                  <span style={{ fontSize: 13, color: '#64756b' }}>
+                    {u.current}/{u.limit === -1 ? 'unlimited' : u.limit}
+                  </span>
                 </div>
-                <div style={{ height: 6, background: '#e5e7eb', borderRadius: 3 }}>
-                  <div style={{ height: '100%', borderRadius: 3, width: u.limit === -1 ? '5%' : `${pct}%`, background: pct >= 80 ? '#ef4444' : '#00875a' }} />
+                <div style={{ marginTop: 8, height: 6, background: '#dfe8e2', borderRadius: 999 }}>
+                  <div style={{ height: '100%', borderRadius: 999, width: u.limit === -1 ? '8%' : `${pct}%`, background: pct >= 80 ? '#ef4444' : '#00875a' }} />
                 </div>
               </div>
             );
@@ -110,110 +128,105 @@ export default function Billing() {
         </div>
       </div>
 
-      <h3 className="text-lg font-bold mb-4">{tr('Выберите тариф', 'Tarifni tanlang')}</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
-        {plans && Object.entries(plans).map(([code, plan]: [string, any]) => {
-          const isCurrent = code === currentPlan;
-          const isPopular = code === 'PRO';
-          return (
-            <div key={code} style={{ background: '#fff', borderRadius: 16, padding: 24, position: 'relative', border: isCurrent ? `2px solid ${planColors[code]}` : '1px solid #e5e7eb', boxShadow: isPopular ? '0 8px 30px rgba(0,135,90,0.12)' : 'none' }}>
-              {isPopular && <div style={{ position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)', background: '#00875a', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 14px', borderRadius: 20 }}>{tr('Популярный', 'Ommabop')}</div>}
-              <p className="text-sm text-gray-500">{plan.name}</p>
-              <p className="text-3xl font-bold mt-1" style={{ color: planColors[code] }}>{plan.price > 0 ? plan.price.toLocaleString() : tr('Бесплатно', 'Bepul')}</p>
-              {plan.price > 0 && <p className="text-sm text-gray-500">{tr('сум / мес', 'so\'m / oy')}</p>}
+      <section>
+        <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800 }}>{tr('Choose plan', 'Tarifni tanlang')}</h3>
+        <div className="sg-grid cols-3">
+          {plans &&
+            Object.entries(plans).map(([code, plan]: [string, any]) => {
+              const isCurrent = code === currentPlan;
+              return (
+                <div key={code} className="sg-card" style={{ borderColor: isCurrent ? planColors[code] : '#dfe7e2' }}>
+                  <div style={{ fontSize: 13, color: '#607167' }}>{plan.name}</div>
+                  <div style={{ fontSize: 34, fontWeight: 900, marginTop: 4, color: planColors[code] }}>{plan.price > 0 ? plan.price.toLocaleString() : 0}</div>
+                  <div style={{ marginTop: 2, fontSize: 13, color: '#607167' }}>{plan.price > 0 ? tr('UZS / month', "so'm / oy") : tr('Free', 'Bepul')}</div>
 
-              <div style={{ margin: '16px 0' }}>
-                {plan.features?.map((f: string, i: number) => (
-                  <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '4px 0' }}>
-                    <span style={{ color: '#00875a', fontSize: 13, fontWeight: 700 }}>✓</span>
-                    <span className="text-sm text-gray-600">{f}</span>
+                  <ul style={{ marginTop: 10, paddingLeft: 16, color: '#4f5f56', fontSize: 13 }}>
+                    {[
+                      `${tr('Stores', "Do'konlar")}: ${plan.limits?.stores === -1 ? 'unlimited' : plan.limits?.stores}`,
+                      `${tr('Products', 'Mahsulotlar')}: ${plan.limits?.products === -1 ? 'unlimited' : plan.limits?.products}`,
+                      `${tr('Orders / month', 'Buyurtma / oy')}: ${plan.limits?.ordersThisMonth === -1 ? 'unlimited' : plan.limits?.ordersThisMonth}`,
+                      `${tr('Delivery zones', 'Hududlar')}: ${plan.limits?.deliveryZones === -1 ? 'unlimited' : plan.limits?.deliveryZones}`,
+                    ].map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+
+                  <div style={{ marginTop: 12 }}>
+                    {isCurrent ? (
+                      <div className="sg-badge" style={{ background: '#eef8f1', color: '#0b6f49' }}>{tr('Current', 'Joriy')}</div>
+                    ) : (
+                      <Button onClick={() => handleUpgrade(code)} disabled={submitting} className="sg-btn primary" style={{ width: '100%' }}>
+                        {plan.price === 0 ? tr('Switch', "O'tish") : tr('Upgrade', 'Ulash')}
+                      </Button>
+                    )}
                   </div>
-                ))}
-              </div>
-
-              {isCurrent ? (
-                <div style={{ width: '100%', padding: 10, borderRadius: 10, textAlign: 'center', background: '#f3f4f6', color: '#6b7280', fontSize: 14, fontWeight: 500 }}>{tr('Текущий', 'Joriy')}</div>
-              ) : (
-                <Button onClick={() => handleUpgrade(code)} className={`w-full py-2.5 rounded-xl text-sm font-semibold text-center ${isPopular ? 'bg-green-600 text-white' : code === 'BUSINESS' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  {plan.price === 0 ? tr('Перейти', "O'tish") : tr('Подключить', 'Ulash')}
-                </Button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {invoices.length > 0 && (
-        <div>
-          <h3 className="text-lg font-bold mb-4">{tr('История счетов', 'Hisoblar tarixi')}</h3>
-          <div className="bg-white rounded-xl border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-gray-500 border-b bg-gray-50">
-                <th className="px-4 py-3">{tr('Дата', 'Sana')}</th>
-                <th className="px-4 py-3">{tr('Тариф', 'Tarif')}</th>
-                <th className="px-4 py-3">{tr('Сумма', 'Summa')}</th>
-                <th className="px-4 py-3">{tr('Статус', 'Holat')}</th>
-                <th className="px-4 py-3">{tr('Транзакция', 'Tranzaksiya')}</th>
-              </tr></thead>
-              <tbody>
-                {invoices.map((inv: any) => {
-                  const st = statusMap[inv.status] || statusMap.PENDING;
-                  return (
-                    <tr key={inv.id} className="border-b hover:bg-gray-50">
-                      <td className="px-4 py-3">{new Date(inv.createdAt).toLocaleDateString(locale)}</td>
-                      <td className="px-4 py-3 font-medium">{inv.plan}</td>
-                      <td className="px-4 py-3">{Number(inv.amount).toLocaleString()} UZS</td>
-                      <td className="px-4 py-3"><span style={{ color: st.color, fontWeight: 600, fontSize: 13 }}>{st.label}</span></td>
-                      <td className="px-4 py-3 text-gray-500">{inv.paymentRef || '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                </div>
+              );
+            })}
         </div>
-      )}
+      </section>
+
+      <section className="sg-card">
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Invoices history', 'Hisoblar tarixi')}</h3>
+        <table className="sg-table" style={{ marginTop: 10 }}>
+          <thead>
+            <tr>
+              <th>{tr('Date', 'Sana')}</th>
+              <th>{tr('Plan', 'Tarif')}</th>
+              <th>{tr('Amount', 'Summa')}</th>
+              <th>{tr('Status', 'Holat')}</th>
+              <th>{tr('Transaction', 'Tranzaksiya')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoices.map((inv) => {
+              const st = statusMap[inv.status] || { label: inv.status, color: '#6b7280' };
+              return (
+                <tr key={inv.id}>
+                  <td>{new Date(inv.createdAt).toLocaleDateString(locale)}</td>
+                  <td>{inv.plan}</td>
+                  <td>{Number(inv.amount).toLocaleString()} UZS</td>
+                  <td>
+                    <span className="sg-badge" style={{ background: `${st.color}1a`, color: st.color }}>
+                      {st.label}
+                    </span>
+                  </td>
+                  <td>{inv.paymentRef || '-'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
 
       {showInvoice && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <h3 className="font-bold text-lg mb-2">💳 {tr('Оплата тарифа', 'Tarif to\'lovi')} {showInvoice.invoice.plan}</h3>
-            <p className="text-sm text-gray-500 mb-4">{tr('Переведите сумму и введите номер транзакции', 'Summani o\'tkazing va tranzaksiya raqamini kiriting')}</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(11, 20, 16, 0.5)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}>
+          <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Plan payment', "Tarif to'lovi")} {showInvoice.invoice.plan}</h3>
+            <p className="sg-subtitle">{tr('Transfer payment and enter transaction reference', "To'lovni o'tkazing va tranzaksiya raqamini kiriting")}</p>
 
-            <div style={{ background: '#f0fdf4', borderRadius: 12, padding: 16, marginBottom: 16, textAlign: 'center' }}>
-              <p className="text-3xl font-bold" style={{ color: '#00875a' }}>{Number(showInvoice.invoice.amount).toLocaleString()} UZS</p>
+            <div className="sg-card soft" style={{ marginTop: 12 }}>
+              <p style={{ margin: 0, fontSize: 13 }}><b>{tr('Bank', 'Bank')}:</b> {showInvoice.bankDetails.bank}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 13 }}><b>{tr('Account', 'Hisob')}:</b> {showInvoice.bankDetails.account}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 13 }}><b>{tr('Recipient', 'Qabul qiluvchi')}:</b> {showInvoice.bankDetails.recipient}</p>
             </div>
 
-            <div style={{ background: '#f9fafb', borderRadius: 12, padding: 14, marginBottom: 16 }}>
-              <p className="text-xs text-gray-500 font-semibold uppercase mb-2">{tr('Реквизиты', 'Rekvizitlar')}</p>
-              {showInvoice.bankDetails && Object.entries({
-                [tr('Банк', 'Bank')]: showInvoice.bankDetails.bank,
-                [tr('Счёт', 'Hisob')]: showInvoice.bankDetails.account,
-                [tr('Получатель', 'Qabul qiluvchi')]: showInvoice.bankDetails.recipient,
-                [tr('Назначение', 'To\'lov izohi')]: `SellGram ${showInvoice.invoice.plan} — ${showInvoice.invoice.id.slice(0, 8)}`,
-              }).map(([k, v]) => (
-                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span className="text-sm text-gray-500">{k}</span>
-                  <span className="text-sm font-medium" style={{ textAlign: 'right', maxWidth: '60%' }}>{String(v)}</span>
-                </div>
-              ))}
+            <label style={{ display: 'grid', gap: 4, marginTop: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#516057' }}>{tr('Transaction / receipt number', 'Tranzaksiya / chek raqami')}</span>
+              <input value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+            </label>
+
+            <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
+              <button onClick={submitPayment} disabled={submitting || !paymentRef.trim()} className="sg-btn primary" style={{ flex: 1 }}>
+                {submitting ? '...' : tr('Submit', 'Yuborish')}
+              </button>
+              <Button onClick={() => setShowInvoice(null)} className="sg-btn ghost" style={{ flex: 1 }}>
+                {tr('Later', 'Keyinroq')}
+              </Button>
             </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); submitPayment(); }}>
-              <div style={{ marginBottom: 16 }}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{tr('Номер транзакции / чека', 'Tranzaksiya / chek raqami')}</label>
-                <input value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm" placeholder="TXN-123456789" />
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button type="submit" disabled={submitting || !paymentRef.trim()} className="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-medium disabled:opacity-50">{submitting ? '...' : tr('Отправить', 'Yuborish')}</button>
-                <Button onClick={() => setShowInvoice(null)} className="px-6 py-2.5 bg-gray-100 rounded-lg">{tr('Позже', 'Keyinroq')}</Button>
-              </div>
-            </form>
-
-            <p className="text-xs text-gray-400 mt-4 text-center">{tr('Счёт действует 48 часов. После оплаты тариф активируется в течение 1 рабочего дня.', 'Hisob 48 soat amal qiladi. To\'lovdan so\'ng tarif 1 ish kunida faollashadi.')}</p>
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }
