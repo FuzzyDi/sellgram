@@ -60,6 +60,8 @@ export default function Products() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'hidden'>('all');
   const [editImages, setEditImages] = useState<{ id: string; url: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,8 +69,15 @@ export default function Products() {
   const loadProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const params = search ? `search=${encodeURIComponent(search)}` : '';
-      const data = await adminApi.getProducts(params);
+      const params = new URLSearchParams();
+      params.set('page', '1');
+      params.set('pageSize', '200');
+      if (search.trim()) params.set('search', search.trim());
+      if (selectedCategory) params.set('categoryId', selectedCategory);
+      if (activeFilter === 'active') params.set('active', 'true');
+      if (activeFilter === 'hidden') params.set('active', 'false');
+
+      const data = await adminApi.getProducts(params.toString());
       setProducts(data.items || []);
       setTotal(data.total || 0);
     } catch {
@@ -77,7 +86,7 @@ export default function Products() {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, selectedCategory, activeFilter]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -89,9 +98,12 @@ export default function Products() {
   }, []);
 
   useEffect(() => {
-    loadProducts();
-    loadCategories();
-  }, [loadProducts, loadCategories]);
+    void loadProducts();
+  }, [loadProducts]);
+
+  useEffect(() => {
+    void loadCategories();
+  }, [loadCategories]);
 
   const openCreate = useCallback(() => {
     setForm(emptyForm);
@@ -155,8 +167,7 @@ export default function Products() {
       if (editingId) {
         await adminApi.updateProduct(editingId, payload);
       } else {
-        const created = await adminApi.createProduct(payload);
-        setEditingId(created.id);
+        await adminApi.createProduct(payload);
       }
 
       setShowForm(false);
@@ -247,24 +258,42 @@ export default function Products() {
         </button>
       </header>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          loadProducts();
-        }}
-        style={{ display: 'flex', gap: 8 }}
-      >
+      <div className="sg-card" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={tr('Поиск по названию или SKU...', "Nomi yoki SKU bo'yicha qidirish...")}
+          placeholder={tr('Поиск по названию, описанию, SKU...', "Nomi, tavsifi, SKU bo'yicha qidirish...")}
           className="w-full"
-          style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px' }}
+          style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px', minWidth: 240, flex: 1 }}
         />
-        <button className="sg-btn ghost" type="submit">
-          {tr('Найти', 'Qidirish')}
+
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="border rounded-lg px-3 py-2 text-sm"
+        >
+          <option value="">{tr('Все категории', 'Barcha toifalar')}</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={activeFilter}
+          onChange={(e) => setActiveFilter(e.target.value as 'all' | 'active' | 'hidden')}
+          className="border rounded-lg px-3 py-2 text-sm"
+        >
+          <option value="all">{tr('Любой статус', 'Har qanday holat')}</option>
+          <option value="active">{tr('Только активные', 'Faqat faol')}</option>
+          <option value="hidden">{tr('Только скрытые', 'Faqat yashirin')}</option>
+        </select>
+
+        <button className="sg-btn ghost" type="button" onClick={() => void loadProducts()}>
+          {tr('Применить', "Qo'llash")}
         </button>
-      </form>
+      </div>
 
       {loading ? (
         <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
@@ -286,18 +315,7 @@ export default function Products() {
               {products.map((product) => (
                 <tr key={product.id}>
                   <td>
-                    <div
-                      style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 8,
-                        background: '#eef3f0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                      }}
-                    >
+                    <div style={{ width: 42, height: 42, borderRadius: 8, background: '#eef3f0', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                       {product.images?.[0]?.url ? (
                         <img src={product.images[0].url} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
@@ -318,13 +336,7 @@ export default function Products() {
                     </span>
                   </td>
                   <td>
-                    <span
-                      className="sg-badge"
-                      style={{
-                        background: product.isActive ? '#e8f7ef' : '#eef1f0',
-                        color: product.isActive ? '#0b7f57' : '#5f6d64',
-                      }}
-                    >
+                    <span className="sg-badge" style={{ background: product.isActive ? '#e8f7ef' : '#eef1f0', color: product.isActive ? '#0b7f57' : '#5f6d64' }}>
                       {product.isActive ? tr('Активен', 'Faol') : tr('Скрыт', 'Yashirin')}
                     </span>
                   </td>
@@ -333,7 +345,7 @@ export default function Products() {
                       <button className="sg-btn ghost" type="button" onClick={() => openEdit(product)}>
                         {tr('Изменить', 'Tahrirlash')}
                       </button>
-                      <button className="sg-btn danger" type="button" onClick={() => removeProduct(product.id, product.name)}>
+                      <button className="sg-btn danger" type="button" onClick={() => void removeProduct(product.id, product.name)}>
                         {tr('Удалить', "O'chirish")}
                       </button>
                     </div>
@@ -363,18 +375,14 @@ export default function Products() {
             <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>
               {editingId ? tr('Редактировать товар', 'Mahsulotni tahrirlash') : tr('Новый товар', 'Yangi mahsulot')}
             </h3>
-            <p className="sg-subtitle">{tr('Управляйте карточкой товара и медиа', "Mahsulot kartasi va media fayllarni boshqaring")}</p>
+            <p className="sg-subtitle">{tr('Управляйте карточкой товара и медиа', 'Mahsulot kartasi va media fayllarni boshqaring')}</p>
 
-            {error && (
-              <div style={{ marginTop: 10, background: '#fff2f2', color: '#b52d2d', border: '1px solid #ffd6d6', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
-                {error}
-              </div>
-            )}
+            {error && <div style={{ marginTop: 10, background: '#fff2f2', color: '#b52d2d', border: '1px solid #ffd6d6', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>{error}</div>}
 
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                saveProduct();
+                void saveProduct();
               }}
               className="sg-grid"
               style={{ gap: 12, marginTop: 12 }}
@@ -385,7 +393,7 @@ export default function Products() {
                   <input value={form.name} onChange={updateForm('name')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('SKU', 'SKU')}</label>
+                  <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>SKU</label>
                   <input value={form.sku} onChange={updateForm('sku')} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
                 </div>
               </div>
@@ -433,14 +441,8 @@ export default function Products() {
                 </button>
                 {showCatForm && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    <input
-                      value={catName}
-                      onChange={(e) => setCatName(e.target.value)}
-                      className="w-full"
-                      style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                      placeholder={tr('Название категории', 'Toifa nomi')}
-                    />
-                    <button className="sg-btn primary" type="button" onClick={createCategory}>
+                    <input value={catName} onChange={(e) => setCatName(e.target.value)} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Название категории', 'Toifa nomi')} />
+                    <button className="sg-btn primary" type="button" onClick={() => void createCategory()}>
                       {tr('Создать', 'Yaratish')}
                     </button>
                   </div>
@@ -449,13 +451,7 @@ export default function Products() {
 
               <div>
                 <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>{tr('Описание', 'Tavsif')}</label>
-                <textarea
-                  value={form.description}
-                  onChange={updateForm('description')}
-                  rows={3}
-                  className="w-full"
-                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }}
-                />
+                <textarea value={form.description} onChange={updateForm('description')} rows={3} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }} />
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
@@ -470,40 +466,12 @@ export default function Products() {
                     {editImages.map((image) => (
                       <div key={image.id} style={{ width: 88, height: 88, borderRadius: 10, overflow: 'hidden', position: 'relative', border: '1px solid #dce4de' }}>
                         <img src={image.url} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(image.id)}
-                          style={{
-                            position: 'absolute',
-                            right: 4,
-                            top: 4,
-                            background: '#d93535',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '50%',
-                            width: 20,
-                            height: 20,
-                            cursor: 'pointer',
-                          }}
-                        >
+                        <button type="button" onClick={() => void removeImage(image.id)} style={{ position: 'absolute', right: 4, top: 4, background: '#d93535', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer' }}>
                           x
                         </button>
                       </div>
                     ))}
-                    <label
-                      style={{
-                        width: 88,
-                        height: 88,
-                        borderRadius: 10,
-                        border: '2px dashed #ced9d2',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        color: '#5f6d64',
-                        fontSize: 12,
-                      }}
-                    >
+                    <label style={{ width: 88, height: 88, borderRadius: 10, border: '2px dashed #ced9d2', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#5f6d64', fontSize: 12 }}>
                       {uploading ? tr('Загрузка...', 'Yuklanmoqda...') : tr('Добавить', "Qo'shish")}
                       <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={uploadImages} style={{ display: 'none' }} />
                     </label>
@@ -515,11 +483,7 @@ export default function Products() {
 
               <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                 <button className="sg-btn primary" type="submit" disabled={saving}>
-                  {saving
-                    ? tr('Сохранение...', 'Saqlanmoqda...')
-                    : editingId
-                    ? tr('Сохранить', 'Saqlash')
-                    : tr('Создать товар', 'Mahsulot yaratish')}
+                  {saving ? tr('Сохранение...', 'Saqlanmoqda...') : editingId ? tr('Сохранить', 'Saqlash') : tr('Создать товар', 'Mahsulot yaratish')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => setShowForm(false)}>
                   {tr('Отмена', 'Bekor qilish')}

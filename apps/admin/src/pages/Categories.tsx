@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -18,6 +18,7 @@ export default function Categories() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [name, setName] = useState('');
+  const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -33,8 +34,14 @@ export default function Categories() {
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q));
+  }, [categories, search]);
 
   function openCreate() {
     setEditing(null);
@@ -78,7 +85,7 @@ export default function Categories() {
             `В категории "${category.name}" есть ${count} товар(ов). Товары останутся, но без категории. Удалить?`,
             `"${category.name}" toifasida ${count} ta mahsulot bor. Mahsulotlar qoladi, lekin toifasiz bo'ladi. O'chirilsinmi?`
           )
-        : tr(`Удалить категорию "${category.name}"?`, `"${category.name}" toifasini o'chirilsinmi?`);
+        : tr(`Удалить категорию "${category.name}"?`, `"${category.name}" toifasi o'chirilsinmi?`);
 
     if (!confirm(question)) return;
 
@@ -102,6 +109,16 @@ export default function Categories() {
         </button>
       </header>
 
+      <div className="sg-card" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={tr('Поиск по названию или slug', 'Nomi yoki slug bo\'yicha qidirish')}
+          className="w-full"
+          style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px' }}
+        />
+      </div>
+
       {loading ? (
         <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
       ) : (
@@ -110,24 +127,20 @@ export default function Categories() {
             <thead>
               <tr>
                 <th>{tr('Название', 'Nomi')}</th>
+                <th>Slug</th>
                 <th>{tr('Товаров', 'Mahsulotlar')}</th>
                 <th>{tr('Статус', 'Holat')}</th>
                 <th>{tr('Действия', 'Amallar')}</th>
               </tr>
             </thead>
             <tbody>
-              {categories.map((category) => (
+              {filtered.map((category) => (
                 <tr key={category.id}>
                   <td style={{ fontWeight: 700 }}>{category.name}</td>
+                  <td>{category.slug}</td>
                   <td>{category._count?.products || 0}</td>
                   <td>
-                    <span
-                      className="sg-badge"
-                      style={{
-                        background: category.isActive ? '#e8f7ef' : '#eef1f0',
-                        color: category.isActive ? '#0b7f57' : '#5f6d64',
-                      }}
-                    >
+                    <span className="sg-badge" style={{ background: category.isActive ? '#e8f7ef' : '#eef1f0', color: category.isActive ? '#0b7f57' : '#5f6d64' }}>
                       {category.isActive ? tr('Активна', 'Faol') : tr('Скрыта', 'Yashirin')}
                     </span>
                   </td>
@@ -136,16 +149,16 @@ export default function Categories() {
                       <button className="sg-btn ghost" type="button" onClick={() => openEdit(category)}>
                         {tr('Изменить', 'Tahrirlash')}
                       </button>
-                      <button className="sg-btn danger" type="button" onClick={() => removeCategory(category)}>
+                      <button className="sg-btn danger" type="button" onClick={() => void removeCategory(category)}>
                         {tr('Удалить', "O'chirish")}
                       </button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {categories.length === 0 && (
+              {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', color: '#6b7a71' }}>
+                  <td colSpan={5} style={{ textAlign: 'center', color: '#6b7a71' }}>
                     {tr('Категорий пока нет', "Toifalar hozircha yo'q")}
                   </td>
                 </tr>
@@ -163,17 +176,10 @@ export default function Categories() {
             </h3>
             <p className="sg-subtitle">{tr('Введите понятное название для покупателей', 'Mijozlar uchun tushunarli nom kiriting')}</p>
 
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-              className="w-full"
-              style={{ marginTop: 12, border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px' }}
-              placeholder={tr('Например: Напитки', 'Masalan: Ichimliklar')}
-            />
+            <input value={name} onChange={(e) => setName(e.target.value)} autoFocus className="w-full" style={{ marginTop: 12, border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px' }} placeholder={tr('Например: Напитки', 'Masalan: Ichimliklar')} />
 
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-              <button className="sg-btn primary" type="button" onClick={saveCategory} disabled={saving}>
+              <button className="sg-btn primary" type="button" onClick={() => void saveCategory()} disabled={saving}>
                 {saving ? tr('Сохранение...', 'Saqlanmoqda...') : tr('Сохранить', 'Saqlash')}
               </button>
               <button className="sg-btn ghost" type="button" onClick={() => setShowForm(false)}>

@@ -44,7 +44,13 @@ export default async function productRoutes(fastify: FastifyInstance) {
     const skip = (Number(page) - 1) * Number(pageSize);
 
     const where: any = { tenantId: request.tenantId! };
-    if (search) where.name = { contains: search, mode: 'insensitive' };
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { sku: { contains: search, mode: 'insensitive' } },
+      ];
+    }
     if (categoryId) where.categoryId = categoryId;
     if (active !== undefined) where.isActive = active === 'true';
 
@@ -237,7 +243,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
       });
 
       return { success: true, data: image };
-    } catch (err: any) {
+    } catch {
       return reply.status(500).send({ success: false, error: 'Upload failed' });
     }
   });
@@ -262,10 +268,11 @@ export default async function productRoutes(fastify: FastifyInstance) {
       const s3Path = image.url.replace(/^\/uploads\//, '');
       const { bucket, objectPath } = resolveBucketAndObjectPath(s3Path);
       await getS3().removeObject(bucket, objectPath);
-    } catch { /* S3 cleanup best-effort */ }
+    } catch {
+      // S3 cleanup best-effort
+    }
 
     await prisma.productImage.delete({ where: { id: imageId } });
     return { success: true, message: 'Image deleted' };
   });
 }
-
