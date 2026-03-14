@@ -22,9 +22,24 @@ export async function loginSystemAdmin(input: { email: string; password: string 
   return { token, admin: { id: admin.id, email: admin.email, name: admin.name } };
 }
 
-async function logSystemAction(action: string, meta: Record<string, unknown>) {
-  // Can be moved to a dedicated audit table later without changing API contract.
-  console.info('[system-admin]', action, meta);
+async function logSystemAction(input: {
+  action: 'TENANT_PLAN_UPDATED' | 'INVOICE_CONFIRMED' | 'INVOICE_REJECTED';
+  actorId?: string;
+  actorEmail?: string;
+  targetType: 'tenant' | 'invoice';
+  targetId: string;
+  details?: Record<string, unknown>;
+}) {
+  await prisma.systemAuditLog.create({
+    data: {
+      action: input.action,
+      actorId: input.actorId || null,
+      actorEmail: input.actorEmail || null,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      details: input.details || {},
+    },
+  });
 }
 
 export async function getSystemDashboard() {
@@ -80,51 +95,24 @@ export async function getSystemHealth() {
 }
 
 export async function listSystemActivity(input: { limit: number }) {
-  const [invoiceEvents, recentTenants] = await Promise.all([
-    prisma.invoice.findMany({
-      where: { confirmedAt: { not: null } },
-      include: { tenant: { select: { id: true, name: true, slug: true } } },
-      orderBy: { confirmedAt: 'desc' },
-      take: input.limit,
-    }),
-    prisma.tenant.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: input.limit,
-      select: { id: true, name: true, slug: true, plan: true, updatedAt: true },
-    }),
-  ]);
+  const logs = await prisma.systemAuditLog.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: input.limit,
+  });
 
-  return [
-    ...invoiceEvents.map((inv) => ({
-      id: `invoice:${inv.id}`,
-      type: inv.status === 'PAID' ? 'invoice_confirmed' : 'invoice_rejected',
-      at: inv.confirmedAt,
-      actor: inv.confirmedBy || 'system',
-      message: inv.status === 'PAID' ? 'Invoice confirmed' : 'Invoice rejected',
-      context: {
-        tenantId: inv.tenantId,
-        tenantName: inv.tenant?.name,
-        invoiceId: inv.id,
-        plan: inv.plan,
-        amount: Number(inv.amount),
-      },
-    })),
-    ...recentTenants.map((tenant) => ({
-      id: `tenant:${tenant.id}:${tenant.updatedAt.toISOString()}`,
-      type: 'tenant_updated',
-      at: tenant.updatedAt,
-      actor: 'system',
-      message: 'Tenant updated',
-      context: {
-        tenantId: tenant.id,
-        tenantName: tenant.name,
-        plan: tenant.plan,
-      },
-    })),
-  ]
-    .filter((item) => Boolean(item.at))
-    .sort((a, b) => new Date(String(b.at)).getTime() - new Date(String(a.at)).getTime())
-    .slice(0, input.limit);
+  return logs.map((log) => ({
+    id: log.id,
+    type: log.action,
+    at: log.createdAt,
+    actor: log.actorEmail || log.actorId || 'system',
+    message:
+      log.action === 'INVOICE_CONFIRMED'
+        ? 'Invoice confirmed'
+        : log.action === 'INVOICE_REJECTED'
+        ? 'Invoice rejected'
+        : 'Tenant plan updated',
+    context: log.details || {},
+  }));
 }
 
 export async function listSystemTenants(input: { page: number; pageSize: number; search?: string }) {
@@ -182,11 +170,17 @@ export async function updateSystemTenantPlan(input: {
     },
   });
 
-  await logSystemAction('tenant.plan.updated', {
-    tenantId: input.id,
-    plan: input.plan,
-    planExpiresAt: input.planExpiresAt || null,
-    changedBy: input.changedBy || 'system',
+  await logSystemAction({
+    action: 'TENANT_PLAN_UPDATED',
+    actorEmail: input.changedBy || 'system',
+    targetType: 'tenant',
+    targetId: input.id,
+    details: {
+      tenantId: input.id,
+      plan: input.plan,
+      planExpiresAt: input.planExpiresAt || null,
+      changedBy: input.changedBy || 'system',
+    },
   });
 
   return updated;
@@ -287,12 +281,18 @@ export async function confirmSystemInvoice(input: { id: string; confirmedBy: str
     }),
   ]);
 
-  await logSystemAction('invoice.confirmed', {
-    invoiceId: input.id,
-    tenantId: invoice.tenantId,
-    plan: invoice.plan,
-    amount: Number(invoice.amount),
-    confirmedBy: input.confirmedBy,
+  await logSystemAction({
+    action: 'INVOICE_CONFIRMED',
+    actorId: input.confirmedBy,
+    targetType: 'invoice',
+    targetId: input.id,
+    details: {
+      invoiceId: input.id,
+      tenantId: invoice.tenantId,
+      plan: invoice.plan,
+      amount: Number(invoice.amount),
+      confirmedBy: input.confirmedBy,
+    },
   });
 
   return invoice.plan;
@@ -309,11 +309,17 @@ export async function rejectSystemInvoice(input: { id: string; confirmedBy: stri
     data: { status: 'CANCELLED', confirmedBy: input.confirmedBy, confirmedAt: new Date() },
   });
 
-  await logSystemAction('invoice.rejected', {
-    invoiceId: input.id,
-    tenantId: invoice.tenantId,
-    plan: invoice.plan,
-    amount: Number(invoice.amount),
-    rejectedBy: input.confirmedBy,
+  await logSystemAction({
+    action: 'INVOICE_REJECTED',
+    actorId: input.confirmedBy,
+    targetType: 'invoice',
+    targetId: input.id,
+    details: {
+      invoiceId: input.id,
+      tenantId: invoice.tenantId,
+      plan: invoice.plan,
+      amount: Number(invoice.amount),
+      rejectedBy: input.confirmedBy,
+    },
   });
 }

@@ -603,3 +603,26 @@ model SystemAdmin {
 
 
 
+
+
+enum SystemAuditAction {
+  TENANT_PLAN_UPDATED
+  INVOICE_CONFIRMED
+  INVOICE_REJECTED
+}
+
+model SystemAuditLog {
+  id        String            @id @default(cuid())
+  action    SystemAuditAction
+  actorId   String?
+  actorEmail String?
+  targetType String
+  targetId  String
+  details   Json?
+  createdAt DateTime          @default(now())
+
+  @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+  @@map("system_audit_logs")
+}
