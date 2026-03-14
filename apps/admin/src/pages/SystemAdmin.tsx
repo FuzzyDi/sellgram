@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { clearSystemToken, setSystemToken, systemApi } from '../api/system-admin-client';
 import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
@@ -43,19 +43,19 @@ export default function SystemAdmin() {
 
   const statusLabel = useMemo(
     () => ({
-      PENDING: tr('Ожидает', 'Kutilmoqda'),
-      PAID: tr('Оплачен', "To'langan"),
-      CANCELLED: tr('Отклонен', 'Rad etilgan'),
-      EXPIRED: tr('Просрочен', "Muddati o'tgan"),
+      PENDING: tr('РћР¶РёРґР°РµС‚', 'Kutilmoqda'),
+      PAID: tr('РћРїР»Р°С‡РµРЅ', "To'langan"),
+      CANCELLED: tr('РћС‚РєР»РѕРЅРµРЅ', 'Rad etilgan'),
+      EXPIRED: tr('РџСЂРѕСЃСЂРѕС‡РµРЅ', "Muddati o'tgan"),
     }),
     [tr]
   );
 
   const activityTypeLabel = useMemo(
     () => ({
-      TENANT_PLAN_UPDATED: tr('План обновлен', 'Tarif yangilandi'),
-      INVOICE_CONFIRMED: tr('Инвойс подтвержден', 'Invoice tasdiqlandi'),
-      INVOICE_REJECTED: tr('Инвойс отклонен', 'Invoice rad etildi'),
+      TENANT_PLAN_UPDATED: tr('РџР»Р°РЅ РѕР±РЅРѕРІР»РµРЅ', 'Tarif yangilandi'),
+      INVOICE_CONFIRMED: tr('РРЅРІРѕР№СЃ РїРѕРґС‚РІРµСЂР¶РґРµРЅ', 'Invoice tasdiqlandi'),
+      INVOICE_REJECTED: tr('РРЅРІРѕР№СЃ РѕС‚РєР»РѕРЅРµРЅ', 'Invoice rad etildi'),
     }),
     [tr]
   );
@@ -109,6 +109,7 @@ export default function SystemAdmin() {
         systemApi.tenants('page=1&pageSize=50'),
         systemApi.stores('page=1&pageSize=50'),
         systemApi.invoices(invoiceQuery.toString()),
+        systemApi.reportUsage(reportUsageQuery),
       ]);
 
       setDashboard(d);
@@ -180,7 +181,7 @@ export default function SystemAdmin() {
   async function saveReminderSettings() {
     const days = parseReminderDaysInput(reminderDaysInput);
     if (days.length === 0) {
-      showNotice('error', tr('Укажите дни через запятую, например: 7,3,1', 'Kunlarni vergul bilan kiriting, masalan: 7,3,1'));
+      showNotice('error', tr('РЈРєР°Р¶РёС‚Рµ РґРЅРё С‡РµСЂРµР· Р·Р°РїСЏС‚СѓСЋ, РЅР°РїСЂРёРјРµСЂ: 7,3,1', 'Kunlarni vergul bilan kiriting, masalan: 7,3,1'));
       return;
     }
 
@@ -190,7 +191,7 @@ export default function SystemAdmin() {
       setReminderEnabled(Boolean(data?.enabled));
       setReminderDaysInput(Array.isArray(data?.days) ? data.days.join(',') : days.join(','));
       await load();
-      showNotice('success', tr('Настройки напоминаний сохранены', 'Eslatma sozlamalari saqlandi'));
+      showNotice('success', tr('РќР°СЃС‚СЂРѕР№РєРё РЅР°РїРѕРјРёРЅР°РЅРёР№ СЃРѕС…СЂР°РЅРµРЅС‹', 'Eslatma sozlamalari saqlandi'));
     } catch (err: any) {
       showNotice('error', err.message || 'Failed to save reminder settings');
     } finally {
@@ -323,15 +324,15 @@ export default function SystemAdmin() {
       <>
         {noticeNode}
       <section className="sg-page" style={{ maxWidth: 460, margin: '20px auto' }}>
-        <h2 className="sg-title" style={{ fontSize: 28 }}>{tr('Глобальный админ системы', 'Global tizim admini')}</h2>
-        <p className="sg-subtitle">{tr('Отдельная консоль для контроля платформы и модерации оплат.', 'Platforma nazorati va to\'lov moderatsiyasi uchun alohida konsol.')}</p>
+        <h2 className="sg-title" style={{ fontSize: 28 }}>{tr('Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ Р°РґРјРёРЅ СЃРёСЃС‚РµРјС‹', 'Global tizim admini')}</h2>
+        <p className="sg-subtitle">{tr('РћС‚РґРµР»СЊРЅР°СЏ РєРѕРЅСЃРѕР»СЊ РґР»СЏ РєРѕРЅС‚СЂРѕР»СЏ РїР»Р°С‚С„РѕСЂРјС‹ Рё РјРѕРґРµСЂР°С†РёРё РѕРїР»Р°С‚.', 'Platforma nazorati va to\'lov moderatsiyasi uchun alohida konsol.')}</p>
 
         <div className="sg-grid" style={{ marginTop: 14 }}>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full border rounded-lg px-3 py-2 text-sm" />
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr('Пароль', 'Parol')} className="w-full border rounded-lg px-3 py-2 text-sm" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr('РџР°СЂРѕР»СЊ', 'Parol')} className="w-full border rounded-lg px-3 py-2 text-sm" />
           {loginError && <p style={{ color: '#b91c1c', fontSize: 13 }}>{loginError}</p>}
           <button onClick={login} disabled={loading} className="sg-btn primary" style={{ width: '100%' }}>
-            {loading ? tr('Входим...', 'Kirilmoqda...') : tr('Войти', 'Kirish')}
+            {loading ? tr('Р’С…РѕРґРёРј...', 'Kirilmoqda...') : tr('Р’РѕР№С‚Рё', 'Kirish')}
           </button>
         </div>
       </section>
@@ -345,72 +346,72 @@ export default function SystemAdmin() {
       <section className="sg-page sg-grid" style={{ gap: 16 }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10 }}>
         <div>
-          <h2 className="sg-title">{tr('Консоль системного админа', 'Tizim admin konsoli')}</h2>
-          <p className="sg-subtitle">{tr('Операции, модерация billing и контроль платформы.', 'Operatsiyalar, billing moderatsiyasi va platforma nazorati.')}</p>
+          <h2 className="sg-title">{tr('РљРѕРЅСЃРѕР»СЊ СЃРёСЃС‚РµРјРЅРѕРіРѕ Р°РґРјРёРЅР°', 'Tizim admin konsoli')}</h2>
+          <p className="sg-subtitle">{tr('РћРїРµСЂР°С†РёРё, РјРѕРґРµСЂР°С†РёСЏ billing Рё РєРѕРЅС‚СЂРѕР»СЊ РїР»Р°С‚С„РѕСЂРјС‹.', 'Operatsiyalar, billing moderatsiyasi va platforma nazorati.')}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Button onClick={goToStoreAdmin} className="sg-btn ghost">
-            {tr('Панель магазина', "Do'kon paneli")}
+            {tr('РџР°РЅРµР»СЊ РјР°РіР°Р·РёРЅР°', "Do'kon paneli")}
           </Button>
           <Button onClick={logout} className="sg-btn danger">
-            {tr('Выйти', 'Chiqish')}
+            {tr('Р’С‹Р№С‚Рё', 'Chiqish')}
           </Button>
         </div>
       </header>
 
       <div className="sg-grid cols-4">
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Тенанты', 'Tenantlar')}</div>
+          <div className="sg-kpi-label">{tr('РўРµРЅР°РЅС‚С‹', 'Tenantlar')}</div>
           <div className="sg-kpi-value">{dashboard?.tenants ?? '-'}</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Активные магазины', "Faol do'konlar")}</div>
+          <div className="sg-kpi-label">{tr('РђРєС‚РёРІРЅС‹Рµ РјР°РіР°Р·РёРЅС‹', "Faol do'konlar")}</div>
           <div className="sg-kpi-value">{dashboard?.activeStores ?? '-'}</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Счета на модерации', 'Moderatsiyadagi invoice')}</div>
+          <div className="sg-kpi-label">{tr('РЎС‡РµС‚Р° РЅР° РјРѕРґРµСЂР°С†РёРё', 'Moderatsiyadagi invoice')}</div>
           <div className="sg-kpi-value">{dashboard?.pendingInvoices ?? '-'}</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Сумма ожидания', 'Kutilayotgan summa')}</div>
+          <div className="sg-kpi-label">{tr('РЎСѓРјРјР° РѕР¶РёРґР°РЅРёСЏ', 'Kutilayotgan summa')}</div>
           <div className="sg-kpi-value">{formatMoney(dashboard?.pendingAmount)}</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Оплачено (месяц)', "To'langan (oy)")}</div>
+          <div className="sg-kpi-label">{tr('РћРїР»Р°С‡РµРЅРѕ (РјРµСЃСЏС†)', "To'langan (oy)")}</div>
           <div className="sg-kpi-value">{dashboard?.paidInvoicesMonth ?? '-'}</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Выручка по счетам (месяц)', "Invoice tushumi (oy)")}</div>
+          <div className="sg-kpi-label">{tr('Р’С‹СЂСѓС‡РєР° РїРѕ СЃС‡РµС‚Р°Рј (РјРµСЃСЏС†)', "Invoice tushumi (oy)")}</div>
           <div className="sg-kpi-value">{formatMoney(dashboard?.paidRevenueMonth)}</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Заказы за месяц', 'Oylik buyurtmalar')}</div>
+          <div className="sg-kpi-label">{tr('Р—Р°РєР°Р·С‹ Р·Р° РјРµСЃСЏС†', 'Oylik buyurtmalar')}</div>
           <div className="sg-kpi-value">{dashboard?.monthlyOrders ?? '-'}</div>
         </article>
       </div>
 
       <section className="sg-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Состояние системы', 'Tizim holati')}</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РЎРѕСЃС‚РѕСЏРЅРёРµ СЃРёСЃС‚РµРјС‹', 'Tizim holati')}</h3>
           <span className="sg-badge" style={{ background: health?.status === 'ok' ? '#e8f7ef' : '#fff1f2', color: health?.status === 'ok' ? '#0f7a4f' : '#be123c' }}>
-            {health?.status === 'ok' ? tr('Стабильно', "Sog'lom") : tr('Есть деградация', 'Nosoz')}
+            {health?.status === 'ok' ? tr('РЎС‚Р°Р±РёР»СЊРЅРѕ', "Sog'lom") : tr('Р•СЃС‚СЊ РґРµРіСЂР°РґР°С†РёСЏ', 'Nosoz')}
           </span>
         </div>
         <div className="sg-grid cols-4" style={{ marginTop: 10 }}>
           <div className="sg-card soft" style={{ padding: 10 }}>
             <div className="sg-kpi-label">DB</div>
-            <div style={{ fontWeight: 800 }}>{health?.db?.ok ? tr('Подключена', 'Ulangan') : tr('Недоступна', 'Mavjud emas')}</div>
+            <div style={{ fontWeight: 800 }}>{health?.db?.ok ? tr('РџРѕРґРєР»СЋС‡РµРЅР°', 'Ulangan') : tr('РќРµРґРѕСЃС‚СѓРїРЅР°', 'Mavjud emas')}</div>
           </div>
           <div className="sg-card soft" style={{ padding: 10 }}>
             <div className="sg-kpi-label">DB ms</div>
             <div style={{ fontWeight: 800 }}>{health?.db?.latencyMs ?? '-'}</div>
           </div>
           <div className="sg-card soft" style={{ padding: 10 }}>
-            <div className="sg-kpi-label">{tr('Аптайм', 'Ish vaqti')}</div>
+            <div className="sg-kpi-label">{tr('РђРїС‚Р°Р№Рј', 'Ish vaqti')}</div>
             <div style={{ fontWeight: 800 }}>{health?.runtime?.uptimeSec ?? '-'}s</div>
           </div>
           <div className="sg-card soft" style={{ padding: 10 }}>
-            <div className="sg-kpi-label">{tr('Память', 'Xotira')}</div>
+            <div className="sg-kpi-label">{tr('РџР°РјСЏС‚СЊ', 'Xotira')}</div>
             <div style={{ fontWeight: 800 }}>{health?.runtime?.memoryMb ?? '-'} MB</div>
           </div>
           <div className="sg-card soft" style={{ padding: 10 }}>
@@ -431,7 +432,7 @@ export default function SystemAdmin() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
                 <input type="checkbox" checked={reminderEnabled} onChange={(e) => setReminderEnabled(e.target.checked)} />
-                {tr('Включить напоминания', 'Eslatmalarni yoqish')}
+                {tr('Р’РєР»СЋС‡РёС‚СЊ РЅР°РїРѕРјРёРЅР°РЅРёСЏ', 'Eslatmalarni yoqish')}
               </label>
               <input
                 value={reminderDaysInput}
@@ -441,11 +442,11 @@ export default function SystemAdmin() {
                 placeholder="7,3,1"
               />
               <Button onClick={() => void saveReminderSettings()} className="sg-btn primary" disabled={reminderSaving}>
-                {reminderSaving ? tr('Сохраняем...', 'Saqlanmoqda...') : tr('Сохранить', 'Saqlash')}
+                {reminderSaving ? tr('РЎРѕС…СЂР°РЅСЏРµРј...', 'Saqlanmoqda...') : tr('РЎРѕС…СЂР°РЅРёС‚СЊ', 'Saqlash')}
               </Button>
             </div>
             <p className="sg-subtitle" style={{ marginTop: 8 }}>
-              {tr('Дни через запятую, 1..30', 'Kunlar vergul bilan, 1..30')}
+              {tr('Р”РЅРё С‡РµСЂРµР· Р·Р°РїСЏС‚СѓСЋ, 1..30', 'Kunlar vergul bilan, 1..30')}
             </p>
           </div>
         </div>
@@ -453,14 +454,14 @@ export default function SystemAdmin() {
 
       <div className="sg-grid cols-2">
         <article className="sg-card">
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Модерация счетов', 'Invoice moderatsiyasi')}</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РњРѕРґРµСЂР°С†РёСЏ СЃС‡РµС‚РѕРІ', 'Invoice moderatsiyasi')}</h3>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <select
               value={invoiceStatus}
               onChange={(e) => setInvoiceStatus(e.target.value as InvoiceStatus | '')}
               className="border rounded-lg px-3 py-2 text-sm"
             >
-              <option value="">{tr('Все статусы', 'Barcha statuslar')}</option>
+              <option value="">{tr('Р’СЃРµ СЃС‚Р°С‚СѓСЃС‹', 'Barcha statuslar')}</option>
               <option value="PENDING">{statusLabel.PENDING}</option>
               <option value="PAID">{statusLabel.PAID}</option>
               <option value="CANCELLED">{statusLabel.CANCELLED}</option>
@@ -469,11 +470,11 @@ export default function SystemAdmin() {
             <input
               value={invoiceSearch}
               onChange={(e) => setInvoiceSearch(e.target.value)}
-              placeholder={tr('Поиск tenant / payment ref', 'Tenant / payment ref qidirish')}
+              placeholder={tr('РџРѕРёСЃРє tenant / payment ref', 'Tenant / payment ref qidirish')}
               className="border rounded-lg px-3 py-2 text-sm"
               style={{ minWidth: 240 }}
             />
-            <Button onClick={() => void load()} className="sg-btn ghost">{tr('Применить', "Qo'llash")}</Button>
+            <Button onClick={() => void load()} className="sg-btn ghost">{tr('РџСЂРёРјРµРЅРёС‚СЊ', "Qo'llash")}</Button>
             <Button onClick={toggleSelectAllPendingInvoices} className="sg-btn ghost">
               {pendingInvoiceIds.length > 0 && pendingInvoiceIds.every((id) => selectedInvoiceIds.includes(id))
                 ? tr('\u0421\u043D\u044F\u0442\u044C \u0432\u044B\u0431\u043E\u0440 pending', 'Pending tanlovini bekor qilish')
@@ -503,48 +504,48 @@ export default function SystemAdmin() {
                 </div>
                 <p style={{ margin: '6px 0 0', fontWeight: 700 }}>{formatMoney(invoice.amount)}</p>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: '#738178' }}>
-                  {tr('Тариф', 'Tarif')}: {invoice.plan}
+                  {tr('РўР°СЂРёС„', 'Tarif')}: {invoice.plan}
                 </p>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#738178' }}>{invoice.paymentRef || tr('Payment ref отсутствует', "Payment ref yo'q")}</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#738178' }}>{invoice.paymentRef || tr('Payment ref РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚', "Payment ref yo'q")}</p>
                 <p style={{ margin: '2px 0 0', fontSize: 12, color: '#738178' }}>{new Date(invoice.createdAt).toLocaleString(locale)}</p>
                 {invoice.status === 'PENDING' && (
                   <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
                     <Button onClick={() => moderateInvoice(invoice.id, 'confirm')} className="sg-btn primary">
-                      {tr('Подтвердить', 'Tasdiqlash')}
+                      {tr('РџРѕРґС‚РІРµСЂРґРёС‚СЊ', 'Tasdiqlash')}
                     </Button>
                     <Button onClick={() => moderateInvoice(invoice.id, 'reject')} className="sg-btn danger">
-                      {tr('Отклонить', 'Rad etish')}
+                      {tr('РћС‚РєР»РѕРЅРёС‚СЊ', 'Rad etish')}
                     </Button>
                   </div>
                 )}
               </div>
             ))}
-            {invoices.length === 0 && <p className="sg-subtitle">{tr('Счета не найдены', 'Invoice topilmadi')}</p>}
+            {invoices.length === 0 && <p className="sg-subtitle">{tr('РЎС‡РµС‚Р° РЅРµ РЅР°Р№РґРµРЅС‹', 'Invoice topilmadi')}</p>}
           </div>
         </article>
 
         <article className="sg-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Журнал действий', 'Harakatlar jurnali')}</h3>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Р–СѓСЂРЅР°Р» РґРµР№СЃС‚РІРёР№', 'Harakatlar jurnali')}</h3>
             <Button onClick={exportActivityCsv} className="sg-btn ghost">CSV</Button>
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <select value={activityType} onChange={(e) => setActivityType(e.target.value as ActivityType | '')} className="border rounded-lg px-3 py-2 text-sm">
-              <option value="">{tr('Все действия', 'Barcha harakatlar')}</option>
+              <option value="">{tr('Р’СЃРµ РґРµР№СЃС‚РІРёСЏ', 'Barcha harakatlar')}</option>
               <option value="TENANT_PLAN_UPDATED">{activityTypeLabel.TENANT_PLAN_UPDATED}</option>
               <option value="INVOICE_CONFIRMED">{activityTypeLabel.INVOICE_CONFIRMED}</option>
               <option value="INVOICE_REJECTED">{activityTypeLabel.INVOICE_REJECTED}</option>
             </select>
             <select value={activityTarget} onChange={(e) => setActivityTarget(e.target.value as ActivityTarget | '')} className="border rounded-lg px-3 py-2 text-sm">
-              <option value="">{tr('Все объекты', 'Barcha obyektlar')}</option>
-              <option value="tenant">{tr('Тенанты', 'Tenantlar')}</option>
-              <option value="invoice">{tr('Счета', 'Invoicelar')}</option>
+              <option value="">{tr('Р’СЃРµ РѕР±СЉРµРєС‚С‹', 'Barcha obyektlar')}</option>
+              <option value="tenant">{tr('РўРµРЅР°РЅС‚С‹', 'Tenantlar')}</option>
+              <option value="invoice">{tr('РЎС‡РµС‚Р°', 'Invoicelar')}</option>
             </select>
-            <input value={activitySearch} onChange={(e) => setActivitySearch(e.target.value)} placeholder={tr('Поиск по actor/target', 'Ijrochi/obyekt qidirish')} className="border rounded-lg px-3 py-2 text-sm" />
+            <input value={activitySearch} onChange={(e) => setActivitySearch(e.target.value)} placeholder={tr('РџРѕРёСЃРє РїРѕ actor/target', 'Ijrochi/obyekt qidirish')} className="border rounded-lg px-3 py-2 text-sm" />
             <input type="date" value={activityDateFrom} onChange={(e) => setActivityDateFrom(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
             <input type="date" value={activityDateTo} onChange={(e) => setActivityDateTo(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
-            <Button onClick={() => void load()} className="sg-btn ghost">{tr('Применить', "Qo'llash")}</Button>
+            <Button onClick={() => void load()} className="sg-btn ghost">{tr('РџСЂРёРјРµРЅРёС‚СЊ', "Qo'llash")}</Button>
           </div>
 
           <div className="sg-grid" style={{ marginTop: 12, maxHeight: 340, overflow: 'auto' }}>
@@ -555,17 +556,17 @@ export default function SystemAdmin() {
                   <span style={{ fontSize: 12, color: '#64756b' }}>{new Date(item.at).toLocaleString(locale)}</span>
                 </div>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64756b' }}>{item.context?.tenantName || item.context?.tenantId || '-'}</p>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64756b' }}>{tr('Кто', 'Ijrochi')}: {item.actor || tr('система', 'tizim')}</p>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64756b' }}>{tr('РљС‚Рѕ', 'Ijrochi')}: {item.actor || tr('СЃРёСЃС‚РµРјР°', 'tizim')}</p>
               </div>
             ))}
-            {activity.length === 0 && <p className="sg-subtitle">{tr('Пока нет действий', "Hali harakatlar yo'q")}</p>}
+            {activity.length === 0 && <p className="sg-subtitle">{tr('РџРѕРєР° РЅРµС‚ РґРµР№СЃС‚РІРёР№', "Hali harakatlar yo'q")}</p>}
           </div>
         </article>
       </div>
 
       <div className="sg-grid cols-2">
         <article className="sg-card">
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Тенанты', 'Tenantlar')}</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РўРµРЅР°РЅС‚С‹', 'Tenantlar')}</h3>
           <div className="sg-grid" style={{ marginTop: 12, maxHeight: 340, overflow: 'auto' }}>
             {tenants.map((tenant) => (
               <div key={tenant.id} className="sg-card soft" style={{ padding: 12 }}>
@@ -597,14 +598,14 @@ export default function SystemAdmin() {
         </article>
 
         <article className="sg-card">
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Магазины', "Do'konlar")}</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РњР°РіР°Р·РёРЅС‹', "Do'konlar")}</h3>
           <div className="sg-grid" style={{ marginTop: 12, maxHeight: 340, overflow: 'auto' }}>
             {stores.map((store) => (
               <div key={store.id} className="sg-card soft" style={{ padding: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                   <p style={{ margin: 0, fontWeight: 700 }}>{store.name}</p>
                   <span className="sg-badge" style={{ background: store.isActive ? '#e8f7ef' : '#f3f4f6', color: store.isActive ? '#0f7a4f' : '#4b5563' }}>
-                    {store.isActive ? tr('Активен', 'Faol') : tr('Выключен', "O'chirilgan")}
+                    {store.isActive ? tr('РђРєС‚РёРІРµРЅ', 'Faol') : tr('Р’С‹РєР»СЋС‡РµРЅ', "O'chirilgan")}
                   </span>
                 </div>
                 <p style={{ margin: 0, fontSize: 12, color: '#738178' }}>{store.tenant?.name || '-'}</p>
@@ -671,3 +672,4 @@ export default function SystemAdmin() {
     </>
   );
 }
+
