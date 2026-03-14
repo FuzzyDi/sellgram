@@ -21,12 +21,32 @@ export default async function orderRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
 
   fastify.get('/orders', async (request) => {
-    const { page = 1, pageSize = 20, status, storeId } = request.query as any;
-    const skip = (Number(page) - 1) * Number(pageSize);
+    const { page = 1, pageSize = 20, status, storeId, paymentStatus, search } = request.query as any;
+    const pageNum = Number(page);
+    const pageSizeNum = Number(pageSize);
+    const skip = (pageNum - 1) * pageSizeNum;
 
     const where: any = { tenantId: request.tenantId! };
     if (status) where.status = status;
     if (storeId) where.storeId = storeId;
+    if (paymentStatus) where.paymentStatus = paymentStatus;
+
+    if (search?.trim()) {
+      const q = search.trim();
+      const parsedNumber = Number(q);
+      const orFilters: any[] = [
+        { customer: { firstName: { contains: q, mode: 'insensitive' } } },
+        { customer: { lastName: { contains: q, mode: 'insensitive' } } },
+        { customer: { telegramUser: { contains: q, mode: 'insensitive' } } },
+        { customer: { phone: { contains: q } } },
+        { note: { contains: q, mode: 'insensitive' } },
+        { trackingNumber: { contains: q, mode: 'insensitive' } },
+      ];
+      if (!Number.isNaN(parsedNumber)) {
+        orFilters.push({ orderNumber: parsedNumber });
+      }
+      where.OR = orFilters;
+    }
 
     const [items, total] = await Promise.all([
       prisma.order.findMany({
@@ -39,14 +59,14 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         },
         orderBy: { createdAt: 'desc' },
         skip,
-        take: Number(pageSize),
+        take: pageSizeNum,
       }),
       prisma.order.count({ where }),
     ]);
 
     return {
       success: true,
-      data: { items, total, page: Number(page), pageSize: Number(pageSize), totalPages: Math.ceil(total / Number(pageSize)) },
+      data: { items, total, page: pageNum, pageSize: pageSizeNum, totalPages: Math.ceil(total / pageSizeNum) },
     };
   });
 
@@ -250,4 +270,3 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     }
   });
 }
-
