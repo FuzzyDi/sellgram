@@ -49,7 +49,7 @@ const CP1251_EXTRA_MAP: Record<number, number> = {
 };
 
 function looksLikeBrokenCyrillic(input: string): boolean {
-  const matches = input.match(/[РС][\u0400-\u04ff]/g);
+  const matches = input.match(/[\u0420\u0421][\u0400-\u04ff]/g);
   return Boolean(matches && matches.length >= 2);
 }
 
@@ -83,7 +83,7 @@ function fixBrokenCyrillic(input: string): string {
   }
 
   const decoded = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(bytes));
-  return /[А-Яа-яЁё]/.test(decoded) ? decoded : input;
+  return /[\u0410-\u044f\u0401\u0451]/.test(decoded) ? decoded : input;
 }
 
 type Key = keyof typeof dict.ru;
@@ -116,7 +116,10 @@ export function AdminI18nProvider({ children }: { children: React.ReactNode }) {
       lang,
       locale: lang === 'uz' ? 'uz-UZ' : 'ru-RU',
       setLang,
-      t: (key: Key) => (lang === 'uz' ? dict.uz[key] : dict.ru[key]),
+      t: (key: Key) => {
+        const value = lang === 'uz' ? dict.uz[key] : dict.ru[key];
+        return lang === 'ru' ? fixBrokenCyrillic(value) : value;
+      },
       tr: (ru: string, uz: string) => (lang === 'uz' ? uz : fixBrokenCyrillic(ru)),
     }),
     [lang]
