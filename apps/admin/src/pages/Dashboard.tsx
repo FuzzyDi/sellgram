@@ -13,7 +13,7 @@ export default function Dashboard() {
     Promise.all([adminApi.getDashboard(), adminApi.getTopProducts(), adminApi.getSubscription().catch(() => null)])
       .then(([s, tp, subscription]) => {
         setStats(s);
-        setTopProducts(Array.isArray(tp) ? tp : tp?.items || []);
+        setTopProducts(Array.isArray(tp) ? tp : tp?.items || tp?.data || []);
         setSub(subscription);
       })
       .finally(() => setLoading(false));
@@ -28,13 +28,13 @@ export default function Dashboard() {
         desc: tr('Отличный старт!', 'Ajoyib start!'),
       },
       {
-        done: (stats?.totalProducts || 0) > 0,
+        done: ((stats?.products?.total ?? stats?.totalProducts ?? 0) > 0),
         label: tr('Добавьте товары', "Mahsulot qo'shish"),
         desc: tr('Товары > Добавить', "Mahsulotlar > Qo'shish"),
         to: '/products',
       },
       {
-        done: (stats?.totalProducts || 0) > 0,
+        done: ((stats?.products?.total ?? stats?.totalProducts ?? 0) > 0),
         label: tr('Загрузите фото', 'Rasm yuklash'),
         desc: tr('Откройте товар > Фото', 'Mahsulotni oching > Rasmlar'),
         to: '/products',
@@ -56,6 +56,11 @@ export default function Dashboard() {
 
   const completedSteps = checks.filter((c) => c.done).length;
   const totalSteps = checks.length;
+
+  const ordersToday = stats?.orders?.today ?? stats?.ordersToday ?? 0;
+  const revenueMonth = stats?.revenue?.month ?? stats?.revenueMonth ?? 0;
+  const totalCustomers = stats?.customers?.total ?? stats?.totalCustomers ?? 0;
+  const totalProducts = stats?.products?.total ?? stats?.totalProducts ?? 0;
 
   if (loading) {
     return (
@@ -122,19 +127,19 @@ export default function Dashboard() {
       <div className="sg-grid cols-4">
         <article className="sg-card">
           <div className="sg-kpi-label">{tr('Заказы сегодня', 'Bugungi buyurtmalar')}</div>
-          <div className="sg-kpi-value">{stats?.ordersToday || 0}</div>
+          <div className="sg-kpi-value">{ordersToday}</div>
         </article>
         <article className="sg-card">
           <div className="sg-kpi-label">{tr('Выручка (месяц)', 'Tushum (oy)')}</div>
-          <div className="sg-kpi-value">{((stats?.revenue?.month || 0) / 1000).toFixed(0)}K</div>
+          <div className="sg-kpi-value">{Number(revenueMonth || 0).toLocaleString()} UZS</div>
         </article>
         <article className="sg-card">
           <div className="sg-kpi-label">{tr('Клиенты', 'Mijozlar')}</div>
-          <div className="sg-kpi-value">{stats?.totalCustomers || 0}</div>
+          <div className="sg-kpi-value">{totalCustomers}</div>
         </article>
         <article className="sg-card">
           <div className="sg-kpi-label">{tr('Товары', 'Mahsulotlar')}</div>
-          <div className="sg-kpi-value">{stats?.totalProducts || 0}</div>
+          <div className="sg-kpi-value">{totalProducts}</div>
         </article>
       </div>
 
@@ -157,8 +162,8 @@ export default function Dashboard() {
               {topProducts.slice(0, 7).map((p: any, i: number) => (
                 <tr key={`${p.id || p.name}-${i}`}>
                   <td>{i + 1}</td>
-                  <td>{p.name}</td>
-                  <td>{Number(p.totalRevenue || 0).toLocaleString()} UZS</td>
+                  <td>{p.product?.name || p.name || '-'}</td>
+                  <td>{Number(p.totalRevenue || p.revenue || 0).toLocaleString()} UZS</td>
                 </tr>
               ))}
             </tbody>

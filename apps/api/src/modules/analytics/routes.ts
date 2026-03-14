@@ -21,6 +21,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       weekRevenue,
       monthRevenue,
       totalCustomers,
+      totalProducts,
       newCustomersWeek,
       pendingOrders,
     ] = await Promise.all([
@@ -42,6 +43,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         _avg: { total: true },
       }),
       prisma.customer.count({ where: { tenantId } }),
+      prisma.product.count({ where: { tenantId, isActive: true } }),
       prisma.customer.count({ where: { tenantId, createdAt: { gte: weekAgo } } }),
       prisma.order.count({ where: { tenantId, status: 'NEW' } }),
     ]);
@@ -65,6 +67,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           total: totalCustomers,
           newThisWeek: newCustomersWeek,
           repeatRate: totalCustomers > 0 ? Math.round((repeatCustomers / totalCustomers) * 100) : 0,
+        },
+        products: {
+          total: totalProducts,
         },
       },
     };
