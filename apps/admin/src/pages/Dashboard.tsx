@@ -62,7 +62,10 @@ export default function Dashboard() {
   const ordersToday = stats?.orders?.today ?? stats?.ordersToday ?? 0;
   const revenueMonth = stats?.revenue?.month ?? stats?.revenueMonth ?? 0;
   const totalCustomers = stats?.customers?.total ?? stats?.totalCustomers ?? 0;
-  const totalProducts = stats?.products?.total ?? stats?.totalProducts ?? 0;
+  const topProductsDerived = Array.isArray(topProducts)
+    ? new Set(topProducts.map((p: any) => p?.product?.id || p?.productId || p?.id || p?.productName || p?.name).filter(Boolean)).size
+    : 0;
+  const totalProducts = Math.max(stats?.products?.total ?? stats?.totalProducts ?? 0, topProductsDerived);
 
   if (loading) {
     return (

@@ -54,12 +54,12 @@ export default function Billing() {
   };
 
   const getLimits = (plan: any) => {
-    const limits = plan?.limits || {};
+    const limits = plan?.limits ?? plan ?? {};
     return {
-      maxStores: limits.maxStores,
-      maxProducts: limits.maxProducts,
-      maxOrdersPerMonth: limits.maxOrdersPerMonth,
-      maxDeliveryZones: limits.maxDeliveryZones,
+      maxStores: limits.maxStores ?? limits.stores ?? limits.storeLimit ?? null,
+      maxProducts: limits.maxProducts ?? limits.products ?? limits.productLimit ?? null,
+      maxOrdersPerMonth: limits.maxOrdersPerMonth ?? limits.ordersPerMonth ?? limits.orderLimit ?? null,
+      maxDeliveryZones: limits.maxDeliveryZones ?? limits.deliveryZones ?? limits.zoneLimit ?? null,
     };
   };
 
@@ -93,7 +93,7 @@ export default function Billing() {
     setSubmitting(false);
   };
 
-  if (loading) return <section className="sg-page"><p className="sg-subtitle">{tr('Loading...', 'Yuklanmoqda...')}</p></section>;
+  if (loading) return <section className="sg-page"><p className="sg-subtitle">{tr('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...', 'Yuklanmoqda...')}</p></section>;
 
   const currentPlan = sub?.plan || 'FREE';
   const usage = sub?.usage || {};
