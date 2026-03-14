@@ -6,7 +6,7 @@ type NoticeTone = 'success' | 'error' | 'info';
 
 export default function Settings() {
   const { tr, locale } = useAdminI18n();
-  const [tab, setTab] = useState<'stores' | 'zones' | 'loyalty'>('stores');
+  const [tab, setTab] = useState<'stores' | 'zones' | 'loyalty' | 'account'>('stores');
   const [stores, setStores] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
   const [loyalty, setLoyalty] = useState<any>(null);
@@ -23,18 +23,48 @@ export default function Settings() {
   const [showZoneForm, setShowZoneForm] = useState(false);
   const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
   const [zoneForm, setZoneForm] = useState({ name: '', price: '', freeFrom: '', storeId: '' });
+  const [me, setMe] = useState<any>(null);
+  const [team, setTeam] = useState<any[]>([]);
+  const [profileForm, setProfileForm] = useState({ name: '', email: '' });
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [teamForm, setTeamForm] = useState({
+    email: '',
+    name: '',
+    password: '',
+    role: 'OPERATOR' as 'MANAGER' | 'OPERATOR',
+    permissions: {
+      manageCatalog: true,
+      manageOrders: true,
+      manageCustomers: true,
+      manageMarketing: false,
+      manageSettings: false,
+      manageBilling: false,
+      manageUsers: false,
+      viewReports: true,
+    },
+  });
 
   async function load() {
     setLoading(true);
     try {
-      const [storeList, zoneList, loyaltyConfig] = await Promise.all([
+      const [storeList, zoneList, loyaltyConfig, meData, teamData] = await Promise.all([
         adminApi.getStores(),
         adminApi.getDeliveryZones(),
         adminApi.getLoyaltyConfig(),
+        adminApi.me(),
+        adminApi.getTeamUsers().catch(() => []),
       ]);
       setStores(Array.isArray(storeList) ? storeList : []);
       setZones(Array.isArray(zoneList) ? zoneList : []);
       setLoyalty(loyaltyConfig);
+      setMe(meData || null);
+      setProfileForm({
+        name: meData?.name || '',
+        email: meData?.email || '',
+      });
+      setTeam(Array.isArray(teamData) ? teamData : []);
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка загрузки настроек', 'Sozlamalarni yuklashda xato'));
     } finally {
       setLoading(false);
     }
@@ -47,6 +77,76 @@ export default function Settings() {
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
     setTimeout(() => setNotice(null), 3200);
+  }
+  const canManageUsers = me?.role === 'OWNER' || me?.role === 'MANAGER' || Boolean(me?.effectivePermissions?.manageUsers);
+
+  async function saveMyProfile() {
+    try {
+      await adminApi.updateMe(profileForm);
+      showNotice('success', tr('РџСЂРѕС„РёР»СЊ СЃРѕС…СЂР°РЅРµРЅ', 'Profil saqlandi'));
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+    }
+  }
+
+  async function changeMyPassword() {
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      showNotice('error', tr('Р—Р°РїРѕР»РЅРёС‚Рµ С‚РµРєСѓС‰РёР№ Рё РЅРѕРІС‹Р№ РїР°СЂРѕР»СЊ', 'Joriy va yangi parolni kiriting'));
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      showNotice('error', tr('РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РїР°СЂРѕР»СЏ РЅРµ СЃРѕРІРїР°РґР°РµС‚', 'Parol tasdig\'i mos emas'));
+      return;
+    }
+
+    try {
+      await adminApi.changeMyPassword(passwordForm.currentPassword, passwordForm.newPassword);
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      showNotice('success', tr('РџР°СЂРѕР»СЊ РѕР±РЅРѕРІР»РµРЅ', 'Parol yangilandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+    }
+  }
+
+  async function createTeamUser() {
+    if (!canManageUsers) return;
+    try {
+      const payload: any = {
+        email: teamForm.email,
+        name: teamForm.name,
+        password: teamForm.password,
+        role: teamForm.role,
+      };
+      if (teamForm.role === 'OPERATOR') payload.permissions = teamForm.permissions;
+      await adminApi.createTeamUser(payload);
+      setTeamForm((s) => ({ ...s, email: '', name: '', password: '' }));
+      showNotice('success', tr('РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РґРѕР±Р°РІР»РµРЅ', "Foydalanuvchi qo'shildi"));
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+    }
+  }
+
+  async function toggleTeamUserActive(user: any) {
+    try {
+      await adminApi.updateTeamUser(user.id, { isActive: !user.isActive });
+      await load();
+      showNotice('success', tr('РЎС‚Р°С‚СѓСЃ РѕР±РЅРѕРІР»РµРЅ', 'Status yangilandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+    }
+  }
+
+  async function resetTeamUserPassword(user: any) {
+    const nextPassword = prompt(tr(`РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ РґР»СЏ ${user.email}`, `${user.email} uchun yangi parol`));
+    if (!nextPassword) return;
+    try {
+      await adminApi.resetTeamUserPassword(user.id, nextPassword);
+      showNotice('success', tr('РџР°СЂРѕР»СЊ СЃР±СЂРѕС€РµРЅ', 'Parol tiklandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+    }
   }
 
 
@@ -85,7 +185,7 @@ export default function Settings() {
         await adminApi.updateStore(editingStoreId, payload);
       } else {
         if (!storeForm.name || !storeForm.botToken) {
-          showNotice('error', tr('Нужны название магазина и bot token', "Do'kon nomi va bot token kerak"));
+          showNotice('error', tr('Р СњРЎС“Р В¶Р Р…РЎвЂ№ Р Р…Р В°Р В·Р Р†Р В°Р Р…Р С‘Р Вµ Р СР В°Р С–Р В°Р В·Р С‘Р Р…Р В° Р С‘ bot token', "Do'kon nomi va bot token kerak"));
           return;
         }
         await adminApi.createStore(storeForm);
@@ -134,7 +234,7 @@ export default function Settings() {
   }
 
   async function deleteZone(id: string) {
-    if (!confirm(tr('Удалить эту зону?', "Bu hudud o'chirilsinmi?"))) return;
+    if (!confirm(tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ РЎРЊРЎвЂљРЎС“ Р В·Р С•Р Р…РЎС“?', "Bu hudud o'chirilsinmi?"))) return;
     try {
       await adminApi.deleteDeliveryZone(id);
       await load();
@@ -145,7 +245,7 @@ export default function Settings() {
 
   async function deleteStore(id: string, name: string) {
     const question = tr(
-      `Удалить магазин "${name}"? Действие необратимо.`,
+      `Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ Р СР В°Р С–Р В°Р В·Р С‘Р Р… "${name}"? Р вЂќР ВµР в„–РЎРѓРЎвЂљР Р†Р С‘Р Вµ Р Р…Р ВµР С•Р В±РЎР‚Р В°РЎвЂљР С‘Р СР С•.`,
       `"${name}" do'koni o'chirilsinmi? Bu amalni ortga qaytarib bo'lmaydi.`
     );
     if (!confirm(question)) return;
@@ -166,13 +266,13 @@ export default function Settings() {
 
       const parts = [
         ok
-          ? tr(`Бот "${store.name}" подключен корректно.`, `"${store.name}" boti to'g'ri ulangan.`)
-          : tr(`Бот "${store.name}" проверен, найдены проблемы.`, `"${store.name}" botida muammo topildi.`),
+          ? tr(`Р вЂР С•РЎвЂљ "${store.name}" Р С—Р С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р… Р С”Р С•РЎР‚РЎР‚Р ВµР С”РЎвЂљР Р…Р С•.`, `"${store.name}" boti to'g'ri ulangan.`)
+          : tr(`Р вЂР С•РЎвЂљ "${store.name}" Р С—РЎР‚Р С•Р Р†Р ВµРЎР‚Р ВµР Р…, Р Р…Р В°Р в„–Р Т‘Р ВµР Р…РЎвЂ№ Р С—РЎР‚Р С•Р В±Р В»Р ВµР СРЎвЂ№.`, `"${store.name}" botida muammo topildi.`),
       ];
 
       if (data?.bot?.username) parts.push(`@${data.bot.username}`);
       if (mismatch && webhook?.expectedUrl) {
-        parts.push(tr('Webhook отличается от ожидаемого.', 'Webhook kutilgan manzilga mos emas.'));
+        parts.push(tr('Webhook Р С•РЎвЂљР В»Р С‘РЎвЂЎР В°Р ВµРЎвЂљРЎРѓРЎРЏ Р С•РЎвЂљ Р С•Р В¶Р С‘Р Т‘Р В°Р ВµР СР С•Р С–Р С•.', 'Webhook kutilgan manzilga mos emas.'));
       }
       if (typeof webhook?.pendingUpdateCount === 'number') {
         parts.push(tr(`Pending updates: ${webhook.pendingUpdateCount}`, `Kutilayotgan update: ${webhook.pendingUpdateCount}`));
@@ -189,7 +289,7 @@ export default function Settings() {
     try {
       const data = await adminApi.activateStore(store.id);
       const webhookUrl = data?.webhookUrl ? `\nWebhook: ${data.webhookUrl}` : '';
-      showNotice('success', tr(`Бот "${store.name}" подключен успешно.${webhookUrl}`, `"${store.name}" boti muvaffaqiyatli ulandi.${webhookUrl}`));
+      showNotice('success', tr(`Р вЂР С•РЎвЂљ "${store.name}" Р С—Р С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р… РЎС“РЎРѓР С—Р ВµРЎв‚¬Р Р…Р С•.${webhookUrl}`, `"${store.name}" boti muvaffaqiyatli ulandi.${webhookUrl}`));
       await load();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
@@ -199,7 +299,7 @@ export default function Settings() {
   async function saveLoyalty() {
     try {
       await adminApi.updateLoyaltyConfig(loyalty);
-      showNotice('success', tr('Сохранено', 'Saqlandi'));
+      showNotice('success', tr('Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р ВµР Р…Р С•', 'Saqlandi'));
       await load();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
@@ -231,39 +331,39 @@ export default function Settings() {
     </div>
   ) : null;
 
-  if (loading) return <p className="sg-subtitle">{tr('Загрузка настроек...', 'Sozlamalar yuklanmoqda...')}</p>;
+  if (loading) return <p className="sg-subtitle">{tr('Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР С”...', 'Sozlamalar yuklanmoqda...')}</p>;
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
       {noticeNode}
       <header>
-        <h2 className="sg-title">{tr('Настройки', 'Sozlamalar')}</h2>
-        <p className="sg-subtitle">{tr('Магазины, доставка, лояльность и Telegram-привязка', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
+        <h2 className="sg-title">{tr('Р СњР В°РЎРѓРЎвЂљРЎР‚Р С•Р в„–Р С”Р С‘', 'Sozlamalar')}</h2>
+        <p className="sg-subtitle">{tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…РЎвЂ№, Р Т‘Р С•РЎРѓРЎвЂљР В°Р Р†Р С”Р В°, Р В»Р С•РЎРЏР В»РЎРЉР Р…Р С•РЎРѓРЎвЂљРЎРЉ Р С‘ Telegram-Р С—РЎР‚Р С‘Р Р†РЎРЏР В·Р С”Р В°', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
       </header>
 
       <div className="sg-card soft">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <p style={{ margin: 0, fontWeight: 800 }}>{tr('Привязка Telegram-админа', 'Telegram adminini bog\'lash')}</p>
+            <p style={{ margin: 0, fontWeight: 800 }}>{tr('Р СџРЎР‚Р С‘Р Р†РЎРЏР В·Р С”Р В° Telegram-Р В°Р Т‘Р СР С‘Р Р…Р В°', 'Telegram adminini bog\'lash')}</p>
             <p className="sg-subtitle" style={{ marginTop: 4 }}>
-              {tr('Сгенерируйте код и отправьте боту: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
+              {tr('Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚РЎС“Р в„–РЎвЂљР Вµ Р С”Р С•Р Т‘ Р С‘ Р С•РЎвЂљР С—РЎР‚Р В°Р Р†РЎРЉРЎвЂљР Вµ Р В±Р С•РЎвЂљРЎС“: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
             </p>
           </div>
           <button className="sg-btn primary" type="button" onClick={generateTelegramLinkCode}>
-            {telegramLinkLoading ? tr('Генерация...', 'Yaratilmoqda...') : tr('Сгенерировать код', 'Kod yaratish')}
+            {telegramLinkLoading ? tr('Р вЂњР ВµР Р…Р ВµРЎР‚Р В°РЎвЂ Р С‘РЎРЏ...', 'Yaratilmoqda...') : tr('Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С”Р С•Р Т‘', 'Kod yaratish')}
           </button>
         </div>
 
         {telegramLinkData && (
           <div className="sg-card" style={{ marginTop: 12 }}>
             <p style={{ margin: 0, fontSize: 14 }}>
-              {tr('Код', 'Kod')}: <b style={{ fontFamily: 'monospace' }}>{telegramLinkData.code}</b>
+              {tr('Р С™Р С•Р Т‘', 'Kod')}: <b style={{ fontFamily: 'monospace' }}>{telegramLinkData.code}</b>
             </p>
             <p style={{ margin: '6px 0 0', fontSize: 12, color: '#65746b' }}>
-              {tr('Истекает', 'Amal qilish muddati')}: {new Date(telegramLinkData.expiresAt).toLocaleString(locale)}
+              {tr('Р ВРЎРѓРЎвЂљР ВµР С”Р В°Р ВµРЎвЂљ', 'Amal qilish muddati')}: {new Date(telegramLinkData.expiresAt).toLocaleString(locale)}
             </p>
             <p style={{ margin: '6px 0 0', fontSize: 12, color: '#65746b' }}>
-              {tr('Команда', 'Buyruq')}: <span style={{ fontFamily: 'monospace' }}>{telegramLinkData.command}</span>
+              {tr('Р С™Р С•Р СР В°Р Р…Р Т‘Р В°', 'Buyruq')}: <span style={{ fontFamily: 'monospace' }}>{telegramLinkData.command}</span>
             </p>
           </div>
         )}
@@ -271,13 +371,16 @@ export default function Settings() {
 
       <div className="sg-pill-row">
         <button className={`sg-pill ${tab === 'stores' ? 'active' : ''}`} type="button" onClick={() => setTab('stores')}>
-          {tr('Магазины', "Do'konlar")}
+          {tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…РЎвЂ№', "Do'konlar")}
         </button>
         <button className={`sg-pill ${tab === 'zones' ? 'active' : ''}`} type="button" onClick={() => setTab('zones')}>
-          {tr('Доставка', 'Yetkazib berish')}
+          {tr('Р вЂќР С•РЎРѓРЎвЂљР В°Р Р†Р С”Р В°', 'Yetkazib berish')}
         </button>
         <button className={`sg-pill ${tab === 'loyalty' ? 'active' : ''}`} type="button" onClick={() => setTab('loyalty')}>
-          {tr('Лояльность', 'Loyallik')}
+          {tr('Р вЂєР С•РЎРЏР В»РЎРЉР Р…Р С•РЎРѓРЎвЂљРЎРЉ', 'Loyallik')}
+        </button>
+        <button className={`sg-pill ${tab === 'account' ? 'active' : ''}`} type="button" onClick={() => setTab('account')}>
+          {tr('РђРєРєР°СѓРЅС‚', 'Akkaunt')}
         </button>
       </div>
 
@@ -285,10 +388,10 @@ export default function Settings() {
         <section className="sg-grid" style={{ gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <p className="sg-subtitle" style={{ margin: 0 }}>
-              {tr('Один магазин = один Telegram-бот', "Bitta do'kon = bitta Telegram bot")}
+              {tr('Р С›Р Т‘Р С‘Р Р… Р СР В°Р С–Р В°Р В·Р С‘Р Р… = Р С•Р Т‘Р С‘Р Р… Telegram-Р В±Р С•РЎвЂљ', "Bitta do'kon = bitta Telegram bot")}
             </p>
             <button className="sg-btn primary" type="button" onClick={openCreateStore}>
-              + {tr('Магазин', "Do'kon")}
+              + {tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…', "Do'kon")}
             </button>
           </div>
 
@@ -300,7 +403,7 @@ export default function Settings() {
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="sg-btn ghost" type="button" onClick={() => openEditStore(store)}>
-                  {tr('Изменить', 'Tahrirlash')}
+                  {tr('Р ВР В·Р СР ВµР Р…Р С‘РЎвЂљРЎРЉ', 'Tahrirlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => checkStoreConnection(store)}>
                   {tr('\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0431\u043E\u0442\u0430', 'Botni tekshirish')}
@@ -312,16 +415,16 @@ export default function Settings() {
                   className="sg-btn danger"
                   type="button"
                   disabled={stores.length <= 1}
-                  title={stores.length <= 1 ? tr('Нельзя удалить последний магазин', "Oxirgi do'konni o'chirib bo'lmaydi") : undefined}
+                  title={stores.length <= 1 ? tr('Р СњР ВµР В»РЎРЉР В·РЎРЏ РЎС“Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ Р С—Р С•РЎРѓР В»Р ВµР Т‘Р Р…Р С‘Р в„– Р СР В°Р С–Р В°Р В·Р С‘Р Р…', "Oxirgi do'konni o'chirib bo'lmaydi") : undefined}
                   onClick={() => deleteStore(store.id, store.name)}
                 >
-                  {tr('Удалить', "O'chirish")}
+                  {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish")}
                 </button>
               </div>
             </article>
           ))}
 
-          {stores.length === 0 && <p className="sg-subtitle">{tr('Магазинов пока нет', "Hozircha do'konlar yo'q")}</p>}
+          {stores.length === 0 && <p className="sg-subtitle">{tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…Р С•Р Р† Р С—Р С•Р С”Р В° Р Р…Р ВµРЎвЂљ', "Hozircha do'konlar yo'q")}</p>}
         </section>
       )}
 
@@ -329,10 +432,10 @@ export default function Settings() {
         <section className="sg-grid" style={{ gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <p className="sg-subtitle" style={{ margin: 0 }}>
-              {tr('Зоны и тарифы доставки', 'Yetkazib berish hududlari va tariflar')}
+              {tr('Р вЂ”Р С•Р Р…РЎвЂ№ Р С‘ РЎвЂљР В°РЎР‚Р С‘РЎвЂћРЎвЂ№ Р Т‘Р С•РЎРѓРЎвЂљР В°Р Р†Р С”Р С‘', 'Yetkazib berish hududlari va tariflar')}
             </p>
             <button className="sg-btn primary" type="button" onClick={openCreateZone}>
-              + {tr('Зона', 'Hudud')}
+              + {tr('Р вЂ”Р С•Р Р…Р В°', 'Hudud')}
             </button>
           </div>
 
@@ -340,10 +443,10 @@ export default function Settings() {
             <table className="sg-table">
               <thead>
                 <tr>
-                  <th>{tr('Зона', 'Hudud')}</th>
-                  <th>{tr('Цена', 'Narx')}</th>
-                  <th>{tr('Бесплатно от', 'Bepul chegarasi')}</th>
-                  <th>{tr('Действия', 'Amallar')}</th>
+                  <th>{tr('Р вЂ”Р С•Р Р…Р В°', 'Hudud')}</th>
+                  <th>{tr('Р В¦Р ВµР Р…Р В°', 'Narx')}</th>
+                  <th>{tr('Р вЂР ВµРЎРѓР С—Р В»Р В°РЎвЂљР Р…Р С• Р С•РЎвЂљ', 'Bepul chegarasi')}</th>
+                  <th>{tr('Р вЂќР ВµР в„–РЎРѓРЎвЂљР Р†Р С‘РЎРЏ', 'Amallar')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -355,10 +458,10 @@ export default function Settings() {
                     <td>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button className="sg-btn ghost" type="button" onClick={() => openEditZone(zone)}>
-                          {tr('Изменить', 'Tahrirlash')}
+                          {tr('Р ВР В·Р СР ВµР Р…Р С‘РЎвЂљРЎРЉ', 'Tahrirlash')}
                         </button>
                         <button className="sg-btn danger" type="button" onClick={() => deleteZone(zone.id)}>
-                          {tr('Удалить', "O'chirish")}
+                          {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish")}
                         </button>
                       </div>
                     </td>
@@ -367,7 +470,7 @@ export default function Settings() {
                 {zones.length === 0 && (
                   <tr>
                     <td colSpan={4} style={{ textAlign: 'center', color: '#6b7a71' }}>
-                      {tr('Зоны доставки не настроены', 'Yetkazib berish hududlari sozlanmagan')}
+                      {tr('Р вЂ”Р С•Р Р…РЎвЂ№ Р Т‘Р С•РЎРѓРЎвЂљР В°Р Р†Р С”Р С‘ Р Р…Р Вµ Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР Р…РЎвЂ№', 'Yetkazib berish hududlari sozlanmagan')}
                     </td>
                   </tr>
                 )}
@@ -379,8 +482,8 @@ export default function Settings() {
 
       {tab === 'loyalty' && loyalty && (
         <section className="sg-card" style={{ maxWidth: 720 }}>
-          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Программа лояльности', 'Loyallik dasturi')}</h3>
-          <p className="sg-subtitle">{tr('Начисления баллов и лимиты скидки', 'Ball berish qoidalari va chegirma limitlari')}</p>
+          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Р СџРЎР‚Р С•Р С–РЎР‚Р В°Р СР СР В° Р В»Р С•РЎРЏР В»РЎРЉР Р…Р С•РЎРѓРЎвЂљР С‘', 'Loyallik dasturi')}</h3>
+          <p className="sg-subtitle">{tr('Р СњР В°РЎвЂЎР С‘РЎРѓР В»Р ВµР Р…Р С‘РЎРЏ Р В±Р В°Р В»Р В»Р С•Р Р† Р С‘ Р В»Р С‘Р СР С‘РЎвЂљРЎвЂ№ РЎРѓР С”Р С‘Р Т‘Р С”Р С‘', 'Ball berish qoidalari va chegirma limitlari')}</p>
 
           <form
             onSubmit={(e) => {
@@ -396,12 +499,12 @@ export default function Settings() {
                 checked={!!loyalty.isEnabled}
                 onChange={(e) => setLoyalty({ ...loyalty, isEnabled: e.target.checked })}
               />
-              {tr('Включена', 'Yoqilgan')}
+              {tr('Р вЂ™Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…Р В°', 'Yoqilgan')}
             </label>
 
             <div className="sg-grid cols-2">
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Сумма шага', 'Qadam summasi')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р РЋРЎС“Р СР СР В° РЎв‚¬Р В°Р С–Р В°', 'Qadam summasi')}</label>
                 <input
                   type="number"
                   value={loyalty.unitAmount || 1000}
@@ -411,7 +514,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Баллов за шаг', 'Qadam uchun ball')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р вЂР В°Р В»Р В»Р С•Р Р† Р В·Р В° РЎв‚¬Р В°Р С–', 'Qadam uchun ball')}</label>
                 <input
                   type="number"
                   value={loyalty.pointsPerUnit || 1}
@@ -424,7 +527,7 @@ export default function Settings() {
 
             <div className="sg-grid cols-2">
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Цена 1 балла', '1 ball qiymati')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р В¦Р ВµР Р…Р В° 1 Р В±Р В°Р В»Р В»Р В°', '1 ball qiymati')}</label>
                 <input
                   type="number"
                   value={loyalty.pointValue || 100}
@@ -434,7 +537,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Макс. скидка %', 'Maks. chegirma %')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р СљР В°Р С”РЎРѓ. РЎРѓР С”Р С‘Р Т‘Р С”Р В° %', 'Maks. chegirma %')}</label>
                 <input
                   type="number"
                   value={loyalty.maxDiscountPct || 30}
@@ -446,17 +549,96 @@ export default function Settings() {
             </div>
 
             <button className="sg-btn primary" type="submit">
-              {tr('Сохранить', 'Saqlash')}
+              {tr('Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р С‘РЎвЂљРЎРЉ', 'Saqlash')}
             </button>
           </form>
         </section>
       )}
 
+      {tab === 'account' && (
+        <section className="sg-grid" style={{ gap: 12 }}>
+          <article className="sg-card">
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РњРѕР№ Р°РєРєР°СѓРЅС‚', 'Mening akkauntim')}</h3>
+            <div className="sg-grid cols-2" style={{ marginTop: 10 }}>
+              <input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РРјСЏ', 'Ism')} />
+              <input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <button className="sg-btn primary" type="button" onClick={() => void saveMyProfile()}>{tr('РЎРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ', 'Profilni saqlash')}</button>
+            </div>
+          </article>
+
+          <article className="sg-card">
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РЎРјРµРЅР° РїР°СЂРѕР»СЏ', 'Parolni almashtirish')}</h3>
+            <div className="sg-grid cols-3" style={{ marginTop: 10 }}>
+              <input type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РўРµРєСѓС‰РёР№ РїР°СЂРѕР»СЊ', 'Joriy parol')} />
+              <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ', 'Yangi parol')} />
+              <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РџРѕРґС‚РІРµСЂРґРёС‚Рµ РїР°СЂРѕР»СЊ', 'Parolni tasdiqlang')} />
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <button className="sg-btn primary" type="button" onClick={() => void changeMyPassword()}>{tr('РћР±РЅРѕРІРёС‚СЊ РїР°СЂРѕР»СЊ', 'Parolni yangilash')}</button>
+            </div>
+          </article>
+
+          {canManageUsers && (
+            <article className="sg-card">
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РџРѕР»СЊР·РѕРІР°С‚РµР»Рё Рё СЂРѕР»Рё', 'Foydalanuvchilar va rollar')}</h3>
+              <p className="sg-subtitle">{tr('Р”РѕР±Р°РІР»СЏР№С‚Рµ РѕРїРµСЂР°С‚РѕСЂРѕРІ Рё СѓРїСЂР°РІР»СЏР№С‚Рµ РґРѕСЃС‚СѓРїР°РјРё.', "Operator qo'shing va ruxsatlarini boshqaring.")}</p>
+
+              <div className="sg-card soft" style={{ marginTop: 10 }}>
+                <div className="sg-grid cols-4" style={{ gap: 8 }}>
+                  <input value={teamForm.email} onChange={(e) => setTeamForm({ ...teamForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
+                  <input value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РРјСЏ', 'Ism')} />
+                  <input type="password" value={teamForm.password} onChange={(e) => setTeamForm({ ...teamForm, password: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РџР°СЂРѕР»СЊ', 'Parol')} />
+                  <select value={teamForm.role} onChange={(e) => setTeamForm({ ...teamForm, role: e.target.value as 'MANAGER' | 'OPERATOR' })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}>
+                    <option value="OPERATOR">Operator</option>
+                    <option value="MANAGER">Manager</option>
+                  </select>
+                </div>
+
+                {teamForm.role === 'OPERATOR' && (
+                  <div className="sg-grid cols-4" style={{ marginTop: 10, gap: 8 }}>
+                    {Object.keys(teamForm.permissions).map((key) => (
+                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                        <input type="checkbox" checked={(teamForm.permissions as any)[key]} onChange={(e) => setTeamForm({ ...teamForm, permissions: { ...teamForm.permissions, [key]: e.target.checked } })} />
+                        {key}
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: 10 }}>
+                  <button className="sg-btn primary" type="button" onClick={() => void createTeamUser()}>{tr('Р”РѕР±Р°РІРёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ', "Foydalanuvchi qo'shish")}</button>
+                </div>
+              </div>
+
+              <div className="sg-grid" style={{ gap: 8, marginTop: 10 }}>
+                {team.map((user) => (
+                  <div key={user.id} className="sg-card soft" style={{ padding: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{user.name} ({user.email})</div>
+                        <div style={{ fontSize: 12, color: '#6b7a71' }}>{user.role} вЂў {user.isActive ? tr('Р°РєС‚РёРІРµРЅ', 'faol') : tr('РѕС‚РєР»СЋС‡РµРЅ', "o'chirilgan")}</div>
+                      </div>
+                      {user.role !== 'OWNER' && (
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="sg-btn ghost" type="button" onClick={() => void toggleTeamUserActive(user)}>{user.isActive ? tr('РћС‚РєР»СЋС‡РёС‚СЊ', "O'chirish") : tr('Р’РєР»СЋС‡РёС‚СЊ', 'Yoqish')}</button>
+                          <button className="sg-btn ghost" type="button" onClick={() => void resetTeamUserPassword(user)}>{tr('РЎР±СЂРѕСЃ РїР°СЂРѕР»СЏ', 'Parolni tiklash')}</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          )}
+        </section>
+      )}
       {showStoreForm && (
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
             <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
-              {editingStoreId ? tr('Редактировать магазин', "Do'konni tahrirlash") : tr('Новый магазин', "Yangi do'kon")}
+              {editingStoreId ? tr('Р В Р ВµР Т‘Р В°Р С”РЎвЂљР С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р СР В°Р С–Р В°Р В·Р С‘Р Р…', "Do'konni tahrirlash") : tr('Р СњР С•Р Р†РЎвЂ№Р в„– Р СР В°Р С–Р В°Р В·Р С‘Р Р…', "Yangi do'kon")}
             </h3>
 
             <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
@@ -465,7 +647,7 @@ export default function Settings() {
                 onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Название магазина', "Do'kon nomi")}
+                placeholder={tr('Р СњР В°Р В·Р Р†Р В°Р Р…Р С‘Р Вµ Р СР В°Р С–Р В°Р В·Р С‘Р Р…Р В°', "Do'kon nomi")}
               />
               <input
                 value={storeForm.botToken}
@@ -480,14 +662,14 @@ export default function Settings() {
                 rows={3}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }}
-                placeholder={tr('Приветственное сообщение', 'Xush kelibsiz xabari')}
+                placeholder={tr('Р СџРЎР‚Р С‘Р Р†Р ВµРЎвЂљРЎРѓРЎвЂљР Р†Р ВµР Р…Р Р…Р С•Р Вµ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘Р Вµ', 'Xush kelibsiz xabari')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="sg-btn primary" type="button" onClick={() => void saveStore()}>
-                  {tr('Сохранить', 'Saqlash')}
+                  {tr('Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р С‘РЎвЂљРЎРЉ', 'Saqlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => setShowStoreForm(false)}>
-                  {tr('Отмена', 'Bekor qilish')}
+                  {tr('Р С›РЎвЂљР СР ВµР Р…Р В°', 'Bekor qilish')}
                 </button>
               </div>
             </div>
@@ -499,7 +681,7 @@ export default function Settings() {
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
             <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
-              {editingZoneId ? tr('Редактировать зону', 'Hududni tahrirlash') : tr('Новая зона', 'Yangi hudud')}
+              {editingZoneId ? tr('Р В Р ВµР Т‘Р В°Р С”РЎвЂљР С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р В·Р С•Р Р…РЎС“', 'Hududni tahrirlash') : tr('Р СњР С•Р Р†Р В°РЎРЏ Р В·Р С•Р Р…Р В°', 'Yangi hudud')}
             </h3>
 
             <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
@@ -522,7 +704,7 @@ export default function Settings() {
                 onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Название зоны', 'Hudud nomi')}
+                placeholder={tr('Р СњР В°Р В·Р Р†Р В°Р Р…Р С‘Р Вµ Р В·Р С•Р Р…РЎвЂ№', 'Hudud nomi')}
               />
               <input
                 type="number"
@@ -530,7 +712,7 @@ export default function Settings() {
                 onChange={(e) => setZoneForm({ ...zoneForm, price: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Цена', 'Narx')}
+                placeholder={tr('Р В¦Р ВµР Р…Р В°', 'Narx')}
               />
               <input
                 type="number"
@@ -538,14 +720,14 @@ export default function Settings() {
                 onChange={(e) => setZoneForm({ ...zoneForm, freeFrom: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Бесплатно от', 'Bepul chegarasi')}
+                placeholder={tr('Р вЂР ВµРЎРѓР С—Р В»Р В°РЎвЂљР Р…Р С• Р С•РЎвЂљ', 'Bepul chegarasi')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="sg-btn primary" type="button" onClick={() => void saveZone()}>
-                  {tr('Сохранить', 'Saqlash')}
+                  {tr('Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р С‘РЎвЂљРЎРЉ', 'Saqlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => setShowZoneForm(false)}>
-                  {tr('Отмена', 'Bekor qilish')}
+                  {tr('Р С›РЎвЂљР СР ВµР Р…Р В°', 'Bekor qilish')}
                 </button>
               </div>
             </div>
@@ -555,3 +737,10 @@ export default function Settings() {
     </section>
   );
 }
+
+
+
+
+
+
+
