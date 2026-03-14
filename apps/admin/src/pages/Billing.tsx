@@ -11,6 +11,15 @@ const planColors: Record<string, string> = {
   BUSINESS: '#7c3aed',
 };
 
+const planLimitFallbacks: Record<
+  string,
+  { maxStores: number; maxProducts: number; maxOrdersPerMonth: number; maxDeliveryZones: number }
+> = {
+  FREE: { maxStores: 1, maxProducts: 30, maxOrdersPerMonth: 50, maxDeliveryZones: 2 },
+  PRO: { maxStores: 3, maxProducts: 500, maxOrdersPerMonth: 1000, maxDeliveryZones: 10 },
+  BUSINESS: { maxStores: 10, maxProducts: -1, maxOrdersPerMonth: -1, maxDeliveryZones: -1 },
+};
+
 export default function Billing() {
   const { tr, locale } = useAdminI18n();
   const [sub, setSub] = useState<any>(null);
@@ -25,10 +34,10 @@ export default function Billing() {
   const statusMap = useMemo(
     () =>
       ({
-        PENDING: { label: tr('Pending payment', "To'lov kutilmoqda"), color: '#f59e0b' },
-        PAID: { label: tr('Paid', "To'langan"), color: '#34c759' },
-        CANCELLED: { label: tr('Rejected', 'Rad etilgan'), color: '#ef4444' },
-        EXPIRED: { label: tr('Expired', 'Muddati tugagan'), color: '#6b7280' },
+        PENDING: { label: tr('Ожидает оплаты', "To'lov kutilmoqda"), color: '#f59e0b' },
+        PAID: { label: tr('Оплачен', "To'langan"), color: '#34c759' },
+        CANCELLED: { label: tr('Отклонен', 'Rad etilgan'), color: '#ef4444' },
+        EXPIRED: { label: tr('Истек', 'Muddati tugagan'), color: '#6b7280' },
       }) as Record<string, { label: string; color: string }>,
     [tr]
   );
@@ -61,11 +70,11 @@ export default function Billing() {
     return code;
   };
 
-  const planLimitFallbacks: Record<string, { maxStores: number; maxProducts: number; maxOrdersPerMonth: number; maxDeliveryZones: number }> = {
-  FREE: { maxStores: 1, maxProducts: 30, maxOrdersPerMonth: 50, maxDeliveryZones: 2 },
-  PRO: { maxStores: 3, maxProducts: 500, maxOrdersPerMonth: 1000, maxDeliveryZones: 10 },
-  BUSINESS: { maxStores: 10, maxProducts: -1, maxOrdersPerMonth: -1, maxDeliveryZones: -1 },
-};
+  const reportLevelLabel = (level?: string) => {
+    if (level === 'FULL') return tr('Все отчеты', 'Barcha hisobotlar');
+    if (level === 'ADVANCED') return tr('Базовые + расширенные', 'Oddiy + kengaytirilgan');
+    return tr('Базовые', 'Oddiy');
+  };
 
   const getLimits = (code: string, plan: any, isCurrent: boolean) => {
     const currentPlanLimits = isCurrent ? sub?.planDetails?.limits : null;
@@ -106,7 +115,7 @@ export default function Billing() {
         await load();
       }
     } catch (err: any) {
-      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
     }
     setSubmitting(false);
   };
@@ -116,14 +125,15 @@ export default function Billing() {
     setSubmitting(true);
     try {
       await adminApi.submitInvoicePayment(showInvoice.invoice.id, paymentRef.trim());
-      showNotice('success', tr('Payment details submitted. Await moderation.', "To'lov ma'lumotlari yuborildi. Tasdiq kutilmoqda."));
+      showNotice('success', tr('Данные оплаты отправлены. Ожидайте модерации.', "To'lov ma'lumotlari yuborildi. Tasdiq kutilmoqda."));
       setShowInvoice(null);
       await load();
     } catch (err: any) {
-      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
     }
     setSubmitting(false);
   };
+
   const currentPlan = sub?.plan || 'FREE';
   const usage = sub?.usage || {};
   const expiryInfo = useMemo(() => {
@@ -140,7 +150,8 @@ export default function Billing() {
     };
   }, [sub?.planExpiresAt]);
 
-  if (loading) return <section className="sg-page"><p className="sg-subtitle">{tr('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...', 'Yuklanmoqda...')}</p></section>;
+  if (loading) return <section className="sg-page"><p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p></section>;
+
   const noticeNode = notice ? (
     <div
       style={{
@@ -165,7 +176,6 @@ export default function Billing() {
       {notice.message}
     </div>
   ) : null;
-
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
@@ -205,7 +215,7 @@ export default function Billing() {
                 : tr(`Подписка закончится через ${expiryInfo.daysLeft} дн.`, `Obuna ${expiryInfo.daysLeft} kunda tugaydi.`)}
             </p>
             <p style={{ margin: '6px 0 0', fontSize: 13 }}>
-              {tr('Срок:', 'Muddat')}: {expiryInfo.expiresAt.toLocaleDateString(locale)}
+              {tr('Срок', 'Muddat')}: {expiryInfo.expiresAt.toLocaleDateString(locale)}
             </p>
           </div>
         )}
@@ -241,38 +251,50 @@ export default function Billing() {
         <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800 }}>{tr('Выберите тариф', 'Tarifni tanlang')}</h3>
         <div className="sg-grid cols-3">
           {planEntries.map(([code, plan]: [string, any]) => {
-              const isCurrent = code === currentPlan;
-              const limits = getLimits(code, plan, isCurrent);
-              const price = Number(plan?.price ?? plan?.priceMonthly ?? 0);
-              return (
-                <div key={code} className="sg-card" style={{ borderColor: isCurrent ? planColors[code] : '#dfe7e2' }}>
-                  <div style={{ fontSize: 13, color: '#607167' }}>{planLabel(code)}</div>
-                  <div style={{ fontSize: 34, fontWeight: 900, marginTop: 4, color: planColors[code] }}>{price > 0 ? price.toLocaleString() : 0}</div>
-                  <div style={{ marginTop: 2, fontSize: 13, color: '#607167' }}>{price > 0 ? tr('UZS / month', "so'm / oy") : tr('Free', 'Bepul')}</div>
+            const isCurrent = code === currentPlan;
+            const limits = getLimits(code, plan, isCurrent);
+            const planLimits = plan?.limits || {};
+            const reportsLevel = planLimits.reportsLevel || (code === 'BUSINESS' ? 'FULL' : code === 'PRO' ? 'ADVANCED' : 'BASIC');
+            const reportsHistoryDays = Number(planLimits.reportsHistoryDays ?? (code === 'BUSINESS' ? 365 : code === 'PRO' ? 90 : 14));
+            const allowReportExport = Boolean(planLimits.allowReportExport ?? (code !== 'FREE'));
+            const maxScheduledReports = Number(planLimits.maxScheduledReports ?? (code === 'BUSINESS' ? -1 : code === 'PRO' ? 3 : 0));
+            const price = Number(plan?.price ?? plan?.priceMonthly ?? 0);
 
-                  <ul style={{ marginTop: 10, paddingLeft: 16, color: '#4f5f56', fontSize: 13 }}>
-                    {[
-                      `${tr('Stores', "Do'konlar")}: ${limits.maxStores === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxStores ?? '-'}`,
-                      `${tr('Products', 'Mahsulotlar')}: ${limits.maxProducts === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxProducts ?? '-'}`,
-                      `${tr('Orders / month', 'Buyurtma / oy')}: ${limits.maxOrdersPerMonth === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxOrdersPerMonth ?? '-'}`,
-                      `${tr('Delivery zones', 'Hududlar')}: ${limits.maxDeliveryZones === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxDeliveryZones ?? '-'}`,
-                    ].map((line) => (
-                      <li key={line}>{line}</li>
-                    ))}
-                  </ul>
+            const features = [
+              `${tr('Stores', "Do'konlar")}: ${limits.maxStores === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxStores ?? '-'}`,
+              `${tr('Products', 'Mahsulotlar')}: ${limits.maxProducts === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxProducts ?? '-'}`,
+              `${tr('Orders / month', 'Buyurtma / oy')}: ${limits.maxOrdersPerMonth === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxOrdersPerMonth ?? '-'}`,
+              `${tr('Delivery zones', 'Hududlar')}: ${limits.maxDeliveryZones === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxDeliveryZones ?? '-'}`,
+              `${tr('Reports', 'Hisobotlar')}: ${reportLevelLabel(reportsLevel)}`,
+              `${tr('History', 'Tarix')}: ${reportsHistoryDays} ${tr('days', 'kun')}`,
+              `${tr('Export', 'Eksport')}: ${allowReportExport ? tr('Да', 'Ha') : tr('Нет', "Yo'q")}`,
+              `${tr('Scheduled reports', 'Avto-hisobotlar')}: ${maxScheduledReports === -1 ? tr('без лимита', 'cheklanmagan') : maxScheduledReports}`,
+            ];
 
-                  <div style={{ marginTop: 12 }}>
-                    {isCurrent ? (
-                      <div className="sg-badge" style={{ background: '#eef8f1', color: '#0b6f49' }}>{tr('Текущий', 'Joriy')}</div>
-                    ) : (
-                      <Button onClick={() => handleUpgrade(code)} disabled={submitting} className="sg-btn primary" style={{ width: '100%' }}>
-                        {price === 0 ? tr('Переключить', "O'tish") : tr('Перейти', 'Yangilash')}
-                      </Button>
-                    )}
-                  </div>
+            return (
+              <div key={code} className="sg-card" style={{ borderColor: isCurrent ? planColors[code] : '#dfe7e2' }}>
+                <div style={{ fontSize: 13, color: '#607167' }}>{planLabel(code)}</div>
+                <div style={{ fontSize: 34, fontWeight: 900, marginTop: 4, color: planColors[code] }}>{price > 0 ? price.toLocaleString() : 0}</div>
+                <div style={{ marginTop: 2, fontSize: 13, color: '#607167' }}>{price > 0 ? tr('UZS / month', "so'm / oy") : tr('Free', 'Bepul')}</div>
+
+                <ul style={{ marginTop: 10, paddingLeft: 16, color: '#4f5f56', fontSize: 13 }}>
+                  {features.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+
+                <div style={{ marginTop: 12 }}>
+                  {isCurrent ? (
+                    <div className="sg-badge" style={{ background: '#eef8f1', color: '#0b6f49' }}>{tr('Текущий', 'Joriy')}</div>
+                  ) : (
+                    <Button onClick={() => handleUpgrade(code)} disabled={submitting} className="sg-btn primary" style={{ width: '100%' }}>
+                      {price === 0 ? tr('Переключить', "O'tish") : tr('Перейти', 'Yangilash')}
+                    </Button>
+                  )}
                 </div>
-              );
-            })}
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -328,10 +350,10 @@ export default function Billing() {
 
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
               <button onClick={submitPayment} disabled={submitting || !paymentRef.trim()} className="sg-btn primary" style={{ flex: 1 }}>
-                {submitting ? '...' : tr('Submit', 'Yuborish')}
+                {submitting ? '...' : tr('Отправить', 'Yuborish')}
               </button>
               <Button onClick={() => setShowInvoice(null)} className="sg-btn ghost" style={{ flex: 1 }}>
-                {tr('Later', 'Keyinroq')}
+                {tr('Позже', 'Keyinroq')}
               </Button>
             </div>
           </div>

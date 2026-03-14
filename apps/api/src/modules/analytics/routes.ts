@@ -1,12 +1,49 @@
-﻿import { FastifyInstance } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import prisma from '../../lib/prisma.js';
+import { PLANS, type PlanCode, type ReportsLevel } from '@sellgram/shared';
+
+const REPORTS_LEVEL_WEIGHT: Record<ReportsLevel, number> = {
+  BASIC: 1,
+  ADVANCED: 2,
+  FULL: 3,
+};
+
+function hasReportsLevel(current: ReportsLevel, required: ReportsLevel) {
+  return REPORTS_LEVEL_WEIGHT[current] >= REPORTS_LEVEL_WEIGHT[required];
+}
+
+async function getTenantReportLimits(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { plan: true },
+  });
+
+  const fallback = PLANS.FREE;
+  const plan = tenant ? PLANS[tenant.plan as PlanCode] || fallback : fallback;
+  return {
+    planCode: plan.code,
+    reportsLevel: plan.limits.reportsLevel,
+    reportsHistoryDays: plan.limits.reportsHistoryDays,
+    allowReportExport: plan.limits.allowReportExport,
+    maxReportsPerMonth: plan.limits.maxReportsPerMonth,
+  };
+}
 
 export default async function analyticsRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
 
   // Dashboard summary
-  fastify.get('/analytics/dashboard', async (request) => {
+  fastify.get('/analytics/dashboard', async (request, reply) => {
     const tenantId = request.tenantId!;
+    const reportLimits = await getTenantReportLimits(tenantId);
+
+    if (!hasReportsLevel(reportLimits.reportsLevel, 'BASIC')) {
+      return reply.status(402).send({
+        success: false,
+        error: 'Reports are not available on your current plan. Please upgrade.',
+      });
+    }
+
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -65,7 +102,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       }),
     ]);
 
-    // Repeat customers
     const repeatCustomers = await prisma.customer.count({
       where: { tenantId, ordersCount: { gt: 1 } },
     });
@@ -93,13 +129,24 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           total: productsTotal,
         },
       },
+      reportLimits,
     };
   });
 
   // Top products
-  fastify.get('/analytics/top-products', async (request) => {
+  fastify.get('/analytics/top-products', async (request, reply) => {
+    const reportLimits = await getTenantReportLimits(request.tenantId!);
+    if (!hasReportsLevel(reportLimits.reportsLevel, 'BASIC')) {
+      return reply.status(402).send({
+        success: false,
+        error: 'Reports are not available on your current plan. Please upgrade.',
+      });
+    }
+
     const { limit = 10, period = '30' } = request.query as any;
-    const since = new Date(Date.now() - Number(period) * 24 * 60 * 60 * 1000);
+    const maxDays = Number(reportLimits.reportsHistoryDays || 30);
+    const safePeriod = Math.max(1, Math.min(Number(period) || 30, maxDays));
+    const since = new Date(Date.now() - safePeriod * 24 * 60 * 60 * 1000);
 
     const topProducts = await prisma.orderItem.groupBy({
       by: ['productId'],
@@ -140,13 +187,23 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       };
     });
 
-    return { success: true, data: result };
+    return { success: true, data: result, reportLimits };
   });
 
   // Revenue time series
-  fastify.get('/analytics/revenue', async (request) => {
+  fastify.get('/analytics/revenue', async (request, reply) => {
+    const reportLimits = await getTenantReportLimits(request.tenantId!);
+    if (!hasReportsLevel(reportLimits.reportsLevel, 'ADVANCED')) {
+      return reply.status(402).send({
+        success: false,
+        error: 'Advanced reports are available on PRO/BUSINESS plans only.',
+      });
+    }
+
     const { days = 30 } = request.query as any;
-    const since = new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000);
+    const maxDays = Number(reportLimits.reportsHistoryDays || 30);
+    const safeDays = Math.max(1, Math.min(Number(days) || 30, maxDays));
+    const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
 
     const orders = await prisma.order.findMany({
       where: {
@@ -170,6 +227,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, data]) => ({ date, ...data }));
 
-    return { success: true, data: series };
+    return { success: true, data: series, reportLimits };
   });
 }

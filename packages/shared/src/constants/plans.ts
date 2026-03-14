@@ -1,4 +1,6 @@
-﻿export const PLANS = {
+export type ReportsLevel = 'BASIC' | 'ADVANCED' | 'FULL';
+
+export const PLANS = {
   FREE: {
     code: 'FREE',
     name: 'Бесплатный',
@@ -16,6 +18,11 @@
       analyticsLevel: 'basic' as const,
       customBotMessages: false,
       brandingWatermark: true,
+      reportsLevel: 'BASIC' as ReportsLevel,
+      reportsHistoryDays: 14,
+      maxReportsPerMonth: 30,
+      allowReportExport: false,
+      maxScheduledReports: 0,
     },
     features: [
       '1 магазин',
@@ -23,6 +30,7 @@
       '50 заказов/мес',
       '2 зоны доставки',
       'Базовая аналитика',
+      'Базовые отчеты (14 дней)',
     ],
   },
   PRO: {
@@ -42,6 +50,11 @@
       analyticsLevel: 'full' as const,
       customBotMessages: true,
       brandingWatermark: false,
+      reportsLevel: 'ADVANCED' as ReportsLevel,
+      reportsHistoryDays: 90,
+      maxReportsPerMonth: 300,
+      allowReportExport: true,
+      maxScheduledReports: 3,
     },
     features: [
       '3 магазина',
@@ -51,6 +64,7 @@
       'Программа лояльности',
       'Закупки',
       'Полная аналитика',
+      'Расширенные отчеты + экспорт',
       'Без водяного знака',
     ],
   },
@@ -71,6 +85,11 @@
       analyticsLevel: 'full_export' as const,
       customBotMessages: true,
       brandingWatermark: false,
+      reportsLevel: 'FULL' as ReportsLevel,
+      reportsHistoryDays: 365,
+      maxReportsPerMonth: -1,
+      allowReportExport: true,
+      maxScheduledReports: -1,
     },
     features: [
       '10 магазинов',
@@ -79,6 +98,7 @@
       'Безлимит зон',
       'Программа лояльности',
       'Закупки + экспорт',
+      'Все отчеты + авто-отчеты',
       'Расширенная аналитика',
       'Приоритетная поддержка',
     ],
