@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
@@ -119,6 +119,19 @@ export default function Billing() {
 
   const currentPlan = sub?.plan || 'FREE';
   const usage = sub?.usage || {};
+  const expiryInfo = useMemo(() => {
+    if (!sub?.planExpiresAt) return null;
+    const now = new Date();
+    const expires = new Date(sub.planExpiresAt);
+    if (Number.isNaN(expires.getTime())) return null;
+    const ms = expires.getTime() - now.getTime();
+    const daysLeft = Math.ceil(ms / (1000 * 60 * 60 * 24));
+    return {
+      daysLeft,
+      isExpired: ms <= 0,
+      expiresAt: expires,
+    };
+  }, [sub?.planExpiresAt]);
   const noticeNode = notice ? (
     <div
       style={{
@@ -165,6 +178,28 @@ export default function Billing() {
             )}
           </div>
         </div>
+
+        {expiryInfo && expiryInfo.daysLeft <= 7 && (
+          <div
+            style={{
+              marginTop: 12,
+              border: `1px solid ${expiryInfo.isExpired ? '#fecaca' : '#fde68a'}`,
+              background: expiryInfo.isExpired ? '#fff1f2' : '#fffbeb',
+              color: expiryInfo.isExpired ? '#be123c' : '#92400e',
+              borderRadius: 12,
+              padding: '10px 12px',
+            }}
+          >
+            <p style={{ margin: 0, fontWeight: 800 }}>
+              {expiryInfo.isExpired
+                ? tr('Подписка истекла. Оплатите тариф для продолжения работы.', "Obuna muddati tugagan. Ishlashni davom ettirish uchun tarifni to'lang.")
+                : tr(`Подписка закончится через ${expiryInfo.daysLeft} дн.`, `Obuna ${expiryInfo.daysLeft} kunda tugaydi.`)}
+            </p>
+            <p style={{ margin: '6px 0 0', fontSize: 13 }}>
+              {tr('Срок:', 'Muddat')}: {expiryInfo.expiresAt.toLocaleDateString(locale)}
+            </p>
+          </div>
+        )}
 
         <div className="sg-grid cols-2" style={{ marginTop: 14 }}>
           {[
