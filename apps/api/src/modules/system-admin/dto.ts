@@ -46,3 +46,9 @@ export const systemAdminReminderSettingsUpdateSchema = z.object({
   enabled: z.boolean().optional(),
   days: z.array(z.coerce.number().int().min(1).max(30)).min(1).max(10).optional(),
 });
+export const systemAdminReportsUsageQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  search: z.string().trim().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});

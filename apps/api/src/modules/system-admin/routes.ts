@@ -6,6 +6,7 @@ import {
   systemAdminInvoiceListQuerySchema,
   systemAdminLoginSchema,
   systemAdminReminderSettingsUpdateSchema,
+  systemAdminReportsUsageQuerySchema,
   systemAdminStoreListQuerySchema,
   systemAdminTenantListQuerySchema,
   systemAdminUpdateTenantPlanSchema,
@@ -17,6 +18,7 @@ import {
   getSystemSubscriptionReminderSettings,
   listPendingSystemInvoices,
   listSystemActivity,
+  listSystemReportsUsage,
   listSystemInvoices,
   listSystemStores,
   listSystemTenants,
@@ -127,7 +129,15 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ success: false, error: err.message });
     }
   });
-
+  fastify.get('/reports/usage', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const query = systemAdminReportsUsageQuerySchema.parse(request.query);
+      const data = await listSystemReportsUsage(query);
+      return { success: true, data };
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
   fastify.get('/invoices/pending', { preHandler: [authenticateSystem] }, async () => {
     const data = await listPendingSystemInvoices();
     return { success: true, data };

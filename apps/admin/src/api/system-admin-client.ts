@@ -50,6 +50,7 @@ export const systemApi = {
     return data;
   },
   dashboard: () => systemRequest<any>('/dashboard'),
+  reportUsage: (params?: string) => systemRequest<any>('/reports/usage' + (params ? ('?' + params) : '')),
   health: () => systemRequest<any>('/health'),
   activity: (params?: string) => systemRequest<any>(`/activity${params ? `?${params}` : ''}`),
   tenants: (params?: string) => systemRequest<any>(`/tenants${params ? `?${params}` : ''}`),
@@ -70,4 +71,3 @@ export const systemApi = {
       body: JSON.stringify({ plan, planExpiresAt }),
     }),
 };
-

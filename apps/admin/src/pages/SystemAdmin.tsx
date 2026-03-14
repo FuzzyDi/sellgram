@@ -22,6 +22,9 @@ export default function SystemAdmin() {
   const [tenants, setTenants] = useState<any[]>([]);
   const [stores, setStores] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [reportUsage, setReportUsage] = useState<any[]>([]);
+  const [reportUsageSummary, setReportUsageSummary] = useState<any>(null);
+  const [reportUsageMonth, setReportUsageMonth] = useState('');
 
   const [invoiceStatus, setInvoiceStatus] = useState<InvoiceStatus | ''>('');
   const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -98,7 +101,8 @@ export default function SystemAdmin() {
         activityQuery.set('dateTo', end.toISOString());
       }
 
-      const [d, h, a, t, s, inv] = await Promise.all([
+      const reportUsageQuery = 'page=1&pageSize=50' + (reportUsageMonth ? '&month=' + encodeURIComponent(reportUsageMonth) : '');
+      const [d, h, a, t, s, inv, ru] = await Promise.all([
         systemApi.dashboard(),
         systemApi.health(),
         systemApi.activity(activityQuery.toString()),
@@ -116,6 +120,9 @@ export default function SystemAdmin() {
       setTenants(tenantItems);
       setStores(Array.isArray(s?.items) ? s.items : []);
       setInvoices(Array.isArray(inv?.items) ? inv.items : []);
+      setReportUsage(Array.isArray(ru?.items) ? ru.items : []);
+      setReportUsageSummary(ru?.summary || null);
+      if (!reportUsageMonth && ru?.monthKey) setReportUsageMonth(String(ru.monthKey));
       setSelectedInvoiceIds((prev) => prev.filter((id) => (Array.isArray(inv?.items) ? inv.items : []).some((x: any) => x.id === id)));
       setTenantPlanExpires(
         tenantItems.reduce((acc: Record<string, string>, tenant: any) => {
@@ -607,7 +614,59 @@ export default function SystemAdmin() {
         </article>
       </div>
 
-      {loading && <p className="sg-subtitle">{tr('Обновляем...', 'Yangilanmoqda...')}</p>}
+      <section className="sg-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Report exports by tenant', "Tenantlar bo'yicha hisobot eksporti")}</h3>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              value={reportUsageMonth}
+              onChange={(e) => setReportUsageMonth(e.target.value)}
+              className="border rounded-lg px-3 py-2 text-sm"
+              style={{ minWidth: 120 }}
+              placeholder="YYYY-MM"
+            />
+            <Button onClick={() => void load()} className="sg-btn ghost">{tr('Refresh', 'Yangilash')}</Button>
+          </div>
+        </div>
+
+        <div className="sg-grid cols-4" style={{ marginTop: 10 }}>
+          <div className="sg-card soft" style={{ padding: 10 }}>
+            <div className="sg-kpi-label">{tr('Exports used', 'Ishlatilgan eksport')}</div>
+            <div style={{ fontWeight: 800 }}>{reportUsageSummary?.totalExportsUsed ?? 0}</div>
+          </div>
+          <div className="sg-card soft" style={{ padding: 10 }}>
+            <div className="sg-kpi-label">{tr('Export enabled', 'Eksport yoqilgan')}</div>
+            <div style={{ fontWeight: 800 }}>{reportUsageSummary?.tenantsWithExport ?? 0}</div>
+          </div>
+          <div className="sg-card soft" style={{ padding: 10 }}>
+            <div className="sg-kpi-label">{tr('At limit', 'Limitga yetganlar')}</div>
+            <div style={{ fontWeight: 800 }}>{reportUsageSummary?.blockedTenants ?? 0}</div>
+          </div>
+        </div>
+
+        <div className="sg-grid" style={{ marginTop: 12, maxHeight: 280, overflow: 'auto' }}>
+          {reportUsage.map((row) => (
+            <div key={row.tenantId} className="sg-card soft" style={{ padding: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 700 }}>{row.tenantName}</p>
+                  <p style={{ margin: 0, color: '#738178', fontSize: 12 }}>{row.tenantSlug}</p>
+                </div>
+                <span className="sg-badge" style={{ background: '#eef2ff', color: '#3730a3' }}>{row.plan}</span>
+              </div>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: '#526258' }}>
+                {tr('Export', 'Eksport')}: {row.exportsUsed} / {row.maxExportsPerMonth < 0 ? tr('Unlimited', 'Cheksiz') : row.maxExportsPerMonth}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: row.blockedByLimit ? '#b91c1c' : '#64756b' }}>
+                {tr('Left', 'Qoldi')}: {row.exportsLeft < 0 ? tr('Unlimited', 'Cheksiz') : row.exportsLeft}
+              </p>
+            </div>
+          ))}
+          {reportUsage.length === 0 && <p className="sg-subtitle">{tr('No export data', "Eksport bo'yicha ma'lumot yo'q")}</p>}
+        </div>
+      </section>
+
+      {loading && <p className="sg-subtitle">{tr('Refreshing...', 'Yangilanmoqda...')}</p>}
     </section>
     </>
   );

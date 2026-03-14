@@ -2,7 +2,31 @@ import bcrypt from 'bcrypt';
 import prisma from '../../lib/prisma.js';
 import { signSystemToken } from '../../lib/system-jwt.js';
 import { getConfig } from '../../config/index.js';
+import { getRedis } from '../../lib/redis.js';
+import { PLANS, type PlanCode, type ReportsLevel } from '@sellgram/shared';
 const SUBSCRIPTION_REMINDER_SETTINGS_KEY = 'subscription_reminders';
+function getMonthKey(date = new Date()) {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+function resolveReportExportLimit(plan: PlanCode) {
+  const planCfg = PLANS[plan] || PLANS.FREE;
+  const allowExport = Boolean(planCfg.limits.allowReportExport);
+  const fallback = plan === 'BUSINESS' ? -1 : plan === 'PRO' ? 50 : 0;
+  const maxExportsPerMonth = Number((planCfg.limits as any).maxExportsPerMonth ?? fallback);
+  return {
+    allowExport,
+    maxExportsPerMonth,
+    reportsLevel: planCfg.limits.reportsLevel as ReportsLevel,
+  };
+}
+
+function computeExportsLeft(max: number, used: number) {
+  if (max < 0) return -1;
+  return Math.max(0, max - used);
+}
 
 type SubscriptionReminderSettings = {
   enabled: boolean;
@@ -320,6 +344,101 @@ export async function updateSystemTenantPlan(input: {
   return updated;
 }
 
+
+export async function listSystemReportsUsage(input: {
+  month?: string;
+  search?: string;
+  page: number;
+  pageSize: number;
+}) {
+  const monthKey = input.month || getMonthKey();
+  const skip = (input.page - 1) * input.pageSize;
+
+  const where: any = {};
+  if (input.search) {
+    where.OR = [
+      { name: { contains: input.search, mode: 'insensitive' } },
+      { slug: { contains: input.search, mode: 'insensitive' } },
+      { id: { contains: input.search, mode: 'insensitive' } },
+    ];
+  }
+
+  const [tenants, total] = await Promise.all([
+    prisma.tenant.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        plan: true,
+        planExpiresAt: true,
+        _count: {
+          select: {
+            stores: true,
+            orders: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: input.pageSize,
+    }),
+    prisma.tenant.count({ where }),
+  ]);
+
+  const redis = getRedis();
+  const keys = tenants.map((tenant) => 'reports:exports:' + tenant.id + ':' + monthKey);
+  const rawCounts = keys.length > 0 ? await redis.mget(keys) : [];
+
+  const items = tenants.map((tenant, idx) => {
+    const used = Number(rawCounts[idx] || 0);
+    const plan = (tenant.plan as PlanCode) || 'FREE';
+    const limits = resolveReportExportLimit(plan);
+    const exportsLeft = computeExportsLeft(limits.maxExportsPerMonth, used);
+
+    return {
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      plan,
+      planExpiresAt: tenant.planExpiresAt,
+      storesCount: tenant._count.stores,
+      ordersCount: tenant._count.orders,
+      reportsLevel: limits.reportsLevel,
+      allowExport: limits.allowExport,
+      maxExportsPerMonth: limits.maxExportsPerMonth,
+      exportsUsed: used,
+      exportsLeft,
+      blockedByLimit: limits.maxExportsPerMonth >= 0 && exportsLeft <= 0,
+      usagePercent:
+        limits.maxExportsPerMonth > 0
+          ? Math.min(100, Math.round((used / limits.maxExportsPerMonth) * 100))
+          : limits.maxExportsPerMonth === 0
+          ? 0
+          : null,
+    };
+  });
+
+  const summary = items.reduce(
+    (acc, row) => {
+      acc.totalExportsUsed += Number(row.exportsUsed || 0);
+      if (row.allowExport) acc.tenantsWithExport += 1;
+      if (row.blockedByLimit) acc.blockedTenants += 1;
+      return acc;
+    },
+    { totalExportsUsed: 0, tenantsWithExport: 0, blockedTenants: 0 }
+  );
+
+  return {
+    monthKey,
+    items,
+    total,
+    page: input.page,
+    pageSize: input.pageSize,
+    totalPages: Math.ceil(total / input.pageSize),
+    summary,
+  };
+}
 export async function listSystemStores(input: { tenantId?: string; page: number; pageSize: number }) {
   const skip = (input.page - 1) * input.pageSize;
   const where: any = {};
