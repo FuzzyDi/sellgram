@@ -50,9 +50,12 @@ export const systemApi = {
     return data;
   },
   dashboard: () => systemRequest<any>('/dashboard'),
+  health: () => systemRequest<any>('/health'),
+  activity: (limit = 30) => systemRequest<any>(`/activity?limit=${limit}`),
   tenants: (params?: string) => systemRequest<any>(`/tenants${params ? `?${params}` : ''}`),
   stores: (params?: string) => systemRequest<any>(`/stores${params ? `?${params}` : ''}`),
   pendingInvoices: () => systemRequest<any>('/invoices/pending'),
+  invoices: (params?: string) => systemRequest<any>(`/invoices${params ? `?${params}` : ''}`),
   confirmInvoice: (id: string) => systemRequest<any>(`/invoices/${id}/confirm`, { method: 'PATCH' }),
   rejectInvoice: (id: string) => systemRequest<any>(`/invoices/${id}/reject`, { method: 'PATCH' }),
   setTenantPlan: (id: string, plan: string, planExpiresAt?: string) =>

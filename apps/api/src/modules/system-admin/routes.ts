@@ -1,7 +1,9 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { verifySystemToken, type SystemJwtPayload } from '../../lib/system-jwt.js';
 import {
+  systemAdminActivityQuerySchema,
   systemAdminIdParamSchema,
+  systemAdminInvoiceListQuerySchema,
   systemAdminLoginSchema,
   systemAdminStoreListQuerySchema,
   systemAdminTenantListQuerySchema,
@@ -10,7 +12,10 @@ import {
 import {
   confirmSystemInvoice,
   getSystemDashboard,
+  getSystemHealth,
   listPendingSystemInvoices,
+  listSystemActivity,
+  listSystemInvoices,
   listSystemStores,
   listSystemTenants,
   loginSystemAdmin,
@@ -57,6 +62,21 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
     return { success: true, data };
   });
 
+  fastify.get('/health', { preHandler: [authenticateSystem] }, async () => {
+    const data = await getSystemHealth();
+    return { success: true, data };
+  });
+
+  fastify.get('/activity', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const query = systemAdminActivityQuerySchema.parse(request.query);
+      const data = await listSystemActivity(query);
+      return { success: true, data };
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
   fastify.get('/tenants', { preHandler: [authenticateSystem] }, async (request, reply) => {
     try {
       const query = systemAdminTenantListQuerySchema.parse(request.query);
@@ -71,7 +91,7 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
     try {
       const { id } = systemAdminIdParamSchema.parse(request.params);
       const body = systemAdminUpdateTenantPlanSchema.parse(request.body);
-      const data = await updateSystemTenantPlan({ id, ...body });
+      const data = await updateSystemTenantPlan({ id, ...body, changedBy: request.systemAdmin?.email || 'system' });
       return { success: true, data };
     } catch (err: any) {
       if (err.message === 'TENANT_NOT_FOUND') {
@@ -94,6 +114,16 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
   fastify.get('/invoices/pending', { preHandler: [authenticateSystem] }, async () => {
     const data = await listPendingSystemInvoices();
     return { success: true, data };
+  });
+
+  fastify.get('/invoices', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const query = systemAdminInvoiceListQuerySchema.parse(request.query);
+      const data = await listSystemInvoices(query);
+      return { success: true, data };
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
   });
 
   fastify.patch('/invoices/:id/confirm', { preHandler: [authenticateSystem] }, async (request, reply) => {

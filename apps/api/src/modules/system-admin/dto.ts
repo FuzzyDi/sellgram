@@ -25,3 +25,15 @@ export const systemAdminUpdateTenantPlanSchema = z.object({
   plan: z.enum(['FREE', 'PRO', 'BUSINESS']),
   planExpiresAt: z.string().datetime().optional(),
 });
+
+
+export const systemAdminInvoiceListQuerySchema = z.object({
+  status: z.enum(['PENDING', 'PAID', 'CANCELLED', 'EXPIRED']).optional(),
+  search: z.string().trim().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+export const systemAdminActivityQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
