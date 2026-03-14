@@ -78,12 +78,13 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
         },
         select: {
           telegramId: true,
-          language: true,
           firstName: true,
         },
       });
 
-      if (!recipients.length) {
+      const telegramRecipients = recipients.filter((r: any) => r.telegramId);
+
+      if (!telegramRecipients.length) {
         return reply.status(400).send({
           success: false,
           error: 'No recipients found for selected audience',
@@ -99,11 +100,11 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
           message: body.message,
           targetType: body.targetType,
           status: 'DRAFT',
-          totalRecipients: recipients.length,
+          totalRecipients: telegramRecipients.length,
         },
       });
 
-      const results = await sendPromoBroadcast(body.storeId, recipients, {
+      const results = await sendPromoBroadcast(body.storeId, telegramRecipients, {
         title: body.title,
         message: body.message,
       });
@@ -123,7 +124,7 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
 
       return {
         success: true,
-        data: { campaignId: campaign.id, total: recipients.length, sent: sentCount, failed: failedCount },
+        data: { campaignId: campaign.id, total: telegramRecipients.length, sent: sentCount, failed: failedCount },
       };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
