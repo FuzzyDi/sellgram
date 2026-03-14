@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
+type NoticeTone = 'success' | 'error' | 'info';
+
 export default function Settings() {
   const { tr, locale } = useAdminI18n();
   const [tab, setTab] = useState<'stores' | 'zones' | 'loyalty'>('stores');
@@ -9,6 +11,7 @@ export default function Settings() {
   const [zones, setZones] = useState<any[]>([]);
   const [loyalty, setLoyalty] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
 
   const [telegramLinkData, setTelegramLinkData] = useState<any | null>(null);
   const [telegramLinkLoading, setTelegramLinkLoading] = useState(false);
@@ -41,13 +44,19 @@ export default function Settings() {
     void load();
   }, []);
 
+  function showNotice(tone: NoticeTone, message: string) {
+    setNotice({ tone, message });
+    setTimeout(() => setNotice(null), 3200);
+  }
+
+
   async function generateTelegramLinkCode() {
     setTelegramLinkLoading(true);
     try {
       const data = await adminApi.createTelegramLinkCode();
       setTelegramLinkData(data);
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
     } finally {
       setTelegramLinkLoading(false);
     }
@@ -76,7 +85,7 @@ export default function Settings() {
         await adminApi.updateStore(editingStoreId, payload);
       } else {
         if (!storeForm.name || !storeForm.botToken) {
-          alert(tr('Нужны название магазина и bot token', "Do'kon nomi va bot token kerak"));
+          showNotice('error', tr('Нужны название магазина и bot token', "Do'kon nomi va bot token kerak"));
           return;
         }
         await adminApi.createStore(storeForm);
@@ -84,7 +93,7 @@ export default function Settings() {
       setShowStoreForm(false);
       await load();
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
     }
   }
 
@@ -120,7 +129,7 @@ export default function Settings() {
       setShowZoneForm(false);
       await load();
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
     }
   }
 
@@ -130,7 +139,7 @@ export default function Settings() {
       await adminApi.deleteDeliveryZone(id);
       await load();
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
     }
   }
 
@@ -144,7 +153,7 @@ export default function Settings() {
       await adminApi.deleteStore(id);
       await load();
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
     }
   }
 
@@ -152,26 +161,53 @@ export default function Settings() {
     try {
       const data = await adminApi.activateStore(store.id);
       const webhookUrl = data?.webhookUrl ? `\nWebhook: ${data.webhookUrl}` : '';
-      alert(tr(`Бот "${store.name}" подключен успешно.${webhookUrl}`, `"${store.name}" boti muvaffaqiyatli ulandi.${webhookUrl}`));
+      showNotice('success', tr(`Бот "${store.name}" подключен успешно.${webhookUrl}`, `"${store.name}" boti muvaffaqiyatli ulandi.${webhookUrl}`));
       await load();
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
     }
   }
 
   async function saveLoyalty() {
     try {
       await adminApi.updateLoyaltyConfig(loyalty);
-      alert(tr('Сохранено', 'Saqlandi'));
+      showNotice('success', tr('Сохранено', 'Saqlandi'));
+      await load();
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
     }
   }
+
+  const noticeNode = notice ? (
+    <div
+      style={{
+        position: 'fixed',
+        top: 18,
+        right: 18,
+        zIndex: 70,
+        minWidth: 280,
+        maxWidth: 440,
+        borderRadius: 12,
+        padding: '12px 14px',
+        fontSize: 14,
+        fontWeight: 700,
+        boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
+        color: notice.tone === 'error' ? '#991b1b' : notice.tone === 'success' ? '#065f46' : '#1e3a8a',
+        background: notice.tone === 'error' ? '#fee2e2' : notice.tone === 'success' ? '#d1fae5' : '#dbeafe',
+        border: `1px solid ${notice.tone === 'error' ? '#fecaca' : notice.tone === 'success' ? '#a7f3d0' : '#bfdbfe'}`,
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      {notice.message}
+    </div>
+  ) : null;
 
   if (loading) return <p className="sg-subtitle">{tr('Загрузка настроек...', 'Sozlamalar yuklanmoqda...')}</p>;
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      {noticeNode}
       <header>
         <h2 className="sg-title">{tr('Настройки', 'Sozlamalar')}</h2>
         <p className="sg-subtitle">{tr('Магазины, доставка, лояльность и Telegram-привязка', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>

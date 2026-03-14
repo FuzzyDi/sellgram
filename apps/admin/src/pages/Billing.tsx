@@ -3,6 +3,8 @@ import { adminApi } from '../api/store-admin-client';
 import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
 
+type NoticeTone = 'success' | 'error' | 'info';
+
 const planColors: Record<string, string> = {
   FREE: '#6b7280',
   PRO: '#00875a',
@@ -18,6 +20,7 @@ export default function Billing() {
   const [showInvoice, setShowInvoice] = useState<any>(null);
   const [paymentRef, setPaymentRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
 
   const statusMap = useMemo(
     () =>
@@ -29,6 +32,11 @@ export default function Billing() {
       }) as Record<string, { label: string; color: string }>,
     [tr]
   );
+
+  function showNotice(tone: NoticeTone, message: string) {
+    setNotice({ tone, message });
+    setTimeout(() => setNotice(null), 3200);
+  }
 
   const load = useCallback(async () => {
     const [s, p, inv] = await Promise.all([
@@ -74,7 +82,7 @@ export default function Billing() {
         await load();
       }
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
     }
     setSubmitting(false);
   };
@@ -84,11 +92,11 @@ export default function Billing() {
     setSubmitting(true);
     try {
       await adminApi.submitInvoicePayment(showInvoice.invoice.id, paymentRef.trim());
-      alert(tr('Payment details submitted. Await moderation.', "To'lov ma'lumotlari yuborildi. Tasdiq kutilmoqda."));
+      showNotice('success', tr('Payment details submitted. Await moderation.', "To'lov ma'lumotlari yuborildi. Tasdiq kutilmoqda."));
       setShowInvoice(null);
       await load();
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
     }
     setSubmitting(false);
   };
@@ -97,9 +105,35 @@ export default function Billing() {
 
   const currentPlan = sub?.plan || 'FREE';
   const usage = sub?.usage || {};
+  const noticeNode = notice ? (
+    <div
+      style={{
+        position: 'fixed',
+        top: 18,
+        right: 18,
+        zIndex: 70,
+        minWidth: 280,
+        maxWidth: 440,
+        borderRadius: 12,
+        padding: '12px 14px',
+        fontSize: 14,
+        fontWeight: 700,
+        boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
+        color: notice.tone === 'error' ? '#991b1b' : notice.tone === 'success' ? '#065f46' : '#1e3a8a',
+        background: notice.tone === 'error' ? '#fee2e2' : notice.tone === 'success' ? '#d1fae5' : '#dbeafe',
+        border: `1px solid ${notice.tone === 'error' ? '#fecaca' : notice.tone === 'success' ? '#a7f3d0' : '#bfdbfe'}`,
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      {notice.message}
+    </div>
+  ) : null;
+
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      {noticeNode}
       <header>
         <h2 className="sg-title">{tr('Тарифы и оплата', "Tariflar va to'lovlar")}</h2>
         <p className="sg-subtitle">{tr('Лимиты, смена тарифа и история счетов', "Limitlar, tarifni o'zgartirish va hisoblar tarixi")}</p>
