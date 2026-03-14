@@ -372,6 +372,20 @@ export default function SystemAdmin() {
             <div className="sg-kpi-label">{tr('Память', 'Xotira')}</div>
             <div style={{ fontWeight: 800 }}>{health?.runtime?.memoryMb ?? '-'} MB</div>
           </div>
+          <div className="sg-card soft" style={{ padding: 10 }}>
+            <div className="sg-kpi-label">{tr('\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f \u043e \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0435', 'Obuna eslatmalari')}</div>
+            <div style={{ fontWeight: 800 }}>
+              {health?.subscriptionReminders?.enabled ? tr('\u0412\u043a\u043b\u044e\u0447\u0435\u043d\u044b', 'Yoqilgan') : tr('\u0412\u044b\u043a\u043b\u044e\u0447\u0435\u043d\u044b', "O'chirilgan")}
+            </div>
+          </div>
+          <div className="sg-card soft" style={{ padding: 10 }}>
+            <div className="sg-kpi-label">{tr('\u0414\u043d\u0438 \u0434\u043e \u043e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u044f', 'Tugashgacha kunlar')}</div>
+            <div style={{ fontWeight: 800 }}>
+              {Array.isArray(health?.subscriptionReminders?.days) && health.subscriptionReminders.days.length > 0
+                ? health.subscriptionReminders.days.join(', ')
+                : '-'}
+            </div>
+          </div>
         </div>
       </section>
 

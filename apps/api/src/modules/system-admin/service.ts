@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import prisma from '../../lib/prisma.js';
 import { signSystemToken } from '../../lib/system-jwt.js';
+import { getConfig } from '../../config/index.js';
 
 export async function loginSystemAdmin(input: { email: string; password: string }) {
   const admin = await prisma.systemAdmin.findUnique({ where: { email: input.email } });
@@ -104,6 +105,13 @@ export async function getSystemHealth() {
     prisma.invoice.count({ where: { status: 'PENDING', paymentRef: { not: null } } }),
   ]);
 
+  const cfg = getConfig();
+  const reminderDays = (cfg.SUBSCRIPTION_REMINDER_DAYS || '7,3,1')
+    .split(',')
+    .map((x) => Number(x.trim()))
+    .filter((x) => Number.isInteger(x) && x >= 1 && x <= 30)
+    .sort((a, b) => b - a);
+
   return {
     status: dbOk ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
@@ -117,6 +125,10 @@ export async function getSystemHealth() {
       tenants,
       activeStores,
       pendingInvoices,
+    },
+    subscriptionReminders: {
+      enabled: cfg.SUBSCRIPTION_REMINDER_ENABLED,
+      days: reminderDays,
     },
   };
 }
