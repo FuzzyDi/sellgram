@@ -1,4 +1,4 @@
-export const PLANS = {
+﻿export const PLANS = {
   FREE: {
     code: 'FREE',
     name: 'Бесплатный',

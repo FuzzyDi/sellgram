@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -21,33 +21,35 @@ export default function Dashboard() {
 
   const checks = useMemo(() => {
     const usage = sub?.usage;
+    const productCount = stats?.products?.total ?? stats?.totalProducts ?? 0;
+
     return [
       {
         done: true,
-        label: tr('Регистрация завершена', "Ro'yxatdan o'tish bajarildi"),
+        label: tr('Регистрация завершена', "Ro'yxatdan o'tish yakunlandi"),
         desc: tr('Отличный старт!', 'Ajoyib start!'),
       },
       {
-        done: ((stats?.products?.total ?? stats?.totalProducts ?? 0) > 0),
-        label: tr('Добавьте товары', "Mahsulot qo'shish"),
+        done: productCount > 0,
+        label: tr('Добавьте товары', "Mahsulot qo'shing"),
         desc: tr('Товары > Добавить', "Mahsulotlar > Qo'shish"),
         to: '/products',
       },
       {
-        done: ((stats?.products?.total ?? stats?.totalProducts ?? 0) > 0),
-        label: tr('Загрузите фото', 'Rasm yuklash'),
+        done: productCount > 0,
+        label: tr('Загрузите фото', 'Rasm yuklang'),
         desc: tr('Откройте товар > Фото', 'Mahsulotni oching > Rasmlar'),
         to: '/products',
       },
       {
         done: (usage?.stores?.current || 0) > 0,
-        label: tr('Подключите бота', 'Botni ulash'),
-        desc: tr('Настройки > Изменить > Токен бота', 'Sozlamalar > Tahrirlash > Bot token'),
+        label: tr('Подключите бота', 'Botni ulang'),
+        desc: tr('Настройки > Редактировать > Токен бота', 'Sozlamalar > Tahrirlash > Bot token'),
         to: '/settings',
       },
       {
         done: (usage?.deliveryZones?.current || 0) > 0,
-        label: tr('Настройте доставку', 'Yetkazib berishni sozlash'),
+        label: tr('Настройте доставку', 'Yetkazib berishni sozlang'),
         desc: tr('Настройки > Доставка', 'Sozlamalar > Yetkazib berish'),
         to: '/settings',
       },
@@ -73,14 +75,14 @@ export default function Dashboard() {
   return (
     <section className="sg-page sg-grid" style={{ gap: 18 }}>
       <header>
-        <h2 className="sg-title">{tr('Дашборд', 'Dashboard')}</h2>
+        <h2 className="sg-title">{tr('Дашборд', 'Boshqaruv paneli')}</h2>
         <p className="sg-subtitle">{tr('Показатели магазина и прогресс настройки', "Do'kon ko'rsatkichlari va sozlash holati")}</p>
       </header>
 
       <div className="sg-card soft">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Чек-лист запуска', 'Sozlash roʻyxati')}</h3>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Чек-лист запуска', "Ishga tushirish ro'yxati")}</h3>
             <p className="sg-subtitle" style={{ marginTop: 6 }}>
               {completedSteps} / {totalSteps} {tr('шагов выполнено', 'qadam bajarildi')}
             </p>
@@ -160,9 +162,9 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {topProducts.slice(0, 7).map((p: any, i: number) => (
-                <tr key={`${p.id || p.name}-${i}`}>
+                <tr key={`${p.id || p.name || p.productName}-${i}`}>
                   <td>{i + 1}</td>
-                  <td>{p.product?.name || p.name || '-'}</td>
+                  <td>{p.product?.name || p.productName || p.name || '-'}</td>
                   <td>{Number(p.totalRevenue || p.revenue || 0).toLocaleString()} UZS</td>
                 </tr>
               ))}

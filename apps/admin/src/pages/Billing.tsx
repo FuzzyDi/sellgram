@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
@@ -46,6 +46,23 @@ export default function Billing() {
     void load();
   }, [load]);
 
+  const planLabel = (code: string) => {
+    if (code === 'FREE') return tr('Бесплатный', 'Bepul');
+    if (code === 'PRO') return tr('Про', 'Pro');
+    if (code === 'BUSINESS') return tr('Бизнес', 'Biznes');
+    return code;
+  };
+
+  const getLimits = (plan: any) => {
+    const limits = plan?.limits || {};
+    return {
+      maxStores: limits.maxStores,
+      maxProducts: limits.maxProducts,
+      maxOrdersPerMonth: limits.maxOrdersPerMonth,
+      maxDeliveryZones: limits.maxDeliveryZones,
+    };
+  };
+
   const handleUpgrade = async (plan: string) => {
     setSubmitting(true);
     try {
@@ -84,18 +101,18 @@ export default function Billing() {
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
       <header>
-        <h2 className="sg-title">{tr('\u0422\u0430\u0440\u0438\u0444\u044b \u0438 \u043e\u043f\u043b\u0430\u0442\u0430', "Tariflar va to'lovlar")}</h2>
-        <p className="sg-subtitle">{tr('\u041b\u0438\u043c\u0438\u0442\u044b, \u0441\u043c\u0435\u043d\u0430 \u0442\u0430\u0440\u0438\u0444\u0430 \u0438 \u0438\u0441\u0442\u043e\u0440\u0438\u044f \u0441\u0447\u0435\u0442\u043e\u0432', "Limitlar, tarifni o'zgartirish va hisoblar tarixi")}</p>
+        <h2 className="sg-title">{tr('Тарифы и оплата', "Tariflar va to'lovlar")}</h2>
+        <p className="sg-subtitle">{tr('Лимиты, смена тарифа и история счетов', "Limitlar, tarifni o'zgartirish va hisoblar tarixi")}</p>
       </header>
 
       <div className="sg-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <div>
-            <p className="sg-kpi-label">{tr('\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u0442\u0430\u0440\u0438\u0444', 'Joriy tarif')}</p>
-            <p className="sg-kpi-value" style={{ color: planColors[currentPlan], margin: 0 }}>{plans?.[currentPlan]?.name || currentPlan}</p>
+            <p className="sg-kpi-label">{tr('Текущий тариф', 'Joriy tarif')}</p>
+            <p className="sg-kpi-value" style={{ color: planColors[currentPlan], margin: 0 }}>{planLabel(currentPlan)}</p>
             {sub?.planExpiresAt && (
               <p className="sg-subtitle" style={{ marginTop: 6 }}>
-                {tr('\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0434\u043e', 'Amal qilish muddati')}: {new Date(sub.planExpiresAt).toLocaleDateString(locale)}
+                {tr('Действует до', 'Amal qilish muddati')}: {new Date(sub.planExpiresAt).toLocaleDateString(locale)}
               </p>
             )}
           </div>
@@ -116,7 +133,7 @@ export default function Billing() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontWeight: 700, fontSize: 13 }}>{item.label}</span>
                   <span style={{ fontSize: 13, color: '#64756b' }}>
-                    {u.current}/{u.limit === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : u.limit}
+                    {u.current}/{u.limit === -1 ? tr('без лимита', 'cheklanmagan') : u.limit}
                   </span>
                 </div>
                 <div style={{ marginTop: 8, height: 6, background: '#dfe8e2', borderRadius: 999 }}>
@@ -129,23 +146,24 @@ export default function Billing() {
       </div>
 
       <section>
-        <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800 }}>{tr('\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u0430\u0440\u0438\u0444', 'Tarifni tanlang')}</h3>
+        <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800 }}>{tr('Выберите тариф', 'Tarifni tanlang')}</h3>
         <div className="sg-grid cols-3">
           {plans &&
             Object.entries(plans).map(([code, plan]: [string, any]) => {
               const isCurrent = code === currentPlan;
+              const limits = getLimits(plan);
               return (
                 <div key={code} className="sg-card" style={{ borderColor: isCurrent ? planColors[code] : '#dfe7e2' }}>
-                  <div style={{ fontSize: 13, color: '#607167' }}>{plan.name}</div>
+                  <div style={{ fontSize: 13, color: '#607167' }}>{planLabel(code)}</div>
                   <div style={{ fontSize: 34, fontWeight: 900, marginTop: 4, color: planColors[code] }}>{plan.price > 0 ? plan.price.toLocaleString() : 0}</div>
                   <div style={{ marginTop: 2, fontSize: 13, color: '#607167' }}>{plan.price > 0 ? tr('UZS / month', "so'm / oy") : tr('Free', 'Bepul')}</div>
 
                   <ul style={{ marginTop: 10, paddingLeft: 16, color: '#4f5f56', fontSize: 13 }}>
                     {[
-                      `${tr('Stores', "Do'konlar")}: ${plan.limits?.maxStores === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : plan.limits?.maxStores}`,
-                      `${tr('Products', 'Mahsulotlar')}: ${plan.limits?.maxProducts === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : plan.limits?.maxProducts}`,
-                      `${tr('Orders / month', 'Buyurtma / oy')}: ${plan.limits?.maxOrdersPerMonth === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : plan.limits?.maxOrdersPerMonth}`,
-                      `${tr('Delivery zones', 'Hududlar')}: ${plan.limits?.maxDeliveryZones === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : plan.limits?.maxDeliveryZones}`,
+                      `${tr('Stores', "Do'konlar")}: ${limits.maxStores === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxStores ?? '-'}`,
+                      `${tr('Products', 'Mahsulotlar')}: ${limits.maxProducts === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxProducts ?? '-'}`,
+                      `${tr('Orders / month', 'Buyurtma / oy')}: ${limits.maxOrdersPerMonth === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxOrdersPerMonth ?? '-'}`,
+                      `${tr('Delivery zones', 'Hududlar')}: ${limits.maxDeliveryZones === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxDeliveryZones ?? '-'}`,
                     ].map((line) => (
                       <li key={line}>{line}</li>
                     ))}
@@ -153,10 +171,10 @@ export default function Billing() {
 
                   <div style={{ marginTop: 12 }}>
                     {isCurrent ? (
-                      <div className="sg-badge" style={{ background: '#eef8f1', color: '#0b6f49' }}>{tr('\u0422\u0435\u043a\u0443\u0449\u0438\u0439', 'Joriy')}</div>
+                      <div className="sg-badge" style={{ background: '#eef8f1', color: '#0b6f49' }}>{tr('Текущий', 'Joriy')}</div>
                     ) : (
                       <Button onClick={() => handleUpgrade(code)} disabled={submitting} className="sg-btn primary" style={{ width: '100%' }}>
-                        {plan.price === 0 ? tr('\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c', "O'tish") : tr('\u041f\u0435\u0440\u0435\u0439\u0442\u0438', 'Yangilash')}
+                        {plan.price === 0 ? tr('Переключить', "O'tish") : tr('Перейти', 'Yangilash')}
                       </Button>
                     )}
                   </div>
@@ -167,15 +185,15 @@ export default function Billing() {
       </section>
 
       <section className="sg-card">
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0441\u0447\u0435\u0442\u043e\u0432', 'Hisoblar tarixi')}</h3>
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('История счетов', 'Hisoblar tarixi')}</h3>
         <table className="sg-table" style={{ marginTop: 10 }}>
           <thead>
             <tr>
-              <th>{tr('\u0414\u0430\u0442\u0430', 'Sana')}</th>
-              <th>{tr('\u0422\u0430\u0440\u0438\u0444', 'Tarif')}</th>
-              <th>{tr('\u0421\u0443\u043c\u043c\u0430', 'Summa')}</th>
-              <th>{tr('\u0421\u0442\u0430\u0442\u0443\u0441', 'Holat')}</th>
-              <th>{tr('\u0422\u0440\u0430\u043d\u0437\u0430\u043a\u0446\u0438\u044f', 'Tranzaksiya')}</th>
+              <th>{tr('Дата', 'Sana')}</th>
+              <th>{tr('Тариф', 'Tarif')}</th>
+              <th>{tr('Сумма', 'Summa')}</th>
+              <th>{tr('Статус', 'Holat')}</th>
+              <th>{tr('Транзакция', 'Tranzaksiya')}</th>
             </tr>
           </thead>
           <tbody>
@@ -184,7 +202,7 @@ export default function Billing() {
               return (
                 <tr key={inv.id}>
                   <td>{new Date(inv.createdAt).toLocaleDateString(locale)}</td>
-                  <td>{inv.plan}</td>
+                  <td>{planLabel(inv.plan)}</td>
                   <td>{Number(inv.amount).toLocaleString()} UZS</td>
                   <td>
                     <span className="sg-badge" style={{ background: `${st.color}1a`, color: st.color }}>
@@ -202,8 +220,8 @@ export default function Billing() {
       {showInvoice && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(11, 20, 16, 0.5)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}>
           <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
-            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Plan payment', "Tarif to'lovi")} {showInvoice.invoice.plan}</h3>
-            <p className="sg-subtitle">{tr('Transfer payment and enter transaction reference', "To'lovni o'tkazing va tranzaksiya raqamini kiriting")}</p>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Оплата тарифа', "Tarif to'lovi")} {planLabel(showInvoice.invoice.plan)}</h3>
+            <p className="sg-subtitle">{tr('Переведите оплату и укажите номер транзакции', "To'lovni o'tkazing va tranzaksiya raqamini kiriting")}</p>
 
             <div className="sg-card soft" style={{ marginTop: 12 }}>
               <p style={{ margin: 0, fontSize: 13 }}><b>{tr('Bank', 'Bank')}:</b> {showInvoice.bankDetails.bank}</p>

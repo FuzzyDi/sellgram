@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+﻿import { FastifyInstance } from 'fastify';
 import prisma from '../../lib/prisma.js';
 
 export default async function analyticsRoutes(fastify: FastifyInstance) {
@@ -10,7 +10,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const [
       totalOrders,
@@ -21,6 +21,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       weekRevenue,
       monthRevenue,
       totalCustomers,
+      customersFromOrders,
       totalProducts,
       newCustomersWeek,
       pendingOrders,
@@ -38,12 +39,17 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         _sum: { total: true },
       }),
       prisma.order.aggregate({
-        where: { tenantId, status: { in: ['COMPLETED', 'DELIVERED'] }, createdAt: { gte: monthAgo } },
+        where: { tenantId, status: { in: ['COMPLETED', 'DELIVERED'] }, createdAt: { gte: monthStart } },
         _sum: { total: true },
         _avg: { total: true },
       }),
       prisma.customer.count({ where: { tenantId } }),
-      prisma.product.count({ where: { tenantId, isActive: true } }),
+      prisma.order.findMany({
+        where: { tenantId },
+        distinct: ['customerId'],
+        select: { customerId: true },
+      }),
+      prisma.product.count({ where: { tenantId } }),
       prisma.customer.count({ where: { tenantId, createdAt: { gte: weekAgo } } }),
       prisma.order.count({ where: { tenantId, status: 'NEW' } }),
     ]);
@@ -64,7 +70,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           avgCheck: Math.round(Number(monthRevenue._avg.total) || 0),
         },
         customers: {
-          total: totalCustomers,
+          total: Math.max(totalCustomers, customersFromOrders.length),
           newThisWeek: newCustomersWeek,
           repeatRate: totalCustomers > 0 ? Math.round((repeatCustomers / totalCustomers) * 100) : 0,
         },
@@ -90,21 +96,29 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         },
       },
       _sum: { qty: true, total: true },
-      orderBy: { _sum: { qty: 'desc' } },
+      orderBy: { _sum: { total: 'desc' } },
       take: Number(limit),
     });
 
-    // Fetch product details
     const productIds = topProducts.map((p: any) => p.productId);
-    const products = await prisma.product.findMany({
-      where: { id: { in: productIds } },
-      select: { id: true, name: true, price: true, stockQty: true },
-    });
+    const [products, names] = await Promise.all([
+      prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, name: true, price: true, stockQty: true },
+      }),
+      prisma.orderItem.findMany({
+        where: { productId: { in: productIds } },
+        distinct: ['productId'],
+        select: { productId: true, name: true },
+      }),
+    ]);
 
     const result = topProducts.map((tp: any) => {
       const product = products.find((p: any) => p.id === tp.productId);
+      const fallback = names.find((n: any) => n.productId === tp.productId);
       return {
         product,
+        productName: product?.name || fallback?.name || '-',
         totalQty: tp._sum.qty,
         totalRevenue: Number(tp._sum.total),
       };
@@ -118,7 +132,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     const { days = 30 } = request.query as any;
     const since = new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000);
 
-    // Use raw query for daily grouping
     const orders = await prisma.order.findMany({
       where: {
         tenantId: request.tenantId!,
@@ -129,7 +142,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       orderBy: { createdAt: 'asc' },
     });
 
-    // Group by date
     const byDate: Record<string, { revenue: number; count: number }> = {};
     for (const order of orders) {
       const date = order.createdAt.toISOString().split('T')[0];
