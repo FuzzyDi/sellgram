@@ -12,6 +12,7 @@ import Orders from './pages/Orders';
 import PaymentMethods from './pages/PaymentMethods';
 import Products from './pages/Products';
 import Settings from './pages/Settings';
+import SystemAdmin from './pages/SystemAdmin';
 
 interface AuthState {
   user: any;
@@ -135,6 +136,8 @@ function Sidebar({ route, navigate, auth, onLogout }: { route: string; navigate:
 
 function PageRouter({ route }: { route: string }) {
   switch (route) {
+    case '/system-admin':
+      return <SystemAdmin />;
     case '/products':
       return <Products />;
     case '/categories':
@@ -199,6 +202,10 @@ export default function App() {
         <p style={{ color: '#6b7280' }}>{t('loading')}</p>
       </div>
     );
+  }
+
+  if (route === '/system-admin') {
+    return <SystemAdmin />;
   }
 
   if (!auth) {
