@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import Orders from './pages/Orders';
 import PaymentMethods from './pages/PaymentMethods';
 import Products from './pages/Products';
+import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import SystemAdmin from './pages/SystemAdmin';
 
@@ -47,6 +48,7 @@ function Sidebar({ route, navigate, auth, onLogout }: { route: string; navigate:
       { to: '/customers', label: t('customers') },
       { to: '/payments', label: t('payments') },
       { to: '/broadcasts', label: t('broadcasts') },
+      { to: '/reports', label: t('reports') },
       { to: '/settings', label: t('settings') },
       { to: '/billing', label: t('plans') },
     ],
@@ -150,6 +152,8 @@ function PageRouter({ route }: { route: string }) {
       return <PaymentMethods />;
     case '/broadcasts':
       return <Broadcasts />;
+    case '/reports':
+      return <Reports />;
     case '/settings':
       return <Settings />;
     case '/billing':

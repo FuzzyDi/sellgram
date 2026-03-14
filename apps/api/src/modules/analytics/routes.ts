@@ -8,11 +8,35 @@ const REPORTS_LEVEL_WEIGHT: Record<ReportsLevel, number> = {
   FULL: 3,
 };
 
+type ReportLimits = {
+  planCode: string;
+  reportsLevel: ReportsLevel;
+  reportsHistoryDays: number;
+  allowReportExport: boolean;
+  maxReportsPerMonth: number;
+  maxScheduledReports: number;
+};
+
 function hasReportsLevel(current: ReportsLevel, required: ReportsLevel) {
   return REPORTS_LEVEL_WEIGHT[current] >= REPORTS_LEVEL_WEIGHT[required];
 }
 
-async function getTenantReportLimits(tenantId: string) {
+function clampDays(raw: unknown, maxDays: number, fallback: number) {
+  const val = Number(raw);
+  if (!Number.isFinite(val) || val <= 0) return Math.min(fallback, maxDays);
+  return Math.max(1, Math.min(Math.round(val), maxDays));
+}
+
+function getReportAccess(reportLimits: ReportLimits) {
+  return {
+    basic: hasReportsLevel(reportLimits.reportsLevel, 'BASIC'),
+    advanced: hasReportsLevel(reportLimits.reportsLevel, 'ADVANCED'),
+    full: hasReportsLevel(reportLimits.reportsLevel, 'FULL'),
+    export: reportLimits.allowReportExport,
+  };
+}
+
+async function getTenantReportLimits(tenantId: string): Promise<ReportLimits> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { plan: true },
@@ -26,11 +50,30 @@ async function getTenantReportLimits(tenantId: string) {
     reportsHistoryDays: plan.limits.reportsHistoryDays,
     allowReportExport: plan.limits.allowReportExport,
     maxReportsPerMonth: plan.limits.maxReportsPerMonth,
+    maxScheduledReports: plan.limits.maxScheduledReports,
   };
 }
 
 export default async function analyticsRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
+
+  fastify.get('/analytics/reports/meta', async (request) => {
+    const reportLimits = await getTenantReportLimits(request.tenantId!);
+    return {
+      success: true,
+      data: {
+        reportLimits,
+        reportAccess: getReportAccess(reportLimits),
+        availableReports: [
+          { code: 'top-products', level: 'BASIC' },
+          { code: 'dashboard-summary', level: 'BASIC' },
+          { code: 'revenue-series', level: 'ADVANCED' },
+          { code: 'sales-by-category', level: 'ADVANCED' },
+          { code: 'customers-value', level: 'FULL' },
+        ],
+      },
+    };
+  });
 
   // Dashboard summary
   fastify.get('/analytics/dashboard', async (request, reply) => {
@@ -130,6 +173,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         },
       },
       reportLimits,
+      reportAccess: getReportAccess(reportLimits),
     };
   });
 
@@ -144,8 +188,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     }
 
     const { limit = 10, period = '30' } = request.query as any;
-    const maxDays = Number(reportLimits.reportsHistoryDays || 30);
-    const safePeriod = Math.max(1, Math.min(Number(period) || 30, maxDays));
+    const safePeriod = clampDays(period, Number(reportLimits.reportsHistoryDays || 30), 30);
     const since = new Date(Date.now() - safePeriod * 24 * 60 * 60 * 1000);
 
     const topProducts = await prisma.orderItem.groupBy({
@@ -187,7 +230,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       };
     });
 
-    return { success: true, data: result, reportLimits };
+    return { success: true, data: result, reportLimits, reportAccess: getReportAccess(reportLimits) };
   });
 
   // Revenue time series
@@ -201,8 +244,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     }
 
     const { days = 30 } = request.query as any;
-    const maxDays = Number(reportLimits.reportsHistoryDays || 30);
-    const safeDays = Math.max(1, Math.min(Number(days) || 30, maxDays));
+    const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 30), 30);
     const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
 
     const orders = await prisma.order.findMany({
@@ -227,6 +269,114 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, data]) => ({ date, ...data }));
 
-    return { success: true, data: series, reportLimits };
+    return { success: true, data: series, reportLimits, reportAccess: getReportAccess(reportLimits) };
+  });
+
+  // Sales by categories (ADVANCED)
+  fastify.get('/analytics/report-categories', async (request, reply) => {
+    const reportLimits = await getTenantReportLimits(request.tenantId!);
+    if (!hasReportsLevel(reportLimits.reportsLevel, 'ADVANCED')) {
+      return reply.status(402).send({
+        success: false,
+        error: 'Advanced reports are available on PRO/BUSINESS plans only.',
+      });
+    }
+
+    const { days = 30, limit = 20 } = request.query as any;
+    const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 30), 30);
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
+    const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
+
+    const items = await prisma.orderItem.findMany({
+      where: {
+        order: {
+          tenantId: request.tenantId!,
+          status: { in: ['COMPLETED', 'DELIVERED'] },
+          createdAt: { gte: since },
+        },
+      },
+      select: {
+        qty: true,
+        total: true,
+        product: {
+          select: {
+            categoryId: true,
+            category: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const map = new Map<string, { categoryId: string | null; categoryName: string; totalQty: number; totalRevenue: number }>();
+    for (const item of items) {
+      const categoryId = item.product?.categoryId || null;
+      const categoryName = item.product?.category?.name || 'Uncategorized';
+      const key = categoryId || '__none__';
+      const prev = map.get(key) || { categoryId, categoryName, totalQty: 0, totalRevenue: 0 };
+      prev.totalQty += Number(item.qty) || 0;
+      prev.totalRevenue += Number(item.total) || 0;
+      map.set(key, prev);
+    }
+
+    const result = Array.from(map.values())
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, safeLimit);
+
+    return { success: true, data: result, reportLimits, reportAccess: getReportAccess(reportLimits) };
+  });
+
+  // Customers value report (FULL)
+  fastify.get('/analytics/report-customers', async (request, reply) => {
+    const reportLimits = await getTenantReportLimits(request.tenantId!);
+    if (!hasReportsLevel(reportLimits.reportsLevel, 'FULL')) {
+      return reply.status(402).send({
+        success: false,
+        error: 'Full reports are available on BUSINESS plan only.',
+      });
+    }
+
+    const { days = 90, limit = 30 } = request.query as any;
+    const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 90), 90);
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 200));
+    const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
+
+    const customers = await prisma.customer.findMany({
+      where: {
+        tenantId: request.tenantId!,
+        OR: [
+          { createdAt: { gte: since } },
+          {
+            orders: {
+              some: {
+                createdAt: { gte: since },
+                status: { in: ['COMPLETED', 'DELIVERED'] },
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        telegramUser: true,
+        ordersCount: true,
+        totalSpent: true,
+        loyaltyPoints: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: [{ totalSpent: 'desc' }, { updatedAt: 'desc' }],
+      take: safeLimit,
+    });
+
+    const result = customers.map((customer) => ({
+      ...customer,
+      totalSpent: Number(customer.totalSpent) || 0,
+      displayName:
+        [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim() || customer.telegramUser || customer.id,
+    }));
+
+    return { success: true, data: result, reportLimits, reportAccess: getReportAccess(reportLimits) };
   });
 }

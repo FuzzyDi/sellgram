@@ -135,8 +135,13 @@ export const adminApi = {
   receivePurchaseOrder: (id: string, data: any) => request<any>(`/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
 
   getDashboard: () => request<any>('/analytics/dashboard'),
-  getTopProducts: () => request<any>('/analytics/top-products'),
+  getTopProducts: (period?: number) => request<any>(`/analytics/top-products?period=${period || 30}`),
   getRevenue: (days?: number) => request<any>(`/analytics/revenue?days=${days || 30}`),
+  getReportsMeta: () => request<any>('/analytics/reports/meta'),
+  getCategoryReport: (days?: number, limit?: number) =>
+    request<any>(`/analytics/report-categories?days=${days || 30}&limit=${limit || 20}`),
+  getCustomersReport: (days?: number, limit?: number) =>
+    request<any>(`/analytics/report-customers?days=${days || 90}&limit=${limit || 30}`),
 
   getBroadcasts: (storeId?: string) => request<any>(`/broadcasts${storeId ? `?storeId=${storeId}` : ''}`),
   getBroadcast: (id: string) => request<any>(`/broadcasts/${id}`),

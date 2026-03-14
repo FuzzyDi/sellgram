@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 
 export type Lang = 'ru' | 'uz';
 
@@ -13,6 +13,7 @@ const dict = {
     customers: 'Клиенты',
     payments: 'Оплата',
     broadcasts: 'Рассылки',
+    reports: 'Отчеты',
     settings: 'Настройки',
     plans: 'Тарифы',
     loading: 'Загрузка...',
@@ -27,6 +28,7 @@ const dict = {
     customers: 'Mijozlar',
     payments: "To'lov",
     broadcasts: 'Xabarnomalar',
+    reports: 'Hisobotlar',
     settings: 'Sozlamalar',
     plans: 'Tariflar',
     loading: 'Yuklanmoqda...',
