@@ -10,12 +10,18 @@ type ReportsMeta = {
     allowReportExport?: boolean;
     maxReportsPerMonth?: number;
     maxScheduledReports?: number;
+    maxExportsPerMonth?: number;
   };
   reportAccess?: {
     basic?: boolean;
     advanced?: boolean;
     full?: boolean;
     export?: boolean;
+  };
+  usage?: {
+    exportsThisMonth?: number;
+    exportsLeft?: number;
+    monthKey?: string;
   };
 };
 
@@ -28,6 +34,7 @@ export default function Reports() {
   const [categories, setCategories] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +95,7 @@ export default function Reports() {
 
   const limits = meta?.reportLimits;
   const access = meta?.reportAccess || {};
+  const usage = meta?.usage;
 
   const revenueTotal = useMemo(
     () => revenue.reduce((sum, row) => sum + Number(row?.revenue || 0), 0),
@@ -99,6 +107,24 @@ export default function Reports() {
     if (limits?.reportsLevel === 'ADVANCED') return tr('Базовые + расширенные', 'Oddiy + kengaytirilgan');
     return tr('Базовые', 'Oddiy');
   }, [limits?.reportsLevel, tr]);
+
+  const exportLeftLabel = useMemo(() => {
+    if ((usage?.exportsLeft ?? 0) < 0) return tr('Без лимита', 'Cheklanmagan');
+    return String(usage?.exportsLeft ?? 0);
+  }, [usage?.exportsLeft, tr]);
+
+  const doExport = async (type: string) => {
+    try {
+      setExporting(type);
+      await adminApi.downloadReportCsv(type, period);
+      const refreshed = await adminApi.getReportsMeta();
+      setMeta(refreshed);
+    } catch (err: any) {
+      alert(err?.message || tr('Ошибка экспорта', 'Eksport xatosi'));
+    } finally {
+      setExporting(null);
+    }
+  };
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
@@ -131,8 +157,9 @@ export default function Reports() {
           <div className="sg-kpi-value">{limits?.reportsHistoryDays ?? '-'} {tr('дней', 'kun')}</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Экспорт', 'Eksport')}</div>
-          <div className="sg-kpi-value">{limits?.allowReportExport ? tr('Да', 'Ha') : tr('Нет', "Yo`q")}</div>
+          <div className="sg-kpi-label">{tr('Экспорт в месяц', 'Oyiga eksport')}</div>
+          <div className="sg-kpi-value">{exportLeftLabel}</div>
+          <div className="sg-subtitle">{tr('Использовано', 'Ishlatilgan')}: {usage?.exportsThisMonth ?? 0}</div>
         </article>
       </div>
 
@@ -141,8 +168,17 @@ export default function Reports() {
       ) : (
         <>
           <section className="sg-card">
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Базовые отчеты', 'Oddiy hisobotlar')}</h3>
-            <p className="sg-subtitle" style={{ marginBottom: 10 }}>{tr('Топ товаров по выручке', 'Tushum bo`yicha top mahsulotlar')}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Базовые отчеты', 'Oddiy hisobotlar')}</h3>
+                <p className="sg-subtitle" style={{ marginBottom: 10 }}>{tr('Топ товаров по выручке', 'Tushum bo`yicha top mahsulotlar')}</p>
+              </div>
+              {access.export && (
+                <button className="sg-btn ghost" disabled={exporting === 'top-products'} onClick={() => doExport('top-products')}>
+                  {exporting === 'top-products' ? '...' : tr('Экспорт CSV', 'CSV eksport')}
+                </button>
+              )}
+            </div>
             {topProducts.length === 0 ? (
               <p className="sg-subtitle">{tr('Нет данных за выбранный период', 'Tanlangan davrda ma`lumot yo`q')}</p>
             ) : (
@@ -170,7 +206,19 @@ export default function Reports() {
           </section>
 
           <section className="sg-card">
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Расширенные отчеты (PRO)', 'Kengaytirilgan hisobotlar (PRO)')}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Расширенные отчеты (PRO)', 'Kengaytirilgan hisobotlar (PRO)')}</h3>
+              {access.advanced && access.export && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="sg-btn ghost" disabled={exporting === 'revenue'} onClick={() => doExport('revenue')}>
+                    {exporting === 'revenue' ? '...' : tr('Выручка CSV', 'Tushum CSV')}
+                  </button>
+                  <button className="sg-btn ghost" disabled={exporting === 'categories'} onClick={() => doExport('categories')}>
+                    {exporting === 'categories' ? '...' : tr('Категории CSV', 'Toifalar CSV')}
+                  </button>
+                </div>
+              )}
+            </div>
             {!access.advanced ? (
               <div className="sg-card soft" style={{ marginTop: 10 }}>
                 <p style={{ margin: 0 }}>{tr('Доступно на тарифах PRO и BUSINESS.', 'PRO va BUSINESS tariflarida mavjud.')}</p>
@@ -215,7 +263,14 @@ export default function Reports() {
           </section>
 
           <section className="sg-card">
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Полные отчеты (BUSINESS)', 'To`liq hisobotlar (BUSINESS)')}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Полные отчеты (BUSINESS)', 'To`liq hisobotlar (BUSINESS)')}</h3>
+              {access.full && access.export && (
+                <button className="sg-btn ghost" disabled={exporting === 'customers'} onClick={() => doExport('customers')}>
+                  {exporting === 'customers' ? '...' : tr('Клиенты CSV', 'Mijozlar CSV')}
+                </button>
+              )}
+            </div>
             {!access.full ? (
               <div className="sg-card soft" style={{ marginTop: 10 }}>
                 <p style={{ margin: 0 }}>{tr('Доступно только на тарифе BUSINESS.', 'Faqat BUSINESS tarifida mavjud.')}</p>

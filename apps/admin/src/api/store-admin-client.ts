@@ -14,6 +14,18 @@ export function clearTokens() {
   localStorage.removeItem('refreshToken');
 }
 
+
+function parseFilenameFromDisposition(disposition: string | null, fallback: string) {
+  if (!disposition) return fallback;
+  const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+  const raw = match?.[1] || match?.[2];
+  if (!raw) return fallback;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -142,6 +154,35 @@ export const adminApi = {
     request<any>(`/analytics/report-categories?days=${days || 30}&limit=${limit || 20}`),
   getCustomersReport: (days?: number, limit?: number) =>
     request<any>(`/analytics/report-customers?days=${days || 90}&limit=${limit || 30}`),
+  downloadReportCsv: async (type: string, days?: number) => {
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch(
+      `${ADMIN_API_BASE}/analytics/reports/export?type=${encodeURIComponent(type)}&days=${days || 30}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+
+    if (!res.ok) {
+      try {
+        const data = await res.json();
+        throw new Error(data?.error || data?.message || 'Export failed');
+      } catch (err) {
+        if (err instanceof Error) throw err;
+        throw new Error('Export failed');
+      }
+    }
+
+    const blob = await res.blob();
+    const defaultName = `sellgram-${type}-${new Date().toISOString().slice(0, 10)}.csv`;
+    const filename = parseFilenameFromDisposition(res.headers.get('content-disposition'), defaultName);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
 
   getBroadcasts: (storeId?: string) => request<any>(`/broadcasts${storeId ? `?storeId=${storeId}` : ''}`),
   getBroadcast: (id: string) => request<any>(`/broadcasts/${id}`),
