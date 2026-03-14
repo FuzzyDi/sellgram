@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -24,31 +24,31 @@ export default function Dashboard() {
     return [
       {
         done: true,
-        label: tr('Registration completed', "Ro'yxatdan o'tish bajarildi"),
-        desc: tr('Great start!', 'Ajoyib start!'),
+        label: tr('Регистрация завершена', "Ro'yxatdan o'tish bajarildi"),
+        desc: tr('Отличный старт!', 'Ajoyib start!'),
       },
       {
         done: (stats?.totalProducts || 0) > 0,
-        label: tr('Add products', "Mahsulot qo'shish"),
-        desc: tr('Products > Add', "Mahsulotlar > Qo'shish"),
+        label: tr('Добавьте товары', "Mahsulot qo'shish"),
+        desc: tr('Товары > Добавить', "Mahsulotlar > Qo'shish"),
         to: '/products',
       },
       {
         done: (stats?.totalProducts || 0) > 0,
-        label: tr('Upload photos', 'Rasm yuklash'),
-        desc: tr('Open product > Photos', 'Mahsulotni oching > Rasmlar'),
+        label: tr('Загрузите фото', 'Rasm yuklash'),
+        desc: tr('Откройте товар > Фото', 'Mahsulotni oching > Rasmlar'),
         to: '/products',
       },
       {
         done: (usage?.stores?.current || 0) > 0,
-        label: tr('Connect bot', 'Botni ulash'),
-        desc: tr('Settings > Edit > Bot token', 'Sozlamalar > Tahrirlash > Bot token'),
+        label: tr('Подключите бота', 'Botni ulash'),
+        desc: tr('Настройки > Изменить > Токен бота', 'Sozlamalar > Tahrirlash > Bot token'),
         to: '/settings',
       },
       {
         done: (usage?.deliveryZones?.current || 0) > 0,
-        label: tr('Configure delivery', 'Yetkazib berishni sozlash'),
-        desc: tr('Settings > Delivery', 'Sozlamalar > Yetkazib berish'),
+        label: tr('Настройте доставку', 'Yetkazib berishni sozlash'),
+        desc: tr('Настройки > Доставка', 'Sozlamalar > Yetkazib berish'),
         to: '/settings',
       },
     ];
@@ -60,7 +60,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <section className="sg-page">
-        <p className="sg-subtitle">{tr('Loading...', 'Yuklanmoqda...')}</p>
+        <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
       </section>
     );
   }
@@ -68,16 +68,16 @@ export default function Dashboard() {
   return (
     <section className="sg-page sg-grid" style={{ gap: 18 }}>
       <header>
-        <h2 className="sg-title">{tr('Dashboard', 'Dashboard')}</h2>
-        <p className="sg-subtitle">{tr('Store performance and setup progress', "Do'kon ko'rsatkichlari va sozlash holati")}</p>
+        <h2 className="sg-title">{tr('Дашборд', 'Dashboard')}</h2>
+        <p className="sg-subtitle">{tr('Показатели магазина и прогресс настройки', "Do'kon ko'rsatkichlari va sozlash holati")}</p>
       </header>
 
       <div className="sg-card soft">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Setup checklist', 'Sozlash roʻyxati')}</h3>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Чек-лист запуска', 'Sozlash roʻyxati')}</h3>
             <p className="sg-subtitle" style={{ marginTop: 6 }}>
-              {completedSteps} / {totalSteps} {tr('steps completed', 'qadam bajarildi')}
+              {completedSteps} / {totalSteps} {tr('шагов выполнено', 'qadam bajarildi')}
             </p>
           </div>
           <div className="sg-badge" style={{ background: '#e8f7ef', color: '#006f4a', fontSize: 12 }}>
@@ -111,7 +111,7 @@ export default function Dashboard() {
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 14, color: check.done ? '#5f6d64' : '#18261f' }}>
-                {check.done ? 'Done' : `Step ${i + 1}`}: {check.label}
+                {check.done ? tr('Готово', 'Bajarildi') : `${tr('Шаг', 'Qadam')} ${i + 1}`}: {check.label}
               </div>
               {!check.done && <div style={{ color: '#738279', fontSize: 12, marginTop: 2 }}>{check.desc}</div>}
             </button>
@@ -121,36 +121,36 @@ export default function Dashboard() {
 
       <div className="sg-grid cols-4">
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Orders today', 'Bugungi buyurtmalar')}</div>
+          <div className="sg-kpi-label">{tr('Заказы сегодня', 'Bugungi buyurtmalar')}</div>
           <div className="sg-kpi-value">{stats?.ordersToday || 0}</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Revenue (month)', 'Tushum (oy)')}</div>
+          <div className="sg-kpi-label">{tr('Выручка (месяц)', 'Tushum (oy)')}</div>
           <div className="sg-kpi-value">{((stats?.revenue?.month || 0) / 1000).toFixed(0)}K</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Customers', 'Mijozlar')}</div>
+          <div className="sg-kpi-label">{tr('Клиенты', 'Mijozlar')}</div>
           <div className="sg-kpi-value">{stats?.totalCustomers || 0}</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Products', 'Mahsulotlar')}</div>
+          <div className="sg-kpi-label">{tr('Товары', 'Mahsulotlar')}</div>
           <div className="sg-kpi-value">{stats?.totalProducts || 0}</div>
         </article>
       </div>
 
       <section className="sg-card">
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Top products', 'Top mahsulotlar')}</h3>
-        <p className="sg-subtitle" style={{ marginBottom: 10 }}>{tr('Best sellers by revenue', "Tushum bo'yicha eng yaxshi mahsulotlar")}</p>
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Топ товаров', 'Top mahsulotlar')}</h3>
+        <p className="sg-subtitle" style={{ marginBottom: 10 }}>{tr('Лидеры продаж по выручке', "Tushum bo'yicha eng yaxshi mahsulotlar")}</p>
 
         {topProducts.length === 0 ? (
-          <p className="sg-subtitle">{tr('No data yet', "Hozircha ma'lumot yo'q")}</p>
+          <p className="sg-subtitle">{tr('Данных пока нет', "Hozircha ma'lumot yo'q")}</p>
         ) : (
           <table className="sg-table">
             <thead>
               <tr>
                 <th>#</th>
-                <th>{tr('Product', 'Mahsulot')}</th>
-                <th>{tr('Revenue', 'Tushum')}</th>
+                <th>{tr('Товар', 'Mahsulot')}</th>
+                <th>{tr('Выручка', 'Tushum')}</th>
               </tr>
             </thead>
             <tbody>

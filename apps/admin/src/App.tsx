@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi, clearTokens, setTokens } from './api/store-admin-client';
 import Button from './components/Button';
 import { useAdminI18n } from './i18n';
@@ -12,7 +12,6 @@ import Orders from './pages/Orders';
 import PaymentMethods from './pages/PaymentMethods';
 import Products from './pages/Products';
 import Settings from './pages/Settings';
-import SystemAdmin from './pages/SystemAdmin';
 
 interface AuthState {
   user: any;
@@ -49,7 +48,6 @@ function Sidebar({ route, navigate, auth, onLogout }: { route: string; navigate:
       { to: '/broadcasts', label: t('broadcasts') },
       { to: '/settings', label: t('settings') },
       { to: '/billing', label: t('plans') },
-      { to: '/system', label: t('system_admin') },
     ],
     [t]
   );
@@ -153,8 +151,6 @@ function PageRouter({ route }: { route: string }) {
       return <Settings />;
     case '/billing':
       return <Billing />;
-    case '/system':
-      return <SystemAdmin />;
     default:
       return <Dashboard />;
   }

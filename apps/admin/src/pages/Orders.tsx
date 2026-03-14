@@ -23,15 +23,15 @@ export default function Orders() {
 
   const statusLabels: Record<string, string> = useMemo(
     () => ({
-      NEW: tr('New', 'Yangi'),
-      CONFIRMED: tr('Confirmed', 'Tasdiqlandi'),
-      PREPARING: tr('Preparing', 'Tayyorlanmoqda'),
-      READY: tr('Ready', 'Tayyor'),
-      SHIPPED: tr('Shipped', "Yo'lda"),
-      DELIVERED: tr('Delivered', 'Yetkazildi'),
-      COMPLETED: tr('Completed', 'Yakunlandi'),
-      CANCELLED: tr('Cancelled', 'Bekor qilindi'),
-      REFUNDED: tr('Refunded', 'Qaytarildi'),
+      NEW: tr('Новый', 'Yangi'),
+      CONFIRMED: tr('Подтвержден', 'Tasdiqlandi'),
+      PREPARING: tr('Готовится', 'Tayyorlanmoqda'),
+      READY: tr('Готов', 'Tayyor'),
+      SHIPPED: tr('В пути', "Yo'lda"),
+      DELIVERED: tr('Доставлен', 'Yetkazildi'),
+      COMPLETED: tr('Завершен', 'Yakunlandi'),
+      CANCELLED: tr('Отменен', 'Bekor qilindi'),
+      REFUNDED: tr('Возврат', 'Qaytarildi'),
     }),
     [tr]
   );
@@ -63,20 +63,20 @@ export default function Orders() {
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
       <header>
-        <h2 className="sg-title">{tr('Orders', 'Buyurtmalar')}</h2>
-        <p className="sg-subtitle">{tr('Manage incoming orders and statuses', 'Buyurtmalar va statuslarni boshqarish')}</p>
+        <h2 className="sg-title">{tr('Заказы', 'Buyurtmalar')}</h2>
+        <p className="sg-subtitle">{tr('Управление входящими заказами и статусами', 'Buyurtmalar va statuslarni boshqarish')}</p>
       </header>
 
       <div className="sg-pill-row">
-        {['', 'NEW', 'CONFIRMED', 'PREPARING', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED'].map((s) => (
+        {['', 'NEW', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'REFUNDED'].map((s) => (
           <button key={s || 'all'} onClick={() => setFilter(s)} className={`sg-pill ${filter === s ? 'active' : ''}`}>
-            {s ? statusLabels[s] : tr('All', 'Barchasi')}
+            {s ? statusLabels[s] : tr('Все', 'Barchasi')}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <p className="sg-subtitle">{tr('Loading...', 'Yuklanmoqda...')}</p>
+        <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
       ) : (
         <div className="sg-grid">
           {data?.items?.map((order: any) => (
@@ -84,7 +84,7 @@ export default function Orders() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 16 }}>
-                    {tr('Order', 'Buyurtma')} #{order.orderNumber}
+                    {tr('Заказ', 'Buyurtma')} #{order.orderNumber}
                   </div>
                   <div style={{ marginTop: 4, fontSize: 13, color: '#64756b' }}>
                     {order.customer?.firstName} {order.customer?.lastName}
@@ -106,36 +106,36 @@ export default function Orders() {
                   {order.status === 'NEW' && (
                     <>
                       <Button onClick={() => handleStatusChange(order.id, 'CONFIRMED')} className="sg-btn primary">
-                        {tr('Confirm', 'Tasdiqlash')}
+                        {tr('Подтвердить', 'Tasdiqlash')}
                       </Button>
                       <Button onClick={() => handleStatusChange(order.id, 'CANCELLED')} className="sg-btn danger">
-                        {tr('Cancel', 'Bekor qilish')}
+                        {tr('Отменить', 'Bekor qilish')}
                       </Button>
                     </>
                   )}
                   {order.status === 'CONFIRMED' && (
                     <Button onClick={() => handleStatusChange(order.id, 'PREPARING')} className="sg-btn ghost">
-                      {tr('Prepare', 'Tayyorlash')}
+                      {tr('Готовить', 'Tayyorlash')}
                     </Button>
                   )}
                   {order.status === 'PREPARING' && (
                     <Button onClick={() => handleStatusChange(order.id, 'READY')} className="sg-btn ghost">
-                      {tr('Ready', 'Tayyor')}
+                      {tr('Готов', 'Tayyor')}
                     </Button>
                   )}
                   {order.status === 'READY' && (
                     <Button onClick={() => handleStatusChange(order.id, 'SHIPPED')} className="sg-btn ghost">
-                      {tr('Ship', "Jo'natish")}
+                      {tr('Отправить', "Jo'natish")}
                     </Button>
                   )}
                   {order.status === 'SHIPPED' && (
                     <Button onClick={() => handleStatusChange(order.id, 'DELIVERED')} className="sg-btn ghost">
-                      {tr('Delivered', 'Yetkazildi')}
+                      {tr('Доставлен', 'Yetkazildi')}
                     </Button>
                   )}
                   {order.status === 'DELIVERED' && (
                     <Button onClick={() => handleStatusChange(order.id, 'COMPLETED')} className="sg-btn primary">
-                      {tr('Complete', 'Yakunlash')}
+                      {tr('Завершить', 'Yakunlash')}
                     </Button>
                   )}
                 </div>
@@ -145,7 +145,7 @@ export default function Orders() {
             </article>
           ))}
 
-          {data?.items?.length === 0 && <p className="sg-subtitle">{tr('No orders', "Buyurtmalar yo'q")}</p>}
+          {data?.items?.length === 0 && <p className="sg-subtitle">{tr('Заказов нет', "Buyurtmalar yo'q")}</p>}
         </div>
       )}
     </section>

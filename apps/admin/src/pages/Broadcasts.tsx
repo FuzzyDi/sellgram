@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -46,7 +46,10 @@ export default function Broadcasts() {
   }, []);
 
   useEffect(() => {
-    if (storeId) loadCampaigns(storeId);
+    if (storeId) {
+      setSelectedCustomerIds([]);
+      loadCampaigns(storeId);
+    }
   }, [storeId]);
 
   const filteredCustomers = useMemo(() => customers.filter((c) => c?.telegramId), [customers]);
@@ -173,7 +176,7 @@ export default function Broadcasts() {
             </div>
           ))}
 
-          {campaigns.length === 0 && <p className="sg-subtitle">{tr('Рассылок пока нет', 'Hali xabarnomalar yo‘q')}</p>}
+          {campaigns.length === 0 && <p className="sg-subtitle">{tr('Рассылок пока нет', "Hali xabarnomalar yo'q")}</p>}
         </article>
       </div>
     </section>

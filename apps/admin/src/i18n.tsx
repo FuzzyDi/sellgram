@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+﻿import React, { createContext, useContext, useMemo, useState } from 'react';
 
 export type Lang = 'ru' | 'uz';
 
@@ -15,7 +15,6 @@ const dict = {
     broadcasts: 'Рассылки',
     settings: 'Настройки',
     plans: 'Тарифы',
-    system_admin: 'Системный админ',
     loading: 'Загрузка...',
     sign_out: 'Выйти',
     language: 'Язык',
@@ -30,7 +29,6 @@ const dict = {
     broadcasts: 'Xabarnomalar',
     settings: 'Sozlamalar',
     plans: 'Tariflar',
-    system_admin: 'Tizim admini',
     loading: 'Yuklanmoqda...',
     sign_out: 'Chiqish',
     language: 'Til',
@@ -67,7 +65,7 @@ export function AdminI18nProvider({ children }: { children: React.ReactNode }) {
       lang,
       locale: lang === 'uz' ? 'uz-UZ' : 'ru-RU',
       setLang,
-      t: (key: Key) => dict[lang][key],
+      t: (key: Key) => (lang === 'uz' ? dict.uz[key] : dict.ru[key]),
       tr: (ru: string, uz: string) => (lang === 'uz' ? uz : ru),
     }),
     [lang]
