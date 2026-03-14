@@ -31,6 +31,7 @@ export default function SystemAdmin() {
   const [activitySearch, setActivitySearch] = useState('');
   const [activityDateFrom, setActivityDateFrom] = useState('');
   const [activityDateTo, setActivityDateTo] = useState('');
+  const [tenantPlanExpires, setTenantPlanExpires] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
 
   const statusLabel = useMemo(
@@ -53,6 +54,12 @@ export default function SystemAdmin() {
   );
 
   const formatMoney = (value: number | string | null | undefined) => `${Number(value || 0).toLocaleString(locale)} UZS`;
+  const toDateInput = (value?: string | null) => {
+    if (!value) return '';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return '';
+    return dt.toISOString().slice(0, 10);
+  };
 
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
@@ -92,9 +99,16 @@ export default function SystemAdmin() {
       setDashboard(d);
       setHealth(h);
       setActivity(Array.isArray(a) ? a : []);
-      setTenants(Array.isArray(t?.items) ? t.items : []);
+      const tenantItems = Array.isArray(t?.items) ? t.items : [];
+      setTenants(tenantItems);
       setStores(Array.isArray(s?.items) ? s.items : []);
       setInvoices(Array.isArray(inv?.items) ? inv.items : []);
+      setTenantPlanExpires(
+        tenantItems.reduce((acc: Record<string, string>, tenant: any) => {
+          acc[tenant.id] = toDateInput(tenant.planExpiresAt);
+          return acc;
+        }, {})
+      );
     } catch (err: any) {
       clearSystemToken();
       setLoggedIn(false);
@@ -135,7 +149,8 @@ export default function SystemAdmin() {
 
   async function setPlan(tenantId: string, plan: 'FREE' | 'PRO' | 'BUSINESS') {
     try {
-      await systemApi.setTenantPlan(tenantId, plan);
+      const expires = tenantPlanExpires[tenantId]?.trim();
+      await systemApi.setTenantPlan(tenantId, plan, expires || undefined);
       await load();
       showNotice('success', tr('\u0422\u0430\u0440\u0438\u0444 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D', 'Tarif yangilandi'));
     } catch (err: any) {
@@ -413,6 +428,16 @@ export default function SystemAdmin() {
                   <span className="sg-badge" style={{ background: '#eef2ff', color: '#3730a3' }}>{tenant.plan}</span>
                 </div>
                 <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <input
+                    type="date"
+                    value={tenantPlanExpires[tenant.id] || ''}
+                    onChange={(e) => setTenantPlanExpires((prev) => ({ ...prev, [tenant.id]: e.target.value }))}
+                    className="border rounded-lg px-3 py-2 text-sm"
+                    title={tr('\u0414\u0430\u0442\u0430 \u043E\u043A\u043E\u043D\u0447\u0430\u043D\u0438\u044F \u0442\u0430\u0440\u0438\u0444\u0430', 'Tarif tugash sanasi')}
+                  />
+                  <Button onClick={() => setTenantPlanExpires((prev) => ({ ...prev, [tenant.id]: '' }))} className="sg-btn ghost">
+                    {tr('\u0411\u0435\u0437 \u0441\u0440\u043E\u043A\u0430', 'Muddatsiz')}
+                  </Button>
                   <Button onClick={() => setPlan(tenant.id, 'FREE')} className="sg-btn ghost">FREE</Button>
                   <Button onClick={() => setPlan(tenant.id, 'PRO')} className="sg-btn ghost">PRO</Button>
                   <Button onClick={() => setPlan(tenant.id, 'BUSINESS')} className="sg-btn ghost">BUSINESS</Button>
