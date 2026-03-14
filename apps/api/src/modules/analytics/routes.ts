@@ -71,6 +71,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         },
         customers: {
           total: Math.max(totalCustomers, customersFromOrders.length),
+          fromOrders: customersFromOrders.length,
           newThisWeek: newCustomersWeek,
           repeatRate: totalCustomers > 0 ? Math.round((repeatCustomers / totalCustomers) * 100) : 0,
         },
@@ -117,10 +118,11 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       const product = products.find((p: any) => p.id === tp.productId);
       const fallback = names.find((n: any) => n.productId === tp.productId);
       return {
+        productId: tp.productId,
         product,
         productName: product?.name || fallback?.name || '-',
-        totalQty: tp._sum.qty,
-        totalRevenue: Number(tp._sum.total),
+        totalQty: Number(tp._sum.qty) || 0,
+        totalRevenue: Number(tp._sum.total) || 0,
       };
     });
 

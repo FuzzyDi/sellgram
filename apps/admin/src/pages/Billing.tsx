@@ -61,8 +61,9 @@ export default function Billing() {
     return code;
   };
 
-  const getLimits = (plan: any) => {
-    const limits = plan?.limits ?? plan ?? {};
+  const getLimits = (plan: any, isCurrent: boolean) => {
+    const currentPlanLimits = isCurrent ? sub?.planDetails?.limits : null;
+    const limits = { ...(currentPlanLimits || {}), ...(plan?.limits || plan || {}) };
     return {
       maxStores: limits.maxStores ?? limits.stores ?? limits.storeLimit ?? null,
       maxProducts: limits.maxProducts ?? limits.products ?? limits.productLimit ?? null,
@@ -70,6 +71,19 @@ export default function Billing() {
       maxDeliveryZones: limits.maxDeliveryZones ?? limits.deliveryZones ?? limits.zoneLimit ?? null,
     };
   };
+
+  const planEntries = useMemo<[string, any][]>(() => {
+    const source = plans?.plans ?? plans?.items ?? plans;
+    if (Array.isArray(source)) {
+      return source
+        .map((item: any) => [item?.code || item?.plan || item?.id, item] as [string, any])
+        .filter(([code]) => Boolean(code));
+    }
+    if (source && typeof source === 'object') {
+      return Object.entries(source);
+    }
+    return [];
+  }, [plans]);
 
   const handleUpgrade = async (plan: string) => {
     setSubmitting(true);
@@ -182,15 +196,15 @@ export default function Billing() {
       <section>
         <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800 }}>{tr('Выберите тариф', 'Tarifni tanlang')}</h3>
         <div className="sg-grid cols-3">
-          {plans &&
-            Object.entries(plans).map(([code, plan]: [string, any]) => {
+          {planEntries.map(([code, plan]: [string, any]) => {
               const isCurrent = code === currentPlan;
-              const limits = getLimits(plan);
+              const limits = getLimits(plan, isCurrent);
+              const price = Number(plan?.price ?? plan?.priceMonthly ?? 0);
               return (
                 <div key={code} className="sg-card" style={{ borderColor: isCurrent ? planColors[code] : '#dfe7e2' }}>
                   <div style={{ fontSize: 13, color: '#607167' }}>{planLabel(code)}</div>
-                  <div style={{ fontSize: 34, fontWeight: 900, marginTop: 4, color: planColors[code] }}>{plan.price > 0 ? plan.price.toLocaleString() : 0}</div>
-                  <div style={{ marginTop: 2, fontSize: 13, color: '#607167' }}>{plan.price > 0 ? tr('UZS / month', "so'm / oy") : tr('Free', 'Bepul')}</div>
+                  <div style={{ fontSize: 34, fontWeight: 900, marginTop: 4, color: planColors[code] }}>{price > 0 ? price.toLocaleString() : 0}</div>
+                  <div style={{ marginTop: 2, fontSize: 13, color: '#607167' }}>{price > 0 ? tr('UZS / month', "so'm / oy") : tr('Free', 'Bepul')}</div>
 
                   <ul style={{ marginTop: 10, paddingLeft: 16, color: '#4f5f56', fontSize: 13 }}>
                     {[
@@ -208,7 +222,7 @@ export default function Billing() {
                       <div className="sg-badge" style={{ background: '#eef8f1', color: '#0b6f49' }}>{tr('Текущий', 'Joriy')}</div>
                     ) : (
                       <Button onClick={() => handleUpgrade(code)} disabled={submitting} className="sg-btn primary" style={{ width: '100%' }}>
-                        {plan.price === 0 ? tr('Переключить', "O'tish") : tr('Перейти', 'Yangilash')}
+                        {price === 0 ? tr('Переключить', "O'tish") : tr('Перейти', 'Yangilash')}
                       </Button>
                     )}
                   </div>

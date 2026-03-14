@@ -61,11 +61,21 @@ export default function Dashboard() {
 
   const ordersToday = stats?.orders?.today ?? stats?.ordersToday ?? 0;
   const revenueMonth = stats?.revenue?.month ?? stats?.revenueMonth ?? 0;
-  const totalCustomers = stats?.customers?.total ?? stats?.totalCustomers ?? 0;
+  const totalCustomers = Math.max(
+    stats?.customers?.total ?? 0,
+    stats?.customers?.fromOrders ?? 0,
+    stats?.totalCustomers ?? 0
+  );
   const topProductsDerived = Array.isArray(topProducts)
     ? new Set(topProducts.map((p: any) => p?.product?.id || p?.productId || p?.id || p?.productName || p?.name).filter(Boolean)).size
     : 0;
   const totalProducts = Math.max(stats?.products?.total ?? stats?.totalProducts ?? 0, topProductsDerived);
+
+  const resolveProductName = (p: any, index: number) => {
+    const raw = p?.product?.name ?? p?.productName ?? p?.name ?? '';
+    const normalized = typeof raw === 'string' ? raw.trim() : '';
+    return normalized || `${tr('\u0422\u043E\u0432\u0430\u0440', 'Mahsulot')} #${index + 1}`;
+  };
 
   if (loading) {
     return (
@@ -167,7 +177,7 @@ export default function Dashboard() {
               {topProducts.slice(0, 7).map((p: any, i: number) => (
                 <tr key={`${p.id || p.name || p.productName}-${i}`}>
                   <td>{i + 1}</td>
-                  <td>{p.product?.name || p.productName || p.name || '-'}</td>
+                  <td>{resolveProductName(p, i)}</td>
                   <td>{Number(p.totalRevenue || p.revenue || 0).toLocaleString()} UZS</td>
                 </tr>
               ))}
