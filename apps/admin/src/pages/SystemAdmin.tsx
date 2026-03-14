@@ -25,6 +25,7 @@ export default function SystemAdmin() {
 
   const [invoiceStatus, setInvoiceStatus] = useState<InvoiceStatus | ''>('');
   const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
 
   const [activityType, setActivityType] = useState<ActivityType | ''>('');
   const [activityTarget, setActivityTarget] = useState<ActivityTarget | ''>('');
@@ -66,6 +67,13 @@ export default function SystemAdmin() {
     setTimeout(() => setNotice(null), 3200);
   }
 
+  const pendingInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === 'PENDING'), [invoices]);
+  const pendingInvoiceIds = useMemo(() => pendingInvoices.map((invoice) => invoice.id), [pendingInvoices]);
+  const selectedPendingCount = useMemo(
+    () => selectedInvoiceIds.filter((id) => pendingInvoiceIds.includes(id)).length,
+    [selectedInvoiceIds, pendingInvoiceIds]
+  );
+
   async function load() {
     setLoading(true);
     try {
@@ -103,6 +111,7 @@ export default function SystemAdmin() {
       setTenants(tenantItems);
       setStores(Array.isArray(s?.items) ? s.items : []);
       setInvoices(Array.isArray(inv?.items) ? inv.items : []);
+      setSelectedInvoiceIds((prev) => prev.filter((id) => (Array.isArray(inv?.items) ? inv.items : []).some((x: any) => x.id === id)));
       setTenantPlanExpires(
         tenantItems.reduce((acc: Record<string, string>, tenant: any) => {
           acc[tenant.id] = toDateInput(tenant.planExpiresAt);
@@ -167,6 +176,52 @@ export default function SystemAdmin() {
     } catch (err: any) {
       showNotice('error', err.message);
     }
+  }
+
+  function toggleInvoiceSelection(invoiceId: string) {
+    setSelectedInvoiceIds((prev) => (prev.includes(invoiceId) ? prev.filter((id) => id !== invoiceId) : [...prev, invoiceId]));
+  }
+
+  function toggleSelectAllPendingInvoices() {
+    setSelectedInvoiceIds((prev) => {
+      const allSelected = pendingInvoiceIds.length > 0 && pendingInvoiceIds.every((id) => prev.includes(id));
+      if (allSelected) return prev.filter((id) => !pendingInvoiceIds.includes(id));
+      const merged = new Set([...prev, ...pendingInvoiceIds]);
+      return Array.from(merged);
+    });
+  }
+
+  async function moderateSelectedInvoices(action: 'confirm' | 'reject') {
+    const ids = selectedInvoiceIds.filter((id) => pendingInvoiceIds.includes(id));
+    if (ids.length === 0) {
+      showNotice('info', tr('\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0447\u0435\u0442\u0430 \u0441 \u0441\u0442\u0430\u0442\u0443\u0441\u043E\u043C \u041E\u0436\u0438\u0434\u0430\u0435\u0442', "Avval 'Kutilmoqda' statusidagi invoicelarni tanlang"));
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      ids.map((id) => (action === 'confirm' ? systemApi.confirmInvoice(id) : systemApi.rejectInvoice(id)))
+    );
+    const successCount = results.filter((r) => r.status === 'fulfilled').length;
+    const failedCount = results.length - successCount;
+    setSelectedInvoiceIds((prev) => prev.filter((id) => !ids.includes(id)));
+    await load();
+
+    if (failedCount === 0) {
+      showNotice(
+        'success',
+        action === 'confirm'
+          ? tr('\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E: ' + successCount, 'Tasdiqlandi: ' + successCount)
+          : tr('\u041E\u0442\u043A\u043B\u043E\u043D\u0435\u043D\u043E: ' + successCount, 'Rad etildi: ' + successCount)
+      );
+      return;
+    }
+
+    showNotice(
+      'error',
+      action === 'confirm'
+        ? tr('\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E: ' + successCount + ', \u0441 \u043E\u0448\u0438\u0431\u043A\u043E\u0439: ' + failedCount, 'Tasdiqlandi: ' + successCount + ', xato: ' + failedCount)
+        : tr('\u041E\u0442\u043A\u043B\u043E\u043D\u0435\u043D\u043E: ' + successCount + ', \u0441 \u043E\u0448\u0438\u0431\u043A\u043E\u0439: ' + failedCount, 'Rad etildi: ' + successCount + ', xato: ' + failedCount)
+    );
   }
 
   function exportActivityCsv() {
@@ -343,13 +398,31 @@ export default function SystemAdmin() {
               style={{ minWidth: 240 }}
             />
             <Button onClick={() => void load()} className="sg-btn ghost">{tr('Применить', "Qo'llash")}</Button>
+            <Button onClick={toggleSelectAllPendingInvoices} className="sg-btn ghost">
+              {pendingInvoiceIds.length > 0 && pendingInvoiceIds.every((id) => selectedInvoiceIds.includes(id))
+                ? tr('\u0421\u043D\u044F\u0442\u044C \u0432\u044B\u0431\u043E\u0440 pending', 'Pending tanlovini bekor qilish')
+                : tr('\u0412\u044B\u0431\u0440\u0430\u0442\u044C \u0432\u0441\u0435 pending', 'Barcha pendingni tanlash')}
+            </Button>
+            <Button onClick={() => void moderateSelectedInvoices('confirm')} className="sg-btn primary">
+              {tr('\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044C \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u044B\u0435', 'Tanlanganlarni tasdiqlash')} ({selectedPendingCount})
+            </Button>
+            <Button onClick={() => void moderateSelectedInvoices('reject')} className="sg-btn danger">
+              {tr('\u041E\u0442\u043A\u043B\u043E\u043D\u0438\u0442\u044C \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u044B\u0435', 'Tanlanganlarni rad etish')} ({selectedPendingCount})
+            </Button>
           </div>
 
           <div className="sg-grid" style={{ marginTop: 12, maxHeight: 340, overflow: 'auto' }}>
             {invoices.map((invoice) => (
               <div key={invoice.id} className="sg-card soft" style={{ padding: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <p style={{ margin: 0, fontWeight: 700 }}>{invoice.tenant?.name || invoice.tenantId}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedInvoiceIds.includes(invoice.id)}
+                      onChange={() => toggleInvoiceSelection(invoice.id)}
+                    />
+                    <p style={{ margin: 0, fontWeight: 700 }}>{invoice.tenant?.name || invoice.tenantId}</p>
+                  </div>
                   <span className="sg-badge" style={{ background: '#f3f4f6', color: '#374151' }}>{statusLabel[invoice.status as InvoiceStatus] || invoice.status}</span>
                 </div>
                 <p style={{ margin: '6px 0 0', fontWeight: 700 }}>{formatMoney(invoice.amount)}</p>
