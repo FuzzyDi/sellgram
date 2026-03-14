@@ -34,6 +34,9 @@ export default function SystemAdmin() {
   const [activityDateTo, setActivityDateTo] = useState('');
   const [tenantPlanExpires, setTenantPlanExpires] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
+  const [reminderEnabled, setReminderEnabled] = useState(true);
+  const [reminderDaysInput, setReminderDaysInput] = useState('7,3,1');
+  const [reminderSaving, setReminderSaving] = useState(false);
 
   const statusLabel = useMemo(
     () => ({
@@ -106,6 +109,8 @@ export default function SystemAdmin() {
 
       setDashboard(d);
       setHealth(h);
+      setReminderEnabled(Boolean(h?.subscriptionReminders?.enabled));
+      setReminderDaysInput(Array.isArray(h?.subscriptionReminders?.days) ? h.subscriptionReminders.days.join(',') : '7,3,1');
       setActivity(Array.isArray(a) ? a : []);
       const tenantItems = Array.isArray(t?.items) ? t.items : [];
       setTenants(tenantItems);
@@ -156,6 +161,35 @@ export default function SystemAdmin() {
     window.location.hash = '/';
   }
 
+
+  function parseReminderDaysInput(input: string): number[] {
+    const parsed = input
+      .split(',')
+      .map((x) => Number(x.trim()))
+      .filter((x) => Number.isInteger(x) && x >= 1 && x <= 30);
+    return Array.from(new Set(parsed)).sort((a, b) => b - a);
+  }
+
+  async function saveReminderSettings() {
+    const days = parseReminderDaysInput(reminderDaysInput);
+    if (days.length === 0) {
+      showNotice('error', tr('Укажите дни через запятую, например: 7,3,1', 'Kunlarni vergul bilan kiriting, masalan: 7,3,1'));
+      return;
+    }
+
+    setReminderSaving(true);
+    try {
+      const data = await systemApi.updateReminderSettings({ enabled: reminderEnabled, days });
+      setReminderEnabled(Boolean(data?.enabled));
+      setReminderDaysInput(Array.isArray(data?.days) ? data.days.join(',') : days.join(','));
+      await load();
+      showNotice('success', tr('Настройки напоминаний сохранены', 'Eslatma sozlamalari saqlandi'));
+    } catch (err: any) {
+      showNotice('error', err.message || 'Failed to save reminder settings');
+    } finally {
+      setReminderSaving(false);
+    }
+  }
   async function setPlan(tenantId: string, plan: 'FREE' | 'PRO' | 'BUSINESS') {
     try {
       const expires = tenantPlanExpires[tenantId]?.trim();
@@ -385,6 +419,27 @@ export default function SystemAdmin() {
                 ? health.subscriptionReminders.days.join(', ')
                 : '-'}
             </div>
+          </div>
+          <div className="sg-card soft" style={{ padding: 12, gridColumn: '1 / -1' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+                <input type="checkbox" checked={reminderEnabled} onChange={(e) => setReminderEnabled(e.target.checked)} />
+                {tr('Включить напоминания', 'Eslatmalarni yoqish')}
+              </label>
+              <input
+                value={reminderDaysInput}
+                onChange={(e) => setReminderDaysInput(e.target.value)}
+                className="border rounded-lg px-3 py-2 text-sm"
+                style={{ minWidth: 220 }}
+                placeholder="7,3,1"
+              />
+              <Button onClick={() => void saveReminderSettings()} className="sg-btn primary" disabled={reminderSaving}>
+                {reminderSaving ? tr('Сохраняем...', 'Saqlanmoqda...') : tr('Сохранить', 'Saqlash')}
+              </Button>
+            </div>
+            <p className="sg-subtitle" style={{ marginTop: 8 }}>
+              {tr('Дни через запятую, 1..30', 'Kunlar vergul bilan, 1..30')}
+            </p>
           </div>
         </div>
       </section>

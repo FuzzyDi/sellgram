@@ -58,6 +58,12 @@ export const systemApi = {
   invoices: (params?: string) => systemRequest<any>(`/invoices${params ? `?${params}` : ''}`),
   confirmInvoice: (id: string) => systemRequest<any>(`/invoices/${id}/confirm`, { method: 'PATCH' }),
   rejectInvoice: (id: string) => systemRequest<any>(`/invoices/${id}/reject`, { method: 'PATCH' }),
+  reminderSettings: () => systemRequest<any>('/settings/reminders'),
+  updateReminderSettings: (payload: { enabled?: boolean; days?: number[] }) =>
+    systemRequest<any>('/settings/reminders', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
   setTenantPlan: (id: string, plan: string, planExpiresAt?: string) =>
     systemRequest<any>(`/tenants/${id}/plan`, {
       method: 'PATCH',

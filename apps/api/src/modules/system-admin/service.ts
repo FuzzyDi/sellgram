@@ -2,6 +2,80 @@ import bcrypt from 'bcrypt';
 import prisma from '../../lib/prisma.js';
 import { signSystemToken } from '../../lib/system-jwt.js';
 import { getConfig } from '../../config/index.js';
+const SUBSCRIPTION_REMINDER_SETTINGS_KEY = 'subscription_reminders';
+
+type SubscriptionReminderSettings = {
+  enabled: boolean;
+  days: number[];
+};
+
+function parseReminderDays(raw: unknown): number[] {
+  const source = typeof raw === 'string' ? raw : '';
+  const parsed = source
+    .split(',')
+    .map((x) => Number(x.trim()))
+    .filter((x) => Number.isInteger(x) && x >= 1 && x <= 30);
+  return Array.from(new Set(parsed)).sort((a, b) => b - a);
+}
+
+function normalizeReminderDays(days: unknown): number[] {
+  const arr = Array.isArray(days) ? days : [];
+  const parsed = arr
+    .map((x) => Number(x))
+    .filter((x) => Number.isInteger(x) && x >= 1 && x <= 30);
+  return Array.from(new Set(parsed)).sort((a, b) => b - a);
+}
+
+export async function getSystemSubscriptionReminderSettings(): Promise<SubscriptionReminderSettings> {
+  const cfg = getConfig();
+  const fallback: SubscriptionReminderSettings = {
+    enabled: cfg.SUBSCRIPTION_REMINDER_ENABLED,
+    days: parseReminderDays(cfg.SUBSCRIPTION_REMINDER_DAYS || '7,3,1'),
+  };
+
+  const row = await prisma.systemSetting.findUnique({
+    where: { key: SUBSCRIPTION_REMINDER_SETTINGS_KEY },
+    select: { value: true },
+  });
+  if (!row?.value || typeof row.value !== 'object' || Array.isArray(row.value)) {
+    return fallback;
+  }
+
+  const value = row.value as Record<string, unknown>;
+  const parsedDays = normalizeReminderDays(value.days);
+  return {
+    enabled: typeof value.enabled === 'boolean' ? value.enabled : fallback.enabled,
+    days: parsedDays.length > 0 ? parsedDays : fallback.days,
+  };
+}
+
+export async function updateSystemSubscriptionReminderSettings(input: {
+  enabled?: boolean;
+  days?: number[];
+}): Promise<SubscriptionReminderSettings> {
+  const current = await getSystemSubscriptionReminderSettings();
+  const next: SubscriptionReminderSettings = {
+    enabled: typeof input.enabled === 'boolean' ? input.enabled : current.enabled,
+    days: Array.isArray(input.days) ? normalizeReminderDays(input.days) : current.days,
+  };
+
+  if (next.days.length === 0) {
+    next.days = current.days.length > 0 ? current.days : [7, 3, 1];
+  }
+
+  await prisma.systemSetting.upsert({
+    where: { key: SUBSCRIPTION_REMINDER_SETTINGS_KEY },
+    create: {
+      key: SUBSCRIPTION_REMINDER_SETTINGS_KEY,
+      value: ({ enabled: next.enabled, days: next.days } as any),
+    },
+    update: {
+      value: ({ enabled: next.enabled, days: next.days } as any),
+    },
+  });
+
+  return next;
+}
 
 export async function loginSystemAdmin(input: { email: string; password: string }) {
   const admin = await prisma.systemAdmin.findUnique({ where: { email: input.email } });
@@ -38,7 +112,7 @@ async function logSystemAction(input: {
       actorEmail: input.actorEmail || null,
       targetType: input.targetType,
       targetId: input.targetId,
-      details: input.details || {},
+      details: (input.details || {}) as any,
     },
   });
 }
@@ -105,12 +179,7 @@ export async function getSystemHealth() {
     prisma.invoice.count({ where: { status: 'PENDING', paymentRef: { not: null } } }),
   ]);
 
-  const cfg = getConfig();
-  const reminderDays = (cfg.SUBSCRIPTION_REMINDER_DAYS || '7,3,1')
-    .split(',')
-    .map((x) => Number(x.trim()))
-    .filter((x) => Number.isInteger(x) && x >= 1 && x <= 30)
-    .sort((a, b) => b - a);
+  const reminder = await getSystemSubscriptionReminderSettings();
 
   return {
     status: dbOk ? 'ok' : 'degraded',
@@ -127,8 +196,8 @@ export async function getSystemHealth() {
       pendingInvoices,
     },
     subscriptionReminders: {
-      enabled: cfg.SUBSCRIPTION_REMINDER_ENABLED,
-      days: reminderDays,
+      enabled: reminder.enabled,
+      days: reminder.days,
     },
   };
 }

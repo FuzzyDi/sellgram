@@ -41,3 +41,8 @@ export const systemAdminActivityQuerySchema = z.object({
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional(),
 });
+
+export const systemAdminReminderSettingsUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  days: z.array(z.coerce.number().int().min(1).max(30)).min(1).max(10).optional(),
+});

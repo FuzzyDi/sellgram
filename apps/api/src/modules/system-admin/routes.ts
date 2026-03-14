@@ -5,6 +5,7 @@ import {
   systemAdminIdParamSchema,
   systemAdminInvoiceListQuerySchema,
   systemAdminLoginSchema,
+  systemAdminReminderSettingsUpdateSchema,
   systemAdminStoreListQuerySchema,
   systemAdminTenantListQuerySchema,
   systemAdminUpdateTenantPlanSchema,
@@ -13,6 +14,7 @@ import {
   confirmSystemInvoice,
   getSystemDashboard,
   getSystemHealth,
+  getSystemSubscriptionReminderSettings,
   listPendingSystemInvoices,
   listSystemActivity,
   listSystemInvoices,
@@ -20,9 +22,9 @@ import {
   listSystemTenants,
   loginSystemAdmin,
   rejectSystemInvoice,
+  updateSystemSubscriptionReminderSettings,
   updateSystemTenantPlan,
 } from './service.js';
-
 declare module 'fastify' {
   interface FastifyRequest {
     systemAdmin?: SystemJwtPayload;
@@ -67,6 +69,21 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
     return { success: true, data };
   });
 
+
+  fastify.get('/settings/reminders', { preHandler: [authenticateSystem] }, async () => {
+    const data = await getSystemSubscriptionReminderSettings();
+    return { success: true, data };
+  });
+
+  fastify.patch('/settings/reminders', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const body = systemAdminReminderSettingsUpdateSchema.parse(request.body);
+      const data = await updateSystemSubscriptionReminderSettings(body);
+      return { success: true, data };
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
   fastify.get('/activity', { preHandler: [authenticateSystem] }, async (request, reply) => {
     try {
       const query = systemAdminActivityQuerySchema.parse(request.query);

@@ -4,7 +4,7 @@ import type { OrderStatusType } from '@sellgram/shared';
 import prisma from '../lib/prisma.js';
 import { decrypt } from '../lib/encrypt.js';
 import { getRedis } from '../lib/redis.js';
-import { getConfig } from '../config/index.js';
+import { getSystemSubscriptionReminderSettings } from '../modules/system-admin/service.js';
 
 interface BotInstance {
   bot: Bot;
@@ -14,14 +14,7 @@ interface BotInstance {
 
 const bots = new Map<string, BotInstance>();
 
-function getSubscriptionReminderDays(): number[] {
-  const raw = getConfig().SUBSCRIPTION_REMINDER_DAYS || '7,3,1';
-  const parsed = raw
-    .split(',')
-    .map((x) => Number(x.trim()))
-    .filter((x) => Number.isInteger(x) && x >= 1 && x <= 30);
-  return Array.from(new Set(parsed)).sort((a, b) => b - a);
-}
+
 
 const STATUS_EMOJI: Record<OrderStatusType, string> = {
   NEW: '\u{1F195}',
@@ -428,7 +421,7 @@ async function completeDeliveredOrder(orderId: string, storeId: string): Promise
   if (customer?.telegramId && bot) {
     try {
       const completionText = tLangByCode(
-        customer.language,
+        undefined,
         `\u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D. \u0411\u0430\u043B\u043B\u044B \u043D\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u044B.`,
         `#${order.orderNumber} buyurtma yakunlandi. Ballar qo'shildi.`
       );
@@ -471,8 +464,9 @@ function getBotInstanceForTenant(tenantId: string): BotInstance | null {
 
 async function remindExpiringSubscriptions(): Promise<void> {
   const now = new Date();
-  const reminderDays = getSubscriptionReminderDays();
-  if (reminderDays.length === 0) return;
+  const reminder = await getSystemSubscriptionReminderSettings();
+  if (!reminder.enabled || reminder.days.length === 0) return;
+  const reminderDays = reminder.days;
 
   const maxReminderDay = Math.max(...reminderDays);
   const until = new Date(now.getTime() + maxReminderDay * 24 * 60 * 60 * 1000);
@@ -513,7 +507,7 @@ async function remindExpiringSubscriptions(): Promise<void> {
         adminTelegramId: { not: null },
         isActive: true,
       },
-      select: { adminTelegramId: true, language: true },
+      select: { adminTelegramId: true },
     });
 
     if (admins.length === 0) continue;
@@ -522,13 +516,13 @@ async function remindExpiringSubscriptions(): Promise<void> {
       if (!admin.adminTelegramId) continue;
 
       const renewHint = tLangByCode(
-        admin.language,
+        undefined,
         '\u041F\u0440\u043E\u0434\u043B\u0438\u0442\u0435 \u0442\u0430\u0440\u0438\u0444 \u0432 \u043F\u0430\u043D\u0435\u043B\u0438: \u0422\u0430\u0440\u0438\u0444\u044B -> \u0412\u044B\u0431\u0440\u0430\u0442\u044C \u0442\u0430\u0440\u0438\u0444 -> \u041E\u043F\u043B\u0430\u0442\u0430.',
         "Tarifni panelda uzaytiring: Tariflar -> Tarifni tanlash -> To'lov."
       );
 
       const text = tLangByCode(
-        admin.language,
+        undefined,
         `\u26A0\uFE0F \u0422\u0430\u0440\u0438\u0444 ${tenant.plan} \u0434\u043B\u044F \u043C\u0430\u0433\u0430\u0437\u0438\u043D\u0430 "${tenant.name}" \u0438\u0441\u0442\u0435\u043A\u0430\u0435\u0442 \u0447\u0435\u0440\u0435\u0437 ${daysLeft} \u0434\u043D.\n\u0414\u0430\u0442\u0430 \u043E\u043A\u043E\u043D\u0447\u0430\u043D\u0438\u044F: ${tenant.planExpiresAt.toLocaleDateString('ru-RU')}\n\n${renewHint}`,
         `\u26A0\uFE0F "${tenant.name}" do'koni uchun ${tenant.plan} tarifi ${daysLeft} kundan so'ng tugaydi.\nTugash sanasi: ${tenant.planExpiresAt.toLocaleDateString('uz-UZ')}\n\n${renewHint}`
       );
@@ -586,10 +580,8 @@ export async function initBotManager(fastify: FastifyInstance): Promise<void> {
   setInterval(() => void autoCompleteDelivered(), 30 * 60 * 1000);
   setTimeout(() => void autoCompleteDelivered(), 10_000);
 
-  if (getConfig().SUBSCRIPTION_REMINDER_ENABLED) {
-    setInterval(() => void remindExpiringSubscriptions(), 60 * 60 * 1000);
-    setTimeout(() => void remindExpiringSubscriptions(), 30_000);
-  }
+  setInterval(() => void remindExpiringSubscriptions(), 60 * 60 * 1000);
+  setTimeout(() => void remindExpiringSubscriptions(), 30_000);
 }
 
 export async function notifyOrderStatus(storeId: string, orderId: string, newStatus: OrderStatusType): Promise<void> {
@@ -602,7 +594,7 @@ export async function notifyOrderStatus(storeId: string, orderId: string, newSta
   });
   if (!order?.customer?.telegramId) return;
 
-  const lang = order.customer.language;
+  const lang = undefined;
   const textByStatus: Partial<Record<OrderStatusType, string>> = {
     CONFIRMED: tLangByCode(lang, `\u2705 \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D.`, `\u2705 #${order.orderNumber} buyurtma tasdiqlandi.`),
     PREPARING: tLangByCode(lang, `\u{1F468}\u200D\u{1F373} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0433\u043E\u0442\u043E\u0432\u0438\u0442\u0441\u044F.`, `\u{1F468}\u200D\u{1F373} #${order.orderNumber} buyurtma tayyorlanmoqda.`),
@@ -644,7 +636,7 @@ export async function notifyNewOrder(storeId: string, order: any): Promise<void>
       adminTelegramId: { not: null },
       isActive: true,
     },
-    select: { adminTelegramId: true, language: true },
+    select: { adminTelegramId: true },
   });
 
   if (admins.length === 0) return;
@@ -660,7 +652,7 @@ export async function notifyNewOrder(storeId: string, order: any): Promise<void>
 
   for (const admin of admins) {
     if (!admin.adminTelegramId) continue;
-    const lang = admin.language;
+    const lang = undefined;
 
     const text = tLangByCode(
       lang,
