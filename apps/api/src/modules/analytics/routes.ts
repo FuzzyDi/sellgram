@@ -25,6 +25,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       totalProducts,
       newCustomersWeek,
       pendingOrders,
+      soldProductIds,
     ] = await Promise.all([
       prisma.order.count({ where: { tenantId } }),
       prisma.order.count({ where: { tenantId, createdAt: { gte: today } } }),
@@ -52,12 +53,25 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       prisma.product.count({ where: { tenantId } }),
       prisma.customer.count({ where: { tenantId, createdAt: { gte: weekAgo } } }),
       prisma.order.count({ where: { tenantId, status: 'NEW' } }),
+      prisma.orderItem.findMany({
+        where: {
+          order: {
+            tenantId,
+            status: { in: ['COMPLETED', 'DELIVERED'] },
+          },
+        },
+        distinct: ['productId'],
+        select: { productId: true },
+      }),
     ]);
 
     // Repeat customers
     const repeatCustomers = await prisma.customer.count({
       where: { tenantId, ordersCount: { gt: 1 } },
     });
+
+    const soldProductsCount = soldProductIds.length;
+    const productsTotal = Math.max(totalProducts, soldProductsCount);
 
     return {
       success: true,
@@ -76,7 +90,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           repeatRate: totalCustomers > 0 ? Math.round((repeatCustomers / totalCustomers) * 100) : 0,
         },
         products: {
-          total: totalProducts,
+          total: productsTotal,
         },
       },
     };

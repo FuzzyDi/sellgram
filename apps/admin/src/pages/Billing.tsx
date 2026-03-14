@@ -61,14 +61,24 @@ export default function Billing() {
     return code;
   };
 
-  const getLimits = (plan: any, isCurrent: boolean) => {
+  const planLimitFallbacks: Record<string, { maxStores: number; maxProducts: number; maxOrdersPerMonth: number; maxDeliveryZones: number }> = {
+  FREE: { maxStores: 1, maxProducts: 30, maxOrdersPerMonth: 50, maxDeliveryZones: 2 },
+  PRO: { maxStores: 3, maxProducts: 500, maxOrdersPerMonth: 1000, maxDeliveryZones: 10 },
+  BUSINESS: { maxStores: 10, maxProducts: -1, maxOrdersPerMonth: -1, maxDeliveryZones: -1 },
+};
+
+  const getLimits = (code: string, plan: any, isCurrent: boolean) => {
     const currentPlanLimits = isCurrent ? sub?.planDetails?.limits : null;
-    const limits = { ...(currentPlanLimits || {}), ...(plan?.limits || plan || {}) };
+    const fallback = planLimitFallbacks[code] || null;
+    const limits = { ...(fallback || {}), ...(currentPlanLimits || {}), ...(plan?.limits || plan || {}) };
+
     return {
-      maxStores: limits.maxStores ?? limits.stores ?? limits.storeLimit ?? null,
-      maxProducts: limits.maxProducts ?? limits.products ?? limits.productLimit ?? null,
-      maxOrdersPerMonth: limits.maxOrdersPerMonth ?? limits.ordersPerMonth ?? limits.orderLimit ?? null,
-      maxDeliveryZones: limits.maxDeliveryZones ?? limits.deliveryZones ?? limits.zoneLimit ?? null,
+      maxStores: limits.maxStores ?? limits.stores ?? limits.storeLimit ?? fallback?.maxStores ?? null,
+      maxProducts: limits.maxProducts ?? limits.products ?? limits.productLimit ?? fallback?.maxProducts ?? null,
+      maxOrdersPerMonth:
+        limits.maxOrdersPerMonth ?? limits.ordersPerMonth ?? limits.orderLimit ?? fallback?.maxOrdersPerMonth ?? null,
+      maxDeliveryZones:
+        limits.maxDeliveryZones ?? limits.deliveryZones ?? limits.zoneLimit ?? fallback?.maxDeliveryZones ?? null,
     };
   };
 
@@ -232,7 +242,7 @@ export default function Billing() {
         <div className="sg-grid cols-3">
           {planEntries.map(([code, plan]: [string, any]) => {
               const isCurrent = code === currentPlan;
-              const limits = getLimits(plan, isCurrent);
+              const limits = getLimits(code, plan, isCurrent);
               const price = Number(plan?.price ?? plan?.priceMonthly ?? 0);
               return (
                 <div key={code} className="sg-card" style={{ borderColor: isCurrent ? planColors[code] : '#dfe7e2' }}>
