@@ -13,27 +13,27 @@ interface BotInstance {
 const bots = new Map<string, BotInstance>();
 
 const STATUS_EMOJI: Record<OrderStatusType, string> = {
-  NEW: 'NEW',
-  CONFIRMED: 'CONF',
-  PREPARING: 'PREP',
-  READY: 'READY',
-  SHIPPED: 'SHIP',
-  DELIVERED: 'DONE',
-  COMPLETED: 'COMP',
-  CANCELLED: 'CANC',
-  REFUNDED: 'REF',
+  NEW: '\u{1F195}',
+  CONFIRMED: '\u2705',
+  PREPARING: '\u{1F468}\u200D\u{1F373}',
+  READY: '\u{1F4E6}',
+  SHIPPED: '\u{1F69A}',
+  DELIVERED: '\u{1F4EC}',
+  COMPLETED: '\u{1F389}',
+  CANCELLED: '\u274C',
+  REFUNDED: '\u{1F4B8}',
 };
 
 const STATUS_LABEL_EN: Record<OrderStatusType, string> = {
-  NEW: 'New',
-  CONFIRMED: 'Confirmed',
-  PREPARING: 'Preparing',
-  READY: 'Ready',
-  SHIPPED: 'Shipped',
-  DELIVERED: 'Delivered',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-  REFUNDED: 'Refunded',
+  NEW: '\u041D\u043E\u0432\u044B\u0439',
+  CONFIRMED: '\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D',
+  PREPARING: '\u0413\u043E\u0442\u043E\u0432\u0438\u0442\u0441\u044F',
+  READY: '\u0413\u043E\u0442\u043E\u0432',
+  SHIPPED: '\u0412 \u043F\u0443\u0442\u0438',
+  DELIVERED: '\u0414\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D',
+  COMPLETED: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043D',
+  CANCELLED: '\u041E\u0442\u043C\u0435\u043D\u0435\u043D',
+  REFUNDED: '\u0412\u043E\u0437\u0432\u0440\u0430\u0442',
 };
 
 const STATUS_LABEL_UZ: Record<OrderStatusType, string> = {
@@ -50,17 +50,17 @@ const STATUS_LABEL_UZ: Record<OrderStatusType, string> = {
 
 const NEXT_STATUS: Partial<Record<OrderStatusType, { status: OrderStatusType; en: string; uz: string }[]>> = {
   NEW: [
-    { status: 'CONFIRMED', en: 'Подтвердить', uz: '? Tasdiqlash' },
-    { status: 'CANCELLED', en: 'Отменить', uz: '? Bekor qilish' },
+    { status: 'CONFIRMED', en: '\u2705 \u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044C', uz: '\u2705 Tasdiqlash' },
+    { status: 'CANCELLED', en: '\u274C \u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C', uz: '\u274C Bekor qilish' },
   ],
-  CONFIRMED: [{ status: 'PREPARING', en: '????? Prepare', uz: '????? Tayyorlash' }],
-  PREPARING: [{ status: 'READY', en: '?? Ready', uz: '?? Tayyor' }],
+  CONFIRMED: [{ status: 'PREPARING', en: '\u{1F468}\u200D\u{1F373} \u0413\u043E\u0442\u043E\u0432\u0438\u0442\u044C', uz: '\u{1F468}\u200D\u{1F373} Tayyorlash' }],
+  PREPARING: [{ status: 'READY', en: '\u{1F4E6} \u0413\u043E\u0442\u043E\u0432', uz: '\u{1F4E6} Tayyor' }],
   READY: [
-    { status: 'SHIPPED', en: '?? Ship', uz: "?? Jo'natish" },
-    { status: 'DELIVERED', en: '?? Delivered', uz: '?? Yetkazildi' },
+    { status: 'SHIPPED', en: '\u{1F69A} \u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C', uz: "\u{1F69A} Jo'natish" },
+    { status: 'DELIVERED', en: '\u{1F4EC} \u0414\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D', uz: '\u{1F4EC} Yetkazildi' },
   ],
-  SHIPPED: [{ status: 'DELIVERED', en: '?? Delivered', uz: '?? Yetkazildi' }],
-  DELIVERED: [{ status: 'COMPLETED', en: '?? Complete', uz: '?? Yakunlash' }],
+  SHIPPED: [{ status: 'DELIVERED', en: '\u{1F4EC} \u0414\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D', uz: '\u{1F4EC} Yetkazildi' }],
+  DELIVERED: [{ status: 'COMPLETED', en: '\u{1F389} \u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044C', uz: '\u{1F389} Yakunlash' }],
 };
 
 function isUzLanguageCode(code?: string | null): boolean {
@@ -132,7 +132,7 @@ async function registerBot(
       await bot.api.setChatMenuButton({
         menu_button: {
           type: 'web_app',
-          text: 'Shop',
+          text: '\u{1F6CD} Do\'kon',
           web_app: { url: resolvedMiniAppUrl },
         },
       });
@@ -141,25 +141,25 @@ async function registerBot(
 
   try {
     await bot.api.setMyCommands([
-      { command: 'start', description: 'Открыть меню' },
-      { command: 'shop', description: 'Открыть магазин' },
-      { command: 'help', description: 'Помощь' },
-      { command: 'orders', description: 'Последние заказы (админ)' },
-      { command: 'stats', description: 'Статистика (админ)' },
+      { command: 'start', description: 'РћС‚РєСЂС‹С‚СЊ РјРµРЅСЋ' },
+      { command: 'shop', description: 'РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ' },
+      { command: 'help', description: 'РџРѕРјРѕС‰СЊ' },
+      { command: 'orders', description: 'РџРѕСЃР»РµРґРЅРёРµ Р·Р°РєР°Р·С‹ (Р°РґРјРёРЅ)' },
+      { command: 'stats', description: 'РЎС‚Р°С‚РёСЃС‚РёРєР° (Р°РґРјРёРЅ)' },
       { command: 'admin', description: 'Link admin: /admin CODE' },
     ]);
   } catch {}
 
   bot.command('start', async (ctx) => {
     const inline = new InlineKeyboard();
-    if (resolvedMiniAppUrl) inline.webApp(tCtx(ctx, 'Открыть магазин', "Do'konni ochish"), resolvedMiniAppUrl);
+    if (resolvedMiniAppUrl) inline.webApp(tCtx(ctx, 'РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ', "Do'konni ochish"), resolvedMiniAppUrl);
 
     const keyboard = new Keyboard();
-    if (resolvedMiniAppUrl) keyboard.webApp(tCtx(ctx, 'Shop', "Do'kon"), resolvedMiniAppUrl).row();
-    keyboard.text('/help');
+    if (resolvedMiniAppUrl) keyboard.webApp(tCtx(ctx, 'РњР°РіР°Р·РёРЅ', "Do'kon"), resolvedMiniAppUrl).row();
+    keyboard.text(tCtx(ctx, 'РџРѕРјРѕС‰СЊ', 'Yordam'));
 
-    await ctx.reply(welcomeMessage || tCtx(ctx, 'Welcome!', "Xush kelibsiz!"), { reply_markup: inline });
-    await ctx.reply(tCtx(ctx, 'Choose action:', 'Amalni tanlang:'), { reply_markup: keyboard.resized().persistent() });
+    await ctx.reply(welcomeMessage || tCtx(ctx, 'Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ SellGram!', "SellGram'ga xush kelibsiz!"), { reply_markup: inline });
+    await ctx.reply(tCtx(ctx, 'Р’С‹Р±РµСЂРёС‚Рµ РґРµР№СЃС‚РІРёРµ:', 'Amalni tanlang:'), { reply_markup: keyboard.resized().persistent() });
 
     if (ctx.from) {
       await prisma.customer.upsert({
@@ -182,11 +182,11 @@ async function registerBot(
 
   bot.command('shop', async (ctx) => {
     if (!resolvedMiniAppUrl) {
-      await ctx.reply(tCtx(ctx, 'Ссылка на магазин еще не настроена.', "Do'kon havolasi hali sozlanmagan."));
+      await ctx.reply(tCtx(ctx, 'РЎСЃС‹Р»РєР° РЅР° РјР°РіР°Р·РёРЅ РµС‰Рµ РЅРµ РЅР°СЃС‚СЂРѕРµРЅР°.', "Do'kon havolasi hali sozlanmagan."));
       return;
     }
-    const kb = new InlineKeyboard().webApp(tCtx(ctx, 'Открыть магазин', "Do'konni ochish"), resolvedMiniAppUrl);
-    await ctx.reply(tCtx(ctx, 'Откройте магазин кнопкой ниже:', "Quyidagi tugma orqali do'konni oching:"), { reply_markup: kb });
+    const kb = new InlineKeyboard().webApp(tCtx(ctx, 'РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ', "Do'konni ochish"), resolvedMiniAppUrl);
+    await ctx.reply(tCtx(ctx, 'РћС‚РєСЂРѕР№С‚Рµ РјР°РіР°Р·РёРЅ РєРЅРѕРїРєРѕР№ РЅРёР¶Рµ:', "Quyidagi tugma orqali do'konni oching:"), { reply_markup: kb });
   });
 
   bot.command('admin', async (ctx) => {
@@ -201,7 +201,7 @@ async function registerBot(
 
     const code = ctx.message?.text?.trim().split(/\s+/)[1];
     if (!code) {
-      await ctx.reply(tCtx(ctx, 'Получите код в админ-панели и отправьте: /admin 123456', "Admin paneldan kod olib yuboring: /admin 123456"));
+      await ctx.reply(tCtx(ctx, 'РџРѕР»СѓС‡РёС‚Рµ РєРѕРґ РІ Р°РґРјРёРЅ-РїР°РЅРµР»Рё Рё РѕС‚РїСЂР°РІСЊС‚Рµ: /admin 123456', "Admin paneldan kod olib yuboring: /admin 123456"));
       return;
     }
 
@@ -215,7 +215,7 @@ async function registerBot(
     });
 
     if (!user) {
-      await ctx.reply(tCtx(ctx, 'Код неверный или просрочен. Сгенерируйте новый код в админ-панели.', "Kod noto'g'ri yoki muddati tugagan. Admin panelda yangisini yarating."));
+      await ctx.reply(tCtx(ctx, 'РљРѕРґ РЅРµРІРµСЂРЅС‹Р№ РёР»Рё РїСЂРѕСЃСЂРѕС‡РµРЅ. РЎРіРµРЅРµСЂРёСЂСѓР№С‚Рµ РЅРѕРІС‹Р№ РєРѕРґ РІ Р°РґРјРёРЅ-РїР°РЅРµР»Рё.', "Kod noto'g'ri yoki muddati tugagan. Admin panelda yangisini yarating."));
       return;
     }
 
@@ -240,7 +240,7 @@ async function registerBot(
   bot.command('orders', async (ctx) => {
     if (!ctx.from) return;
     if (!(await isAdmin(tenantId, BigInt(ctx.from.id)))) {
-      await ctx.reply(tCtx(ctx, 'Admin access required. Use /admin first.', 'Admin ruxsati kerak. Avval /admin yuboring.'));
+      await ctx.reply(tCtx(ctx, '\u041D\u0443\u0436\u0435\u043D \u0434\u043E\u0441\u0442\u0443\u043F \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u0430. \u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043E\u0442\u043F\u0440\u0430\u0432\u044C\u0442\u0435 /admin.', 'Admin ruxsati kerak. Avval /admin yuboring.'));
       return;
     }
 
@@ -252,23 +252,23 @@ async function registerBot(
     });
 
     if (orders.length === 0) {
-      await ctx.reply(tCtx(ctx, 'Пока заказов нет.', "Hozircha buyurtmalar yo'q."));
+      await ctx.reply(tCtx(ctx, 'РџРѕРєР° Р·Р°РєР°Р·РѕРІ РЅРµС‚.', "Hozircha buyurtmalar yo'q."));
       return;
     }
 
     const lines = orders.map((o: any) => {
       const customerName = o.customer.firstName || o.customer.telegramUser || '-';
       const items = o.items.map((i: any) => `${i.name} x${i.qty}`).join(', ');
-      return `${STATUS_EMOJI[o.status as OrderStatusType]} #${o.orderNumber} - ${customerName}\n${items}\n${Number(o.total).toLocaleString()} UZS · ${statusLabel(o.status, ctx.from?.language_code)}`;
+      return `${STATUS_EMOJI[o.status as OrderStatusType]} #${o.orderNumber} - ${customerName}\n${items}\n${Number(o.total).toLocaleString()} UZS В· ${statusLabel(o.status, ctx.from?.language_code)}`;
     });
 
-    await ctx.reply(`${tCtx(ctx, 'Последние заказы', "So'nggi buyurtmalar")}:\n\n${lines.join('\n\n')}`);
+    await ctx.reply(`${tCtx(ctx, 'РџРѕСЃР»РµРґРЅРёРµ Р·Р°РєР°Р·С‹', "So'nggi buyurtmalar")}:\n\n${lines.join('\n\n')}`);
   });
 
   bot.command('stats', async (ctx) => {
     if (!ctx.from) return;
     if (!(await isAdmin(tenantId, BigInt(ctx.from.id)))) {
-      await ctx.reply(tCtx(ctx, 'Admin access required. Use /admin first.', 'Admin ruxsati kerak. Avval /admin yuboring.'));
+      await ctx.reply(tCtx(ctx, '\u041D\u0443\u0436\u0435\u043D \u0434\u043E\u0441\u0442\u0443\u043F \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u0430. \u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043E\u0442\u043F\u0440\u0430\u0432\u044C\u0442\u0435 /admin.', 'Admin ruxsati kerak. Avval /admin yuboring.'));
       return;
     }
 
@@ -287,18 +287,22 @@ async function registerBot(
 
     const message = tCtx(
       ctx,
-      `Stats\n\nToday:\nOrders: ${todayOrders}\nRevenue: ${Number(todayRevenue._sum.total || 0).toLocaleString()} UZS\nNew customers: ${newCustomers}\n\nWeek:\nOrders: ${weekOrders}\nRevenue: ${Number(weekRevenue._sum.total || 0).toLocaleString()} UZS\n\nIn progress: ${pendingOrders}`,
+      `\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430\n\n\u0421\u0435\u0433\u043E\u0434\u043D\u044F:\n\u0417\u0430\u043A\u0430\u0437\u043E\u0432: ${todayOrders}\n\u0412\u044B\u0440\u0443\u0447\u043A\u0430: ${Number(todayRevenue._sum.total || 0).toLocaleString()} UZS\n\u041D\u043E\u0432\u044B\u0445 \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432: ${newCustomers}\n\n\u0417\u0430 7 \u0434\u043D\u0435\u0439:\n\u0417\u0430\u043A\u0430\u0437\u043E\u0432: ${weekOrders}\n\u0412\u044B\u0440\u0443\u0447\u043A\u0430: ${Number(weekRevenue._sum.total || 0).toLocaleString()} UZS\n\n\u0412 \u0440\u0430\u0431\u043E\u0442\u0435: ${pendingOrders}`,
       `Statistika\n\nBugun:\nBuyurtmalar: ${todayOrders}\nTushum: ${Number(todayRevenue._sum.total || 0).toLocaleString()} UZS\nYangi mijozlar: ${newCustomers}\n\nHafta:\nBuyurtmalar: ${weekOrders}\nTushum: ${Number(weekRevenue._sum.total || 0).toLocaleString()} UZS\n\nJarayonda: ${pendingOrders}`
     );
 
     await ctx.reply(message);
   });
 
+  bot.hears(['РџРѕРјРѕС‰СЊ', 'Yordam'], async (ctx) => {
+    await ctx.reply('/help');
+  });
+
   bot.command('help', async (ctx) => {
     await ctx.reply(
       tCtx(
         ctx,
-        'Команды SellGram:\n/start - Открыть магазин\n/shop - Открыть магазин\n/admin <code> - Привязать Telegram\n/orders - Последние заказы\n/stats - Статистика за день/неделю\n/help - Помощь',
+        'РљРѕРјР°РЅРґС‹ SellGram:\n/start - РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ\n/shop - РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ\n/admin <code> - РџСЂРёРІСЏР·Р°С‚СЊ Telegram\n/orders - РџРѕСЃР»РµРґРЅРёРµ Р·Р°РєР°Р·С‹\n/stats - РЎС‚Р°С‚РёСЃС‚РёРєР° Р·Р° РґРµРЅСЊ/РЅРµРґРµР»СЋ\n/help - РџРѕРјРѕС‰СЊ',
         "SellGram buyruqlari:\n/start - Do'konni ochish\n/shop - Do'konni ochish\n/admin <code> - Telegram ulash\n/orders - So'nggi buyurtmalar\n/stats - Kun/hafta statistikasi\n/help - Yordam"
       )
     );
@@ -312,7 +316,7 @@ async function registerBot(
     const newStatus = rawStatus as OrderStatusType;
 
     if (!(await isAdmin(tenantId, BigInt(ctx.from.id)))) {
-      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Нет доступа', "Ruxsat yo'q") });
+      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'РќРµС‚ РґРѕСЃС‚СѓРїР°', "Ruxsat yo'q") });
       return;
     }
 
@@ -321,13 +325,13 @@ async function registerBot(
       include: { items: true, customer: true },
     });
     if (!order) {
-      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Заказ не найден', 'Buyurtma topilmadi') });
+      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Р—Р°РєР°Р· РЅРµ РЅР°Р№РґРµРЅ', 'Buyurtma topilmadi') });
       return;
     }
 
     const allowed = NEXT_STATUS[order.status as OrderStatusType]?.map((s: any) => s.status as OrderStatusType) || [];
     if (!allowed.includes(newStatus)) {
-      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Некорректный переход статуса', "Noto'g'ri status o'tishi") });
+      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РїРµСЂРµС…РѕРґ СЃС‚Р°С‚СѓСЃР°', "Noto'g'ri status o'tishi") });
       return;
     }
 
@@ -352,7 +356,7 @@ async function registerBot(
 
     const updateData: any = { status: newStatus };
     if (newStatus === 'SHIPPED') updateData.trackingNumber = order.trackingNumber || `TRK-${Date.now()}`;
-    if (newStatus === 'CANCELLED') updateData.cancelReason = 'Отменено администратором';
+    if (newStatus === 'CANCELLED') updateData.cancelReason = 'РћС‚РјРµРЅРµРЅРѕ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј';
 
     await prisma.order.update({ where: { id: order.id }, data: updateData });
 
@@ -367,7 +371,7 @@ async function registerBot(
     }
 
     await notifyOrderStatus(storeId, order.id, newStatus);
-    await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Обновлено', 'Yangilandi') });
+    await ctx.answerCallbackQuery({ text: tCtx(ctx, 'РћР±РЅРѕРІР»РµРЅРѕ', 'Yangilandi') });
   });
 
   bot.callbackQuery(/^confirm_received_(.+)$/, async (ctx) => {
@@ -377,14 +381,14 @@ async function registerBot(
     const orderId = match[1];
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order || order.status !== 'DELIVERED') {
-      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Заказ уже обработан', 'Buyurtma allaqachon qayta ishlangan') });
+      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Р—Р°РєР°Р· СѓР¶Рµ РѕР±СЂР°Р±РѕС‚Р°РЅ', 'Buyurtma allaqachon qayta ishlangan') });
       return;
     }
 
     await completeDeliveredOrder(order.id, storeId);
 
-    await ctx.editMessageText((ctx.callbackQuery.message?.text || '') + '\n\nСпасибо. Заказ завершен.').catch(() => {});
-    await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Баллы начислены', "Ball qo'shildi") });
+    await ctx.editMessageText((ctx.callbackQuery.message?.text || '') + '\n\nРЎРїР°СЃРёР±Рѕ. Р—Р°РєР°Р· Р·Р°РІРµСЂС€РµРЅ.').catch(() => {});
+    await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Р‘Р°Р»Р»С‹ РЅР°С‡РёСЃР»РµРЅС‹', "Ball qo'shildi") });
   });
 
   bot.catch((err) => {
@@ -408,7 +412,7 @@ async function completeDeliveredOrder(orderId: string, storeId: string): Promise
   const bot = bots.get(storeId)?.bot;
   if (customer?.telegramId && bot) {
     try {
-      await bot.api.sendMessage(customer.telegramId.toString(), `Order #${order.orderNumber} completed. Баллы начислены.`);
+      await bot.api.sendMessage(customer.telegramId.toString(), `Order #${order.orderNumber} completed. Р‘Р°Р»Р»С‹ РЅР°С‡РёСЃР»РµРЅС‹.`);
     } catch {}
   }
 }
@@ -451,7 +455,7 @@ async function awardLoyaltyPoints(orderId: string): Promise<void> {
       points: pointsEarned,
       balanceAfter: customer.loyaltyPoints,
       orderId,
-      description: `Начислены баллы за заказ #${order.orderNumber}`,
+      description: `РќР°С‡РёСЃР»РµРЅС‹ Р±Р°Р»Р»С‹ Р·Р° Р·Р°РєР°Р· #${order.orderNumber}`,
     },
   });
 }
@@ -484,24 +488,24 @@ export async function notifyOrderStatus(storeId: string, orderId: string, newSta
 
   const lang = order.customer.language;
   const textByStatus: Partial<Record<OrderStatusType, string>> = {
-    CONFIRMED: tLangByCode(lang, `? Заказ #${order.orderNumber} подтвержден.`, `? #${order.orderNumber} buyurtma tasdiqlandi.`),
-    PREPARING: tLangByCode(lang, `????? Заказ #${order.orderNumber} готовится.`, `????? #${order.orderNumber} buyurtma tayyorlanmoqda.`),
-    READY: tLangByCode(lang, `?? Заказ #${order.orderNumber} готов.`, `?? #${order.orderNumber} buyurtma tayyor.`),
-    SHIPPED: tLangByCode(lang, `?? Заказ #${order.orderNumber} в пути.`, `?? #${order.orderNumber} buyurtma yo'lda.`),
-    CANCELLED: tLangByCode(lang, `? Заказ #${order.orderNumber} отменен.`, `? #${order.orderNumber} buyurtma bekor qilindi.`),
-    REFUNDED: tLangByCode(lang, `?? Возврат по заказу #${order.orderNumber} выполнен.`, `?? #${order.orderNumber} buyurtma uchun qaytarish bajarildi.`),
+    CONFIRMED: tLangByCode(lang, `\u2705 \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D.`, `\u2705 #${order.orderNumber} buyurtma tasdiqlandi.`),
+    PREPARING: tLangByCode(lang, `\u{1F468}\u200D\u{1F373} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0433\u043E\u0442\u043E\u0432\u0438\u0442\u0441\u044F.`, `\u{1F468}\u200D\u{1F373} #${order.orderNumber} buyurtma tayyorlanmoqda.`),
+    READY: tLangByCode(lang, `\u{1F4E6} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0433\u043E\u0442\u043E\u0432.`, `\u{1F4E6} #${order.orderNumber} buyurtma tayyor.`),
+    SHIPPED: tLangByCode(lang, `\u{1F69A} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0432 \u043F\u0443\u0442\u0438.`, `\u{1F69A} #${order.orderNumber} buyurtma yo'lda.`),
+    CANCELLED: tLangByCode(lang, `\u274C \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u043E\u0442\u043C\u0435\u043D\u0435\u043D.`, `\u274C #${order.orderNumber} buyurtma bekor qilindi.`),
+    REFUNDED: tLangByCode(lang, `\u{1F4B8} \u0412\u043E\u0437\u0432\u0440\u0430\u0442 \u043F\u043E \u0437\u0430\u043A\u0430\u0437\u0443 #${order.orderNumber} \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D.`, `\u{1F4B8} #${order.orderNumber} buyurtma uchun qaytarish bajarildi.`),
   };
 
   if (newStatus === 'DELIVERED') {
     const kb = new InlineKeyboard().text(
-      tLangByCode(lang, '? Я получил заказ', '? Buyurtmani oldim'),
+      tLangByCode(lang, '\u2705 \u042F \u043F\u043E\u043B\u0443\u0447\u0438\u043B \u0437\u0430\u043A\u0430\u0437', '\u2705 Buyurtmani oldim'),
       `confirm_received_${orderId}`
     );
 
     const deliveredText = tLangByCode(
       lang,
-      `?? Заказ #${order.orderNumber} доставлен.\n\nИтого: ${Number(order.total).toLocaleString()} UZS\n\nПодтвердите получение.`,
-      `?? #${order.orderNumber} buyurtma yetkazildi.\n\nJami: ${Number(order.total).toLocaleString()} UZS\n\nQabulni tasdiqlang.`
+      `\u{1F4EC} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D.\n\n\u0418\u0442\u043E\u0433\u043E: ${Number(order.total).toLocaleString()} UZS\n\n\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0435.`,
+      `\u{1F4EC} #${order.orderNumber} buyurtma yetkazildi.\n\nJami: ${Number(order.total).toLocaleString()} UZS\n\nQabulni tasdiqlang.`
     );
 
     await instance.bot.api.sendMessage(order.customer.telegramId.toString(), deliveredText, { reply_markup: kb });
@@ -531,12 +535,12 @@ export async function notifyNewOrder(storeId: string, order: any): Promise<void>
 
   const customer = await prisma.customer.findUnique({ where: { id: order.customerId } });
   const name = customer
-    ? `${customer.firstName || ''}${customer.lastName ? ` ${customer.lastName}` : ''}`.trim() || `@${customer.telegramUser}` || 'Клиент'
-    : 'Клиент';
+    ? `${customer.firstName || ''}${customer.lastName ? ` ${customer.lastName}` : ''}`.trim() || `@${customer.telegramUser}` || 'РљР»РёРµРЅС‚'
+    : 'РљР»РёРµРЅС‚';
   const phone = customer?.phone;
 
   const items = order.items || [];
-  const itemsList = items.map((i: any) => `• ${i.name} x${i.qty} - ${Number(i.total).toLocaleString()} UZS`).join('\n');
+  const itemsList = items.map((i: any) => `\u2022 ${i.name} x${i.qty} - ${Number(i.total).toLocaleString()} UZS`).join('\n');
 
   for (const admin of admins) {
     if (!admin.adminTelegramId) continue;
@@ -544,13 +548,13 @@ export async function notifyNewOrder(storeId: string, order: any): Promise<void>
 
     const text = tLangByCode(
       lang,
-      `?? Новый заказ #${order.orderNumber}\n\n?? ${name}${phone ? `\n?? ${phone}` : ''}\n\n?? Товары:\n${itemsList}\n\n?? Итого: ${Number(order.total).toLocaleString()} UZS`,
-      `?? Yangi buyurtma #${order.orderNumber}\n\n?? ${name}${phone ? `\n?? ${phone}` : ''}\n\n?? Mahsulotlar:\n${itemsList}\n\n?? Jami: ${Number(order.total).toLocaleString()} UZS`
+      `\u{1F195} \u041D\u043E\u0432\u044B\u0439 \u0437\u0430\u043A\u0430\u0437 #${order.orderNumber}\n\n\u{1F464} ${name}${phone ? `\n\u{1F4DE} ${phone}` : ''}\n\n\u{1F6D2} \u0422\u043E\u0432\u0430\u0440\u044B:\n${itemsList}\n\n\u{1F4B0} \u0418\u0442\u043E\u0433\u043E: ${Number(order.total).toLocaleString()} UZS`,
+      `\u{1F195} Yangi buyurtma #${order.orderNumber}\n\n\u{1F464} ${name}${phone ? `\n\u{1F4DE} ${phone}` : ''}\n\n\u{1F6D2} Mahsulotlar:\n${itemsList}\n\n\u{1F4B0} Jami: ${Number(order.total).toLocaleString()} UZS`
     );
 
     const kb = new InlineKeyboard()
-      .text(tLangByCode(lang, 'Подтвердить', 'Tasdiqlash'), `adm_CONFIRMED_${order.id}`)
-      .text(tLangByCode(lang, 'Отменить', 'Bekor qilish'), `adm_CANCELLED_${order.id}`);
+      .text(tLangByCode(lang, '\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044C', 'Tasdiqlash'), `adm_CONFIRMED_${order.id}`)
+      .text(tLangByCode(lang, '\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C', 'Bekor qilish'), `adm_CANCELLED_${order.id}`);
 
     try {
       await instance.bot.api.sendMessage(admin.adminTelegramId.toString(), text, { reply_markup: kb });
@@ -593,6 +597,7 @@ export function getBotWebhookHandler(storeId: string) {
 export function getBot(storeId: string): Bot | undefined {
   return bots.get(storeId)?.bot;
 }
+
 
 
 
