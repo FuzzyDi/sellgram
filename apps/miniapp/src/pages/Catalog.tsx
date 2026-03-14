@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
@@ -26,13 +26,30 @@ export default function Catalog() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getCatalog()
-      .then((d) => {
-        setCategories(d.categories || []);
-        setProducts(d.products || []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    const load = (isRetry = false) => {
+      api.getCatalog()
+        .then((d) => {
+          if (cancelled) return;
+          setCategories(d.categories || []);
+          setProducts(d.products || []);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          if (!isRetry) {
+            setTimeout(() => load(true), 700);
+            return;
+          }
+          setLoading(false);
+        });
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered = selected ? products.filter((p) => p.category?.id === selected) : products;

@@ -97,6 +97,10 @@ function AppShell() {
       '';
     const initDataFromQuery = params.get('tgWebAppData') || '';
     const effectiveInitData = initData || initDataFromQuery;
+    if (!storeId || !effectiveInitData) {
+      setReady(false);
+      return;
+    }
     setAuthData(effectiveInitData, storeId);
     setReady(true);
   }, [initData, webApp]);
