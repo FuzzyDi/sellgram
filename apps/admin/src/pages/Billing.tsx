@@ -84,18 +84,18 @@ export default function Billing() {
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
       <header>
-        <h2 className="sg-title">{tr('Plans and billing', 'Tariflar va billing')}</h2>
-        <p className="sg-subtitle">{tr('Subscription limits, upgrades and invoice moderation', 'Obuna limitlari, upgrade va invoice moderatsiyasi')}</p>
+        <h2 className="sg-title">{tr('\u0422\u0430\u0440\u0438\u0444\u044b \u0438 \u043e\u043f\u043b\u0430\u0442\u0430', "Tariflar va to'lovlar")}</h2>
+        <p className="sg-subtitle">{tr('\u041b\u0438\u043c\u0438\u0442\u044b, \u0441\u043c\u0435\u043d\u0430 \u0442\u0430\u0440\u0438\u0444\u0430 \u0438 \u0438\u0441\u0442\u043e\u0440\u0438\u044f \u0441\u0447\u0435\u0442\u043e\u0432', "Limitlar, tarifni o'zgartirish va hisoblar tarixi")}</p>
       </header>
 
       <div className="sg-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <div>
-            <p className="sg-kpi-label">{tr('Current plan', 'Joriy tarif')}</p>
+            <p className="sg-kpi-label">{tr('\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u0442\u0430\u0440\u0438\u0444', 'Joriy tarif')}</p>
             <p className="sg-kpi-value" style={{ color: planColors[currentPlan], margin: 0 }}>{plans?.[currentPlan]?.name || currentPlan}</p>
             {sub?.planExpiresAt && (
               <p className="sg-subtitle" style={{ marginTop: 6 }}>
-                {tr('Active until', 'Amal qilish muddati')}: {new Date(sub.planExpiresAt).toLocaleDateString(locale)}
+                {tr('\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0434\u043e', 'Amal qilish muddati')}: {new Date(sub.planExpiresAt).toLocaleDateString(locale)}
               </p>
             )}
           </div>
@@ -116,7 +116,7 @@ export default function Billing() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontWeight: 700, fontSize: 13 }}>{item.label}</span>
                   <span style={{ fontSize: 13, color: '#64756b' }}>
-                    {u.current}/{u.limit === -1 ? 'unlimited' : u.limit}
+                    {u.current}/{u.limit === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : u.limit}
                   </span>
                 </div>
                 <div style={{ marginTop: 8, height: 6, background: '#dfe8e2', borderRadius: 999 }}>
@@ -129,7 +129,7 @@ export default function Billing() {
       </div>
 
       <section>
-        <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800 }}>{tr('Choose plan', 'Tarifni tanlang')}</h3>
+        <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800 }}>{tr('\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u0430\u0440\u0438\u0444', 'Tarifni tanlang')}</h3>
         <div className="sg-grid cols-3">
           {plans &&
             Object.entries(plans).map(([code, plan]: [string, any]) => {
@@ -142,10 +142,10 @@ export default function Billing() {
 
                   <ul style={{ marginTop: 10, paddingLeft: 16, color: '#4f5f56', fontSize: 13 }}>
                     {[
-                      `${tr('Stores', "Do'konlar")}: ${plan.limits?.stores === -1 ? 'unlimited' : plan.limits?.stores}`,
-                      `${tr('Products', 'Mahsulotlar')}: ${plan.limits?.products === -1 ? 'unlimited' : plan.limits?.products}`,
-                      `${tr('Orders / month', 'Buyurtma / oy')}: ${plan.limits?.ordersThisMonth === -1 ? 'unlimited' : plan.limits?.ordersThisMonth}`,
-                      `${tr('Delivery zones', 'Hududlar')}: ${plan.limits?.deliveryZones === -1 ? 'unlimited' : plan.limits?.deliveryZones}`,
+                      `${tr('Stores', "Do'konlar")}: ${plan.limits?.maxStores === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : plan.limits?.maxStores}`,
+                      `${tr('Products', 'Mahsulotlar')}: ${plan.limits?.maxProducts === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : plan.limits?.maxProducts}`,
+                      `${tr('Orders / month', 'Buyurtma / oy')}: ${plan.limits?.maxOrdersPerMonth === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : plan.limits?.maxOrdersPerMonth}`,
+                      `${tr('Delivery zones', 'Hududlar')}: ${plan.limits?.maxDeliveryZones === -1 ? tr('\u0431\u0435\u0437 \u043b\u0438\u043c\u0438\u0442\u0430', 'cheklanmagan') : plan.limits?.maxDeliveryZones}`,
                     ].map((line) => (
                       <li key={line}>{line}</li>
                     ))}
@@ -153,10 +153,10 @@ export default function Billing() {
 
                   <div style={{ marginTop: 12 }}>
                     {isCurrent ? (
-                      <div className="sg-badge" style={{ background: '#eef8f1', color: '#0b6f49' }}>{tr('Current', 'Joriy')}</div>
+                      <div className="sg-badge" style={{ background: '#eef8f1', color: '#0b6f49' }}>{tr('\u0422\u0435\u043a\u0443\u0449\u0438\u0439', 'Joriy')}</div>
                     ) : (
                       <Button onClick={() => handleUpgrade(code)} disabled={submitting} className="sg-btn primary" style={{ width: '100%' }}>
-                        {plan.price === 0 ? tr('Switch', "O'tish") : tr('Upgrade', 'Ulash')}
+                        {plan.price === 0 ? tr('\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c', "O'tish") : tr('\u041f\u0435\u0440\u0435\u0439\u0442\u0438', 'Yangilash')}
                       </Button>
                     )}
                   </div>
@@ -167,15 +167,15 @@ export default function Billing() {
       </section>
 
       <section className="sg-card">
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Invoices history', 'Hisoblar tarixi')}</h3>
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0441\u0447\u0435\u0442\u043e\u0432', 'Hisoblar tarixi')}</h3>
         <table className="sg-table" style={{ marginTop: 10 }}>
           <thead>
             <tr>
-              <th>{tr('Date', 'Sana')}</th>
-              <th>{tr('Plan', 'Tarif')}</th>
-              <th>{tr('Amount', 'Summa')}</th>
-              <th>{tr('Status', 'Holat')}</th>
-              <th>{tr('Transaction', 'Tranzaksiya')}</th>
+              <th>{tr('\u0414\u0430\u0442\u0430', 'Sana')}</th>
+              <th>{tr('\u0422\u0430\u0440\u0438\u0444', 'Tarif')}</th>
+              <th>{tr('\u0421\u0443\u043c\u043c\u0430', 'Summa')}</th>
+              <th>{tr('\u0421\u0442\u0430\u0442\u0443\u0441', 'Holat')}</th>
+              <th>{tr('\u0422\u0440\u0430\u043d\u0437\u0430\u043a\u0446\u0438\u044f', 'Tranzaksiya')}</th>
             </tr>
           </thead>
           <tbody>
