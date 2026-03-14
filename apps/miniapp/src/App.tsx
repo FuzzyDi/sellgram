@@ -90,8 +90,14 @@ function AppShell() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const storeId = params.get('storeId') || webApp?.initDataUnsafe?.start_param || '';
-    setAuthData(initData, storeId);
+    const storeId =
+      params.get('storeId') ||
+      params.get('tgWebAppStartParam') ||
+      webApp?.initDataUnsafe?.start_param ||
+      '';
+    const initDataFromQuery = params.get('tgWebAppData') || '';
+    const effectiveInitData = initData || initDataFromQuery;
+    setAuthData(effectiveInitData, storeId);
     setReady(true);
   }, [initData, webApp]);
 
