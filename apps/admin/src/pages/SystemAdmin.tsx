@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { clearSystemToken, setSystemToken, systemApi } from '../api/system-admin-client';
 import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
