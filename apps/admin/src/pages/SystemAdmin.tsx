@@ -6,6 +6,7 @@ import { useAdminI18n } from '../i18n';
 type InvoiceStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'EXPIRED';
 type ActivityType = 'TENANT_PLAN_UPDATED' | 'INVOICE_CONFIRMED' | 'INVOICE_REJECTED';
 type ActivityTarget = 'tenant' | 'invoice';
+type NoticeTone = 'success' | 'error' | 'info';
 
 export default function SystemAdmin() {
   const { tr, locale } = useAdminI18n();
@@ -30,6 +31,7 @@ export default function SystemAdmin() {
   const [activitySearch, setActivitySearch] = useState('');
   const [activityDateFrom, setActivityDateFrom] = useState('');
   const [activityDateTo, setActivityDateTo] = useState('');
+  const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
 
   const statusLabel = useMemo(
     () => ({
@@ -51,6 +53,11 @@ export default function SystemAdmin() {
   );
 
   const formatMoney = (value: number | string | null | undefined) => `${Number(value || 0).toLocaleString(locale)} UZS`;
+
+  function showNotice(tone: NoticeTone, message: string) {
+    setNotice({ tone, message });
+    setTimeout(() => setNotice(null), 3200);
+  }
 
   async function load() {
     setLoading(true);
@@ -130,8 +137,9 @@ export default function SystemAdmin() {
     try {
       await systemApi.setTenantPlan(tenantId, plan);
       await load();
+      showNotice('success', tr('\u0422\u0430\u0440\u0438\u0444 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D', 'Tarif yangilandi'));
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err.message);
     }
   }
 
@@ -140,8 +148,9 @@ export default function SystemAdmin() {
       if (action === 'confirm') await systemApi.confirmInvoice(id);
       else await systemApi.rejectInvoice(id);
       await load();
+      showNotice('success', action === 'confirm' ? tr('\u0421\u0447\u0435\u0442 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D', 'Invoice tasdiqlandi') : tr('\u0421\u0447\u0435\u0442 \u043E\u0442\u043A\u043B\u043E\u043D\u0435\u043D', 'Invoice rad etildi'));
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err.message);
     }
   }
 
@@ -175,8 +184,33 @@ export default function SystemAdmin() {
     URL.revokeObjectURL(url);
   }
 
+  const noticeNode = notice ? (
+    <div
+      style={{
+        position: 'fixed',
+        right: 16,
+        top: 16,
+        zIndex: 200,
+        minWidth: 260,
+        maxWidth: 420,
+        borderRadius: 12,
+        padding: '10px 12px',
+        color: notice.tone === 'error' ? '#991b1b' : notice.tone === 'success' ? '#065f46' : '#1e3a8a',
+        background: notice.tone === 'error' ? '#fee2e2' : notice.tone === 'success' ? '#d1fae5' : '#dbeafe',
+        border: `1px solid ${notice.tone === 'error' ? '#fecaca' : notice.tone === 'success' ? '#a7f3d0' : '#bfdbfe'}`,
+        fontSize: 13,
+        fontWeight: 700,
+        boxShadow: '0 10px 24px rgba(0,0,0,0.08)',
+      }}
+    >
+      {notice.message}
+    </div>
+  ) : null;
+
   if (!loggedIn) {
     return (
+      <>
+        {noticeNode}
       <section className="sg-page" style={{ maxWidth: 460, margin: '20px auto' }}>
         <h2 className="sg-title" style={{ fontSize: 28 }}>{tr('Глобальный админ системы', 'Global tizim admini')}</h2>
         <p className="sg-subtitle">{tr('Отдельная консоль для контроля платформы и модерации оплат.', 'Platforma nazorati va to\'lov moderatsiyasi uchun alohida konsol.')}</p>
@@ -190,11 +224,14 @@ export default function SystemAdmin() {
           </button>
         </div>
       </section>
+      </>
     );
   }
 
   return (
-    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+    <>
+      {noticeNode}
+      <section className="sg-page sg-grid" style={{ gap: 16 }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10 }}>
         <div>
           <h2 className="sg-title">{tr('Консоль системного админа', 'Tizim admin konsoli')}</h2>
@@ -405,5 +442,6 @@ export default function SystemAdmin() {
 
       {loading && <p className="sg-subtitle">{tr('Обновляем...', 'Yangilanmoqda...')}</p>}
     </section>
+    </>
   );
 }
