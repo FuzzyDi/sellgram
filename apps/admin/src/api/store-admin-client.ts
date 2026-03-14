@@ -1,4 +1,4 @@
-﻿const ADMIN_API_BASE = '/api/store-admin';
+const ADMIN_API_BASE = '/api/store-admin';
 
 function getToken(): string | null {
   return localStorage.getItem('accessToken');
@@ -87,6 +87,7 @@ export const adminApi = {
   getStores: () => request<any>('/stores'),
   createStore: (data: any) => request<any>('/stores', { method: 'POST', body: JSON.stringify(data) }),
   updateStore: (id: string, data: any) => request<any>(`/stores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  activateStore: (id: string) => request<any>(`/stores/${id}/activate`, { method: 'POST' }),
   deleteStore: (id: string) => request<any>(`/stores/${id}`, { method: 'DELETE' }),
 
   getStorePaymentMethods: (storeId: string) => request<any>(`/stores/${storeId}/payment-methods`),

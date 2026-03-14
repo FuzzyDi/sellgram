@@ -147,6 +147,17 @@ export default function Settings() {
       alert(err.message);
     }
   }
+
+  async function testStoreConnection(store: any) {
+    try {
+      const data = await adminApi.activateStore(store.id);
+      const webhookUrl = data?.webhookUrl ? `\nWebhook: ${data.webhookUrl}` : '';
+      alert(tr(`Бот "${store.name}" подключен успешно.${webhookUrl}`, `"${store.name}" boti muvaffaqiyatli ulandi.${webhookUrl}`));
+      await load();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
   async function saveLoyalty() {
     try {
       await adminApi.updateLoyaltyConfig(loyalty);
@@ -221,9 +232,13 @@ export default function Settings() {
               <div>
                 <p style={{ margin: 0, fontWeight: 800 }}>{store.name}</p>
                 {store.botUsername && <p style={{ margin: '4px 0 0', color: '#2e7d64', fontSize: 13 }}>@{store.botUsername}</p>}
-              </div>              <div style={{ display: 'flex', gap: 8 }}>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
                 <button className="sg-btn ghost" type="button" onClick={() => openEditStore(store)}>
                   {tr('Изменить', 'Tahrirlash')}
+                </button>
+                <button className="sg-btn ghost" type="button" onClick={() => testStoreConnection(store)}>
+                  {tr('Проверить бота', "Botni tekshirish")}
                 </button>
                 <button
                   className="sg-btn danger"

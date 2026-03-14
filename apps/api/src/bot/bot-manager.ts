@@ -1,4 +1,4 @@
-﻿import { Bot, webhookCallback, InlineKeyboard, Keyboard } from 'grammy';
+import { Bot, webhookCallback, InlineKeyboard, Keyboard } from 'grammy';
 import type { FastifyInstance } from 'fastify';
 import type { OrderStatusType } from '@sellgram/shared';
 import prisma from '../lib/prisma.js';
@@ -13,15 +13,15 @@ interface BotInstance {
 const bots = new Map<string, BotInstance>();
 
 const STATUS_EMOJI: Record<OrderStatusType, string> = {
-  NEW: '??',
-  CONFIRMED: '?',
-  PREPARING: '?????',
-  READY: '??',
-  SHIPPED: '??',
-  DELIVERED: '??',
-  COMPLETED: '??',
-  CANCELLED: '?',
-  REFUNDED: '??',
+  NEW: 'NEW',
+  CONFIRMED: 'CONF',
+  PREPARING: 'PREP',
+  READY: 'READY',
+  SHIPPED: 'SHIP',
+  DELIVERED: 'DONE',
+  COMPLETED: 'COMP',
+  CANCELLED: 'CANC',
+  REFUNDED: 'REF',
 };
 
 const STATUS_LABEL_EN: Record<OrderStatusType, string> = {
@@ -99,7 +99,7 @@ async function isAdmin(tenantId: string, adminTelegramId: bigint): Promise<boole
       tenantId,
       adminTelegramId,
       isActive: true,
-      role: { in: ['OWNER', 'ADMIN', 'MANAGER'] },
+      role: { in: ['OWNER', 'MANAGER'] },
     },
   });
   return !!user;
@@ -152,13 +152,13 @@ async function registerBot(
 
   bot.command('start', async (ctx) => {
     const inline = new InlineKeyboard();
-    if (resolvedMiniAppUrl) inline.webApp(tCtx(ctx, '??? Открыть магазин', "??? Do'konni ochish"), resolvedMiniAppUrl);
+    if (resolvedMiniAppUrl) inline.webApp(tCtx(ctx, 'Открыть магазин', "Do'konni ochish"), resolvedMiniAppUrl);
 
     const keyboard = new Keyboard();
-    if (resolvedMiniAppUrl) keyboard.webApp(tCtx(ctx, '??? Shop', "??? Do'kon"), resolvedMiniAppUrl).row();
+    if (resolvedMiniAppUrl) keyboard.webApp(tCtx(ctx, 'Shop', "Do'kon"), resolvedMiniAppUrl).row();
     keyboard.text('/help');
 
-    await ctx.reply(welcomeMessage || tCtx(ctx, 'Welcome! ???', "Xush kelibsiz! ???"), { reply_markup: inline });
+    await ctx.reply(welcomeMessage || tCtx(ctx, 'Welcome!', "Xush kelibsiz!"), { reply_markup: inline });
     await ctx.reply(tCtx(ctx, 'Choose action:', 'Amalni tanlang:'), { reply_markup: keyboard.resized().persistent() });
 
     if (ctx.from) {
@@ -185,8 +185,8 @@ async function registerBot(
       await ctx.reply(tCtx(ctx, 'Ссылка на магазин еще не настроена.', "Do'kon havolasi hali sozlanmagan."));
       return;
     }
-    const kb = new InlineKeyboard().webApp(tCtx(ctx, '??? Открыть магазин', "??? Do'konni ochish"), resolvedMiniAppUrl);
-    await ctx.reply(tCtx(ctx, 'Открыть магазин from button below:', "Quyidagi tugma orqali do'konni oching:"), { reply_markup: kb });
+    const kb = new InlineKeyboard().webApp(tCtx(ctx, 'Открыть магазин', "Do'konni ochish"), resolvedMiniAppUrl);
+    await ctx.reply(tCtx(ctx, 'Откройте магазин кнопкой ниже:', "Quyidagi tugma orqali do'konni oching:"), { reply_markup: kb });
   });
 
   bot.command('admin', async (ctx) => {
@@ -520,7 +520,7 @@ export async function notifyNewOrder(storeId: string, order: any): Promise<void>
   const admins = await prisma.user.findMany({
     where: {
       tenantId: instance.tenantId,
-      role: { in: ['OWNER', 'ADMIN', 'MANAGER'] },
+      role: { in: ['OWNER', 'MANAGER'] },
       adminTelegramId: { not: null },
       isActive: true,
     },
