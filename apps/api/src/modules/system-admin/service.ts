@@ -43,20 +43,47 @@ async function logSystemAction(input: {
 }
 
 export async function getSystemDashboard() {
-  const [tenants, activeStores, pendingInvoices, monthlyOrders] = await Promise.all([
+  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+  const [tenants, activeStores, pendingInvoices, monthlyOrders, pendingAmountAgg, paidInvoicesMonth, paidRevenueMonthAgg] = await Promise.all([
     prisma.tenant.count(),
     prisma.store.count({ where: { isActive: true } }),
     prisma.invoice.count({ where: { status: 'PENDING', paymentRef: { not: null } } }),
     prisma.order.count({
       where: {
         createdAt: {
-          gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+          gte: startOfMonth,
         },
       },
     }),
+    prisma.invoice.aggregate({
+      where: { status: 'PENDING', paymentRef: { not: null } },
+      _sum: { amount: true },
+    }),
+    prisma.invoice.count({
+      where: {
+        status: 'PAID',
+        confirmedAt: { gte: startOfMonth },
+      },
+    }),
+    prisma.invoice.aggregate({
+      where: {
+        status: 'PAID',
+        confirmedAt: { gte: startOfMonth },
+      },
+      _sum: { amount: true },
+    }),
   ]);
 
-  return { tenants, activeStores, pendingInvoices, monthlyOrders };
+  return {
+    tenants,
+    activeStores,
+    pendingInvoices,
+    monthlyOrders,
+    pendingAmount: Number(pendingAmountAgg._sum.amount || 0),
+    paidInvoicesMonth,
+    paidRevenueMonth: Number(paidRevenueMonthAgg._sum.amount || 0),
+  };
 }
 
 export async function getSystemHealth() {
