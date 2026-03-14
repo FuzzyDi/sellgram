@@ -51,7 +51,7 @@ export const systemApi = {
   },
   dashboard: () => systemRequest<any>('/dashboard'),
   health: () => systemRequest<any>('/health'),
-  activity: (limit = 30) => systemRequest<any>(`/activity?limit=${limit}`),
+  activity: (params?: string) => systemRequest<any>(`/activity${params ? `?${params}` : ''}`),
   tenants: (params?: string) => systemRequest<any>(`/tenants${params ? `?${params}` : ''}`),
   stores: (params?: string) => systemRequest<any>(`/stores${params ? `?${params}` : ''}`),
   pendingInvoices: () => systemRequest<any>('/invoices/pending'),

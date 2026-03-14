@@ -1,4 +1,4 @@
-﻿import bcrypt from 'bcrypt';
+import bcrypt from 'bcrypt';
 import prisma from '../../lib/prisma.js';
 import { signSystemToken } from '../../lib/system-jwt.js';
 
@@ -94,13 +94,39 @@ export async function getSystemHealth() {
   };
 }
 
-export async function listSystemActivity(input: { limit: number }) {
+export async function listSystemActivity(input: {
+  limit: number;
+  action?: 'TENANT_PLAN_UPDATED' | 'INVOICE_CONFIRMED' | 'INVOICE_REJECTED';
+  targetType?: 'tenant' | 'invoice';
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  const where: any = {};
+
+  if (input.action) where.action = input.action;
+  if (input.targetType) where.targetType = input.targetType;
+
+  if (input.search) {
+    where.OR = [
+      { actorEmail: { contains: input.search, mode: 'insensitive' } },
+      { targetId: { contains: input.search, mode: 'insensitive' } },
+    ];
+  }
+
+  if (input.dateFrom || input.dateTo) {
+    where.createdAt = {};
+    if (input.dateFrom) where.createdAt.gte = new Date(input.dateFrom);
+    if (input.dateTo) where.createdAt.lte = new Date(input.dateTo);
+  }
+
   const logs = await prisma.systemAuditLog.findMany({
+    where,
     orderBy: { createdAt: 'desc' },
     take: input.limit,
   });
 
-  return logs.map((log) => ({
+  return logs.map((log: (typeof logs)[number]) => ({
     id: log.id,
     type: log.action,
     at: log.createdAt,

@@ -26,7 +26,6 @@ export const systemAdminUpdateTenantPlanSchema = z.object({
   planExpiresAt: z.string().datetime().optional(),
 });
 
-
 export const systemAdminInvoiceListQuerySchema = z.object({
   status: z.enum(['PENDING', 'PAID', 'CANCELLED', 'EXPIRED']).optional(),
   search: z.string().trim().optional(),
@@ -35,5 +34,10 @@ export const systemAdminInvoiceListQuerySchema = z.object({
 });
 
 export const systemAdminActivityQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(30),
+  limit: z.coerce.number().int().min(1).max(200).default(30),
+  action: z.enum(['TENANT_PLAN_UPDATED', 'INVOICE_CONFIRMED', 'INVOICE_REJECTED']).optional(),
+  targetType: z.enum(['tenant', 'invoice']).optional(),
+  search: z.string().trim().optional(),
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
 });

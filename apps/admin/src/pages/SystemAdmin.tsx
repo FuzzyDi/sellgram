@@ -4,6 +4,8 @@ import Button from '../components/Button';
 import { useAdminI18n } from '../i18n';
 
 type InvoiceStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'EXPIRED';
+type ActivityType = 'TENANT_PLAN_UPDATED' | 'INVOICE_CONFIRMED' | 'INVOICE_REJECTED';
+type ActivityTarget = 'tenant' | 'invoice';
 
 export default function SystemAdmin() {
   const { tr, locale } = useAdminI18n();
@@ -23,12 +25,27 @@ export default function SystemAdmin() {
   const [invoiceStatus, setInvoiceStatus] = useState<InvoiceStatus | ''>('');
   const [invoiceSearch, setInvoiceSearch] = useState('');
 
+  const [activityType, setActivityType] = useState<ActivityType | ''>('');
+  const [activityTarget, setActivityTarget] = useState<ActivityTarget | ''>('');
+  const [activitySearch, setActivitySearch] = useState('');
+  const [activityDateFrom, setActivityDateFrom] = useState('');
+  const [activityDateTo, setActivityDateTo] = useState('');
+
   const statusLabel = useMemo(
     () => ({
       PENDING: tr('Ожидает', 'Kutilmoqda'),
       PAID: tr('Оплачен', "To'langan"),
       CANCELLED: tr('Отклонен', 'Rad etilgan'),
       EXPIRED: tr('Просрочен', "Muddati o'tgan"),
+    }),
+    [tr]
+  );
+
+  const activityTypeLabel = useMemo(
+    () => ({
+      TENANT_PLAN_UPDATED: tr('План обновлен', 'Tarif yangilandi'),
+      INVOICE_CONFIRMED: tr('Инвойс подтвержден', 'Invoice tasdiqlandi'),
+      INVOICE_REJECTED: tr('Инвойс отклонен', 'Invoice rad etildi'),
     }),
     [tr]
   );
@@ -42,10 +59,22 @@ export default function SystemAdmin() {
       if (invoiceStatus) invoiceQuery.set('status', invoiceStatus);
       if (invoiceSearch.trim()) invoiceQuery.set('search', invoiceSearch.trim());
 
+      const activityQuery = new URLSearchParams();
+      activityQuery.set('limit', '200');
+      if (activityType) activityQuery.set('action', activityType);
+      if (activityTarget) activityQuery.set('targetType', activityTarget);
+      if (activitySearch.trim()) activityQuery.set('search', activitySearch.trim());
+      if (activityDateFrom) activityQuery.set('dateFrom', new Date(activityDateFrom).toISOString());
+      if (activityDateTo) {
+        const end = new Date(activityDateTo);
+        end.setHours(23, 59, 59, 999);
+        activityQuery.set('dateTo', end.toISOString());
+      }
+
       const [d, h, a, t, s, inv] = await Promise.all([
         systemApi.dashboard(),
         systemApi.health(),
-        systemApi.activity(30),
+        systemApi.activity(activityQuery.toString()),
         systemApi.tenants('page=1&pageSize=30'),
         systemApi.stores('page=1&pageSize=30'),
         systemApi.invoices(invoiceQuery.toString()),
@@ -68,6 +97,7 @@ export default function SystemAdmin() {
 
   useEffect(() => {
     if (loggedIn) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loggedIn]);
 
   async function login() {
@@ -111,6 +141,36 @@ export default function SystemAdmin() {
     } catch (err: any) {
       alert(err.message);
     }
+  }
+
+  function exportActivityCsv() {
+    if (activity.length === 0) return;
+
+    const escape = (v: unknown) => {
+      const raw = String(v ?? '');
+      return `"${raw.replace(/"/g, '""')}"`;
+    };
+
+    const rows = [
+      ['time', 'type', 'message', 'actor', 'targetId', 'tenantName'],
+      ...activity.map((item) => [
+        new Date(item.at).toISOString(),
+        item.type || '',
+        item.message || '',
+        item.actor || '',
+        item.context?.targetId || item.context?.invoiceId || item.context?.tenantId || '',
+        item.context?.tenantName || '',
+      ]),
+    ];
+
+    const csv = rows.map((row) => row.map(escape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `system-activity-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   if (!loggedIn) {
@@ -171,7 +231,7 @@ export default function SystemAdmin() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('System health', 'Tizim holati')}</h3>
           <span className="sg-badge" style={{ background: health?.status === 'ok' ? '#e8f7ef' : '#fff1f2', color: health?.status === 'ok' ? '#0f7a4f' : '#be123c' }}>
-            {health?.status === 'ok' ? tr('Healthy', 'Sog\'lom') : tr('Degraded', 'Nosoz')}
+            {health?.status === 'ok' ? tr('Healthy', "Sog'lom") : tr('Degraded', 'Nosoz')}
           </span>
         </div>
         <div className="sg-grid cols-4" style={{ marginTop: 10 }}>
@@ -216,7 +276,7 @@ export default function SystemAdmin() {
               className="border rounded-lg px-3 py-2 text-sm"
               style={{ minWidth: 240 }}
             />
-            <Button onClick={() => void load()} className="sg-btn ghost">{tr('Apply', 'Qo\'llash')}</Button>
+            <Button onClick={() => void load()} className="sg-btn ghost">{tr('Apply', "Qo'llash")}</Button>
           </div>
 
           <div className="sg-grid" style={{ marginTop: 12, maxHeight: 340, overflow: 'auto' }}>
@@ -246,12 +306,34 @@ export default function SystemAdmin() {
         </article>
 
         <article className="sg-card">
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Action log', 'Harakatlar jurnali')}</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Action log', 'Harakatlar jurnali')}</h3>
+            <Button onClick={exportActivityCsv} className="sg-btn ghost">CSV</Button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <select value={activityType} onChange={(e) => setActivityType(e.target.value as ActivityType | '')} className="border rounded-lg px-3 py-2 text-sm">
+              <option value="">{tr('All actions', 'Barcha harakatlar')}</option>
+              <option value="TENANT_PLAN_UPDATED">{activityTypeLabel.TENANT_PLAN_UPDATED}</option>
+              <option value="INVOICE_CONFIRMED">{activityTypeLabel.INVOICE_CONFIRMED}</option>
+              <option value="INVOICE_REJECTED">{activityTypeLabel.INVOICE_REJECTED}</option>
+            </select>
+            <select value={activityTarget} onChange={(e) => setActivityTarget(e.target.value as ActivityTarget | '')} className="border rounded-lg px-3 py-2 text-sm">
+              <option value="">{tr('All targets', 'Barcha obyektlar')}</option>
+              <option value="tenant">{tr('Tenants', 'Tenantlar')}</option>
+              <option value="invoice">{tr('Invoices', 'Invoicelar')}</option>
+            </select>
+            <input value={activitySearch} onChange={(e) => setActivitySearch(e.target.value)} placeholder={tr('Search actor/target', 'Ijrochi/obyekt qidirish')} className="border rounded-lg px-3 py-2 text-sm" />
+            <input type="date" value={activityDateFrom} onChange={(e) => setActivityDateFrom(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
+            <input type="date" value={activityDateTo} onChange={(e) => setActivityDateTo(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
+            <Button onClick={() => void load()} className="sg-btn ghost">{tr('Apply', "Qo'llash")}</Button>
+          </div>
+
           <div className="sg-grid" style={{ marginTop: 12, maxHeight: 340, overflow: 'auto' }}>
             {activity.map((item) => (
               <div key={item.id} className="sg-card soft" style={{ padding: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <strong>{item.message}</strong>
+                  <strong>{activityTypeLabel[item.type as ActivityType] || item.message}</strong>
                   <span style={{ fontSize: 12, color: '#64756b' }}>{new Date(item.at).toLocaleString(locale)}</span>
                 </div>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64756b' }}>{item.context?.tenantName || item.context?.tenantId || '-'}</p>
