@@ -1,9 +1,10 @@
-﻿import { FastifyInstance } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { planGuard } from '../../plugins/plan-guard.js';
 import paymentMethodRoutes from '../payments-integration/payment-methods.routes.js';
 import { createStoreSchema, storeIdParamSchema, updateStoreSchema } from './dto.js';
 import {
   activateTenantStoreBot,
+  checkTenantStoreBotConnection,
   createTenantStore,
   deleteTenantStore,
   getTenantStore,
@@ -75,6 +76,17 @@ export default async function storeRoutes(fastify: FastifyInstance) {
       const { id } = storeIdParamSchema.parse(request.params);
       await deleteTenantStore(request.tenantId!, id);
       return { success: true, message: 'Store deleted' };
+    } catch (err: unknown) {
+      const mapped = mapStoreError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
+  });
+
+  fastify.get('/stores/:id/check-bot', async (request, reply) => {
+    try {
+      const { id } = storeIdParamSchema.parse(request.params);
+      const data = await checkTenantStoreBotConnection(request.tenantId!, id);
+      return { success: true, data };
     } catch (err: unknown) {
       const mapped = mapStoreError(err);
       return reply.status(mapped.status).send({ success: false, error: mapped.error });

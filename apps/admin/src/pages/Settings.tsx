@@ -157,14 +157,42 @@ export default function Settings() {
     }
   }
 
-  async function testStoreConnection(store: any) {
+  async function checkStoreConnection(store: any) {
+    try {
+      const data = await adminApi.checkStoreBot(store.id);
+      const ok = Boolean(data?.ok);
+      const webhook = data?.webhook;
+      const mismatch = webhook?.matchesExpected === false;
+
+      const parts = [
+        ok
+          ? tr(`Бот "${store.name}" подключен корректно.`, `"${store.name}" boti to'g'ri ulangan.`)
+          : tr(`Бот "${store.name}" проверен, найдены проблемы.`, `"${store.name}" botida muammo topildi.`),
+      ];
+
+      if (data?.bot?.username) parts.push(`@${data.bot.username}`);
+      if (mismatch && webhook?.expectedUrl) {
+        parts.push(tr('Webhook отличается от ожидаемого.', 'Webhook kutilgan manzilga mos emas.'));
+      }
+      if (typeof webhook?.pendingUpdateCount === 'number') {
+        parts.push(tr(`Pending updates: ${webhook.pendingUpdateCount}`, `Kutilayotgan update: ${webhook.pendingUpdateCount}`));
+      }
+      if (data?.error) parts.push(String(data.error));
+
+      showNotice(ok ? 'success' : 'error', parts.join(' | '));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
+    }
+  }
+
+  async function activateStoreConnection(store: any) {
     try {
       const data = await adminApi.activateStore(store.id);
       const webhookUrl = data?.webhookUrl ? `\nWebhook: ${data.webhookUrl}` : '';
       showNotice('success', tr(`Бот "${store.name}" подключен успешно.${webhookUrl}`, `"${store.name}" boti muvaffaqiyatli ulandi.${webhookUrl}`));
       await load();
     } catch (err: any) {
-      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik')); 
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
     }
   }
 
@@ -274,8 +302,11 @@ export default function Settings() {
                 <button className="sg-btn ghost" type="button" onClick={() => openEditStore(store)}>
                   {tr('Изменить', 'Tahrirlash')}
                 </button>
-                <button className="sg-btn ghost" type="button" onClick={() => testStoreConnection(store)}>
-                  {tr('Проверить бота', 'Botni tekshirish')}
+                <button className="sg-btn ghost" type="button" onClick={() => checkStoreConnection(store)}>
+                  {tr('\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0431\u043E\u0442\u0430', 'Botni tekshirish')}
+                </button>
+                <button className="sg-btn primary" type="button" onClick={() => activateStoreConnection(store)}>
+                  {tr('\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C', 'Ulash')}
                 </button>
                 <button
                   className="sg-btn danger"

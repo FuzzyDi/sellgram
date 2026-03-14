@@ -1,4 +1,4 @@
-﻿import { Bot } from 'grammy';
+import { Bot } from 'grammy';
 import prisma from '../../lib/prisma.js';
 import { getConfig } from '../../config/index.js';
 import { decrypt, encrypt } from '../../lib/encrypt.js';
@@ -133,6 +133,92 @@ export async function activateTenantStoreBot(tenantId: string, id: string) {
   return { storeId: store.id, webhookUrl, miniAppUrl };
 }
 
+
+export async function checkTenantStoreBotConnection(tenantId: string, id: string) {
+  const store = await prisma.store.findFirst({
+    where: { id, tenantId },
+    select: {
+      id: true,
+      name: true,
+      botToken: true,
+      miniAppUrl: true,
+      webhookSecret: true,
+      isActive: true,
+    },
+  });
+
+  if (!store) throw new StoreServiceError('STORE_NOT_FOUND');
+
+  const cfg = getConfig();
+  const webhookBase = (cfg.APP_URL || '').trim();
+  const expectedWebhookUrl = webhookBase
+    ? `${webhookBase.replace(/\/+$/, '')}/webhook/${store.id}`
+    : null;
+
+  const diagnostics: Record<string, unknown> = {
+    ok: false,
+    storeId: store.id,
+    storeName: store.name,
+    isActive: store.isActive,
+    expectedWebhookUrl,
+    miniApp: {
+      configured: Boolean(store.miniAppUrl),
+      url: store.miniAppUrl,
+      hasStoreIdParam: false,
+    },
+  };
+
+  if (store.miniAppUrl) {
+    try {
+      const url = new URL(store.miniAppUrl);
+      (diagnostics.miniApp as any).hasStoreIdParam = Boolean(url.searchParams.get('storeId'));
+    } catch {
+      (diagnostics.miniApp as any).hasStoreIdParam = false;
+    }
+  }
+
+  if (!store.isActive) {
+    diagnostics.error = 'Store is inactive';
+    return diagnostics;
+  }
+
+  if (!expectedWebhookUrl) {
+    diagnostics.error = 'APP_URL is not configured';
+    return diagnostics;
+  }
+
+  try {
+    const token = decrypt(store.botToken);
+    const bot = new Bot(token);
+    const [me, webhook] = await Promise.all([bot.api.getMe(), bot.api.getWebhookInfo()]);
+
+    const webhookMatches = webhook.url === expectedWebhookUrl;
+
+    diagnostics.bot = {
+      id: me.id,
+      username: me.username,
+      firstName: me.first_name,
+    };
+    diagnostics.webhook = {
+      currentUrl: webhook.url,
+      expectedUrl: expectedWebhookUrl,
+      matchesExpected: webhookMatches,
+      pendingUpdateCount: webhook.pending_update_count,
+      lastErrorDate: webhook.last_error_date || null,
+      lastErrorMessage: webhook.last_error_message || null,
+    };
+    diagnostics.ok = webhookMatches;
+
+    if (!webhookMatches) {
+      diagnostics.error = 'Webhook URL mismatch';
+    }
+
+    return diagnostics;
+  } catch (err: any) {
+    diagnostics.error = err?.message || 'Failed to validate bot token';
+    return diagnostics;
+  }
+}
 export async function deleteTenantStore(tenantId: string, id: string) {
   const store = await prisma.store.findFirst({
     where: { id, tenantId },

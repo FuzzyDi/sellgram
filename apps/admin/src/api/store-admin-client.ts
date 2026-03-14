@@ -87,6 +87,7 @@ export const adminApi = {
   getStores: () => request<any>('/stores'),
   createStore: (data: any) => request<any>('/stores', { method: 'POST', body: JSON.stringify(data) }),
   updateStore: (id: string, data: any) => request<any>(`/stores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  checkStoreBot: (id: string) => request<any>(`/stores/${id}/check-bot`),
   activateStore: (id: string) => request<any>(`/stores/${id}/activate`, { method: 'POST' }),
   deleteStore: (id: string) => request<any>(`/stores/${id}`, { method: 'DELETE' }),
 
