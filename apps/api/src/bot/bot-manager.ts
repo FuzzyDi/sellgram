@@ -4,6 +4,7 @@ import type { OrderStatusType } from '@sellgram/shared';
 import prisma from '../lib/prisma.js';
 import { decrypt } from '../lib/encrypt.js';
 import { getRedis } from '../lib/redis.js';
+import { getConfig } from '../config/index.js';
 
 interface BotInstance {
   bot: Bot;
@@ -12,7 +13,15 @@ interface BotInstance {
 }
 
 const bots = new Map<string, BotInstance>();
-const SUBSCRIPTION_REMINDER_DAYS = [7, 3, 1];
+
+function getSubscriptionReminderDays(): number[] {
+  const raw = getConfig().SUBSCRIPTION_REMINDER_DAYS || '7,3,1';
+  const parsed = raw
+    .split(',')
+    .map((x) => Number(x.trim()))
+    .filter((x) => Number.isInteger(x) && x >= 1 && x <= 30);
+  return Array.from(new Set(parsed)).sort((a, b) => b - a);
+}
 
 const STATUS_EMOJI: Record<OrderStatusType, string> = {
   NEW: '\u{1F195}',
@@ -462,7 +471,10 @@ function getBotInstanceForTenant(tenantId: string): BotInstance | null {
 
 async function remindExpiringSubscriptions(): Promise<void> {
   const now = new Date();
-  const maxReminderDay = Math.max(...SUBSCRIPTION_REMINDER_DAYS);
+  const reminderDays = getSubscriptionReminderDays();
+  if (reminderDays.length === 0) return;
+
+  const maxReminderDay = Math.max(...reminderDays);
   const until = new Date(now.getTime() + maxReminderDay * 24 * 60 * 60 * 1000);
 
   const expiringTenants = await prisma.tenant.findMany({
@@ -485,7 +497,7 @@ async function remindExpiringSubscriptions(): Promise<void> {
     if (!tenant.planExpiresAt) continue;
 
     const daysLeft = calcDaysLeft(tenant.planExpiresAt, now);
-    if (!SUBSCRIPTION_REMINDER_DAYS.includes(daysLeft)) continue;
+    if (!reminderDays.includes(daysLeft)) continue;
 
     const instance = getBotInstanceForTenant(tenant.id);
     if (!instance) continue;
@@ -574,8 +586,10 @@ export async function initBotManager(fastify: FastifyInstance): Promise<void> {
   setInterval(() => void autoCompleteDelivered(), 30 * 60 * 1000);
   setTimeout(() => void autoCompleteDelivered(), 10_000);
 
-  setInterval(() => void remindExpiringSubscriptions(), 60 * 60 * 1000);
-  setTimeout(() => void remindExpiringSubscriptions(), 30_000);
+  if (getConfig().SUBSCRIPTION_REMINDER_ENABLED) {
+    setInterval(() => void remindExpiringSubscriptions(), 60 * 60 * 1000);
+    setTimeout(() => void remindExpiringSubscriptions(), 30_000);
+  }
 }
 
 export async function notifyOrderStatus(storeId: string, orderId: string, newStatus: OrderStatusType): Promise<void> {

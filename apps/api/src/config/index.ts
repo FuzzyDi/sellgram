@@ -33,6 +33,8 @@ const envSchema = z.object({
   BILLING_INN: z.string().default('XXXXXXXXX'),
   BILLING_MFO: z.string().default('XXXXX'),
   BILLING_PAYMENT_NOTE: z.string().default('SellGram subscription payment'),
+  SUBSCRIPTION_REMINDER_ENABLED: z.coerce.boolean().default(true),
+  SUBSCRIPTION_REMINDER_DAYS: z.string().default('7,3,1'),
   GA_MEASUREMENT_ID: z.string().optional(),
   YANDEX_METRIKA_ID: z.string().optional(),
   API_PORT: z.coerce.number().default(4000),
