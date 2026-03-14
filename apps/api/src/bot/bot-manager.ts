@@ -141,25 +141,25 @@ async function registerBot(
 
   try {
     await bot.api.setMyCommands([
-      { command: 'start', description: 'РћС‚РєСЂС‹С‚СЊ РјРµРЅСЋ' },
-      { command: 'shop', description: 'РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ' },
-      { command: 'help', description: 'РџРѕРјРѕС‰СЊ' },
-      { command: 'orders', description: 'РџРѕСЃР»РµРґРЅРёРµ Р·Р°РєР°Р·С‹ (Р°РґРјРёРЅ)' },
-      { command: 'stats', description: 'РЎС‚Р°С‚РёСЃС‚РёРєР° (Р°РґРјРёРЅ)' },
+      { command: 'start', description: '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0435\u043D\u044E' },
+      { command: 'shop', description: '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0430\u0433\u0430\u0437\u0438\u043D' },
+      { command: 'help', description: '\u041F\u043E\u043C\u043E\u0449\u044C' },
+      { command: 'orders', description: '\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0435 \u0437\u0430\u043A\u0430\u0437\u044B (\u0430\u0434\u043C\u0438\u043D)' },
+      { command: 'stats', description: '\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 (\u0430\u0434\u043C\u0438\u043D)' },
       { command: 'admin', description: 'Link admin: /admin CODE' },
     ]);
   } catch {}
 
   bot.command('start', async (ctx) => {
     const inline = new InlineKeyboard();
-    if (resolvedMiniAppUrl) inline.webApp(tCtx(ctx, 'РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ', "Do'konni ochish"), resolvedMiniAppUrl);
+    if (resolvedMiniAppUrl) inline.webApp(tCtx(ctx, '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0430\u0433\u0430\u0437\u0438\u043D', "Do'konni ochish"), resolvedMiniAppUrl);
 
     const keyboard = new Keyboard();
-    if (resolvedMiniAppUrl) keyboard.webApp(tCtx(ctx, 'РњР°РіР°Р·РёРЅ', "Do'kon"), resolvedMiniAppUrl).row();
-    keyboard.text(tCtx(ctx, 'РџРѕРјРѕС‰СЊ', 'Yordam'));
+    if (resolvedMiniAppUrl) keyboard.webApp(tCtx(ctx, '\u041C\u0430\u0433\u0430\u0437\u0438\u043D', "Do'kon"), resolvedMiniAppUrl).row();
+    keyboard.text(tCtx(ctx, '\u041F\u043E\u043C\u043E\u0449\u044C', 'Yordam'));
 
-    await ctx.reply(welcomeMessage || tCtx(ctx, 'Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ SellGram!', "SellGram'ga xush kelibsiz!"), { reply_markup: inline });
-    await ctx.reply(tCtx(ctx, 'Р’С‹Р±РµСЂРёС‚Рµ РґРµР№СЃС‚РІРёРµ:', 'Amalni tanlang:'), { reply_markup: keyboard.resized().persistent() });
+    await ctx.reply(welcomeMessage || tCtx(ctx, '\u0414\u043E\u0431\u0440\u043E \u043F\u043E\u0436\u0430\u043B\u043E\u0432\u0430\u0442\u044C \u0432 SellGram!', "SellGram'ga xush kelibsiz!"), { reply_markup: inline });
+    await ctx.reply(tCtx(ctx, '\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435:', 'Amalni tanlang:'), { reply_markup: keyboard.resized().persistent() });
 
     if (ctx.from) {
       await prisma.customer.upsert({
@@ -182,11 +182,11 @@ async function registerBot(
 
   bot.command('shop', async (ctx) => {
     if (!resolvedMiniAppUrl) {
-      await ctx.reply(tCtx(ctx, 'РЎСЃС‹Р»РєР° РЅР° РјР°РіР°Р·РёРЅ РµС‰Рµ РЅРµ РЅР°СЃС‚СЂРѕРµРЅР°.', "Do'kon havolasi hali sozlanmagan."));
+      await ctx.reply(tCtx(ctx, '\u0421\u0441\u044B\u043B\u043A\u0430 \u043D\u0430 \u043C\u0430\u0433\u0430\u0437\u0438\u043D \u0435\u0449\u0435 \u043D\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0430.', "Do'kon havolasi hali sozlanmagan."));
       return;
     }
-    const kb = new InlineKeyboard().webApp(tCtx(ctx, 'РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ', "Do'konni ochish"), resolvedMiniAppUrl);
-    await ctx.reply(tCtx(ctx, 'РћС‚РєСЂРѕР№С‚Рµ РјР°РіР°Р·РёРЅ РєРЅРѕРїРєРѕР№ РЅРёР¶Рµ:', "Quyidagi tugma orqali do'konni oching:"), { reply_markup: kb });
+    const kb = new InlineKeyboard().webApp(tCtx(ctx, '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0430\u0433\u0430\u0437\u0438\u043D', "Do'konni ochish"), resolvedMiniAppUrl);
+    await ctx.reply(tCtx(ctx, '\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u043C\u0430\u0433\u0430\u0437\u0438\u043D \u043A\u043D\u043E\u043F\u043A\u043E\u0439 \u043D\u0438\u0436\u0435:', "Quyidagi tugma orqali do'konni oching:"), { reply_markup: kb });
   });
 
   bot.command('admin', async (ctx) => {
@@ -201,7 +201,7 @@ async function registerBot(
 
     const code = ctx.message?.text?.trim().split(/\s+/)[1];
     if (!code) {
-      await ctx.reply(tCtx(ctx, 'РџРѕР»СѓС‡РёС‚Рµ РєРѕРґ РІ Р°РґРјРёРЅ-РїР°РЅРµР»Рё Рё РѕС‚РїСЂР°РІСЊС‚Рµ: /admin 123456', "Admin paneldan kod olib yuboring: /admin 123456"));
+      await ctx.reply(tCtx(ctx, '\u041F\u043E\u043B\u0443\u0447\u0438\u0442\u0435 \u043A\u043E\u0434 \u0432 \u0430\u0434\u043C\u0438\u043D-\u043F\u0430\u043D\u0435\u043B\u0438 \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u044C\u0442\u0435: /admin 123456', "Admin paneldan kod olib yuboring: /admin 123456"));
       return;
     }
 
@@ -215,7 +215,7 @@ async function registerBot(
     });
 
     if (!user) {
-      await ctx.reply(tCtx(ctx, 'РљРѕРґ РЅРµРІРµСЂРЅС‹Р№ РёР»Рё РїСЂРѕСЃСЂРѕС‡РµРЅ. РЎРіРµРЅРµСЂРёСЂСѓР№С‚Рµ РЅРѕРІС‹Р№ РєРѕРґ РІ Р°РґРјРёРЅ-РїР°РЅРµР»Рё.', "Kod noto'g'ri yoki muddati tugagan. Admin panelda yangisini yarating."));
+      await ctx.reply(tCtx(ctx, '\u041A\u043E\u0434 \u043D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0438\u043B\u0438 \u043F\u0440\u043E\u0441\u0440\u043E\u0447\u0435\u043D. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439\u0442\u0435 \u043D\u043E\u0432\u044B\u0439 \u043A\u043E\u0434 \u0432 \u0430\u0434\u043C\u0438\u043D-\u043F\u0430\u043D\u0435\u043B\u0438.', "Kod noto'g'ri yoki muddati tugagan. Admin panelda yangisini yarating."));
       return;
     }
 
@@ -252,17 +252,17 @@ async function registerBot(
     });
 
     if (orders.length === 0) {
-      await ctx.reply(tCtx(ctx, 'РџРѕРєР° Р·Р°РєР°Р·РѕРІ РЅРµС‚.', "Hozircha buyurtmalar yo'q."));
+      await ctx.reply(tCtx(ctx, '\u041F\u043E\u043A\u0430 \u0437\u0430\u043A\u0430\u0437\u043E\u0432 \u043D\u0435\u0442.', "Hozircha buyurtmalar yo'q."));
       return;
     }
 
     const lines = orders.map((o: any) => {
       const customerName = o.customer.firstName || o.customer.telegramUser || '-';
       const items = o.items.map((i: any) => `${i.name} x${i.qty}`).join(', ');
-      return `${STATUS_EMOJI[o.status as OrderStatusType]} #${o.orderNumber} - ${customerName}\n${items}\n${Number(o.total).toLocaleString()} UZS В· ${statusLabel(o.status, ctx.from?.language_code)}`;
+      return `${STATUS_EMOJI[o.status as OrderStatusType]} #${o.orderNumber} - ${customerName}\n${items}\n${Number(o.total).toLocaleString()} UZS - ${statusLabel(o.status, ctx.from?.language_code)}`;
     });
 
-    await ctx.reply(`${tCtx(ctx, 'РџРѕСЃР»РµРґРЅРёРµ Р·Р°РєР°Р·С‹', "So'nggi buyurtmalar")}:\n\n${lines.join('\n\n')}`);
+    await ctx.reply(`${tCtx(ctx, '\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0435 \u0437\u0430\u043A\u0430\u0437\u044B', "So'nggi buyurtmalar")}:\n\n${lines.join('\n\n')}`);
   });
 
   bot.command('stats', async (ctx) => {
@@ -294,7 +294,7 @@ async function registerBot(
     await ctx.reply(message);
   });
 
-  bot.hears(['РџРѕРјРѕС‰СЊ', 'Yordam'], async (ctx) => {
+  bot.hears(['\u041F\u043E\u043C\u043E\u0449\u044C', 'Yordam'], async (ctx) => {
     await ctx.reply('/help');
   });
 
@@ -302,7 +302,7 @@ async function registerBot(
     await ctx.reply(
       tCtx(
         ctx,
-        'РљРѕРјР°РЅРґС‹ SellGram:\n/start - РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ\n/shop - РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ\n/admin <code> - РџСЂРёРІСЏР·Р°С‚СЊ Telegram\n/orders - РџРѕСЃР»РµРґРЅРёРµ Р·Р°РєР°Р·С‹\n/stats - РЎС‚Р°С‚РёСЃС‚РёРєР° Р·Р° РґРµРЅСЊ/РЅРµРґРµР»СЋ\n/help - РџРѕРјРѕС‰СЊ',
+        '\u041A\u043E\u043C\u0430\u043D\u0434\u044B SellGram:\n/start - \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0430\u0433\u0430\u0437\u0438\u043D\n/shop - \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0430\u0433\u0430\u0437\u0438\u043D\n/admin <code> - \u041F\u0440\u0438\u0432\u044F\u0437\u0430\u0442\u044C Telegram\n/orders - \u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0435 \u0437\u0430\u043A\u0430\u0437\u044B\n/stats - \u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 \u0437\u0430 \u0434\u0435\u043D\u044C/\u043D\u0435\u0434\u0435\u043B\u044E\n/help - \u041F\u043E\u043C\u043E\u0449\u044C',
         "SellGram buyruqlari:\n/start - Do'konni ochish\n/shop - Do'konni ochish\n/admin <code> - Telegram ulash\n/orders - So'nggi buyurtmalar\n/stats - Kun/hafta statistikasi\n/help - Yordam"
       )
     );
@@ -316,7 +316,7 @@ async function registerBot(
     const newStatus = rawStatus as OrderStatusType;
 
     if (!(await isAdmin(tenantId, BigInt(ctx.from.id)))) {
-      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'РќРµС‚ РґРѕСЃС‚СѓРїР°', "Ruxsat yo'q") });
+      await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u041D\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u0430', "Ruxsat yo'q") });
       return;
     }
 
@@ -325,13 +325,13 @@ async function registerBot(
       include: { items: true, customer: true },
     });
     if (!order) {
-      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Р—Р°РєР°Р· РЅРµ РЅР°Р№РґРµРЅ', 'Buyurtma topilmadi') });
+      await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u0417\u0430\u043A\u0430\u0437 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D', 'Buyurtma topilmadi') });
       return;
     }
 
     const allowed = NEXT_STATUS[order.status as OrderStatusType]?.map((s: any) => s.status as OrderStatusType) || [];
     if (!allowed.includes(newStatus)) {
-      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РїРµСЂРµС…РѕРґ СЃС‚Р°С‚СѓСЃР°', "Noto'g'ri status o'tishi") });
+      await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0439 \u043F\u0435\u0440\u0435\u0445\u043E\u0434 \u0441\u0442\u0430\u0442\u0443\u0441\u0430', "Noto'g'ri status o'tishi") });
       return;
     }
 
@@ -356,7 +356,7 @@ async function registerBot(
 
     const updateData: any = { status: newStatus };
     if (newStatus === 'SHIPPED') updateData.trackingNumber = order.trackingNumber || `TRK-${Date.now()}`;
-    if (newStatus === 'CANCELLED') updateData.cancelReason = 'РћС‚РјРµРЅРµРЅРѕ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј';
+    if (newStatus === 'CANCELLED') updateData.cancelReason = '\u041E\u0442\u043C\u0435\u043D\u0435\u043D\u043E \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u043E\u043C';
 
     await prisma.order.update({ where: { id: order.id }, data: updateData });
 
@@ -371,7 +371,7 @@ async function registerBot(
     }
 
     await notifyOrderStatus(storeId, order.id, newStatus);
-    await ctx.answerCallbackQuery({ text: tCtx(ctx, 'РћР±РЅРѕРІР»РµРЅРѕ', 'Yangilandi') });
+    await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E', 'Yangilandi') });
   });
 
   bot.callbackQuery(/^confirm_received_(.+)$/, async (ctx) => {
@@ -381,14 +381,14 @@ async function registerBot(
     const orderId = match[1];
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order || order.status !== 'DELIVERED') {
-      await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Р—Р°РєР°Р· СѓР¶Рµ РѕР±СЂР°Р±РѕС‚Р°РЅ', 'Buyurtma allaqachon qayta ishlangan') });
+      await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u0417\u0430\u043A\u0430\u0437 \u0443\u0436\u0435 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D', 'Buyurtma allaqachon qayta ishlangan') });
       return;
     }
 
     await completeDeliveredOrder(order.id, storeId);
 
-    await ctx.editMessageText((ctx.callbackQuery.message?.text || '') + '\n\nРЎРїР°СЃРёР±Рѕ. Р—Р°РєР°Р· Р·Р°РІРµСЂС€РµРЅ.').catch(() => {});
-    await ctx.answerCallbackQuery({ text: tCtx(ctx, 'Р‘Р°Р»Р»С‹ РЅР°С‡РёСЃР»РµРЅС‹', "Ball qo'shildi") });
+    await ctx.editMessageText((ctx.callbackQuery.message?.text || '') + '\n\n\u0421\u043F\u0430\u0441\u0438\u0431\u043E. \u0417\u0430\u043A\u0430\u0437 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D.').catch(() => {});
+    await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u0411\u0430\u043B\u043B\u044B \u043D\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u044B', "Ball qo'shildi") });
   });
 
   bot.catch((err) => {
@@ -412,7 +412,7 @@ async function completeDeliveredOrder(orderId: string, storeId: string): Promise
   const bot = bots.get(storeId)?.bot;
   if (customer?.telegramId && bot) {
     try {
-      await bot.api.sendMessage(customer.telegramId.toString(), `Order #${order.orderNumber} completed. Р‘Р°Р»Р»С‹ РЅР°С‡РёСЃР»РµРЅС‹.`);
+      await bot.api.sendMessage(customer.telegramId.toString(), `Order #${order.orderNumber} completed. \u0411\u0430\u043B\u043B\u044B \u043D\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u044B.`);
     } catch {}
   }
 }
@@ -455,7 +455,7 @@ async function awardLoyaltyPoints(orderId: string): Promise<void> {
       points: pointsEarned,
       balanceAfter: customer.loyaltyPoints,
       orderId,
-      description: `РќР°С‡РёСЃР»РµРЅС‹ Р±Р°Р»Р»С‹ Р·Р° Р·Р°РєР°Р· #${order.orderNumber}`,
+      description: `\u041D\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u044B \u0431\u0430\u043B\u043B\u044B \u0437\u0430 \u0437\u0430\u043A\u0430\u0437 #${order.orderNumber}`,
     },
   });
 }
@@ -535,8 +535,8 @@ export async function notifyNewOrder(storeId: string, order: any): Promise<void>
 
   const customer = await prisma.customer.findUnique({ where: { id: order.customerId } });
   const name = customer
-    ? `${customer.firstName || ''}${customer.lastName ? ` ${customer.lastName}` : ''}`.trim() || `@${customer.telegramUser}` || 'РљР»РёРµРЅС‚'
-    : 'РљР»РёРµРЅС‚';
+    ? `${customer.firstName || ''}${customer.lastName ? ` ${customer.lastName}` : ''}`.trim() || `@${customer.telegramUser}` || '\u041A\u043B\u0438\u0435\u043D\u0442'
+    : '\u041A\u043B\u0438\u0435\u043D\u0442';
   const phone = customer?.phone;
 
   const items = order.items || [];
