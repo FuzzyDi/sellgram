@@ -114,9 +114,6 @@ export default function Billing() {
     }
     setSubmitting(false);
   };
-
-  if (loading) return <section className="sg-page"><p className="sg-subtitle">{tr('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...', 'Yuklanmoqda...')}</p></section>;
-
   const currentPlan = sub?.plan || 'FREE';
   const usage = sub?.usage || {};
   const expiryInfo = useMemo(() => {
@@ -132,6 +129,8 @@ export default function Billing() {
       expiresAt: expires,
     };
   }, [sub?.planExpiresAt]);
+
+  if (loading) return <section className="sg-page"><p className="sg-subtitle">{tr('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...', 'Yuklanmoqda...')}</p></section>;
   const noticeNode = notice ? (
     <div
       style={{
