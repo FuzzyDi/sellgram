@@ -1,17 +1,20 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
+type TargetType = 'ALL' | 'SELECTED';
+
 export default function Broadcasts() {
-  const { tr } = useAdminI18n();
+  const { tr, locale } = useAdminI18n();
   const [stores, setStores] = useState<any[]>([]);
   const [storeId, setStoreId] = useState('');
   const [customers, setCustomers] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
-  const [targetType, setTargetType] = useState<'ALL' | 'SELECTED'>('ALL');
+  const [targetType, setTargetType] = useState<TargetType>('ALL');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
@@ -23,11 +26,15 @@ export default function Broadcasts() {
   }
 
   async function loadCustomers() {
-    const result = await adminApi.getCustomers('page=1&pageSize=300');
+    const result = await adminApi.getCustomers('page=1&pageSize=500');
     setCustomers(Array.isArray(result?.items) ? result.items : []);
   }
 
   async function loadCampaigns(targetStoreId?: string) {
+    if (!targetStoreId) {
+      setCampaigns([]);
+      return;
+    }
     const list = await adminApi.getBroadcasts(targetStoreId);
     setCampaigns(Array.isArray(list) ? list : []);
   }
@@ -36,28 +43,44 @@ export default function Broadcasts() {
     setLoading(true);
     try {
       await Promise.all([loadStores(), loadCustomers()]);
+    } catch (err: any) {
+      alert(err.message || 'Failed to load broadcasts data');
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    bootstrap();
+    void bootstrap();
   }, []);
 
   useEffect(() => {
     if (storeId) {
       setSelectedCustomerIds([]);
-      loadCampaigns(storeId);
+      void loadCampaigns(storeId);
     }
   }, [storeId]);
 
-  const filteredCustomers = useMemo(() => customers.filter((c) => c?.telegramId), [customers]);
+  const filteredCustomers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const base = customers.filter((c) => c?.telegramId);
+    if (!q) return base;
+    return base.filter((c) => {
+      const label = [c.firstName, c.lastName, c.telegramUser, c.phone].filter(Boolean).join(' ').toLowerCase();
+      return label.includes(q);
+    });
+  }, [customers, search]);
 
   const canSend =
     !!storeId &&
     message.trim().length > 0 &&
     (targetType === 'ALL' || selectedCustomerIds.length > 0);
+
+  const statusLabel: Record<string, string> = {
+    DRAFT: tr('Черновик', 'Qoralama'),
+    SENT: tr('Отправлена', 'Yuborildi'),
+    FAILED: tr('Ошибка', 'Xato'),
+  };
 
   async function sendCampaign() {
     if (!canSend) return;
@@ -72,6 +95,7 @@ export default function Broadcasts() {
       });
       setTitle('');
       setMessage('');
+      setSearch('');
       setSelectedCustomerIds([]);
       await loadCampaigns(storeId);
       alert(tr('Рассылка отправлена', 'Xabarnoma yuborildi'));
@@ -136,21 +160,30 @@ export default function Broadcasts() {
           </div>
 
           {targetType === 'SELECTED' && (
-            <div style={{ border: '1px solid #d6e0da', borderRadius: 12, padding: 12, maxHeight: 240, overflow: 'auto' }}>
-              {filteredCustomers.map((customer) => (
-                <label key={customer.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 6 }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedCustomerIds.includes(customer.id)}
-                    onChange={() => toggleCustomer(customer.id)}
-                  />
-                  <span>
-                    {customer.firstName || customer.telegramUser || customer.id}
-                    {customer.phone ? ` (${customer.phone})` : ''}
-                  </span>
-                </label>
-              ))}
-              {filteredCustomers.length === 0 && <p className="sg-subtitle">{tr('Список клиентов пуст', "Mijozlar ro'yxati bo'sh")}</p>}
+            <div style={{ border: '1px solid #d6e0da', borderRadius: 12, padding: 12 }}>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={tr('Поиск клиента', 'Mijoz qidirish')}
+                className="w-full"
+                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }}
+              />
+              <div style={{ maxHeight: 240, overflow: 'auto' }}>
+                {filteredCustomers.map((customer) => (
+                  <label key={customer.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedCustomerIds.includes(customer.id)}
+                      onChange={() => toggleCustomer(customer.id)}
+                    />
+                    <span>
+                      {[customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.telegramUser || customer.id}
+                      {customer.phone ? ` (${customer.phone})` : ''}
+                    </span>
+                  </label>
+                ))}
+                {filteredCustomers.length === 0 && <p className="sg-subtitle">{tr('Список клиентов пуст', "Mijozlar ro'yxati bo'sh")}</p>}
+              </div>
             </div>
           )}
 
@@ -166,10 +199,13 @@ export default function Broadcasts() {
             <div key={campaign.id} style={{ border: '1px solid #e0e8e2', borderRadius: 10, padding: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
                 <p style={{ margin: 0, fontWeight: 700 }}>{campaign.title || tr('Без заголовка', 'Sarlavhasiz')}</p>
-                <span className="sg-badge" style={{ background: '#eef3f0', color: '#476154' }}>{campaign.status}</span>
+                <span className="sg-badge" style={{ background: '#eef3f0', color: '#476154' }}>{statusLabel[campaign.status] || campaign.status}</span>
               </div>
               <p style={{ margin: '8px 0 0', color: '#5f6d64', fontSize: 13 }}>{campaign.message}</p>
-              <p style={{ margin: '10px 0 0', color: '#748278', fontSize: 12 }}>
+              <p style={{ margin: '8px 0 0', color: '#748278', fontSize: 12 }}>
+                {new Date(campaign.createdAt).toLocaleString(locale)}
+              </p>
+              <p style={{ margin: '6px 0 0', color: '#748278', fontSize: 12 }}>
                 {tr('Получатели', 'Qabul qiluvchilar')}: {campaign.totalRecipients} | {tr('Отправлено', 'Yuborildi')}:{' '}
                 {campaign.sentCount} | {tr('Ошибки', 'Xatolar')}: {campaign.failedCount}
               </p>

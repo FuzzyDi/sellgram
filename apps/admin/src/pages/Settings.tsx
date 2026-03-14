@@ -38,7 +38,7 @@ export default function Settings() {
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function generateTelegramLinkCode() {
@@ -158,6 +158,7 @@ export default function Settings() {
       alert(err.message);
     }
   }
+
   async function saveLoyalty() {
     try {
       await adminApi.updateLoyaltyConfig(loyalty);
@@ -179,7 +180,7 @@ export default function Settings() {
       <div className="sg-card soft">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <p style={{ margin: 0, fontWeight: 800 }}>{tr('Привязка Telegram-админа', "Telegram adminini bog'lash")}</p>
+            <p style={{ margin: 0, fontWeight: 800 }}>{tr('Привязка Telegram-админа', 'Telegram adminini bog\'lash')}</p>
             <p className="sg-subtitle" style={{ marginTop: 4 }}>
               {tr('Сгенерируйте код и отправьте боту: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
             </p>
@@ -238,7 +239,7 @@ export default function Settings() {
                   {tr('Изменить', 'Tahrirlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => testStoreConnection(store)}>
-                  {tr('Проверить бота', "Botni tekshirish")}
+                  {tr('Проверить бота', 'Botni tekshirish')}
                 </button>
                 <button
                   className="sg-btn danger"
@@ -317,7 +318,7 @@ export default function Settings() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              saveLoyalty();
+              void saveLoyalty();
             }}
             className="sg-grid"
             style={{ gap: 12, marginTop: 10 }}
@@ -415,7 +416,7 @@ export default function Settings() {
                 placeholder={tr('Приветственное сообщение', 'Xush kelibsiz xabari')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="sg-btn primary" type="button" onClick={saveStore}>
+                <button className="sg-btn primary" type="button" onClick={() => void saveStore()}>
                   {tr('Сохранить', 'Saqlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => setShowStoreForm(false)}>
@@ -473,7 +474,7 @@ export default function Settings() {
                 placeholder={tr('Бесплатно от', 'Bepul chegarasi')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="sg-btn primary" type="button" onClick={saveZone}>
+                <button className="sg-btn primary" type="button" onClick={() => void saveZone()}>
                   {tr('Сохранить', 'Saqlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => setShowZoneForm(false)}>

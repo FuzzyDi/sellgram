@@ -63,12 +63,11 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
           return reply.status(400).send({ success: false, error: 'customerIds required for SELECTED mode' });
         }
       } else {
-        const orderCustomers = await prisma.order.findMany({
-          where: { tenantId: request.tenantId!, storeId: body.storeId },
-          select: { customerId: true },
-          distinct: ['customerId'],
+        const allCustomers = await prisma.customer.findMany({
+          where: { tenantId: request.tenantId! },
+          select: { id: true },
         });
-        targetCustomerIds = orderCustomers.map((row: { customerId: string }) => row.customerId);
+        targetCustomerIds = allCustomers.map((row: { id: string }) => row.id);
       }
 
       const recipients = await prisma.customer.findMany({
@@ -79,12 +78,11 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
         select: {
           telegramId: true,
           firstName: true,
+          id: true,
         },
       });
 
-      const telegramRecipients = recipients.filter((r: any) => r.telegramId);
-
-      if (!telegramRecipients.length) {
+      if (!recipients.length) {
         return reply.status(400).send({
           success: false,
           error: 'No recipients found for selected audience',
@@ -100,11 +98,11 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
           message: body.message,
           targetType: body.targetType,
           status: 'DRAFT',
-          totalRecipients: telegramRecipients.length,
+          totalRecipients: recipients.length,
         },
       });
 
-      const results = await sendPromoBroadcast(body.storeId, telegramRecipients, {
+      const results = await sendPromoBroadcast(body.storeId, recipients, {
         title: body.title,
         message: body.message,
       });
@@ -124,7 +122,7 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
 
       return {
         success: true,
-        data: { campaignId: campaign.id, total: telegramRecipients.length, sent: sentCount, failed: failedCount },
+        data: { campaignId: campaign.id, total: recipients.length, sent: sentCount, failed: failedCount },
       };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
