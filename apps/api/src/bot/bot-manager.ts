@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { OrderStatusType } from '@sellgram/shared';
 import prisma from '../lib/prisma.js';
 import { decrypt } from '../lib/encrypt.js';
+import { getRedis } from '../lib/redis.js';
 
 interface BotInstance {
   bot: Bot;
@@ -11,6 +12,7 @@ interface BotInstance {
 }
 
 const bots = new Map<string, BotInstance>();
+const SUBSCRIPTION_REMINDER_DAYS = [7, 3, 1];
 
 const STATUS_EMOJI: Record<OrderStatusType, string> = {
   NEW: '\u{1F195}',
@@ -438,6 +440,94 @@ async function autoCompleteDelivered(): Promise<void> {
   }
 }
 
+function toStartOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function calcDaysLeft(planExpiresAt: Date, now = new Date()): number {
+  const msInDay = 24 * 60 * 60 * 1000;
+  const from = toStartOfDay(now).getTime();
+  const to = toStartOfDay(planExpiresAt).getTime();
+  return Math.round((to - from) / msInDay);
+}
+
+function getBotInstanceForTenant(tenantId: string): BotInstance | null {
+  for (const instance of bots.values()) {
+    if (instance.tenantId === tenantId) return instance;
+  }
+  return null;
+}
+
+async function remindExpiringSubscriptions(): Promise<void> {
+  const now = new Date();
+  const maxReminderDay = Math.max(...SUBSCRIPTION_REMINDER_DAYS);
+  const until = new Date(now.getTime() + maxReminderDay * 24 * 60 * 60 * 1000);
+
+  const expiringTenants = await prisma.tenant.findMany({
+    where: {
+      plan: { in: ['PRO', 'BUSINESS'] },
+      planExpiresAt: {
+        not: null,
+        gte: toStartOfDay(now),
+        lte: toStartOfDay(until),
+      },
+    },
+    select: { id: true, name: true, plan: true, planExpiresAt: true },
+  });
+
+  if (expiringTenants.length === 0) return;
+
+  const redis = getRedis();
+
+  for (const tenant of expiringTenants) {
+    if (!tenant.planExpiresAt) continue;
+
+    const daysLeft = calcDaysLeft(tenant.planExpiresAt, now);
+    if (!SUBSCRIPTION_REMINDER_DAYS.includes(daysLeft)) continue;
+
+    const instance = getBotInstanceForTenant(tenant.id);
+    if (!instance) continue;
+
+    const dedupeKey = `subscription:reminder:${tenant.id}:${daysLeft}:${toStartOfDay(now).toISOString().slice(0, 10)}`;
+    const dedupeSet = await redis.set(dedupeKey, '1', 'EX', 26 * 60 * 60, 'NX');
+    if (!dedupeSet) continue;
+
+    const admins = await prisma.user.findMany({
+      where: {
+        tenantId: tenant.id,
+        role: { in: ['OWNER', 'MANAGER'] },
+        adminTelegramId: { not: null },
+        isActive: true,
+      },
+      select: { adminTelegramId: true, language: true },
+    });
+
+    if (admins.length === 0) continue;
+
+    for (const admin of admins) {
+      if (!admin.adminTelegramId) continue;
+
+      const renewHint = tLangByCode(
+        admin.language,
+        '\u041F\u0440\u043E\u0434\u043B\u0438\u0442\u0435 \u0442\u0430\u0440\u0438\u0444 \u0432 \u043F\u0430\u043D\u0435\u043B\u0438: \u0422\u0430\u0440\u0438\u0444\u044B -> \u0412\u044B\u0431\u0440\u0430\u0442\u044C \u0442\u0430\u0440\u0438\u0444 -> \u041E\u043F\u043B\u0430\u0442\u0430.',
+        "Tarifni panelda uzaytiring: Tariflar -> Tarifni tanlash -> To'lov."
+      );
+
+      const text = tLangByCode(
+        admin.language,
+        `\u26A0\uFE0F \u0422\u0430\u0440\u0438\u0444 ${tenant.plan} \u0434\u043B\u044F \u043C\u0430\u0433\u0430\u0437\u0438\u043D\u0430 "${tenant.name}" \u0438\u0441\u0442\u0435\u043A\u0430\u0435\u0442 \u0447\u0435\u0440\u0435\u0437 ${daysLeft} \u0434\u043D.\n\u0414\u0430\u0442\u0430 \u043E\u043A\u043E\u043D\u0447\u0430\u043D\u0438\u044F: ${tenant.planExpiresAt.toLocaleDateString('ru-RU')}\n\n${renewHint}`,
+        `\u26A0\uFE0F "${tenant.name}" do'koni uchun ${tenant.plan} tarifi ${daysLeft} kundan so'ng tugaydi.\nTugash sanasi: ${tenant.planExpiresAt.toLocaleDateString('uz-UZ')}\n\n${renewHint}`
+      );
+
+      try {
+        await instance.bot.api.sendMessage(admin.adminTelegramId.toString(), text);
+      } catch {}
+    }
+  }
+}
+
 async function awardLoyaltyPoints(orderId: string): Promise<void> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -483,6 +573,9 @@ export async function initBotManager(fastify: FastifyInstance): Promise<void> {
 
   setInterval(() => void autoCompleteDelivered(), 30 * 60 * 1000);
   setTimeout(() => void autoCompleteDelivered(), 10_000);
+
+  setInterval(() => void remindExpiringSubscriptions(), 60 * 60 * 1000);
+  setTimeout(() => void remindExpiringSubscriptions(), 30_000);
 }
 
 export async function notifyOrderStatus(storeId: string, orderId: string, newStatus: OrderStatusType): Promise<void> {
@@ -606,6 +699,7 @@ export function getBotWebhookHandler(storeId: string) {
 export function getBot(storeId: string): Bot | undefined {
   return bots.get(storeId)?.bot;
 }
+
 
 
 
