@@ -9,7 +9,7 @@ type ActivityTarget = 'tenant' | 'invoice';
 type NoticeTone = 'success' | 'error' | 'info';
 
 export default function SystemAdmin() {
-  const { tr, locale } = useAdminI18n();
+  const { tr, locale, lang, setLang } = useAdminI18n();
   const [loggedIn, setLoggedIn] = useState(!!sessionStorage.getItem('systemToken'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -324,6 +324,10 @@ export default function SystemAdmin() {
       <>
         {noticeNode}
       <section className="sg-page" style={{ maxWidth: 460, margin: '20px auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10, gap: 6 }}>
+          <button type="button" onClick={() => setLang('ru')} style={langBtn(lang === 'ru')}>RU</button>
+          <button type="button" onClick={() => setLang('uz')} style={langBtn(lang === 'uz')}>UZ</button>
+        </div>
         <h2 className="sg-title" style={{ fontSize: 28 }}>{tr('Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ Р°РґРјРёРЅ СЃРёСЃС‚РµРјС‹', 'Global tizim admini')}</h2>
         <p className="sg-subtitle">{tr('РћС‚РґРµР»СЊРЅР°СЏ РєРѕРЅСЃРѕР»СЊ РґР»СЏ РєРѕРЅС‚СЂРѕР»СЏ РїР»Р°С‚С„РѕСЂРјС‹ Рё РјРѕРґРµСЂР°С†РёРё РѕРїР»Р°С‚.', 'Platforma nazorati va to\'lov moderatsiyasi uchun alohida konsol.')}</p>
 
@@ -350,6 +354,8 @@ export default function SystemAdmin() {
           <p className="sg-subtitle">{tr('РћРїРµСЂР°С†РёРё, РјРѕРґРµСЂР°С†РёСЏ billing Рё РєРѕРЅС‚СЂРѕР»СЊ РїР»Р°С‚С„РѕСЂРјС‹.', 'Operatsiyalar, billing moderatsiyasi va platforma nazorati.')}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={() => setLang('ru')} style={langBtn(lang === 'ru')}>RU</button>
+          <button type="button" onClick={() => setLang('uz')} style={langBtn(lang === 'uz')}>UZ</button>
           <Button onClick={goToStoreAdmin} className="sg-btn ghost">
             {tr('РџР°РЅРµР»СЊ РјР°РіР°Р·РёРЅР°', "Do'kon paneli")}
           </Button>
@@ -673,5 +679,18 @@ export default function SystemAdmin() {
   );
 }
 
-
+function langBtn(active: boolean): React.CSSProperties {
+  return {
+    border: '1px solid #cfd8d3',
+    borderRadius: 999,
+    height: 32,
+    minWidth: 46,
+    padding: '0 12px',
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: 'pointer',
+    color: active ? '#ffffff' : '#1f2937',
+    background: active ? '#0f172a' : '#ffffff',
+  };
+}
 
