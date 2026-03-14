@@ -146,7 +146,7 @@ async function registerBot(
       { command: 'help', description: '\u041F\u043E\u043C\u043E\u0449\u044C' },
       { command: 'orders', description: '\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0435 \u0437\u0430\u043A\u0430\u0437\u044B (\u0430\u0434\u043C\u0438\u043D)' },
       { command: 'stats', description: '\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 (\u0430\u0434\u043C\u0438\u043D)' },
-      { command: 'admin', description: 'Link admin: /admin CODE' },
+      { command: 'admin', description: '\u041F\u0440\u0438\u0432\u044F\u0437\u043A\u0430 \u0430\u0434\u043C\u0438\u043D\u0430: /admin CODE' },
     ]);
   } catch {}
 
@@ -195,7 +195,7 @@ async function registerBot(
 
     const existing = await prisma.user.findFirst({ where: { tenantId, adminTelegramId: tgId } });
     if (existing) {
-      await ctx.reply(tCtx(ctx, `Already linked: ${existing.name} (${existing.role}).`, `${existing.name} (${existing.role}) allaqachon ulangan.`));
+      await ctx.reply(tCtx(ctx, `\u0423\u0436\u0435 \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u043D\u043E: ${existing.name} (${existing.role}).`, `${existing.name} (${existing.role}) allaqachon ulangan.`));
       return;
     }
 
@@ -231,7 +231,7 @@ async function registerBot(
     await ctx.reply(
       tCtx(
         ctx,
-        `Telegram linked!\n\nUser: ${user.name} (${user.role})\nEmail: ${user.email}\n\nCommands: /orders /stats /help`,
+        `Telegram \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u043D.\n\n\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C: ${user.name} (${user.role})\nEmail: ${user.email}\n\n\u041A\u043E\u043C\u0430\u043D\u0434\u044B: /orders /stats /help`,
         `Telegram ulandi!\n\nFoydalanuvchi: ${user.name} (${user.role})\nEmail: ${user.email}\n\nBuyruqlar: /orders /stats /help`
       )
     );
@@ -339,7 +339,7 @@ async function registerBot(
       for (const item of order.items) {
         const product = await prisma.product.findUnique({ where: { id: item.productId } });
         if (!product || product.stockQty < item.qty) {
-          await ctx.answerCallbackQuery({ text: tCtx(ctx, `Not enough stock: ${item.name}`, `${item.name} uchun qoldiq yetarli emas`) });
+          await ctx.answerCallbackQuery({ text: tCtx(ctx, `\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u043E\u0441\u0442\u0430\u0442\u043A\u0430: ${item.name}`, `${item.name} uchun qoldiq yetarli emas`) });
           return;
         }
       }
@@ -363,8 +363,12 @@ async function registerBot(
     const updated = await prisma.order.findUnique({ where: { id: order.id } });
     if (updated) {
       const kb = buildAdminOrderKeyboard(order.id, updated.status, ctx.from.language_code);
-      const baseText = (ctx.callbackQuery.message?.text || '').split('\n\nStatus:')[0];
-      const statusLine = `\n\nStatus: ${STATUS_EMOJI[updated.status as OrderStatusType]} ${statusLabel(updated.status, ctx.from.language_code)}`;
+      const baseText = (ctx.callbackQuery.message?.text || '')
+        .split('\n\nStatus:')[0]
+        .split('\n\n\u0421\u0442\u0430\u0442\u0443\u0441:')[0]
+        .split('\n\nHolat:')[0];
+      const statusTitle = tCtx(ctx, '\u0421\u0442\u0430\u0442\u0443\u0441', 'Holat');
+      const statusLine = `\n\n${statusTitle}: ${STATUS_EMOJI[updated.status as OrderStatusType]} ${statusLabel(updated.status, ctx.from.language_code)}`;
       await ctx.editMessageText(baseText + statusLine, {
         reply_markup: kb.inline_keyboard.length ? kb : undefined,
       }).catch(() => {});
@@ -387,7 +391,7 @@ async function registerBot(
 
     await completeDeliveredOrder(order.id, storeId);
 
-    await ctx.editMessageText((ctx.callbackQuery.message?.text || '') + '\n\n\u0421\u043F\u0430\u0441\u0438\u0431\u043E. \u0417\u0430\u043A\u0430\u0437 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D.').catch(() => {});
+    await ctx.editMessageText((ctx.callbackQuery.message?.text || '') + `\n\n${tCtx(ctx, '\u0421\u043F\u0430\u0441\u0438\u0431\u043E. \u0417\u0430\u043A\u0430\u0437 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D.', 'Rahmat. Buyurtma yakunlandi.')}`).catch(() => {});
     await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u0411\u0430\u043B\u043B\u044B \u043D\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u044B', "Ball qo'shildi") });
   });
 
@@ -412,7 +416,12 @@ async function completeDeliveredOrder(orderId: string, storeId: string): Promise
   const bot = bots.get(storeId)?.bot;
   if (customer?.telegramId && bot) {
     try {
-      await bot.api.sendMessage(customer.telegramId.toString(), `Order #${order.orderNumber} completed. \u0411\u0430\u043B\u043B\u044B \u043D\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u044B.`);
+      const completionText = tLangByCode(
+        customer.language,
+        `\u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D. \u0411\u0430\u043B\u043B\u044B \u043D\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u044B.`,
+        `#${order.orderNumber} buyurtma yakunlandi. Ballar qo'shildi.`
+      );
+      await bot.api.sendMessage(customer.telegramId.toString(), completionText);
     } catch {}
   }
 }
