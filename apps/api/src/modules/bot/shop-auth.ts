@@ -15,6 +15,9 @@ declare module 'fastify' {
 export async function telegramShopAuth(request: FastifyRequest, reply: FastifyReply) {
   const initData = request.headers['x-telegram-init-data'] as string;
   const storeId = request.headers['x-store-id'] as string;
+  const isPublicCatalogRead =
+    request.method === 'GET' &&
+    (request.url.startsWith('/api/shop/catalog') || request.url.startsWith('/api/shop/products/'));
 
   if (!storeId) {
     return reply.status(401).send({ success: false, error: 'Missing store ID' });
@@ -61,6 +64,13 @@ export async function telegramShopAuth(request: FastifyRequest, reply: FastifyRe
       request.customer = { id: firstCustomer.id, tenantId: store.tenantId };
       return;
     }
+  }
+
+  if (isPublicCatalogRead) {
+    // Allow first catalog/product load before Telegram initData becomes available.
+    // Cart/checkout/orders remain protected by full Telegram auth.
+    request.customer = { id: '', tenantId: store.tenantId };
+    return;
   }
 
   return reply.status(401).send({ success: false, error: 'Auth failed' });
