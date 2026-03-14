@@ -78,6 +78,20 @@ function tCtx(ctx: any, en: string, uz: string): string {
 function statusLabel(status: OrderStatusType, langCode?: string | null): string {
   return isUzLanguageCode(langCode) ? STATUS_LABEL_UZ[status] : STATUS_LABEL_EN[status];
 }
+function buildStoreMiniAppUrl(miniAppUrl: string | null | undefined, storeId: string): string | null {
+  if (!miniAppUrl) return null;
+  try {
+    const url = new URL(miniAppUrl);
+    if (!url.searchParams.get('storeId')) {
+      url.searchParams.set('storeId', storeId);
+    }
+    return url.toString();
+  } catch {
+    return miniAppUrl;
+  }
+}
+
+
 
 async function isAdmin(tenantId: string, adminTelegramId: bigint): Promise<boolean> {
   const user = await prisma.user.findFirst({
@@ -111,14 +125,15 @@ async function registerBot(
   const token = decrypt(encryptedToken);
   const bot = new Bot(token);
   await bot.init();
+  const resolvedMiniAppUrl = buildStoreMiniAppUrl(miniAppUrl, storeId);
 
-  if (miniAppUrl) {
+  if (resolvedMiniAppUrl) {
     try {
       await bot.api.setChatMenuButton({
         menu_button: {
           type: 'web_app',
           text: 'Shop',
-          web_app: { url: miniAppUrl },
+          web_app: { url: resolvedMiniAppUrl },
         },
       });
     } catch {}
@@ -137,10 +152,10 @@ async function registerBot(
 
   bot.command('start', async (ctx) => {
     const inline = new InlineKeyboard();
-    if (miniAppUrl) inline.webApp(tCtx(ctx, '??? Открыть магазин', "??? Do'konni ochish"), miniAppUrl);
+    if (resolvedMiniAppUrl) inline.webApp(tCtx(ctx, '??? Открыть магазин', "??? Do'konni ochish"), resolvedMiniAppUrl);
 
     const keyboard = new Keyboard();
-    if (miniAppUrl) keyboard.webApp(tCtx(ctx, '??? Shop', "??? Do'kon"), miniAppUrl).row();
+    if (resolvedMiniAppUrl) keyboard.webApp(tCtx(ctx, '??? Shop', "??? Do'kon"), resolvedMiniAppUrl).row();
     keyboard.text('/help');
 
     await ctx.reply(welcomeMessage || tCtx(ctx, 'Welcome! ???', "Xush kelibsiz! ???"), { reply_markup: inline });
@@ -166,11 +181,11 @@ async function registerBot(
   });
 
   bot.command('shop', async (ctx) => {
-    if (!miniAppUrl) {
+    if (!resolvedMiniAppUrl) {
       await ctx.reply(tCtx(ctx, 'Ссылка на магазин еще не настроена.', "Do'kon havolasi hali sozlanmagan."));
       return;
     }
-    const kb = new InlineKeyboard().webApp(tCtx(ctx, '??? Открыть магазин', "??? Do'konni ochish"), miniAppUrl);
+    const kb = new InlineKeyboard().webApp(tCtx(ctx, '??? Открыть магазин', "??? Do'konni ochish"), resolvedMiniAppUrl);
     await ctx.reply(tCtx(ctx, 'Открыть магазин from button below:', "Quyidagi tugma orqali do'konni oching:"), { reply_markup: kb });
   });
 
@@ -578,6 +593,7 @@ export function getBotWebhookHandler(storeId: string) {
 export function getBot(storeId: string): Bot | undefined {
   return bots.get(storeId)?.bot;
 }
+
 
 
 

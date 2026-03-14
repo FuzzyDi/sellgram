@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -76,7 +76,7 @@ export default function Settings() {
         await adminApi.updateStore(editingStoreId, payload);
       } else {
         if (!storeForm.name || !storeForm.botToken) {
-          alert(tr('Нужны название магазина и bot token', "Do'kon nomi va bot token kerak"));
+          alert(tr('РќСѓР¶РЅС‹ РЅР°Р·РІР°РЅРёРµ РјР°РіР°Р·РёРЅР° Рё bot token', "Do'kon nomi va bot token kerak"));
           return;
         }
         await adminApi.createStore(storeForm);
@@ -125,7 +125,7 @@ export default function Settings() {
   }
 
   async function deleteZone(id: string) {
-    if (!confirm(tr('Удалить эту зону?', "Bu hudud o'chirilsinmi?"))) return;
+    if (!confirm(tr('РЈРґР°Р»РёС‚СЊ СЌС‚Сѓ Р·РѕРЅСѓ?', "Bu hudud o'chirilsinmi?"))) return;
     try {
       await adminApi.deleteDeliveryZone(id);
       await load();
@@ -133,48 +133,60 @@ export default function Settings() {
       alert(err.message);
     }
   }
-
+  async function deleteStore(id: string, name: string) {
+    const question = tr(
+      `Delete store "${name}"? This action cannot be undone.`,
+      `"${name}" do'koni o'chirilsinmi? Bu amalni ortga qaytarib bo'lmaydi.`
+    );
+    if (!confirm(question)) return;
+    try {
+      await adminApi.deleteStore(id);
+      await load();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
   async function saveLoyalty() {
     try {
       await adminApi.updateLoyaltyConfig(loyalty);
-      alert(tr('Сохранено', 'Saqlandi'));
+      alert(tr('РЎРѕС…СЂР°РЅРµРЅРѕ', 'Saqlandi'));
     } catch (err: any) {
       alert(err.message);
     }
   }
 
-  if (loading) return <p className="sg-subtitle">{tr('Загрузка настроек...', 'Sozlamalar yuklanmoqda...')}</p>;
+  if (loading) return <p className="sg-subtitle">{tr('Р—Р°РіСЂСѓР·РєР° РЅР°СЃС‚СЂРѕРµРє...', 'Sozlamalar yuklanmoqda...')}</p>;
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
       <header>
-        <h2 className="sg-title">{tr('Настройки', 'Sozlamalar')}</h2>
-        <p className="sg-subtitle">{tr('Магазины, доставка, лояльность и Telegram-привязка', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
+        <h2 className="sg-title">{tr('РќР°СЃС‚СЂРѕР№РєРё', 'Sozlamalar')}</h2>
+        <p className="sg-subtitle">{tr('РњР°РіР°Р·РёРЅС‹, РґРѕСЃС‚Р°РІРєР°, Р»РѕСЏР»СЊРЅРѕСЃС‚СЊ Рё Telegram-РїСЂРёРІСЏР·РєР°', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
       </header>
 
       <div className="sg-card soft">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <p style={{ margin: 0, fontWeight: 800 }}>{tr('Привязка Telegram-админа', "Telegram adminini bog'lash")}</p>
+            <p style={{ margin: 0, fontWeight: 800 }}>{tr('РџСЂРёРІСЏР·РєР° Telegram-Р°РґРјРёРЅР°', "Telegram adminini bog'lash")}</p>
             <p className="sg-subtitle" style={{ marginTop: 4 }}>
-              {tr('Сгенерируйте код и отправьте боту: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
+              {tr('РЎРіРµРЅРµСЂРёСЂСѓР№С‚Рµ РєРѕРґ Рё РѕС‚РїСЂР°РІСЊС‚Рµ Р±РѕС‚Сѓ: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
             </p>
           </div>
           <button className="sg-btn primary" type="button" onClick={generateTelegramLinkCode}>
-            {telegramLinkLoading ? tr('Генерация...', 'Yaratilmoqda...') : tr('Сгенерировать код', 'Kod yaratish')}
+            {telegramLinkLoading ? tr('Р“РµРЅРµСЂР°С†РёСЏ...', 'Yaratilmoqda...') : tr('РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РєРѕРґ', 'Kod yaratish')}
           </button>
         </div>
 
         {telegramLinkData && (
           <div className="sg-card" style={{ marginTop: 12 }}>
             <p style={{ margin: 0, fontSize: 14 }}>
-              {tr('Код', 'Kod')}: <b style={{ fontFamily: 'monospace' }}>{telegramLinkData.code}</b>
+              {tr('РљРѕРґ', 'Kod')}: <b style={{ fontFamily: 'monospace' }}>{telegramLinkData.code}</b>
             </p>
             <p style={{ margin: '6px 0 0', fontSize: 12, color: '#65746b' }}>
-              {tr('Истекает', 'Amal qilish muddati')}: {new Date(telegramLinkData.expiresAt).toLocaleString(locale)}
+              {tr('РСЃС‚РµРєР°РµС‚', 'Amal qilish muddati')}: {new Date(telegramLinkData.expiresAt).toLocaleString(locale)}
             </p>
             <p style={{ margin: '6px 0 0', fontSize: 12, color: '#65746b' }}>
-              {tr('Команда', 'Buyruq')}: <span style={{ fontFamily: 'monospace' }}>{telegramLinkData.command}</span>
+              {tr('РљРѕРјР°РЅРґР°', 'Buyruq')}: <span style={{ fontFamily: 'monospace' }}>{telegramLinkData.command}</span>
             </p>
           </div>
         )}
@@ -182,13 +194,13 @@ export default function Settings() {
 
       <div className="sg-pill-row">
         <button className={`sg-pill ${tab === 'stores' ? 'active' : ''}`} type="button" onClick={() => setTab('stores')}>
-          {tr('Магазины', "Do'konlar")}
+          {tr('РњР°РіР°Р·РёРЅС‹', "Do'konlar")}
         </button>
         <button className={`sg-pill ${tab === 'zones' ? 'active' : ''}`} type="button" onClick={() => setTab('zones')}>
-          {tr('Доставка', 'Yetkazib berish')}
+          {tr('Р”РѕСЃС‚Р°РІРєР°', 'Yetkazib berish')}
         </button>
         <button className={`sg-pill ${tab === 'loyalty' ? 'active' : ''}`} type="button" onClick={() => setTab('loyalty')}>
-          {tr('Лояльность', 'Loyallik')}
+          {tr('Р›РѕСЏР»СЊРЅРѕСЃС‚СЊ', 'Loyallik')}
         </button>
       </div>
 
@@ -196,10 +208,10 @@ export default function Settings() {
         <section className="sg-grid" style={{ gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <p className="sg-subtitle" style={{ margin: 0 }}>
-              {tr('Один магазин = один Telegram-бот', "Bitta do'kon = bitta Telegram bot")}
+              {tr('РћРґРёРЅ РјР°РіР°Р·РёРЅ = РѕРґРёРЅ Telegram-Р±РѕС‚', "Bitta do'kon = bitta Telegram bot")}
             </p>
             <button className="sg-btn primary" type="button" onClick={openCreateStore}>
-              + {tr('Магазин', "Do'kon")}
+              + {tr('РњР°РіР°Р·РёРЅ', "Do'kon")}
             </button>
           </div>
 
@@ -209,13 +221,24 @@ export default function Settings() {
                 <p style={{ margin: 0, fontWeight: 800 }}>{store.name}</p>
                 {store.botUsername && <p style={{ margin: '4px 0 0', color: '#2e7d64', fontSize: 13 }}>@{store.botUsername}</p>}
               </div>
-              <button className="sg-btn ghost" type="button" onClick={() => openEditStore(store)}>
-                {tr('Изменить', 'Tahrirlash')}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="sg-btn ghost" type="button" onClick={() => openEditStore(store)}>
+                  {tr('РР·РјРµРЅРёС‚СЊ', 'Tahrirlash')}
+                </button>
+                <button
+                  className="sg-btn danger"
+                  type="button"
+                  disabled={stores.length <= 1}
+                  title={stores.length <= 1 ? tr('Нельзя удалить последний магазин', "Oxirgi do'konni o'chirib bo'lmaydi") : undefined}
+                  onClick={() => deleteStore(store.id, store.name)}
+                >
+                  {tr('РЈРґР°Р»РёС‚СЊ', "O'chirish")}
+                </button>
+              </div>
             </article>
           ))}
 
-          {stores.length === 0 && <p className="sg-subtitle">{tr('Магазинов пока нет', "Hozircha do'konlar yo'q")}</p>}
+          {stores.length === 0 && <p className="sg-subtitle">{tr('РњР°РіР°Р·РёРЅРѕРІ РїРѕРєР° РЅРµС‚', "Hozircha do'konlar yo'q")}</p>}
         </section>
       )}
 
@@ -223,10 +246,10 @@ export default function Settings() {
         <section className="sg-grid" style={{ gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <p className="sg-subtitle" style={{ margin: 0 }}>
-              {tr('Зоны и тарифы доставки', 'Yetkazib berish hududlari va tariflar')}
+              {tr('Р—РѕРЅС‹ Рё С‚Р°СЂРёС„С‹ РґРѕСЃС‚Р°РІРєРё', 'Yetkazib berish hududlari va tariflar')}
             </p>
             <button className="sg-btn primary" type="button" onClick={openCreateZone}>
-              + {tr('Зона', 'Hudud')}
+              + {tr('Р—РѕРЅР°', 'Hudud')}
             </button>
           </div>
 
@@ -234,10 +257,10 @@ export default function Settings() {
             <table className="sg-table">
               <thead>
                 <tr>
-                  <th>{tr('Зона', 'Hudud')}</th>
-                  <th>{tr('Цена', 'Narx')}</th>
-                  <th>{tr('Бесплатно от', 'Bepul chegarasi')}</th>
-                  <th>{tr('Действия', 'Amallar')}</th>
+                  <th>{tr('Р—РѕРЅР°', 'Hudud')}</th>
+                  <th>{tr('Р¦РµРЅР°', 'Narx')}</th>
+                  <th>{tr('Р‘РµСЃРїР»Р°С‚РЅРѕ РѕС‚', 'Bepul chegarasi')}</th>
+                  <th>{tr('Р”РµР№СЃС‚РІРёСЏ', 'Amallar')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -249,10 +272,10 @@ export default function Settings() {
                     <td>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button className="sg-btn ghost" type="button" onClick={() => openEditZone(zone)}>
-                          {tr('Изменить', 'Tahrirlash')}
+                          {tr('РР·РјРµРЅРёС‚СЊ', 'Tahrirlash')}
                         </button>
                         <button className="sg-btn danger" type="button" onClick={() => deleteZone(zone.id)}>
-                          {tr('Удалить', "O'chirish")}
+                          {tr('РЈРґР°Р»РёС‚СЊ', "O'chirish")}
                         </button>
                       </div>
                     </td>
@@ -261,7 +284,7 @@ export default function Settings() {
                 {zones.length === 0 && (
                   <tr>
                     <td colSpan={4} style={{ textAlign: 'center', color: '#6b7a71' }}>
-                      {tr('Зоны доставки не настроены', 'Yetkazib berish hududlari sozlanmagan')}
+                      {tr('Р—РѕРЅС‹ РґРѕСЃС‚Р°РІРєРё РЅРµ РЅР°СЃС‚СЂРѕРµРЅС‹', 'Yetkazib berish hududlari sozlanmagan')}
                     </td>
                   </tr>
                 )}
@@ -273,8 +296,8 @@ export default function Settings() {
 
       {tab === 'loyalty' && loyalty && (
         <section className="sg-card" style={{ maxWidth: 720 }}>
-          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Программа лояльности', 'Loyallik dasturi')}</h3>
-          <p className="sg-subtitle">{tr('Начисления баллов и лимиты скидки', 'Ball berish qoidalari va chegirma limitlari')}</p>
+          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('РџСЂРѕРіСЂР°РјРјР° Р»РѕСЏР»СЊРЅРѕСЃС‚Рё', 'Loyallik dasturi')}</h3>
+          <p className="sg-subtitle">{tr('РќР°С‡РёСЃР»РµРЅРёСЏ Р±Р°Р»Р»РѕРІ Рё Р»РёРјРёС‚С‹ СЃРєРёРґРєРё', 'Ball berish qoidalari va chegirma limitlari')}</p>
 
           <form
             onSubmit={(e) => {
@@ -290,12 +313,12 @@ export default function Settings() {
                 checked={!!loyalty.isEnabled}
                 onChange={(e) => setLoyalty({ ...loyalty, isEnabled: e.target.checked })}
               />
-              {tr('Включена', 'Yoqilgan')}
+              {tr('Р’РєР»СЋС‡РµРЅР°', 'Yoqilgan')}
             </label>
 
             <div className="sg-grid cols-2">
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Сумма шага', 'Qadam summasi')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('РЎСѓРјРјР° С€Р°РіР°', 'Qadam summasi')}</label>
                 <input
                   type="number"
                   value={loyalty.unitAmount || 1000}
@@ -305,7 +328,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Баллов за шаг', 'Qadam uchun ball')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р‘Р°Р»Р»РѕРІ Р·Р° С€Р°Рі', 'Qadam uchun ball')}</label>
                 <input
                   type="number"
                   value={loyalty.pointsPerUnit || 1}
@@ -318,7 +341,7 @@ export default function Settings() {
 
             <div className="sg-grid cols-2">
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Цена 1 балла', '1 ball qiymati')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р¦РµРЅР° 1 Р±Р°Р»Р»Р°', '1 ball qiymati')}</label>
                 <input
                   type="number"
                   value={loyalty.pointValue || 100}
@@ -328,7 +351,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Макс. скидка %', 'Maks. chegirma %')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('РњР°РєСЃ. СЃРєРёРґРєР° %', 'Maks. chegirma %')}</label>
                 <input
                   type="number"
                   value={loyalty.maxDiscountPct || 30}
@@ -340,7 +363,7 @@ export default function Settings() {
             </div>
 
             <button className="sg-btn primary" type="submit">
-              {tr('Сохранить', 'Saqlash')}
+              {tr('РЎРѕС…СЂР°РЅРёС‚СЊ', 'Saqlash')}
             </button>
           </form>
         </section>
@@ -350,7 +373,7 @@ export default function Settings() {
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
             <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
-              {editingStoreId ? tr('Редактировать магазин', "Do'konni tahrirlash") : tr('Новый магазин', "Yangi do'kon")}
+              {editingStoreId ? tr('Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ РјР°РіР°Р·РёРЅ', "Do'konni tahrirlash") : tr('РќРѕРІС‹Р№ РјР°РіР°Р·РёРЅ', "Yangi do'kon")}
             </h3>
 
             <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
@@ -359,7 +382,7 @@ export default function Settings() {
                 onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Название магазина', "Do'kon nomi")}
+                placeholder={tr('РќР°Р·РІР°РЅРёРµ РјР°РіР°Р·РёРЅР°', "Do'kon nomi")}
               />
               <input
                 value={storeForm.botToken}
@@ -374,14 +397,14 @@ export default function Settings() {
                 rows={3}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }}
-                placeholder={tr('Приветственное сообщение', 'Xush kelibsiz xabari')}
+                placeholder={tr('РџСЂРёРІРµС‚СЃС‚РІРµРЅРЅРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ', 'Xush kelibsiz xabari')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="sg-btn primary" type="button" onClick={saveStore}>
-                  {tr('Сохранить', 'Saqlash')}
+                  {tr('РЎРѕС…СЂР°РЅРёС‚СЊ', 'Saqlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => setShowStoreForm(false)}>
-                  {tr('Отмена', 'Bekor qilish')}
+                  {tr('РћС‚РјРµРЅР°', 'Bekor qilish')}
                 </button>
               </div>
             </div>
@@ -393,7 +416,7 @@ export default function Settings() {
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
             <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
-              {editingZoneId ? tr('Редактировать зону', 'Hududni tahrirlash') : tr('Новая зона', 'Yangi hudud')}
+              {editingZoneId ? tr('Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ Р·РѕРЅСѓ', 'Hududni tahrirlash') : tr('РќРѕРІР°СЏ Р·РѕРЅР°', 'Yangi hudud')}
             </h3>
 
             <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
@@ -416,7 +439,7 @@ export default function Settings() {
                 onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Название зоны', 'Hudud nomi')}
+                placeholder={tr('РќР°Р·РІР°РЅРёРµ Р·РѕРЅС‹', 'Hudud nomi')}
               />
               <input
                 type="number"
@@ -424,7 +447,7 @@ export default function Settings() {
                 onChange={(e) => setZoneForm({ ...zoneForm, price: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Цена', 'Narx')}
+                placeholder={tr('Р¦РµРЅР°', 'Narx')}
               />
               <input
                 type="number"
@@ -432,14 +455,14 @@ export default function Settings() {
                 onChange={(e) => setZoneForm({ ...zoneForm, freeFrom: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Бесплатно от', 'Bepul chegarasi')}
+                placeholder={tr('Р‘РµСЃРїР»Р°С‚РЅРѕ РѕС‚', 'Bepul chegarasi')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="sg-btn primary" type="button" onClick={saveZone}>
-                  {tr('Сохранить', 'Saqlash')}
+                  {tr('РЎРѕС…СЂР°РЅРёС‚СЊ', 'Saqlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => setShowZoneForm(false)}>
-                  {tr('Отмена', 'Bekor qilish')}
+                  {tr('РћС‚РјРµРЅР°', 'Bekor qilish')}
                 </button>
               </div>
             </div>
@@ -449,3 +472,5 @@ export default function Settings() {
     </section>
   );
 }
+
+

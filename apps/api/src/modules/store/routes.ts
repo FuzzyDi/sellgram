@@ -1,10 +1,11 @@
-import { FastifyInstance } from 'fastify';
+﻿import { FastifyInstance } from 'fastify';
 import { planGuard } from '../../plugins/plan-guard.js';
 import paymentMethodRoutes from '../payments-integration/payment-methods.routes.js';
 import { createStoreSchema, storeIdParamSchema, updateStoreSchema } from './dto.js';
 import {
   activateTenantStoreBot,
   createTenantStore,
+  deleteTenantStore,
   getTenantStore,
   listTenantStores,
   StoreServiceError,
@@ -16,6 +17,8 @@ function mapStoreError(err: unknown) {
     if (err.code === 'STORE_NOT_FOUND') return { status: 404, error: 'Store not found' };
     if (err.code === 'STORE_INACTIVE') return { status: 400, error: 'Store is inactive' };
     if (err.code === 'WEBHOOK_BASE_URL_NOT_CONFIGURED') return { status: 400, error: 'Webhook base URL is not configured' };
+    if (err.code === 'STORE_HAS_ORDERS') return { status: 409, error: 'Store has orders and cannot be deleted' };
+    if (err.code === 'LAST_STORE_CANNOT_BE_DELETED') return { status: 409, error: 'At least one store must remain' };
   }
 
   if (err instanceof Error) return { status: 400, error: err.message };
@@ -61,6 +64,17 @@ export default async function storeRoutes(fastify: FastifyInstance) {
       const body = updateStoreSchema.parse(request.body);
       await updateTenantStore(request.tenantId!, id, body);
       return { success: true, message: 'Store updated' };
+    } catch (err: unknown) {
+      const mapped = mapStoreError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
+  });
+
+  fastify.delete('/stores/:id', async (request, reply) => {
+    try {
+      const { id } = storeIdParamSchema.parse(request.params);
+      await deleteTenantStore(request.tenantId!, id);
+      return { success: true, message: 'Store deleted' };
     } catch (err: unknown) {
       const mapped = mapStoreError(err);
       return reply.status(mapped.status).send({ success: false, error: mapped.error });

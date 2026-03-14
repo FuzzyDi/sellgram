@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   encrypt: vi.fn(),
@@ -14,7 +14,19 @@ const mocks = vi.hoisted(() => ({
       findFirst: vi.fn(),
       updateMany: vi.fn(),
       update: vi.fn(),
+      count: vi.fn(),
+      delete: vi.fn(),
     },
+    deliveryZone: {
+      deleteMany: vi.fn(),
+    },
+    storePaymentMethod: {
+      deleteMany: vi.fn(),
+    },
+    broadcastCampaign: {
+      deleteMany: vi.fn(),
+    },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -44,6 +56,7 @@ vi.mock('grammy', () => ({
 import {
   activateTenantStoreBot,
   createTenantStore,
+  deleteTenantStore,
   StoreServiceError,
   updateTenantStore,
 } from './service.js';
@@ -114,5 +127,24 @@ describe('store.service', () => {
       drop_pending_updates: false,
     });
     expect(result.storeId).toBe('s-1');
+  });
+
+  it('throws STORE_HAS_ORDERS when deleting store with orders', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue({ id: 's-1', _count: { orders: 2 } });
+
+    await expect(deleteTenantStore('t-1', 's-1')).rejects.toMatchObject({
+      code: 'STORE_HAS_ORDERS',
+    } satisfies Partial<StoreServiceError>);
+  });
+
+  it('deletes store when no orders and tenant has more than one store', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue({ id: 's-1', _count: { orders: 0 } });
+    mocks.prisma.store.count.mockResolvedValue(2);
+    mocks.prisma.$transaction.mockResolvedValue(undefined);
+
+    await deleteTenantStore('t-1', 's-1');
+
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.prisma.store.delete).toHaveBeenCalledWith({ where: { id: 's-1' } });
   });
 });

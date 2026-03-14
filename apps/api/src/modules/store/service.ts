@@ -1,11 +1,16 @@
-import { Bot } from 'grammy';
+﻿import { Bot } from 'grammy';
 import prisma from '../../lib/prisma.js';
 import { getConfig } from '../../config/index.js';
 import { decrypt, encrypt } from '../../lib/encrypt.js';
 import type { CreateStoreInput, UpdateStoreInput } from './dto.js';
 
 export class StoreServiceError extends Error {
-  code: 'STORE_NOT_FOUND' | 'STORE_INACTIVE' | 'WEBHOOK_BASE_URL_NOT_CONFIGURED';
+  code:
+    | 'STORE_NOT_FOUND'
+    | 'STORE_INACTIVE'
+    | 'WEBHOOK_BASE_URL_NOT_CONFIGURED'
+    | 'STORE_HAS_ORDERS'
+    | 'LAST_STORE_CANNOT_BE_DELETED';
 
   constructor(code: StoreServiceError['code']) {
     super(code);
@@ -126,4 +131,27 @@ export async function activateTenantStoreBot(tenantId: string, id: string) {
   });
 
   return { storeId: store.id, webhookUrl, miniAppUrl };
+}
+
+export async function deleteTenantStore(tenantId: string, id: string) {
+  const store = await prisma.store.findFirst({
+    where: { id, tenantId },
+    select: {
+      id: true,
+      _count: { select: { orders: true } },
+    },
+  });
+
+  if (!store) throw new StoreServiceError('STORE_NOT_FOUND');
+  if (store._count.orders > 0) throw new StoreServiceError('STORE_HAS_ORDERS');
+
+  const storesCount = await prisma.store.count({ where: { tenantId } });
+  if (storesCount <= 1) throw new StoreServiceError('LAST_STORE_CANNOT_BE_DELETED');
+
+  await prisma.$transaction([
+    prisma.deliveryZone.deleteMany({ where: { tenantId, storeId: id } }),
+    prisma.storePaymentMethod.deleteMany({ where: { tenantId, storeId: id } }),
+    prisma.broadcastCampaign.deleteMany({ where: { tenantId, storeId: id } }),
+    prisma.store.delete({ where: { id } }),
+  ]);
 }
