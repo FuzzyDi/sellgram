@@ -75,7 +75,6 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
         where: {
           tenantId: request.tenantId!,
           id: { in: targetCustomerIds },
-          telegramId: { not: null },
         },
         select: {
           telegramId: true,
@@ -83,6 +82,13 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
           firstName: true,
         },
       });
+
+      if (!recipients.length) {
+        return reply.status(400).send({
+          success: false,
+          error: 'No recipients found for selected audience',
+        });
+      }
 
       const campaign = await prisma.broadcastCampaign.create({
         data: {
