@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -77,6 +77,20 @@ export default function Dashboard() {
     return normalized || `${tr('\u0422\u043E\u0432\u0430\u0440', 'Mahsulot')} #${index + 1}`;
   };
 
+  const expiryInfo = useMemo(() => {
+    if (!sub?.planExpiresAt) return null;
+    const now = new Date();
+    const expires = new Date(sub.planExpiresAt);
+    if (Number.isNaN(expires.getTime())) return null;
+    const ms = expires.getTime() - now.getTime();
+    const daysLeft = Math.ceil(ms / (1000 * 60 * 60 * 24));
+    return {
+      daysLeft,
+      isExpired: ms <= 0,
+      expiresAt: expires,
+    };
+  }, [sub?.planExpiresAt]);
+
   if (loading) {
     return (
       <section className="sg-page">
@@ -91,6 +105,30 @@ export default function Dashboard() {
         <h2 className="sg-title">{tr('Дашборд', 'Boshqaruv paneli')}</h2>
         <p className="sg-subtitle">{tr('Показатели магазина и прогресс настройки', "Do'kon ko'rsatkichlari va sozlash holati")}</p>
       </header>
+
+      {expiryInfo && expiryInfo.daysLeft <= 7 && (
+        <div
+          className="sg-card"
+          style={{
+            borderColor: expiryInfo.isExpired ? '#fecaca' : '#fde68a',
+            background: expiryInfo.isExpired ? '#fff1f2' : '#fffbeb',
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 800, color: expiryInfo.isExpired ? '#be123c' : '#92400e' }}>
+            {expiryInfo.isExpired
+              ? tr('Подписка истекла. Продлите тариф, чтобы избежать ограничений.', "Obuna muddati tugagan. Cheklovlar bo'lmasligi uchun tarifni uzaytiring.")
+              : tr(`Подписка заканчивается через ${expiryInfo.daysLeft} дн. Продлите заранее.`, `Obuna ${expiryInfo.daysLeft} kunda tugaydi. Oldindan uzaytiring.`)}
+          </p>
+          <p className="sg-subtitle" style={{ marginTop: 6 }}>
+            {tr('Срок:', 'Muddat')}: {expiryInfo.expiresAt.toLocaleDateString()}
+          </p>
+          <div style={{ marginTop: 10 }}>
+            <button className="sg-btn primary" onClick={() => (window.location.hash = '/billing')}>
+              {tr('Продлить тариф', 'Tarifni uzaytirish')}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="sg-card soft">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
