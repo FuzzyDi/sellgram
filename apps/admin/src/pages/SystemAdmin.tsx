@@ -9,7 +9,8 @@ type ActivityTarget = 'tenant' | 'invoice';
 type NoticeTone = 'success' | 'error' | 'info';
 
 export default function SystemAdmin() {
-  const { tr, locale } = useAdminI18n();
+  const { tr: trI18n, locale } = useAdminI18n();
+  const tr = (_ru: string, uz: string) => uz || trI18n(_ru, uz);
   const [loggedIn, setLoggedIn] = useState(!!sessionStorage.getItem('systemToken'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -672,4 +673,5 @@ export default function SystemAdmin() {
     </>
   );
 }
+
 
