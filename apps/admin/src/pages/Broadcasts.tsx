@@ -3,6 +3,7 @@ import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
 type TargetType = 'ALL' | 'SELECTED';
+type NoticeTone = 'success' | 'error' | 'info';
 
 export default function Broadcasts() {
   const { tr, locale } = useAdminI18n();
@@ -17,6 +18,7 @@ export default function Broadcasts() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
 
   async function loadStores() {
     const list = await adminApi.getStores();
@@ -44,7 +46,7 @@ export default function Broadcasts() {
     try {
       await Promise.all([loadStores(), loadCustomers()]);
     } catch (err: any) {
-      alert(err.message || 'Failed to load broadcasts data');
+      showNotice('error', err?.message || tr('\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0440\u0430\u0441\u0441\u044B\u043B\u043A\u0438', "Xabarnoma ma'lumotlarini yuklab bo'lmadi"));
     } finally {
       setLoading(false);
     }
@@ -82,6 +84,11 @@ export default function Broadcasts() {
     FAILED: tr('Ошибка', 'Xato'),
   };
 
+  function showNotice(tone: NoticeTone, message: string) {
+    setNotice({ tone, message });
+    setTimeout(() => setNotice(null), 3200);
+  }
+
   async function sendCampaign() {
     if (!canSend) return;
     setSending(true);
@@ -98,9 +105,9 @@ export default function Broadcasts() {
       setSearch('');
       setSelectedCustomerIds([]);
       await loadCampaigns(storeId);
-      alert(tr('Рассылка отправлена', 'Xabarnoma yuborildi'));
+      showNotice('success', tr('Рассылка отправлена', 'Xabarnoma yuborildi'));
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
     } finally {
       setSending(false);
     }
@@ -112,12 +119,38 @@ export default function Broadcasts() {
     );
   }
 
+  const noticeNode = notice ? (
+    <div
+      style={{
+        position: 'fixed',
+        top: 18,
+        right: 18,
+        zIndex: 70,
+        minWidth: 280,
+        maxWidth: 440,
+        borderRadius: 12,
+        padding: '12px 14px',
+        fontSize: 14,
+        fontWeight: 700,
+        boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
+        color: notice.tone === 'error' ? '#991b1b' : notice.tone === 'success' ? '#065f46' : '#1e3a8a',
+        background: notice.tone === 'error' ? '#fee2e2' : notice.tone === 'success' ? '#d1fae5' : '#dbeafe',
+        border: `1px solid ${notice.tone === 'error' ? '#fecaca' : notice.tone === 'success' ? '#a7f3d0' : '#bfdbfe'}`,
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      {notice.message}
+    </div>
+  ) : null;
+
   if (loading) {
     return <p className="sg-subtitle">{tr('Загрузка рассылок...', 'Xabarnomalar yuklanmoqda...')}</p>;
   }
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      {noticeNode}
       <header>
         <h2 className="sg-title">{tr('Рассылки', 'Xabarnomalar')}</h2>
         <p className="sg-subtitle">{tr('Маркетинговые сообщения по базе клиентов', 'Mijozlar bazasiga marketing xabarlari yuborish')}</p>

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
+type NoticeTone = 'success' | 'error' | 'info';
+
 interface Product {
   id: string;
   name: string;
@@ -59,6 +61,7 @@ export default function Products() {
   const [catName, setCatName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'hidden'>('all');
@@ -186,7 +189,7 @@ export default function Products() {
         await adminApi.deleteProduct(id);
         await loadProducts();
       } catch (err: any) {
-        alert(err.message);
+        showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
       }
     },
     [loadProducts, tr]
@@ -201,7 +204,7 @@ export default function Products() {
       setShowCatForm(false);
       await loadCategories();
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
     }
   }, [catName, loadCategories]);
 
@@ -216,7 +219,7 @@ export default function Products() {
           const image = await adminApi.uploadProductImage(editingId, file);
           setEditImages((prev) => [...prev, image]);
         } catch (err: any) {
-          alert(`${tr('Ошибка загрузки', 'Yuklash xatosi')} ${file.name}: ${err.message}`);
+          showNotice('error', `${tr('Ошибка загрузки', 'Yuklash xatosi')} ${file.name}: ${err.message}`);
         }
       }
       setUploading(false);
@@ -235,19 +238,50 @@ export default function Products() {
         setEditImages((prev) => prev.filter((i) => i.id !== imageId));
         await loadProducts();
       } catch (err: any) {
-        alert(err.message);
+        showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
       }
     },
     [editingId, loadProducts]
   );
+
+  function showNotice(tone: NoticeTone, message: string) {
+    setNotice({ tone, message });
+    setTimeout(() => setNotice(null), 3200);
+  }
 
   const updateForm = (field: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const value = e.target instanceof HTMLInputElement && e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const noticeNode = notice ? (
+    <div
+      style={{
+        position: 'fixed',
+        top: 18,
+        right: 18,
+        zIndex: 70,
+        minWidth: 280,
+        maxWidth: 440,
+        borderRadius: 12,
+        padding: '12px 14px',
+        fontSize: 14,
+        fontWeight: 700,
+        boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
+        color: notice.tone === 'error' ? '#991b1b' : notice.tone === 'success' ? '#065f46' : '#1e3a8a',
+        background: notice.tone === 'error' ? '#fee2e2' : notice.tone === 'success' ? '#d1fae5' : '#dbeafe',
+        border: `1px solid ${notice.tone === 'error' ? '#fecaca' : notice.tone === 'success' ? '#a7f3d0' : '#bfdbfe'}`,
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      {notice.message}
+    </div>
+  ) : null;
+
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      {noticeNode}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <div>
           <h2 className="sg-title">{tr('Товары', 'Mahsulotlar')}</h2>
