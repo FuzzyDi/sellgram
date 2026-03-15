@@ -5,7 +5,6 @@ import {
   HelpCircle, LogOut, Menu, X, type LucideIcon,
 } from 'lucide-react';
 import { adminApi, clearTokens, setTokens } from './api/store-admin-client';
-import Button from './components/Button';
 import { useAdminI18n } from './i18n';
 import Billing from './pages/Billing';
 import Broadcasts from './pages/Broadcasts';
@@ -289,8 +288,23 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <p style={{ color: '#6b7280' }}>{t('loading')}</p>
+      <div style={{ minHeight: '100vh', display: 'flex' }}>
+        {/* Skeleton sidebar */}
+        <div style={{ width: 260, flexShrink: 0, background: 'linear-gradient(180deg,#112336 0%,#0b1726 100%)', padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ height: 28, width: 140, borderRadius: 8, background: 'rgba(255,255,255,0.1)', marginBottom: 16 }} />
+          {[1,2,3,4,5,6].map((i) => (
+            <div key={i} style={{ height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.07)' }} />
+          ))}
+        </div>
+        {/* Skeleton content */}
+        <div style={{ flex: 1, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="sg-skeleton" style={{ height: 32, width: '35%' }} />
+          <div className="sg-skeleton" style={{ height: 18, width: '55%' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginTop: 8 }}>
+            {[1,2,3,4].map((i) => <div key={i} className="sg-skeleton" style={{ height: 80, borderRadius: 14 }} />)}
+          </div>
+          <div className="sg-skeleton" style={{ height: 220, borderRadius: 14 }} />
+        </div>
       </div>
     );
   }
