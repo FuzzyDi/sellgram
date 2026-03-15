@@ -388,7 +388,7 @@ export default function Settings() {
         <section className="sg-grid" style={{ gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <p className="sg-subtitle" style={{ margin: 0 }}>
-              {tr('Р С›Р Т‘Р С‘Р Р… Р СР В°Р С–Р В°Р В·Р С‘Р Р… = Р С•Р Т‘Р С‘Р Р… Telegram-Р В±Р С•РЎвЂљ', 'Bitta do'kon = bitta Telegram bot')}
+              {tr('Р С›Р Т‘Р С‘Р Р… Р СР В°Р С–Р В°Р В·Р С‘Р Р… = Р С•Р Т‘Р С‘Р Р… Telegram-Р В±Р С•РЎвЂљ', "Bitta do'kon = bitta Telegram bot")}
             </p>
             <button className="sg-btn primary" type="button" onClick={openCreateStore}>
               + {tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…', "Do'kon")}
@@ -418,7 +418,7 @@ export default function Settings() {
                   title={stores.length <= 1 ? tr('Р СњР ВµР В»РЎРЉР В·РЎРЏ РЎС“Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ Р С—Р С•РЎРѓР В»Р ВµР Т‘Р Р…Р С‘Р в„– Р СР В°Р С–Р В°Р В·Р С‘Р Р…', "Oxirgi do'konni o'chirib bo'lmaydi") : undefined}
                   onClick={() => deleteStore(store.id, store.name)}
                 >
-                  {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish')}
+                  {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish")}
                 </button>
               </div>
             </article>
@@ -461,7 +461,7 @@ export default function Settings() {
                           {tr('Р ВР В·Р СР ВµР Р…Р С‘РЎвЂљРЎРЉ', 'Tahrirlash')}
                         </button>
                         <button className="sg-btn danger" type="button" onClick={() => deleteZone(zone.id)}>
-                          {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish')}
+                          {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish")}
                         </button>
                       </div>
                     </td>
@@ -618,7 +618,7 @@ export default function Settings() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <div>
                         <div style={{ fontWeight: 700 }}>{user.name} ({user.email})</div>
-                        <div style={{ fontSize: 12, color: '#6b7a71' }}>{user.role} • {user.isActive ? tr('активен', 'faol') : tr('отключен', "o'chirilgan')}</div>
+                        <div style={{ fontSize: 12, color: '#6b7a71' }}>{user.role} • {user.isActive ? tr('активен', 'faol') : tr('отключен', "o\'chirilgan")}</div>
                       </div>
                       {user.role !== 'OWNER' && (
                         <div style={{ display: 'flex', gap: 8 }}>
