@@ -409,7 +409,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Reports are not available on your current plan. Please upgrade.' });
     }
 
-    const { limit, period } = topProductsQuerySchema.parse(request.query);
+    let limit: number, period: number;
+    try {
+      ({ limit, period } = topProductsQuerySchema.parse(request.query));
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
     const safePeriod = clampDays(period, Number(reportLimits.reportsHistoryDays || 30), 30);
     const safeLimit = Math.max(1, Math.min(limit, 100));
     const data = await fetchTopProducts(tenantId, safePeriod, safeLimit);
@@ -425,7 +430,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Advanced reports are available on PRO/BUSINESS plans only.' });
     }
 
-    const { days } = revenueQuerySchema.parse(request.query);
+    let days: number;
+    try {
+      ({ days } = revenueQuerySchema.parse(request.query));
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
     const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 30), 30);
     const data = await fetchRevenueSeries(tenantId, safeDays);
 
@@ -440,7 +450,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Advanced reports are available on PRO/BUSINESS plans only.' });
     }
 
-    const { days, limit } = categoriesQuerySchema.parse(request.query);
+    let days: number, limit: number;
+    try {
+      ({ days, limit } = categoriesQuerySchema.parse(request.query));
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
     const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 30), 30);
     const safeLimit = Math.max(1, Math.min(limit, 100));
     const data = await fetchCategoryReport(tenantId, safeDays, safeLimit);
@@ -456,7 +471,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Full reports are available on BUSINESS plan only.' });
     }
 
-    const { days, limit } = customersReportQuerySchema.parse(request.query);
+    let days: number, limit: number;
+    try {
+      ({ days, limit } = customersReportQuerySchema.parse(request.query));
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
     const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 90), 90);
     const safeLimit = Math.max(1, Math.min(limit, 200));
     const data = await fetchCustomersReport(tenantId, safeDays, safeLimit);
@@ -468,7 +488,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   fastify.get('/analytics/reports/export', async (request, reply) => {
     const tenantId = request.tenantId!;
     const reportLimits = await getTenantReportLimits(tenantId);
-    const { type: reportType, days } = exportQuerySchema.parse(request.query);
+    let reportType: string, days: number;
+    try {
+      ({ type: reportType, days } = exportQuerySchema.parse(request.query));
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
 
     if (!reportLimits.allowReportExport) {
       return reply.status(402).send({ success: false, error: 'Export is not available on your current plan.' });
