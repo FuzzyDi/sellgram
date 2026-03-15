@@ -67,6 +67,7 @@ export default function Products() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'hidden'>('all');
   const [editImages, setEditImages] = useState<{ id: string; url: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadProducts = useCallback(async () => {
@@ -183,8 +184,8 @@ export default function Products() {
   }, [editingId, form, loadProducts, tr]);
 
   const removeProduct = useCallback(
-    async (id: string, name: string) => {
-      if (!confirm(tr(`Удалить "${name}"?`, `"${name}" o'chirilsinmi?`))) return;
+    async (id: string) => {
+      setPendingDelete(null);
       try {
         await adminApi.deleteProduct(id);
         await loadProducts();
@@ -330,7 +331,18 @@ export default function Products() {
       </div>
 
       {loading ? (
-        <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
+        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid #edf2ee', alignItems: 'center' }}>
+              <div className="sg-skeleton" style={{ width: 42, height: 42, borderRadius: 8, flexShrink: 0 }} />
+              <div style={{ flex: 1, display: 'grid', gap: 6 }}>
+                <div className="sg-skeleton" style={{ height: 14, width: '40%' }} />
+                <div className="sg-skeleton" style={{ height: 12, width: '25%' }} />
+              </div>
+              <div className="sg-skeleton" style={{ height: 24, width: 60 }} />
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
           <table className="sg-table">
@@ -370,19 +382,33 @@ export default function Products() {
                     </span>
                   </td>
                   <td>
-                    <span className="sg-badge" style={{ background: product.isActive ? '#e8f7ef' : '#eef1f0', color: product.isActive ? '#0b7f57' : '#5f6d64' }}>
-                      {product.isActive ? tr('Активен', 'Faol') : tr('Скрыт', 'Yashirin')}
+                    <span className="sg-badge" style={product.isActive
+                      ? { background: '#d1fae5', color: '#065f46' }
+                      : { background: '#f3f4f6', color: '#4b5563' }}>
+                      {product.isActive ? tr('\u0410\u043a\u0442\u0438\u0432\u0435\u043d', 'Faol') : tr('\u0421\u043a\u0440\u044b\u0442', 'Yashirin')}
                     </span>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="sg-btn ghost" type="button" onClick={() => openEdit(product)}>
-                        {tr('Изменить', 'Tahrirlash')}
-                      </button>
-                      <button className="sg-btn danger" type="button" onClick={() => void removeProduct(product.id, product.name)}>
-                        {tr('Удалить', "O'chirish")}
-                      </button>
-                    </div>
+                    {pendingDelete === product.id ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 12, color: '#4b5563' }}>{tr('\u0423\u0434\u0430\u043b\u0438\u0442\u044c?', "O'chirish?")}</span>
+                        <button className="sg-btn danger" type="button" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => void removeProduct(product.id)}>
+                          {tr('\u0414\u0430', 'Ha')}
+                        </button>
+                        <button className="sg-btn ghost" type="button" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setPendingDelete(null)}>
+                          {tr('\u041d\u0435\u0442', "Yo'q")}
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="sg-btn ghost" type="button" onClick={() => openEdit(product)}>
+                          {tr('\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c', 'Tahrirlash')}
+                        </button>
+                        <button className="sg-btn danger" type="button" onClick={() => setPendingDelete(product.id)}>
+                          {tr('\u0423\u0434\u0430\u043b\u0438\u0442\u044c', "O'chirish")}
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
