@@ -1,6 +1,7 @@
 import { Queue, Worker } from 'bullmq';
 import prisma from '../lib/prisma.js';
 import { getConfig } from '../config/index.js';
+import { getBot } from '../bot/bot-manager.js';
 
 const QUEUE_NAME = 'daily-digest';
 const redisConnection = { url: getConfig().REDIS_URL };
@@ -13,18 +14,15 @@ export function createDailyDigestWorker(): Worker {
   return new Worker(
     QUEUE_NAME,
     async (_job) => {
-      console.log('[DailyDigest] Running...');
-
       const stores = await prisma.store.findMany({
         where: { isActive: true },
-        include: { tenant: true },
+        include: { tenant: { include: { users: { where: { role: 'OWNER', adminTelegramId: { not: null } } } } } },
       });
 
       const now = new Date();
       const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
       for (const store of stores) {
-
         const [todayOrders, todayRevenue, newCustomers] = await Promise.all([
           prisma.order.count({
             where: { tenantId: store.tenantId, storeId: store.id, createdAt: { gte: today } },
@@ -54,23 +52,32 @@ export function createDailyDigestWorker(): Worker {
 
         const revenue = Number(todayRevenue._sum.total) || 0;
 
-        const digest = [
-          `?? Daily report - ${new Date().toLocaleDateString('uz-UZ')}`,
+        const lines = [
+          `📊 Daily report — ${new Date().toLocaleDateString('uz-UZ')}`,
+          `🏪 ${store.name}`,
           '',
-          `?? Revenue: ${revenue.toLocaleString()} UZS`,
-          `?? Orders today: ${todayOrders}`,
-          `?? New customers: ${newCustomers}`,
+          `💰 Revenue: ${revenue.toLocaleString()} UZS`,
+          `🛍️ Orders today: ${todayOrders}`,
+          `👥 New customers: ${newCustomers}`,
         ];
 
         if (lowStockProducts.length > 0) {
-          digest.push('', '?? Low stock:');
-          lowStockProducts.forEach((p: any) => {
-            digest.push(`  � ${p.name}: ${p.stockQty} pcs`);
+          lines.push('', '⚠️ Low stock:');
+          lowStockProducts.forEach((p: { name: string; stockQty: number }) => {
+            lines.push(`  📦 ${p.name}: ${p.stockQty} pcs`);
           });
         }
 
-        console.log(`[DailyDigest] Store ${store.name}:\n${digest.join('\n')}`);
-        // TODO: Send via bot to store owner when notify_chat_id is configured
+        const text = lines.join('\n');
+
+        // Send to all OWNER users who have linked their Telegram account
+        const bot = getBot(store.id);
+        if (bot) {
+          for (const user of store.tenant.users) {
+            if (!user.adminTelegramId) continue;
+            await bot.api.sendMessage(user.adminTelegramId.toString(), text).catch(() => {});
+          }
+        }
       }
     },
     { connection: redisConnection }
