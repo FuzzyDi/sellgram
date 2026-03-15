@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
+type NoticeTone = 'success' | 'error';
+
 type ReportsMeta = {
   reportLimits?: {
     planCode?: string;
@@ -35,6 +37,12 @@ export default function Reports() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
+
+  function showNotice(tone: NoticeTone, message: string) {
+    setNotice({ tone, message });
+    setTimeout(() => setNotice(null), 3200);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -120,14 +128,28 @@ export default function Reports() {
       const refreshed = await adminApi.getReportsMeta();
       setMeta(refreshed);
     } catch (err: any) {
-      alert(err?.message || tr('Ошибка экспорта', 'Eksport xatosi'));
+      showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430 \u044d\u043a\u0441\u043f\u043e\u0440\u0442\u0430', 'Eksport xatosi'));
     } finally {
       setExporting(null);
     }
   };
 
+  const noticeNode = notice ? (
+    <div style={{
+      position: 'fixed', right: 16, top: 16, zIndex: 200, minWidth: 260, maxWidth: 420,
+      borderRadius: 12, padding: '12px 16px', fontSize: 13, fontWeight: 700,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.1)', animation: 'sg-fade-in 0.2s ease both',
+      color: notice.tone === 'error' ? '#991b1b' : '#065f46',
+      background: notice.tone === 'error' ? '#fee2e2' : '#d1fae5',
+      border: `1px solid ${notice.tone === 'error' ? '#fecaca' : '#a7f3d0'}`,
+    }}>
+      {notice.message}
+    </div>
+  ) : null;
+
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      {noticeNode}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h2 className="sg-title">{tr('Отчеты', 'Hisobotlar')}</h2>
@@ -220,10 +242,12 @@ export default function Reports() {
               )}
             </div>
             {!access.advanced ? (
-              <div className="sg-card soft" style={{ marginTop: 10 }}>
-                <p style={{ margin: 0 }}>{tr('Доступно на тарифах PRO и BUSINESS.', 'PRO va BUSINESS tariflarida mavjud.')}</p>
-                <button className="sg-btn primary" style={{ marginTop: 10 }} onClick={() => (window.location.hash = '/billing')}>
-                  {tr('Перейти к тарифам', 'Tariflarga o`tish')}
+              <div style={{ marginTop: 10, padding: '20px 16px', background: 'var(--sg-panel-2)', border: '1px solid var(--sg-border)', borderRadius: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{tr('Доступно на PRO и BUSINESS', 'PRO va BUSINESS tariflarida mavjud')}</p>
+                <p className="sg-subtitle" style={{ marginTop: 4 }}>{tr('Выручка по дням и отчёт по категориям', 'Kunlik tushum va toifalar hisoboti')}</p>
+                <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => (window.location.hash = '/billing')}>
+                  {tr('Перейти к тарифам', 'Tariflarga o\'tish')}
                 </button>
               </div>
             ) : (
@@ -272,9 +296,11 @@ export default function Reports() {
               )}
             </div>
             {!access.full ? (
-              <div className="sg-card soft" style={{ marginTop: 10 }}>
-                <p style={{ margin: 0 }}>{tr('Доступно только на тарифе BUSINESS.', 'Faqat BUSINESS tarifida mavjud.')}</p>
-                <button className="sg-btn primary" style={{ marginTop: 10 }} onClick={() => (window.location.hash = '/billing')}>
+              <div style={{ marginTop: 10, padding: '20px 16px', background: 'var(--sg-panel-2)', border: '1px solid var(--sg-border)', borderRadius: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{tr('Доступно только на BUSINESS', 'Faqat BUSINESS tarifida mavjud')}</p>
+                <p className="sg-subtitle" style={{ marginTop: 4 }}>{tr('Аналитика по клиентам, LTV и сегментация', 'Mijozlar analitikasi, LTV va segmentatsiya')}</p>
+                <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => (window.location.hash = '/billing')}>
                   {tr('Обновить тариф', 'Tarifni yangilash')}
                 </button>
               </div>

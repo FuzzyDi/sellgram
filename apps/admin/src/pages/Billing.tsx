@@ -271,26 +271,72 @@ export default function Billing() {
               `${tr('Scheduled reports', 'Avto-hisobotlar')}: ${maxScheduledReports === -1 ? tr('без лимита', 'cheklanmagan') : maxScheduledReports}`,
             ];
 
+            const isPopular = code === 'PRO';
             return (
-              <div key={code} className="sg-card" style={{ borderColor: isCurrent ? planColors[code] : '#dfe7e2' }}>
-                <div style={{ fontSize: 13, color: '#607167' }}>{planLabel(code)}</div>
-                <div style={{ fontSize: 34, fontWeight: 900, marginTop: 4, color: planColors[code] }}>{price > 0 ? price.toLocaleString() : 0}</div>
-                <div style={{ marginTop: 2, fontSize: 13, color: '#607167' }}>{price > 0 ? tr('UZS / month', "so'm / oy") : tr('Free', 'Bepul')}</div>
+              <div
+                key={code}
+                className="sg-card"
+                style={{
+                  borderColor: isCurrent ? planColors[code] ?? '#dfe7e2' : isPopular ? '#a78bfa' : '#dfe7e2',
+                  borderWidth: isPopular ? 2 : 1,
+                  padding: 0,
+                  overflow: 'hidden',
+                  transition: 'transform 0.18s, box-shadow 0.18s',
+                  position: 'relative',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 10px 30px rgba(0,0,0,0.10)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.transform = '';
+                  (e.currentTarget as HTMLElement).style.boxShadow = '';
+                }}
+              >
+                {/* Top stripe */}
+                {isPopular && (
+                  <div style={{ background: 'linear-gradient(135deg,#7c3aed,#a78bfa)', padding: '5px 16px', textAlign: 'center', fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: 0.5 }}>
+                    {tr('ПОПУЛЯРНЫЙ', 'MASHHUR')}
+                  </div>
+                )}
+                {isCurrent && (
+                  <div style={{ background: `${planColors[code]}22`, borderBottom: `2px solid ${planColors[code]}`, padding: '5px 16px', textAlign: 'center', fontSize: 11, fontWeight: 800, color: planColors[code], letterSpacing: 0.5 }}>
+                    {tr('ТЕКУЩИЙ ТАРИФ', 'JORIY TARIF')}
+                  </div>
+                )}
 
-                <ul style={{ marginTop: 10, paddingLeft: 16, color: '#4f5f56', fontSize: 13 }}>
-                  {features.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
+                <div style={{ padding: 18 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: planColors[code] ?? '#607167', textTransform: 'uppercase', letterSpacing: 0.5 }}>{planLabel(code)}</div>
+                  <div style={{ fontSize: 32, fontWeight: 900, marginTop: 6, color: planColors[code] ?? '#15231a', letterSpacing: -0.5 }}>
+                    {price > 0 ? price.toLocaleString() : tr('0', '0')}
+                  </div>
+                  <div style={{ marginTop: 2, fontSize: 13, color: '#607167' }}>{price > 0 ? `UZS / ${tr('мес', 'oy')}` : tr('бесплатно', 'bepul')}</div>
 
-                <div style={{ marginTop: 12 }}>
-                  {isCurrent ? (
-                    <div className="sg-badge" style={{ background: '#eef8f1', color: '#0b6f49' }}>{tr('Текущий', 'Joriy')}</div>
-                  ) : (
-                    <Button onClick={() => handleUpgrade(code)} disabled={submitting} className="sg-btn primary" style={{ width: '100%' }}>
-                      {price === 0 ? tr('Переключить', "O'tish") : tr('Перейти', 'Yangilash')}
-                    </Button>
-                  )}
+                  <ul style={{ marginTop: 14, listStyle: 'none', padding: 0, display: 'grid', gap: 6 }}>
+                    {features.map((line) => (
+                      <li key={line} style={{ display: 'flex', gap: 8, fontSize: 13, color: '#3a4f40', alignItems: 'start' }}>
+                        <span style={{ color: planColors[code] ?? '#00875a', fontWeight: 900, flexShrink: 0 }}>✓</span>
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div style={{ marginTop: 16 }}>
+                    {isCurrent ? (
+                      <div className="sg-badge" style={{ background: `${planColors[code]}1a`, color: planColors[code] ?? '#0b6f49', fontSize: 12 }}>
+                        {tr('Активен', 'Faol')}
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => handleUpgrade(code)}
+                        disabled={submitting}
+                        className="sg-btn primary"
+                        style={{ width: '100%', ...(isPopular ? {} : { background: 'transparent', border: `1px solid ${planColors[code] ?? '#00875a'}`, color: planColors[code] ?? '#00875a' }) }}
+                      >
+                        {price === 0 ? tr('Переключить', "O'tish") : tr('Выбрать', 'Tanlash')}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
