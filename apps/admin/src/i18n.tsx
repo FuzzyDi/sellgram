@@ -6,19 +6,19 @@ const STORAGE_KEY = 'sellgram_admin_lang';
 
 const dict = {
   ru: {
-    dashboard: 'Р”Р°С€Р±РѕСЂРґ',
-    orders: 'Р—Р°РєР°Р·С‹',
-    products: 'РўРѕРІР°СЂС‹',
-    categories: 'РљР°С‚РµРіРѕСЂРёРё',
-    customers: 'РљР»РёРµРЅС‚С‹',
-    payments: 'РћРїР»Р°С‚Р°',
-    broadcasts: 'Р Р°СЃСЃС‹Р»РєРё',
-    reports: 'РћС‚С‡РµС‚С‹',
-    settings: 'РќР°СЃС‚СЂРѕР№РєРё',
-    plans: 'РўР°СЂРёС„С‹',
-    loading: 'Р—Р°РіСЂСѓР·РєР°...',
-    sign_out: 'Р’С‹Р№С‚Рё',
-    language: 'РЇР·С‹Рє',
+    dashboard: 'Дашборд',
+    orders: 'Заказы',
+    products: 'Товары',
+    categories: 'Категории',
+    customers: 'Клиенты',
+    payments: 'Оплата',
+    broadcasts: 'Рассылки',
+    reports: 'Отчеты',
+    settings: 'Настройки',
+    plans: 'Тарифы',
+    loading: 'Загрузка...',
+    sign_out: 'Выйти',
+    language: 'Язык',
   },
   uz: {
     dashboard: 'Boshqaruv paneli',
@@ -104,8 +104,8 @@ const CP1251_EXTRA_MAP: Record<number, number> = {
 };
 
 function looksLikeBrokenCyrillic(input: string): boolean {
-  const matches = input.match(/[\u0420\u0421][\u0400-\u04ff]/g);
-  return Boolean(matches && matches.length >= 2);
+  if (!input) return false;
+  return /Р[\u00A0-\u04ff]|С[\u00A0-\u04ff]|вЂ|Ð|Ñ/.test(input);
 }
 
 function fixBrokenCyrillic(input: string): string {
@@ -124,6 +124,10 @@ function fixBrokenCyrillic(input: string): string {
     }
     if (CP1251_EXTRA_MAP[code] !== undefined) {
       bytes.push(CP1251_EXTRA_MAP[code]);
+      continue;
+    }
+    if (code <= 0xff) {
+      bytes.push(code);
       continue;
     }
     return input;
