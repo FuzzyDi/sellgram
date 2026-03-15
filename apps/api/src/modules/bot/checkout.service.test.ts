@@ -16,6 +16,19 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+// tx always has $executeRaw for advisory lock
+function makeTx(overrides: Record<string, any> = {}) {
+  return {
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    order: { findFirst: vi.fn(), create: vi.fn() },
+    customer: { update: vi.fn().mockResolvedValue({}) },
+    orderStatusLog: { create: vi.fn().mockResolvedValue({}) },
+    loyaltyTransaction: { create: vi.fn().mockResolvedValue({}) },
+    cartItem: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    ...overrides,
+  };
+}
+
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../payments/service.js', () => ({ prepareOrderPayment: mocks.prepareOrderPayment }));
 
@@ -104,16 +117,12 @@ describe('checkout.service', () => {
       paymentMeta: { channel: 'cash' },
     });
 
-    const tx = {
+    const tx = makeTx({
       order: {
         findFirst: vi.fn().mockResolvedValue({ orderNumber: 10 }),
         create: vi.fn().mockResolvedValue({ id: 'o-1', items: [], customer: { id: 'c-1' } }),
       },
-      customer: { update: vi.fn().mockResolvedValue({}) },
-      orderStatusLog: { create: vi.fn().mockResolvedValue({}) },
-      loyaltyTransaction: { create: vi.fn().mockResolvedValue({}) },
-      cartItem: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
-    };
+    });
 
     mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
 
@@ -129,7 +138,47 @@ describe('checkout.service', () => {
     });
 
     expect(result).toMatchObject({ id: 'o-1' });
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(tx.order.create).toHaveBeenCalledTimes(1);
     expect(tx.cartItem.deleteMany).toHaveBeenCalledWith({ where: { customerId: 'c-1', storeId: 's-1' } });
+  });
+
+  it('acquires advisory lock before reading last orderNumber', async () => {
+    mocks.prisma.cartItem.findMany.mockResolvedValue([{ productId: 'p-1', variantId: null, qty: 1 }]);
+    mocks.prisma.product.findFirst.mockResolvedValue({
+      id: 'p-1', name: 'Item', price: 5000, stockQty: 10, variants: [],
+    });
+    mocks.prisma.storePaymentMethod.findFirst.mockResolvedValue({
+      id: 'pm-1', provider: 'CASH', code: 'cash', title: 'Cash',
+      description: null, instructions: null, meta: null,
+    });
+    mocks.prepareOrderPayment.mockReturnValue({
+      paymentMethod: 'CASH', paymentStatus: 'PENDING', paymentMeta: {},
+    });
+
+    const callOrder: string[] = [];
+    const tx = makeTx({
+      order: {
+        findFirst: vi.fn().mockImplementation(async () => {
+          callOrder.push('findFirst');
+          return { orderNumber: 5 };
+        }),
+        create: vi.fn().mockResolvedValue({ id: 'o-2', items: [], customer: {} }),
+      },
+    });
+    (tx.$executeRaw as any).mockImplementation(async () => {
+      callOrder.push('lock');
+      return 1;
+    });
+
+    mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+    await createShopCheckoutOrder({
+      customerId: 'c-1', tenantId: 't-1', storeId: 's-1',
+      body: { deliveryType: 'PICKUP', loyaltyPointsToUse: 0 },
+    });
+
+    expect(callOrder[0]).toBe('lock');
+    expect(callOrder[1]).toBe('findFirst');
   });
 });

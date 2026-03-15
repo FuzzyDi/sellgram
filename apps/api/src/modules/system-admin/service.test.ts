@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     store: { count: vi.fn(), findMany: vi.fn() },
     invoice: { count: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     order: { count: vi.fn() },
+    systemAuditLog: { create: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn(),
   },
 }));

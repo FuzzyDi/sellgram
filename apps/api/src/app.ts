@@ -120,10 +120,12 @@ async function main() {
     });
   });
 
-  // BigInt JSON serialization (Telegram IDs)
-  (BigInt.prototype as any).toJSON = function () {
-    return this.toString();
-  };
+  // Serialize BigInt values (Telegram IDs) as strings without mutating BigInt.prototype
+  fastify.addHook('preSerialization', async (_request, _reply, payload) => {
+    return JSON.parse(JSON.stringify(payload, (_key, value) =>
+      typeof value === 'bigint' ? value.toString() : value
+    ));
+  });
 
   // Landing page + static pages
   fastify.get('/', { config: { rateLimit: false } }, async (request, reply) => {

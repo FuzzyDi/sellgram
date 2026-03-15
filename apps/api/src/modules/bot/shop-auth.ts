@@ -31,7 +31,12 @@ export async function telegramShopAuth(request: FastifyRequest, reply: FastifyRe
   request.storeId = storeId;
 
   if (initData) {
-    const botToken = decrypt(store.botToken);
+    let botToken: string;
+    try {
+      botToken = decrypt(store.botToken);
+    } catch {
+      return reply.status(401).send({ success: false, error: 'Auth failed' });
+    }
     const tgUser = validateInitData(initData, botToken, getConfig().MINIAPP_INITDATA_MAX_AGE_SEC);
     if (tgUser) {
       request.telegramUser = tgUser;

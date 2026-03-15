@@ -1,5 +1,6 @@
 ﻿import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { timingSafeEqual } from 'node:crypto';
 import prisma from '../../lib/prisma.js';
 import { applyOrderPaymentStatus } from '../../payments/service.js';
 import { normalizeProviderWebhook, verifyProviderWebhookAuth } from '../../payments/webhooks.js';
@@ -52,9 +53,10 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ success: false, error: 'orderId or (orderNumber + storeId) is required' });
     }
 
+    // Always scope by storeId when available to enforce tenant isolation
     const order = await prisma.order.findFirst({
       where: lookup.orderId
-        ? { id: lookup.orderId }
+        ? { id: lookup.orderId, ...(lookup.storeId ? { storeId: lookup.storeId } : {}) }
         : { orderNumber: lookup.orderNumber!, storeId: lookup.storeId! },
       include: {
         paymentMethodRef: true,
@@ -75,8 +77,12 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
       String(body.secret || '');
     const configuredSecret = String((order.paymentMethodRef?.meta as any)?.webhookSecret || '');
 
-    if (configuredSecret && providedSecret !== configuredSecret) {
-      return reply.status(401).send({ success: false, error: 'Invalid webhook secret' });
+    if (configuredSecret) {
+      const provided = Buffer.from(providedSecret);
+      const expected = Buffer.from(configuredSecret);
+      if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+        return reply.status(401).send({ success: false, error: 'Invalid webhook secret' });
+      }
     }
 
     try {

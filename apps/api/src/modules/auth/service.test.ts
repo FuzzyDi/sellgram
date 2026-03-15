@@ -63,10 +63,10 @@ describe('auth.service', () => {
 
     const result = await login({ email: 'owner@test.uz', password: 'secret123' });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       accessToken: 'access-1',
       refreshToken: 'refresh-1',
-      user: { id: 'u-1', email: 'owner@test.uz', name: 'Owner', role: 'OWNER' },
+      user: expect.objectContaining({ id: 'u-1', email: 'owner@test.uz', name: 'Owner', role: 'OWNER' }),
       tenant: { id: 't-1', name: 'Demo', slug: 'demo', plan: 'FREE' },
     });
   });

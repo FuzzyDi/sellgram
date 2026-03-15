@@ -107,6 +107,9 @@ export async function createShopCheckoutOrder(input: {
   const total = subtotal + deliveryPrice - loyaltyDiscount;
 
   const order = await prisma.$transaction(async (tx: any) => {
+    // Advisory lock scoped per tenant — prevents concurrent checkouts from
+    // racing on orderNumber. Released automatically when the transaction ends.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}))`;
     const lastOrder = await tx.order.findFirst({ where: { tenantId }, orderBy: { orderNumber: 'desc' } });
     const orderNumber = (lastOrder?.orderNumber ?? 0) + 1;
 

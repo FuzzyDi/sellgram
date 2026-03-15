@@ -1,4 +1,5 @@
-﻿import { asObject, normalizeStatus, UnifiedStatus, UnifiedWebhookResult } from './types.js';
+﻿import { timingSafeEqual } from 'node:crypto';
+import { asObject, normalizeStatus, UnifiedStatus, UnifiedWebhookResult } from './types.js';
 
 export function normalizePaymeWebhook(body: any): UnifiedWebhookResult {
   const payload = asObject(body);
@@ -37,7 +38,14 @@ export function verifyPaymeWebhookAuth(input: {
   const expectedBearer = `Bearer ${required}`;
   const expectedBasic = `Basic ${Buffer.from(required).toString('base64')}`;
 
-  if (auth !== expectedBearer && auth !== expectedBasic) {
+  const authBuf = Buffer.from(auth);
+  const matchBearer =
+    authBuf.length === Buffer.from(expectedBearer).length &&
+    timingSafeEqual(authBuf, Buffer.from(expectedBearer));
+  const matchBasic =
+    authBuf.length === Buffer.from(expectedBasic).length &&
+    timingSafeEqual(authBuf, Buffer.from(expectedBasic));
+  if (!matchBearer && !matchBasic) {
     throw new Error('Invalid PAYME auth header');
   }
 }
