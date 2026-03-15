@@ -1,5 +1,15 @@
 import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+
+const loyaltyConfigSchema = z.object({
+  isEnabled: z.boolean().optional(),
+  pointsPerUnit: z.number().int().positive().optional(),
+  unitAmount: z.number().positive().optional(),        // must be > 0 — divides order total
+  pointValue: z.number().positive().optional(),        // must be > 0 — multiplied to compute discount
+  maxDiscountPct: z.number().min(0).max(100).optional(),
+  minPointsToRedeem: z.number().int().min(0).optional(),
+});
 
 export default async function loyaltyRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
@@ -17,8 +27,14 @@ export default async function loyaltyRoutes(fastify: FastifyInstance) {
   });
 
   fastify.patch('/loyalty/config', async (request, reply) => {
-    const { isEnabled, pointsPerUnit, unitAmount, pointValue, maxDiscountPct, minPointsToRedeem } = request.body as any;
+    let parsed: z.infer<typeof loyaltyConfigSchema>;
+    try {
+      parsed = loyaltyConfigSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
 
+    const { isEnabled, pointsPerUnit, unitAmount, pointValue, maxDiscountPct, minPointsToRedeem } = parsed;
     const data: any = {};
     if (isEnabled !== undefined) data.isEnabled = isEnabled;
     if (pointsPerUnit !== undefined) data.pointsPerUnit = pointsPerUnit;
