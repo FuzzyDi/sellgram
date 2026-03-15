@@ -64,7 +64,7 @@ export default function Settings() {
       });
       setTeam(Array.isArray(teamData) ? teamData : []);
     } catch (err: any) {
-      showNotice('error', err?.message || tr('Ошибка загрузки настроек', 'Sozlamalarni yuklashda xato'));
+      showNotice('error', err?.message || tr('Р В РЎвЂєР РЋРІвЂљВ¬Р В РЎвЂР В Р’В±Р В РЎвЂќР В Р’В° Р В Р’В·Р В Р’В°Р В РЎвЂ“Р РЋР вЂљР РЋРЎвЂњР В Р’В·Р В РЎвЂќР В РЎвЂ Р В Р вЂ¦Р В Р’В°Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљР В РЎвЂўР В Р’ВµР В РЎвЂќ', 'Sozlamalarni yuklashda xato'));
     } finally {
       setLoading(false);
     }
@@ -83,29 +83,29 @@ export default function Settings() {
   async function saveMyProfile() {
     try {
       await adminApi.updateMe(profileForm);
-      showNotice('success', tr('РџСЂРѕС„РёР»СЊ СЃРѕС…СЂР°РЅРµРЅ', 'Profil saqlandi'));
+      showNotice('success', tr('Р В РЎСџР РЋР вЂљР В РЎвЂўР РЋРІР‚С›Р В РЎвЂР В Р’В»Р РЋР Р‰ Р РЋР С“Р В РЎвЂўР РЋРІР‚В¦Р РЋР вЂљР В Р’В°Р В Р вЂ¦Р В Р’ВµР В Р вЂ¦', 'Profil saqlandi'));
       await load();
     } catch (err: any) {
-      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+      showNotice('error', err?.message || tr('Р В РЎвЂєР РЋРІвЂљВ¬Р В РЎвЂР В Р’В±Р В РЎвЂќР В Р’В°', 'Xatolik'));
     }
   }
 
   async function changeMyPassword() {
     if (!passwordForm.currentPassword || !passwordForm.newPassword) {
-      showNotice('error', tr('Р—Р°РїРѕР»РЅРёС‚Рµ С‚РµРєСѓС‰РёР№ Рё РЅРѕРІС‹Р№ РїР°СЂРѕР»СЊ', 'Joriy va yangi parolni kiriting'));
+      showNotice('error', tr('Р В РІР‚вЂќР В Р’В°Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р В Р вЂ¦Р В РЎвЂР РЋРІР‚С™Р В Р’Вµ Р РЋРІР‚С™Р В Р’ВµР В РЎвЂќР РЋРЎвЂњР РЋРІР‚В°Р В РЎвЂР В РІвЂћвЂ“ Р В РЎвЂ Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Joriy va yangi parolni kiriting'));
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      showNotice('error', tr('РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РїР°СЂРѕР»СЏ РЅРµ СЃРѕРІРїР°РґР°РµС‚', 'Parol tasdig\'i mos emas'));
+      showNotice('error', tr('Р В РЎСџР В РЎвЂўР В РўвЂР РЋРІР‚С™Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р’В¶Р В РўвЂР В Р’ВµР В Р вЂ¦Р В РЎвЂР В Р’Вµ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР РЏ Р В Р вЂ¦Р В Р’Вµ Р РЋР С“Р В РЎвЂўР В Р вЂ Р В РЎвЂ”Р В Р’В°Р В РўвЂР В Р’В°Р В Р’ВµР РЋРІР‚С™', 'Parol tasdig\'i mos emas'));
       return;
     }
 
     try {
       await adminApi.changeMyPassword(passwordForm.currentPassword, passwordForm.newPassword);
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      showNotice('success', tr('РџР°СЂРѕР»СЊ РѕР±РЅРѕРІР»РµРЅ', 'Parol yangilandi'));
+      showNotice('success', tr('Р В РЎСџР В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰ Р В РЎвЂўР В Р’В±Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦', 'Parol yangilandi'));
     } catch (err: any) {
-      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+      showNotice('error', err?.message || tr('Р В РЎвЂєР РЋРІвЂљВ¬Р В РЎвЂР В Р’В±Р В РЎвЂќР В Р’В°', 'Xatolik'));
     }
   }
 
@@ -121,10 +121,10 @@ export default function Settings() {
       if (teamForm.role === 'OPERATOR') payload.permissions = teamForm.permissions;
       await adminApi.createTeamUser(payload);
       setTeamForm((s) => ({ ...s, email: '', name: '', password: '' }));
-      showNotice('success', tr('РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РґРѕР±Р°РІР»РµРЅ', "Foydalanuvchi qo'shildi"));
+      showNotice('success', tr('Р В РЎСџР В РЎвЂўР В Р’В»Р РЋР Р‰Р В Р’В·Р В РЎвЂўР В Р вЂ Р В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р РЋР Р‰ Р В РўвЂР В РЎвЂўР В Р’В±Р В Р’В°Р В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦', "Foydalanuvchi qo'shildi"));
       await load();
     } catch (err: any) {
-      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+      showNotice('error', err?.message || tr('Р В РЎвЂєР РЋРІвЂљВ¬Р В РЎвЂР В Р’В±Р В РЎвЂќР В Р’В°', 'Xatolik'));
     }
   }
 
@@ -132,9 +132,9 @@ export default function Settings() {
     try {
       await adminApi.updateTeamUser(user.id, { isActive: !user.isActive });
       await load();
-      showNotice('success', tr('РЎС‚Р°С‚СѓСЃ РѕР±РЅРѕРІР»РµРЅ', 'Status yangilandi'));
+      showNotice('success', tr('Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ Р С•Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…', 'Status yangilandi'));
     } catch (err: any) {
-      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+      showNotice('error', err?.message || tr('Р В РЎвЂєР РЋРІвЂљВ¬Р В РЎвЂР В Р’В±Р В РЎвЂќР В Р’В°', 'Xatolik'));
     }
   }
 
@@ -143,9 +143,9 @@ export default function Settings() {
     if (!nextPassword) return;
     try {
       await adminApi.resetTeamUserPassword(user.id, nextPassword);
-      showNotice('success', tr('РџР°СЂРѕР»СЊ СЃР±СЂРѕС€РµРЅ', 'Parol tiklandi'));
+      showNotice('success', tr('Р В РЎСџР В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰ Р РЋР С“Р В Р’В±Р РЋР вЂљР В РЎвЂўР РЋРІвЂљВ¬Р В Р’ВµР В Р вЂ¦', 'Parol tiklandi'));
     } catch (err: any) {
-      showNotice('error', err?.message || tr('РћС€РёР±РєР°', 'Xatolik'));
+      showNotice('error', err?.message || tr('Р В РЎвЂєР РЋРІвЂљВ¬Р В РЎвЂР В Р’В±Р В РЎвЂќР В Р’В°', 'Xatolik'));
     }
   }
 
@@ -331,7 +331,7 @@ export default function Settings() {
     </div>
   ) : null;
 
-  if (loading) return <p className="sg-subtitle">{tr('Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР С”...', 'Sozlamalar yuklanmoqda...')}</p>;
+  if (loading) return <p className="sg-subtitle">{tr('Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР С”...','Sozlamalar yuklanmoqda...')}</p>;
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
@@ -350,7 +350,7 @@ export default function Settings() {
             </p>
           </div>
           <button className="sg-btn primary" type="button" onClick={generateTelegramLinkCode}>
-            {telegramLinkLoading ? tr('Р вЂњР ВµР Р…Р ВµРЎР‚Р В°РЎвЂ Р С‘РЎРЏ...', 'Yaratilmoqda...') : tr('Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С”Р С•Р Т‘', 'Kod yaratish')}
+            {telegramLinkLoading ? tr('Р вЂњР ВµР Р…Р ВµРЎР‚Р В°РЎвЂ Р С‘РЎРЏ...','Yaratilmoqda...') : tr('Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С”Р С•Р Т‘', 'Kod yaratish')}
           </button>
         </div>
 
@@ -380,7 +380,7 @@ export default function Settings() {
           {tr('Р вЂєР С•РЎРЏР В»РЎРЉР Р…Р С•РЎРѓРЎвЂљРЎРЉ', 'Loyallik')}
         </button>
         <button className={`sg-pill ${tab === 'account' ? 'active' : ''}`} type="button" onClick={() => setTab('account')}>
-          {tr('РђРєРєР°СѓРЅС‚', 'Akkaunt')}
+          {tr('Р В РЎвЂ™Р В РЎвЂќР В РЎвЂќР В Р’В°Р РЋРЎвЂњР В Р вЂ¦Р РЋРІР‚С™', 'Akkaunt')}
         </button>
       </div>
 
@@ -388,7 +388,7 @@ export default function Settings() {
         <section className="sg-grid" style={{ gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <p className="sg-subtitle" style={{ margin: 0 }}>
-              {tr('Р С›Р Т‘Р С‘Р Р… Р СР В°Р С–Р В°Р В·Р С‘Р Р… = Р С•Р Т‘Р С‘Р Р… Telegram-Р В±Р С•РЎвЂљ', "Bitta do'kon = bitta Telegram bot")}
+              {tr('Р С›Р Т‘Р С‘Р Р… Р СР В°Р С–Р В°Р В·Р С‘Р Р… = Р С•Р Т‘Р С‘Р Р… Telegram-Р В±Р С•РЎвЂљ', 'Bitta do'kon = bitta Telegram bot')}
             </p>
             <button className="sg-btn primary" type="button" onClick={openCreateStore}>
               + {tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…', "Do'kon")}
@@ -418,7 +418,7 @@ export default function Settings() {
                   title={stores.length <= 1 ? tr('Р СњР ВµР В»РЎРЉР В·РЎРЏ РЎС“Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ Р С—Р С•РЎРѓР В»Р ВµР Т‘Р Р…Р С‘Р в„– Р СР В°Р С–Р В°Р В·Р С‘Р Р…', "Oxirgi do'konni o'chirib bo'lmaydi") : undefined}
                   onClick={() => deleteStore(store.id, store.name)}
                 >
-                  {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish")}
+                  {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish')}
                 </button>
               </div>
             </article>
@@ -461,7 +461,7 @@ export default function Settings() {
                           {tr('Р ВР В·Р СР ВµР Р…Р С‘РЎвЂљРЎРЉ', 'Tahrirlash')}
                         </button>
                         <button className="sg-btn danger" type="button" onClick={() => deleteZone(zone.id)}>
-                          {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish")}
+                          {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish')}
                         </button>
                       </div>
                     </td>
@@ -483,7 +483,7 @@ export default function Settings() {
       {tab === 'loyalty' && loyalty && (
         <section className="sg-card" style={{ maxWidth: 720 }}>
           <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Р СџРЎР‚Р С•Р С–РЎР‚Р В°Р СР СР В° Р В»Р С•РЎРЏР В»РЎРЉР Р…Р С•РЎРѓРЎвЂљР С‘', 'Loyallik dasturi')}</h3>
-          <p className="sg-subtitle">{tr('Р СњР В°РЎвЂЎР С‘РЎРѓР В»Р ВµР Р…Р С‘РЎРЏ Р В±Р В°Р В»Р В»Р С•Р Р† Р С‘ Р В»Р С‘Р СР С‘РЎвЂљРЎвЂ№ РЎРѓР С”Р С‘Р Т‘Р С”Р С‘', 'Ball berish qoidalari va chegirma limitlari')}</p>
+          <p className="sg-subtitle">{tr('Р СњР В°РЎвЂЎР С‘РЎРѓР В»Р ВµР Р…Р С‘Р Вµ Р В±Р В°Р В»Р В»Р С•Р Р† Р С‘ Р В»Р С‘Р СР С‘РЎвЂљРЎвЂ№ РЎРѓР С”Р С‘Р Т‘Р С”Р С‘', 'Ball berish qoidalari va chegirma limitlari')}</p>
 
           <form
             onSubmit={(e) => {
@@ -558,38 +558,38 @@ export default function Settings() {
       {tab === 'account' && (
         <section className="sg-grid" style={{ gap: 12 }}>
           <article className="sg-card">
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РњРѕР№ Р°РєРєР°СѓРЅС‚', 'Mening akkauntim')}</h3>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Р В РЎС™Р В РЎвЂўР В РІвЂћвЂ“ Р В Р’В°Р В РЎвЂќР В РЎвЂќР В Р’В°Р РЋРЎвЂњР В Р вЂ¦Р РЋРІР‚С™', 'Mening akkauntim')}</h3>
             <div className="sg-grid cols-2" style={{ marginTop: 10 }}>
-              <input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РРјСЏ', 'Ism')} />
+              <input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р В Р’ВР В РЎВР РЋР РЏ', 'Ism')} />
               <input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
             </div>
             <div style={{ marginTop: 10 }}>
-              <button className="sg-btn primary" type="button" onClick={() => void saveMyProfile()}>{tr('РЎРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ', 'Profilni saqlash')}</button>
+              <button className="sg-btn primary" type="button" onClick={() => void saveMyProfile()}>{tr('Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р С‘РЎвЂљРЎРЉ Р С—РЎР‚Р С•РЎвЂћР С‘Р В»РЎРЉ', 'Profilni saqlash')}</button>
             </div>
           </article>
 
           <article className="sg-card">
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РЎРјРµРЅР° РїР°СЂРѕР»СЏ', 'Parolni almashtirish')}</h3>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Р РЋР СР ВµР Р…Р В° Р С—Р В°РЎР‚Р С•Р В»РЎРЏ', 'Parolni almashtirish')}</h3>
             <div className="sg-grid cols-3" style={{ marginTop: 10 }}>
-              <input type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РўРµРєСѓС‰РёР№ РїР°СЂРѕР»СЊ', 'Joriy parol')} />
-              <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ', 'Yangi parol')} />
-              <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РџРѕРґС‚РІРµСЂРґРёС‚Рµ РїР°СЂРѕР»СЊ', 'Parolni tasdiqlang')} />
+              <input type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р СћР ВµР С”РЎС“РЎвЂ°Р С‘Р в„– Р С—Р В°РЎР‚Р С•Р В»РЎРЉ', 'Joriy parol')} />
+              <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р В РЎСљР В РЎвЂўР В Р вЂ Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Yangi parol')} />
+              <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р В РЎСџР В РЎвЂўР В РўвЂР РЋРІР‚С™Р В Р вЂ Р В Р’ВµР РЋР вЂљР В РўвЂР В РЎвЂР РЋРІР‚С™Р В Р’Вµ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Parolni tasdiqlang')} />
             </div>
             <div style={{ marginTop: 10 }}>
-              <button className="sg-btn primary" type="button" onClick={() => void changeMyPassword()}>{tr('РћР±РЅРѕРІРёС‚СЊ РїР°СЂРѕР»СЊ', 'Parolni yangilash')}</button>
+              <button className="sg-btn primary" type="button" onClick={() => void changeMyPassword()}>{tr('Р В РЎвЂєР В Р’В±Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Parolni yangilash')}</button>
             </div>
           </article>
 
           {canManageUsers && (
             <article className="sg-card">
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('РџРѕР»СЊР·РѕРІР°С‚РµР»Рё Рё СЂРѕР»Рё', 'Foydalanuvchilar va rollar')}</h3>
-              <p className="sg-subtitle">{tr('Р”РѕР±Р°РІР»СЏР№С‚Рµ РѕРїРµСЂР°С‚РѕСЂРѕРІ Рё СѓРїСЂР°РІР»СЏР№С‚Рµ РґРѕСЃС‚СѓРїР°РјРё.', "Operator qo'shing va ruxsatlarini boshqaring.")}</p>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Р В РЎСџР В РЎвЂўР В Р’В»Р РЋР Р‰Р В Р’В·Р В РЎвЂўР В Р вЂ Р В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р В РЎвЂ Р В РЎвЂ Р РЋР вЂљР В РЎвЂўР В Р’В»Р В РЎвЂ', 'Foydalanuvchilar va rollar')}</h3>
+              <p className="sg-subtitle">{tr('Р В РІР‚СњР В РЎвЂўР В Р’В±Р В Р’В°Р В Р вЂ Р В Р’В»Р РЋР РЏР В РІвЂћвЂ“Р РЋРІР‚С™Р В Р’Вµ Р В РЎвЂўР В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’В°Р РЋРІР‚С™Р В РЎвЂўР РЋР вЂљР В РЎвЂўР В Р вЂ  Р В РЎвЂ Р РЋРЎвЂњР В РЎвЂ”Р РЋР вЂљР В Р’В°Р В Р вЂ Р В Р’В»Р РЋР РЏР В РІвЂћвЂ“Р РЋРІР‚С™Р В Р’Вµ Р В РўвЂР В РЎвЂўР РЋР С“Р РЋРІР‚С™Р РЋРЎвЂњР В РЎвЂ”Р В Р’В°Р В РЎВР В РЎвЂ.', "Operator qo'shing va ruxsatlarini boshqaring.")}</p>
 
               <div className="sg-card soft" style={{ marginTop: 10 }}>
                 <div className="sg-grid cols-4" style={{ gap: 8 }}>
                   <input value={teamForm.email} onChange={(e) => setTeamForm({ ...teamForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
-                  <input value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РРјСЏ', 'Ism')} />
-                  <input type="password" value={teamForm.password} onChange={(e) => setTeamForm({ ...teamForm, password: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('РџР°СЂРѕР»СЊ', 'Parol')} />
+                  <input value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р В Р’ВР В РЎВР РЋР РЏ', 'Ism')} />
+                  <input type="password" value={teamForm.password} onChange={(e) => setTeamForm({ ...teamForm, password: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р В РЎСџР В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Parol')} />
                   <select value={teamForm.role} onChange={(e) => setTeamForm({ ...teamForm, role: e.target.value as 'MANAGER' | 'OPERATOR' })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}>
                     <option value="OPERATOR">Operator</option>
                     <option value="MANAGER">Manager</option>
@@ -608,7 +608,7 @@ export default function Settings() {
                 )}
 
                 <div style={{ marginTop: 10 }}>
-                  <button className="sg-btn primary" type="button" onClick={() => void createTeamUser()}>{tr('Р”РѕР±Р°РІРёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ', "Foydalanuvchi qo'shish")}</button>
+                  <button className="sg-btn primary" type="button" onClick={() => void createTeamUser()}>{tr('Р В РІР‚СњР В РЎвЂўР В Р’В±Р В Р’В°Р В Р вЂ Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰ Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р РЋР Р‰Р В Р’В·Р В РЎвЂўР В Р вЂ Р В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р РЋР РЏ', "Foydalanuvchi qo'shish")}</button>
                 </div>
               </div>
 
@@ -618,12 +618,12 @@ export default function Settings() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <div>
                         <div style={{ fontWeight: 700 }}>{user.name} ({user.email})</div>
-                        <div style={{ fontSize: 12, color: '#6b7a71' }}>{user.role} вЂў {user.isActive ? tr('Р°РєС‚РёРІРµРЅ', 'faol') : tr('РѕС‚РєР»СЋС‡РµРЅ', "o'chirilgan")}</div>
+                        <div style={{ fontSize: 12, color: '#6b7a71' }}>{user.role} • {user.isActive ? tr('активен', 'faol') : tr('отключен', "o'chirilgan')}</div>
                       </div>
                       {user.role !== 'OWNER' && (
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button className="sg-btn ghost" type="button" onClick={() => void toggleTeamUserActive(user)}>{user.isActive ? tr('РћС‚РєР»СЋС‡РёС‚СЊ', "O'chirish") : tr('Р’РєР»СЋС‡РёС‚СЊ', 'Yoqish')}</button>
-                          <button className="sg-btn ghost" type="button" onClick={() => void resetTeamUserPassword(user)}>{tr('РЎР±СЂРѕСЃ РїР°СЂРѕР»СЏ', 'Parolni tiklash')}</button>
+                          <button className="sg-btn ghost" type="button" onClick={() => void toggleTeamUserActive(user)}>{user.isActive ? tr('Отключить', "O'chirish") : tr('Включить', 'Yoqish')}</button>
+                          <button className="sg-btn ghost" type="button" onClick={() => void resetTeamUserPassword(user)}>{tr('Сброс пароля', 'Parolni tiklash')}</button>
                         </div>
                       )}
                     </div>
