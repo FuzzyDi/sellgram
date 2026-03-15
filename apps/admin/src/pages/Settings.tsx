@@ -331,39 +331,39 @@ export default function Settings() {
     </div>
   ) : null;
 
-  if (loading) return <p className="sg-subtitle">{tr('Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР С”...','Sozlamalar yuklanmoqda...')}</p>;
+  if (loading) return <p className="sg-subtitle">{tr('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043a...', 'Sozlamalar yuklanmoqda...')}</p>;
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
       {noticeNode}
       <header>
-        <h2 className="sg-title">{tr('Р СњР В°РЎРѓРЎвЂљРЎР‚Р С•Р в„–Р С”Р С‘', 'Sozlamalar')}</h2>
-        <p className="sg-subtitle">{tr('Магазины, доставка, лояльность и Telegram-привязка', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
+        <h2 className="sg-title">{tr('\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438', 'Sozlamalar')}</h2>
+        <p className="sg-subtitle">{tr('\u041c\u0430\u0433\u0430\u0437\u0438\u043d\u044b, \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430, \u043b\u043e\u044f\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0438 Telegram-\u043f\u0440\u0438\u0432\u044f\u0437\u043a\u0430', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
       </header>
 
       <div className="sg-card soft">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <p style={{ margin: 0, fontWeight: 800 }}>{tr('Р СџРЎР‚Р С‘Р Р†РЎРЏР В·Р С”Р В° Telegram-Р В°Р Т‘Р СР С‘Р Р…Р В°', 'Telegram adminini bog\'lash')}</p>
+            <p style={{ margin: 0, fontWeight: 800 }}>{tr('\u041f\u0440\u0438\u0432\u044f\u0437\u043a\u0430 Telegram-\u0430\u0434\u043c\u0438\u043d\u0430', 'Telegram adminini bog\'lash')}</p>
             <p className="sg-subtitle" style={{ marginTop: 4 }}>
-              {tr('Сгенерируйте код и отправьте боту: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
+              {tr('\u0421\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u0443\u0439\u0442\u0435 \u043a\u043e\u0434 \u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u044c\u0442\u0435 \u0431\u043e\u0442\u0443: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
             </p>
           </div>
           <button className="sg-btn primary" type="button" onClick={generateTelegramLinkCode}>
-            {telegramLinkLoading ? tr('Генерируется...', 'Yaratilmoqda...') : tr('Сгенерировать код', 'Kod yaratish')}
+            {telegramLinkLoading ? tr('\u0413\u0435\u043d\u0435\u0440\u0438\u0440\u0443\u0435\u0442\u0441\u044f...', 'Yaratilmoqda...') : tr('\u0421\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043a\u043e\u0434', 'Kod yaratish')}
           </button>
         </div>
 
         {telegramLinkData && (
           <div className="sg-card" style={{ marginTop: 12 }}>
             <p style={{ margin: 0, fontSize: 14 }}>
-              {tr('Р С™Р С•Р Т‘', 'Kod')}: <b style={{ fontFamily: 'monospace' }}>{telegramLinkData.code}</b>
+              {tr('\u041a\u043e\u0434', 'Kod')}: <b style={{ fontFamily: 'monospace' }}>{telegramLinkData.code}</b>
             </p>
             <p style={{ margin: '6px 0 0', fontSize: 12, color: '#65746b' }}>
-              {tr('Р ВРЎРѓРЎвЂљР ВµР С”Р В°Р ВµРЎвЂљ', 'Amal qilish muddati')}: {new Date(telegramLinkData.expiresAt).toLocaleString(locale)}
+              {tr('\u0421\u0440\u043e\u043a \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f', 'Amal qilish muddati')}: {new Date(telegramLinkData.expiresAt).toLocaleString(locale)}
             </p>
             <p style={{ margin: '6px 0 0', fontSize: 12, color: '#65746b' }}>
-              {tr('Р С™Р С•Р СР В°Р Р…Р Т‘Р В°', 'Buyruq')}: <span style={{ fontFamily: 'monospace' }}>{telegramLinkData.command}</span>
+              {tr('\u041a\u043e\u043c\u0430\u043d\u0434\u0430', 'Buyruq')}: <span style={{ fontFamily: 'monospace' }}>{telegramLinkData.command}</span>
             </p>
           </div>
         )}
@@ -371,16 +371,16 @@ export default function Settings() {
 
       <div className="sg-pill-row">
         <button className={`sg-pill ${tab === 'stores' ? 'active' : ''}`} type="button" onClick={() => setTab('stores')}>
-          {tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…РЎвЂ№', "Do'konlar")}
+          {tr('\u041c\u0430\u0433\u0430\u0437\u0438\u043d\u044b', 'Do\'konlar')}
         </button>
         <button className={`sg-pill ${tab === 'zones' ? 'active' : ''}`} type="button" onClick={() => setTab('zones')}>
-          {tr('Р вЂќР С•РЎРѓРЎвЂљР В°Р Р†Р С”Р В°', 'Yetkazib berish')}
+          {tr('\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430', 'Yetkazib berish')}
         </button>
         <button className={`sg-pill ${tab === 'loyalty' ? 'active' : ''}`} type="button" onClick={() => setTab('loyalty')}>
-          {tr('Р вЂєР С•РЎРЏР В»РЎРЉР Р…Р С•РЎРѓРЎвЂљРЎРЉ', 'Loyallik')}
+          {tr('\u041b\u043e\u044f\u043b\u044c\u043d\u043e\u0441\u0442\u044c', 'Loyallik')}
         </button>
         <button className={`sg-pill ${tab === 'account' ? 'active' : ''}`} type="button" onClick={() => setTab('account')}>
-          {tr('Р В РЎвЂ™Р В РЎвЂќР В РЎвЂќР В Р’В°Р РЋРЎвЂњР В Р вЂ¦Р РЋРІР‚С™', 'Akkaunt')}
+          {tr('\u0410\u043a\u043a\u0430\u0443\u043d\u0442', 'Akkaunt')}
         </button>
       </div>
 
@@ -388,10 +388,10 @@ export default function Settings() {
         <section className="sg-grid" style={{ gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <p className="sg-subtitle" style={{ margin: 0 }}>
-              {tr('Р С›Р Т‘Р С‘Р Р… Р СР В°Р С–Р В°Р В·Р С‘Р Р… = Р С•Р Т‘Р С‘Р Р… Telegram-Р В±Р С•РЎвЂљ', "Bitta do'kon = bitta Telegram bot")}
+              {tr('\u041e\u0434\u0438\u043d \u043c\u0430\u0433\u0430\u0437\u0438\u043d = \u043e\u0434\u0438\u043d Telegram-\u0431\u043e\u0442', 'Bitta do\'kon = bitta Telegram bot')}
             </p>
             <button className="sg-btn primary" type="button" onClick={openCreateStore}>
-              + {tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…', "Do'kon")}
+              + {tr('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Do\'kon')}
             </button>
           </div>
 
@@ -403,28 +403,28 @@ export default function Settings() {
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="sg-btn ghost" type="button" onClick={() => openEditStore(store)}>
-                  {tr('Р ВР В·Р СР ВµР Р…Р С‘РЎвЂљРЎРЉ', 'Tahrirlash')}
+                  {tr('\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c', 'Tahrirlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => checkStoreConnection(store)}>
-                  {tr('\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0431\u043E\u0442\u0430', 'Botni tekshirish')}
+                  {tr('\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u0431\u043e\u0442\u0430', 'Botni tekshirish')}
                 </button>
                 <button className="sg-btn primary" type="button" onClick={() => activateStoreConnection(store)}>
-                  {tr('\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C', 'Ulash')}
+                  {tr('\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c', 'Ulash')}
                 </button>
                 <button
                   className="sg-btn danger"
                   type="button"
                   disabled={stores.length <= 1}
-                  title={stores.length <= 1 ? tr('Р СњР ВµР В»РЎРЉР В·РЎРЏ РЎС“Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ Р С—Р С•РЎРѓР В»Р ВµР Т‘Р Р…Р С‘Р в„– Р СР В°Р С–Р В°Р В·Р С‘Р Р…', "Oxirgi do'konni o'chirib bo'lmaydi") : undefined}
+                  title={stores.length <= 1 ? tr('\u041d\u0435\u043b\u044c\u0437\u044f \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u043c\u0430\u0433\u0430\u0437\u0438\u043d', 'Oxirgi do\'konni o\'chirib bo\'lmaydi') : undefined}
                   onClick={() => deleteStore(store.id, store.name)}
                 >
-                  {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish")}
+                  {tr('\u0423\u0434\u0430\u043b\u0438\u0442\u044c', 'O\'chirish')}
                 </button>
               </div>
             </article>
           ))}
 
-          {stores.length === 0 && <p className="sg-subtitle">{tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…Р С•Р Р† Р С—Р С•Р С”Р В° Р Р…Р ВµРЎвЂљ', "Hozircha do'konlar yo'q")}</p>}
+          {stores.length === 0 && <p className="sg-subtitle">{tr('\u041f\u043e\u043a\u0430 \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432 \u043d\u0435\u0442', 'Hozircha do\'konlar yo\'q')}</p>}
         </section>
       )}
 
@@ -432,10 +432,10 @@ export default function Settings() {
         <section className="sg-grid" style={{ gap: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <p className="sg-subtitle" style={{ margin: 0 }}>
-              {tr('Р вЂ”Р С•Р Р…РЎвЂ№ Р С‘ РЎвЂљР В°РЎР‚Р С‘РЎвЂћРЎвЂ№ Р Т‘Р С•РЎРѓРЎвЂљР В°Р Р†Р С”Р С‘', 'Yetkazib berish hududlari va tariflar')}
+              {tr('\u0417\u043e\u043d\u044b \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u0438 \u0442\u0430\u0440\u0438\u0444\u044b', 'Yetkazib berish hududlari va tariflar')}
             </p>
             <button className="sg-btn primary" type="button" onClick={openCreateZone}>
-              + {tr('Р вЂ”Р С•Р Р…Р В°', 'Hudud')}
+              + {tr('\u0417\u043e\u043d\u0430', 'Hudud')}
             </button>
           </div>
 
@@ -443,10 +443,10 @@ export default function Settings() {
             <table className="sg-table">
               <thead>
                 <tr>
-                  <th>{tr('Р вЂ”Р С•Р Р…Р В°', 'Hudud')}</th>
-                  <th>{tr('Р В¦Р ВµР Р…Р В°', 'Narx')}</th>
-                  <th>{tr('Р вЂР ВµРЎРѓР С—Р В»Р В°РЎвЂљР Р…Р С• Р С•РЎвЂљ', 'Bepul chegarasi')}</th>
-                  <th>{tr('Р вЂќР ВµР в„–РЎРѓРЎвЂљР Р†Р С‘РЎРЏ', 'Amallar')}</th>
+                  <th>{tr('\u0417\u043e\u043d\u0430', 'Hudud')}</th>
+                  <th>{tr('\u0426\u0435\u043d\u0430', 'Narx')}</th>
+                  <th>{tr('\u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0439 \u043f\u043e\u0440\u043e\u0433', 'Bepul chegarasi')}</th>
+                  <th>{tr('\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f', 'Amallar')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -458,10 +458,10 @@ export default function Settings() {
                     <td>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button className="sg-btn ghost" type="button" onClick={() => openEditZone(zone)}>
-                          {tr('Р ВР В·Р СР ВµР Р…Р С‘РЎвЂљРЎРЉ', 'Tahrirlash')}
+                          {tr('\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c', 'Tahrirlash')}
                         </button>
                         <button className="sg-btn danger" type="button" onClick={() => deleteZone(zone.id)}>
-                          {tr('Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљРЎРЉ', "O'chirish")}
+                          {tr('\u0423\u0434\u0430\u043b\u0438\u0442\u044c', 'O\'chirish')}
                         </button>
                       </div>
                     </td>
@@ -470,7 +470,7 @@ export default function Settings() {
                 {zones.length === 0 && (
                   <tr>
                     <td colSpan={4} style={{ textAlign: 'center', color: '#6b7a71' }}>
-                      {tr('Р вЂ”Р С•Р Р…РЎвЂ№ Р Т‘Р С•РЎРѓРЎвЂљР В°Р Р†Р С”Р С‘ Р Р…Р Вµ Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР Р…РЎвЂ№', 'Yetkazib berish hududlari sozlanmagan')}
+                      {tr('\u0417\u043e\u043d\u044b \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u043d\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d\u044b', 'Yetkazib berish hududlari sozlanmagan')}
                     </td>
                   </tr>
                 )}
@@ -482,8 +482,8 @@ export default function Settings() {
 
       {tab === 'loyalty' && loyalty && (
         <section className="sg-card" style={{ maxWidth: 720 }}>
-          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Р СџРЎР‚Р С•Р С–РЎР‚Р В°Р СР СР В° Р В»Р С•РЎРЏР В»РЎРЉР Р…Р С•РЎРѓРЎвЂљР С‘', 'Loyallik dasturi')}</h3>
-          <p className="sg-subtitle">{tr('Р СњР В°РЎвЂЎР С‘РЎРѓР В»Р ВµР Р…Р С‘Р Вµ Р В±Р В°Р В»Р В»Р С•Р Р† Р С‘ Р В»Р С‘Р СР С‘РЎвЂљРЎвЂ№ РЎРѓР С”Р С‘Р Т‘Р С”Р С‘', 'Ball berish qoidalari va chegirma limitlari')}</p>
+          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('\u041f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 \u043b\u043e\u044f\u043b\u044c\u043d\u043e\u0441\u0442\u0438', 'Loyallik dasturi')}</h3>
+          <p className="sg-subtitle">{tr('\u041d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0435 \u0431\u0430\u043b\u043b\u043e\u0432 \u0438 \u043b\u0438\u043c\u0438\u0442\u044b \u0441\u043a\u0438\u0434\u043a\u0438', 'Ball berish qoidalari va chegirma limitlari')}</p>
 
           <form
             onSubmit={(e) => {
@@ -499,12 +499,12 @@ export default function Settings() {
                 checked={!!loyalty.isEnabled}
                 onChange={(e) => setLoyalty({ ...loyalty, isEnabled: e.target.checked })}
               />
-              {tr('Р вЂ™Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…Р В°', 'Yoqilgan')}
+              {tr('\u0412\u043a\u043b\u044e\u0447\u0435\u043d\u0430', 'Yoqilgan')}
             </label>
 
             <div className="sg-grid cols-2">
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р РЋРЎС“Р СР СР В° РЎв‚¬Р В°Р С–Р В°', 'Qadam summasi')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('\u0421\u0443\u043c\u043c\u0430 \u0448\u0430\u0433\u0430', 'Qadam summasi')}</label>
                 <input
                   type="number"
                   value={loyalty.unitAmount || 1000}
@@ -514,7 +514,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р вЂР В°Р В»Р В»Р С•Р Р† Р В·Р В° РЎв‚¬Р В°Р С–', 'Qadam uchun ball')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('\u0411\u0430\u043b\u043b\u043e\u0432 \u0437\u0430 \u0448\u0430\u0433', 'Qadam uchun ball')}</label>
                 <input
                   type="number"
                   value={loyalty.pointsPerUnit || 1}
@@ -527,7 +527,7 @@ export default function Settings() {
 
             <div className="sg-grid cols-2">
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р В¦Р ВµР Р…Р В° 1 Р В±Р В°Р В»Р В»Р В°', '1 ball qiymati')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('\u0426\u0435\u043d\u0430 1 \u0431\u0430\u043b\u043b\u0430', '1 ball qiymati')}</label>
                 <input
                   type="number"
                   value={loyalty.pointValue || 100}
@@ -537,7 +537,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Р СљР В°Р С”РЎРѓ. РЎРѓР С”Р С‘Р Т‘Р С”Р В° %', 'Maks. chegirma %')}</label>
+                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('\u041c\u0430\u043a\u0441. \u0441\u043a\u0438\u0434\u043a\u0430 %', 'Maks. chegirma %')}</label>
                 <input
                   type="number"
                   value={loyalty.maxDiscountPct || 30}
@@ -549,7 +549,7 @@ export default function Settings() {
             </div>
 
             <button className="sg-btn primary" type="submit">
-              {tr('Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р С‘РЎвЂљРЎРЉ', 'Saqlash')}
+              {tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
             </button>
           </form>
         </section>
@@ -558,25 +558,25 @@ export default function Settings() {
       {tab === 'account' && (
         <section className="sg-grid" style={{ gap: 12 }}>
           <article className="sg-card">
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Р В РЎС™Р В РЎвЂўР В РІвЂћвЂ“ Р В Р’В°Р В РЎвЂќР В РЎвЂќР В Р’В°Р РЋРЎвЂњР В Р вЂ¦Р РЋРІР‚С™', 'Mening akkauntim')}</h3>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('\u041c\u043e\u0439 \u0430\u043a\u043a\u0430\u0443\u043d\u0442', 'Mening akkauntim')}</h3>
             <div className="sg-grid cols-2" style={{ marginTop: 10 }}>
               <input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р В Р’ВР В РЎВР РЋР РЏ', 'Ism')} />
               <input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
             </div>
             <div style={{ marginTop: 10 }}>
-              <button className="sg-btn primary" type="button" onClick={() => void saveMyProfile()}>{tr('Сохранить профиль', 'Profilni saqlash')}</button>
+              <button className="sg-btn primary" type="button" onClick={() => void saveMyProfile()}>{tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043f\u0440\u043e\u0444\u0438\u043b\u044c', 'Profilni saqlash')}</button>
             </div>
           </article>
 
           <article className="sg-card">
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Смена пароля', 'Parolni almashtirish')}</h3>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('\u0421\u043c\u0435\u043d\u0430 \u043f\u0430\u0440\u043e\u043b\u044f', 'Parolni almashtirish')}</h3>
             <div className="sg-grid cols-3" style={{ marginTop: 10 }}>
-              <input type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р СћР ВµР С”РЎС“РЎвЂ°Р С‘Р в„– Р С—Р В°РЎР‚Р С•Р В»РЎРЉ', 'Joriy parol')} />
-              <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Новый пароль', 'Yangi parol')} />
-              <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р В РЎСџР В РЎвЂўР В РўвЂР РЋРІР‚С™Р В Р вЂ Р В Р’ВµР РЋР вЂљР В РўвЂР В РЎвЂР РЋРІР‚С™Р В Р’Вµ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Parolni tasdiqlang')} />
+              <input type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'Joriy parol')} />
+              <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'Yangi parol')} />
+              <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u043f\u0430\u0440\u043e\u043b\u044c', 'Parolni tasdiqlang')} />
             </div>
             <div style={{ marginTop: 10 }}>
-              <button className="sg-btn primary" type="button" onClick={() => void changeMyPassword()}>{tr('Р В РЎвЂєР В Р’В±Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Parolni yangilash')}</button>
+              <button className="sg-btn primary" type="button" onClick={() => void changeMyPassword()}>{tr('\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c', 'Parolni yangilash')}</button>
             </div>
           </article>
 
@@ -622,7 +622,7 @@ export default function Settings() {
                       </div>
                       {user.role !== 'OWNER' && (
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button className="sg-btn ghost" type="button" onClick={() => void toggleTeamUserActive(user)}>{user.isActive ? tr('Отключить', "O'chirish") : tr('Включить', 'Yoqish')}</button>
+                          <button className="sg-btn ghost" type="button" onClick={() => void toggleTeamUserActive(user)}>{user.isActive ? tr('\u0423\u0434\u0430\u043b\u0438\u0442\u044c', 'O\'chirish') : tr('Включить', 'Yoqish')}</button>
                           <button className="sg-btn ghost" type="button" onClick={() => void resetTeamUserPassword(user)}>{tr('Сброс пароля', 'Parolni tiklash')}</button>
                         </div>
                       )}
@@ -638,7 +638,7 @@ export default function Settings() {
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
             <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
-              {editingStoreId ? tr('Р В Р ВµР Т‘Р В°Р С”РЎвЂљР С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р СР В°Р С–Р В°Р В·Р С‘Р Р…', "Do'konni tahrirlash") : tr('Р СњР С•Р Р†РЎвЂ№Р в„– Р СР В°Р С–Р В°Р В·Р С‘Р Р…', "Yangi do'kon")}
+              {editingStoreId ? tr('\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043c\u0430\u0433\u0430\u0437\u0438\u043d', 'Do\'konni tahrirlash') : tr('\u041d\u043e\u0432\u044b\u0439 \u043c\u0430\u0433\u0430\u0437\u0438\u043d', 'Yangi do\'kon')}
             </h3>
 
             <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
@@ -647,7 +647,7 @@ export default function Settings() {
                 onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Р СњР В°Р В·Р Р†Р В°Р Р…Р С‘Р Вµ Р СР В°Р С–Р В°Р В·Р С‘Р Р…Р В°', "Do'kon nomi")}
+                placeholder={tr('\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u0430', 'Do\'kon nomi')}
               />
               <input
                 value={storeForm.botToken}
@@ -662,14 +662,14 @@ export default function Settings() {
                 rows={3}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }}
-                placeholder={tr('Р СџРЎР‚Р С‘Р Р†Р ВµРЎвЂљРЎРѓРЎвЂљР Р†Р ВµР Р…Р Р…Р С•Р Вµ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘Р Вµ', 'Xush kelibsiz xabari')}
+                placeholder={tr('\u041f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435', 'Xush kelibsiz xabari')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="sg-btn primary" type="button" onClick={() => void saveStore()}>
-                  {tr('Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р С‘РЎвЂљРЎРЉ', 'Saqlash')}
+                  {tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => setShowStoreForm(false)}>
-                  {tr('Р С›РЎвЂљР СР ВµР Р…Р В°', 'Bekor qilish')}
+                  {tr('\u041e\u0442\u043c\u0435\u043d\u0430', 'Bekor qilish')}
                 </button>
               </div>
             </div>
@@ -681,7 +681,7 @@ export default function Settings() {
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
             <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
-              {editingZoneId ? tr('Р В Р ВµР Т‘Р В°Р С”РЎвЂљР С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р В·Р С•Р Р…РЎС“', 'Hududni tahrirlash') : tr('Р СњР С•Р Р†Р В°РЎРЏ Р В·Р С•Р Р…Р В°', 'Yangi hudud')}
+              {editingZoneId ? tr('\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0437\u043e\u043d\u0443', 'Hududni tahrirlash') : tr('\u041d\u043e\u0432\u0430\u044f \u0437\u043e\u043d\u0430', 'Yangi hudud')}
             </h3>
 
             <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
@@ -704,7 +704,7 @@ export default function Settings() {
                 onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Р СњР В°Р В·Р Р†Р В°Р Р…Р С‘Р Вµ Р В·Р С•Р Р…РЎвЂ№', 'Hudud nomi')}
+                placeholder={tr('\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0437\u043e\u043d\u044b', 'Hudud nomi')}
               />
               <input
                 type="number"
@@ -712,7 +712,7 @@ export default function Settings() {
                 onChange={(e) => setZoneForm({ ...zoneForm, price: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Р В¦Р ВµР Р…Р В°', 'Narx')}
+                placeholder={tr('\u0426\u0435\u043d\u0430', 'Narx')}
               />
               <input
                 type="number"
@@ -720,14 +720,14 @@ export default function Settings() {
                 onChange={(e) => setZoneForm({ ...zoneForm, freeFrom: e.target.value })}
                 className="w-full"
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                placeholder={tr('Р вЂР ВµРЎРѓР С—Р В»Р В°РЎвЂљР Р…Р С• Р С•РЎвЂљ', 'Bepul chegarasi')}
+                placeholder={tr('\u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0439 \u043f\u043e\u0440\u043e\u0433', 'Bepul chegarasi')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="sg-btn primary" type="button" onClick={() => void saveZone()}>
-                  {tr('Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р С‘РЎвЂљРЎРЉ', 'Saqlash')}
+                  {tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
                 </button>
                 <button className="sg-btn ghost" type="button" onClick={() => setShowZoneForm(false)}>
-                  {tr('Р С›РЎвЂљР СР ВµР Р…Р В°', 'Bekor qilish')}
+                  {tr('\u041e\u0442\u043c\u0435\u043d\u0430', 'Bekor qilish')}
                 </button>
               </div>
             </div>
