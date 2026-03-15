@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SellGram</title>
+  <title>SellGram — Telegram do'kon platformasi</title>
   <meta name="description" content="SellGram: Telegram ichida do'kon ochish va boshqarish platformasi" />
   <style>
     :root {
@@ -33,6 +33,7 @@
 
     .wrap { max-width: 1160px; margin: 0 auto; padding: 22px; }
 
+    /* ── Header ── */
     .top {
       display: flex;
       justify-content: space-between;
@@ -48,16 +49,15 @@
       font-weight: 900;
       font-size: 24px;
       letter-spacing: -0.5px;
+      text-decoration: none;
+      color: var(--text);
     }
 
     .brand-badge {
-      width: 36px;
-      height: 36px;
+      width: 36px; height: 36px;
       border-radius: 11px;
-      display: grid;
-      place-items: center;
-      color: #fff;
-      font-weight: 900;
+      display: grid; place-items: center;
+      color: #fff; font-weight: 900;
       background: linear-gradient(135deg, var(--brand), var(--brand-2));
     }
 
@@ -65,70 +65,41 @@
       display: inline-flex;
       border-radius: 999px;
       background: #e8f0eb;
-      padding: 4px;
-      gap: 4px;
+      padding: 4px; gap: 4px;
     }
-
     .lang button {
-      border: none;
-      border-radius: 999px;
-      padding: 8px 14px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 800;
-      color: #415045;
-      background: transparent;
+      border: none; border-radius: 999px;
+      padding: 8px 14px; cursor: pointer;
+      font-size: 12px; font-weight: 800;
+      color: #415045; background: transparent;
+      transition: background 0.14s, color 0.14s;
     }
+    .lang button.active { background: #0f1f16; color: #fff; }
+    .lang button:hover:not(.active) { background: #d4e8da; }
 
-    .lang button.active {
-      background: #0f1f16;
-      color: #fff;
-    }
-
-    .hero {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: calc(var(--radius) + 4px);
-      box-shadow: var(--shadow);
-      padding: 44px;
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 26px;
-      margin-bottom: 16px;
-    }
-
-    .hero h1 {
-      font-size: clamp(32px, 5vw, 54px);
-      line-height: 1.05;
-      letter-spacing: -0.9px;
-      margin-bottom: 14px;
-    }
-
-    .hero p {
-      color: var(--muted);
-      font-size: 18px;
-      margin-bottom: 22px;
-      max-width: 560px;
-    }
-
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
-
+    /* ── Buttons ── */
     .btn {
       text-decoration: none;
       border-radius: 12px;
-      padding: 13px 20px;
+      padding: 13px 22px;
       font-size: 14px;
       font-weight: 800;
       border: 1px solid transparent;
       display: inline-flex;
       align-items: center;
-      justify-content: center;
+      gap: 7px;
       cursor: pointer;
+      transition: background 0.14s, box-shadow 0.14s, transform 0.08s, border-color 0.14s;
     }
+    .btn:active { transform: scale(0.97); }
 
     .btn.primary {
       color: #fff;
       background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    }
+    .btn.primary:hover {
+      background: linear-gradient(135deg, #007a51, #009e66);
+      box-shadow: 0 6px 18px rgba(0, 135, 90, 0.30);
     }
 
     .btn.ghost {
@@ -136,42 +107,146 @@
       background: #fff;
       border-color: var(--line);
     }
+    .btn.ghost:hover {
+      background: var(--panel-soft);
+      border-color: #bfd4c8;
+    }
 
+    /* ── Hero ── */
+    .hero {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 4px);
+      box-shadow: var(--shadow);
+      padding: 48px 44px;
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 32px;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    .hero h1 {
+      font-size: clamp(30px, 4.5vw, 52px);
+      line-height: 1.06;
+      letter-spacing: -0.9px;
+      margin-bottom: 16px;
+    }
+    .hero h1 span { color: var(--brand); }
+    .hero p {
+      color: var(--muted);
+      font-size: 17px;
+      margin-bottom: 24px;
+      max-width: 520px;
+      line-height: 1.6;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+    /* ── Steps ── */
     .step {
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--panel-soft);
-      padding: 18px;
+      padding: 18px 20px;
+      transition: box-shadow 0.2s, transform 0.15s;
     }
+    .step:hover {
+      box-shadow: 0 8px 24px rgba(0,90,50,0.10);
+      transform: translateY(-2px);
+    }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      margin-bottom: 10px;
+    }
+    .step h3 { font-size: 16px; margin-bottom: 5px; }
+    .step p { font-size: 14px; color: var(--muted); margin: 0; line-height: 1.55; }
 
-    .step h3 { font-size: 17px; margin-bottom: 6px; }
-    .step p { font-size: 14px; color: var(--muted); margin: 0; }
-
+    /* ── Features ── */
     .features {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 12px;
-      margin: 12px 0 20px;
+      margin: 12px 0 16px;
     }
-
     .feature {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      padding: 18px;
+      padding: 22px 20px;
+      transition: box-shadow 0.2s, transform 0.15s;
+    }
+    .feature:hover {
+      box-shadow: 0 8px 24px rgba(0,90,50,0.10);
+      transform: translateY(-2px);
+    }
+    .feature .icon { font-size: 26px; margin-bottom: 10px; }
+    .feature h4 { font-size: 16px; margin-bottom: 7px; font-weight: 800; }
+    .feature p { font-size: 14px; color: var(--muted); line-height: 1.55; }
+
+    /* ── Plans ── */
+    .plans {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 2px);
+      box-shadow: var(--shadow);
+      padding: 36px 32px;
+      margin: 16px 0;
+    }
+    .plans h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.4px; margin-bottom: 6px; }
+    .plans > p { color: var(--muted); font-size: 15px; margin-bottom: 24px; }
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    .plan-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px 20px;
+      background: var(--panel-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: box-shadow 0.2s, transform 0.15s;
+    }
+    .plan-card:hover {
+      box-shadow: 0 8px 24px rgba(0,90,50,0.10);
+      transform: translateY(-2px);
+    }
+    .plan-card.featured {
+      border-color: var(--brand);
+      background: linear-gradient(160deg, #f0faf5, #e8f7ef);
+      box-shadow: 0 0 0 3px rgba(0,135,90,0.12);
+    }
+    .plan-name { font-size: 18px; font-weight: 900; letter-spacing: -0.3px; }
+    .plan-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .plan-features { list-style: none; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .plan-features li { font-size: 13px; display: flex; gap: 8px; align-items: flex-start; }
+    .plan-features li::before { content: "✓"; color: var(--brand); font-weight: 900; flex-shrink: 0; margin-top: 1px; }
+    .plan-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      background: var(--brand);
+      color: #fff;
     }
 
-    .feature .icon { font-size: 22px; margin-bottom: 8px; }
-    .feature h4 { font-size: 16px; margin-bottom: 6px; }
-    .feature p { font-size: 14px; color: var(--muted); }
-
+    /* ── Links / footer ── */
     .links {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
       margin-top: 8px;
     }
-
     .links a {
       font-size: 13px;
       font-weight: 700;
@@ -179,9 +254,11 @@
       text-decoration: none;
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 8px 12px;
+      padding: 8px 14px;
       background: #fff;
+      transition: background 0.14s, border-color 0.14s;
     }
+    .links a:hover { background: var(--panel-soft); border-color: #bfd4c8; }
 
     .bottom {
       display: flex;
@@ -191,50 +268,68 @@
       flex-wrap: wrap;
       color: var(--muted);
       font-size: 13px;
-      padding: 8px 2px;
+      padding: 10px 2px;
+      margin-top: 8px;
     }
 
+    /* ── Responsive ── */
     @media (max-width: 920px) {
-      .hero { grid-template-columns: 1fr; padding: 28px; }
+      .hero { grid-template-columns: 1fr; padding: 28px 24px; }
+      .features { grid-template-columns: 1fr 1fr; }
+      .plans-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
       .features { grid-template-columns: 1fr; }
+      .plans { padding: 24px 18px; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header class="top">
-      <div class="brand"><span class="brand-badge">S</span>SellGram</div>
+      <a class="brand" href="/">
+        <span class="brand-badge">S</span>SellGram
+      </a>
       <div class="lang">
         <button id="lang-uz" class="active" type="button">UZ</button>
         <button id="lang-ru" type="button">RU</button>
       </div>
     </header>
 
+    <!-- Hero -->
     <section class="hero">
       <div>
         <h1 data-i18n="hero_title"></h1>
         <p data-i18n="hero_desc"></p>
         <div class="actions">
-          <a class="btn primary" href="https://app.sellgram.uz" data-i18n="cta_primary"></a>
-          <a class="btn ghost" href="/guide.html" data-i18n="cta_secondary"></a>
+          <a class="btn primary" href="https://app.sellgram.uz">
+            &#x26A1; <span data-i18n="cta_primary"></span>
+          </a>
+          <a class="btn ghost" href="/guide">
+            <span data-i18n="cta_secondary"></span>
+          </a>
         </div>
       </div>
-      <div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
         <article class="step">
+          <div class="step-num">1</div>
           <h3 data-i18n="step1_title"></h3>
           <p data-i18n="step1_desc"></p>
         </article>
-        <article class="step" style="margin-top:10px">
+        <article class="step">
+          <div class="step-num">2</div>
           <h3 data-i18n="step2_title"></h3>
           <p data-i18n="step2_desc"></p>
         </article>
-        <article class="step" style="margin-top:10px">
+        <article class="step">
+          <div class="step-num">3</div>
           <h3 data-i18n="step3_title"></h3>
           <p data-i18n="step3_desc"></p>
         </article>
       </div>
     </section>
 
+    <!-- Features -->
     <section class="features">
       <article class="feature">
         <div class="icon">🛍️</div>
@@ -251,16 +346,59 @@
         <h4 data-i18n="f3_title"></h4>
         <p data-i18n="f3_desc"></p>
       </article>
+      <article class="feature">
+        <div class="icon">📣</div>
+        <h4 data-i18n="f4_title"></h4>
+        <p data-i18n="f4_desc"></p>
+      </article>
+      <article class="feature">
+        <div class="icon">📊</div>
+        <h4 data-i18n="f5_title"></h4>
+        <p data-i18n="f5_desc"></p>
+      </article>
+      <article class="feature">
+        <div class="icon">👥</div>
+        <h4 data-i18n="f6_title"></h4>
+        <p data-i18n="f6_desc"></p>
+      </article>
     </section>
 
+    <!-- Plans -->
+    <section class="plans">
+      <h2 data-i18n="plans_title"></h2>
+      <p data-i18n="plans_desc"></p>
+      <div class="plans-grid">
+        <div class="plan-card">
+          <div class="plan-name">Free</div>
+          <div class="plan-desc" data-i18n="plan_free_desc"></div>
+          <ul class="plan-features" data-i18n-list="plan_free_features"></ul>
+        </div>
+        <div class="plan-card featured">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="plan-name">Pro</div>
+            <span class="plan-badge" data-i18n="plan_popular"></span>
+          </div>
+          <div class="plan-desc" data-i18n="plan_pro_desc"></div>
+          <ul class="plan-features" data-i18n-list="plan_pro_features"></ul>
+        </div>
+        <div class="plan-card">
+          <div class="plan-name">Business</div>
+          <div class="plan-desc" data-i18n="plan_business_desc"></div>
+          <ul class="plan-features" data-i18n-list="plan_business_features"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer links -->
     <div class="links">
-      <a href="/privacy.html" data-i18n="link_privacy"></a>
-      <a href="/terms.html" data-i18n="link_terms"></a>
-      <a href="/guide.html" data-i18n="link_guide"></a>
+      <a href="/privacy" data-i18n="link_privacy"></a>
+      <a href="/terms" data-i18n="link_terms"></a>
+      <a href="/guide" data-i18n="link_guide"></a>
+      <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a>
     </div>
 
     <footer class="bottom">
-      <span>© <span id="year"></span> SellGram</span>
+      <span>© <span id="year"></span> SellGram. {{LEGAL_ENTITY_SHORT_NAME}}</span>
       <span data-i18n="footer_right"></span>
     </footer>
   </div>
@@ -268,62 +406,102 @@
   <script>
     const dict = {
       uz: {
-        hero_title: "Telegram ichida do'konni 5 daqiqada ishga tushiring",
-        hero_desc: "SellGram katalog, savat, buyurtma va mijozlar bilan ishlashni bitta panelda boshqaradi.",
+        hero_title: "Telegram ichida do'konni <span style='color:#00875a'>5 daqiqada</span> ishga tushiring",
+        hero_desc: "SellGram katalog, savat, buyurtma va mijozlar bilan ishlashni bitta panelda boshqaradi. Bot token kifoya.",
         cta_primary: "Do'kon yaratish",
-        cta_secondary: "Qadam-baqadam qo'llanma",
-        step1_title: "1. Botni ulang",
+        cta_secondary: "Qo'llanmani o'qish →",
+        step1_title: "Botni ulang",
         step1_desc: "Bot token kiriting va do'konni faollashtiring.",
-        step2_title: "2. Mahsulot joylang",
+        step2_title: "Mahsulot joylang",
         step2_desc: "Toifa, narx, rasm va qoldiqni kiriting.",
-        step3_title: "3. Sotuvni boshlang",
+        step3_title: "Sotuvni boshlang",
         step3_desc: "Mijoz Telegram ichida buyurtma beradi, siz paneldan nazorat qilasiz.",
         f1_title: "Miniapp katalog",
-        f1_desc: "Mijoz uchun qulay katalog, tez savat va buyurtma.",
+        f1_desc: "Mijoz uchun qulay katalog, tez savat va buyurtma to'g'ridan-to'g'ri Telegram ichida.",
         f2_title: "Buyurtma oqimi",
-        f2_desc: "Yangi, tayyorlanmoqda, yetkazildi holatlari bo'yicha boshqaruv.",
-        f3_title: "Loyallik va to'lov",
-        f3_desc: "Ballar tizimi va do'kon egasi uchun moslashuvchan to'lov sozlamalari.",
+        f2_desc: "Yangi, tayyorlanmoqda, yetkazildi holatlari bo'yicha real vaqt boshqaruvi.",
+        f3_title: "Loyallik dasturi",
+        f3_desc: "Ballar tizimi — mijozlar to'g'rilaydi va qayta keladi.",
+        f4_title: "Xabarlar",
+        f4_desc: "Barcha yoki tanlangan mijozlarga Telegram orqali xabar yuboring.",
+        f5_title: "Hisobotlar",
+        f5_desc: "Daromad, buyurtmalar va mijozlar bo'yicha tahlillar.",
+        f6_title: "Jamoa boshqaruvi",
+        f6_desc: "Operator va menejer qo'shing, har biriga ruxsatlar bering.",
+        plans_title: "Tariflar",
+        plans_desc: "Boshlang — bepul. O'sib borayotgan biznes uchun kengaytirishingiz mumkin.",
+        plan_popular: "Mashhur",
+        plan_free_desc: "Kichik do'konlar uchun",
+        plan_free_features: ["1 ta do'kon", "50 tagacha mahsulot", "Asosiy funksiyalar", "Buyurtmalar va mijozlar"],
+        plan_pro_desc: "Rivojlanayotgan biznes uchun",
+        plan_pro_features: ["Bir nechta do'kon", "Cheksiz mahsulotlar", "Xabarlar va segmentatsiya", "Hisobotlarni eksport qilish", "Loyallik dasturi"],
+        plan_business_desc: "Katta hajmli operatsiyalar uchun",
+        plan_business_features: ["Cheksiz hamma narsa", "Ustuvor qo'llab-quvvatlash", "Jamoa va rollar", "SLA kafolati"],
         link_privacy: "Maxfiylik siyosati",
         link_terms: "Foydalanuvchi kelishuvi",
         link_guide: "Bot ulash qo'llanmasi",
-        footer_right: "UZ va RU tillari to'liq qo'llab-quvvatlanadi"
+        footer_right: "UZ va RU tillari to'liq qo'llab-quvvatlanadi",
       },
       ru: {
-        hero_title: "Запустите магазин в Telegram за 5 минут",
-        hero_desc: "SellGram объединяет каталог, корзину, заказы и клиентов в одной панели управления.",
+        hero_title: "Запустите магазин в Telegram <span style='color:#00875a'>за 5 минут</span>",
+        hero_desc: "SellGram объединяет каталог, корзину, заказы и клиентов в одной панели управления. Достаточно bot token.",
         cta_primary: "Создать магазин",
-        cta_secondary: "Пошаговое руководство",
-        step1_title: "1. Подключите бота",
+        cta_secondary: "Читать руководство →",
+        step1_title: "Подключите бота",
         step1_desc: "Укажите bot token и активируйте магазин.",
-        step2_title: "2. Добавьте товары",
+        step2_title: "Добавьте товары",
         step2_desc: "Заполните категории, цены, фото и остатки.",
-        step3_title: "3. Начните продажи",
+        step3_title: "Начните продажи",
         step3_desc: "Клиент оформляет заказ в Telegram, вы контролируете процесс в панели.",
         f1_title: "Каталог miniapp",
         f1_desc: "Удобная витрина, быстрый заказ и оформление прямо в Telegram.",
         f2_title: "Поток заказов",
         f2_desc: "Статусы заказа, доставка и контроль в реальном времени.",
-        f3_title: "Лояльность и оплата",
-        f3_desc: "Баллы и гибкие способы оплаты, которые настраивает владелец.",
+        f3_title: "Программа лояльности",
+        f3_desc: "Система баллов — клиенты возвращаются и покупают снова.",
+        f4_title: "Рассылки",
+        f4_desc: "Отправляйте сообщения всем или выбранным клиентам через Telegram.",
+        f5_title: "Аналитика",
+        f5_desc: "Отчёты по выручке, заказам и покупателям.",
+        f6_title: "Управление командой",
+        f6_desc: "Добавляйте операторов и менеджеров, назначайте права.",
+        plans_title: "Тарифы",
+        plans_desc: "Начните бесплатно. Расширяйте по мере роста.",
+        plan_popular: "Популярный",
+        plan_free_desc: "Для небольших магазинов",
+        plan_free_features: ["1 магазин", "До 50 товаров", "Базовые функции", "Заказы и клиенты"],
+        plan_pro_desc: "Для растущего бизнеса",
+        plan_pro_features: ["Несколько магазинов", "Безлимит товаров", "Рассылки и сегментация", "Экспорт отчётов", "Программа лояльности"],
+        plan_business_desc: "Для крупных операций",
+        plan_business_features: ["Всё без ограничений", "Приоритетная поддержка", "Команда и роли", "Гарантия SLA"],
         link_privacy: "Политика конфиденциальности",
         link_terms: "Пользовательское соглашение",
         link_guide: "Как подключить бота",
-        footer_right: "Полная поддержка языков UZ и RU"
+        footer_right: "Полная поддержка языков UZ и RU",
       }
     };
 
-    const qs = (s) => document.querySelector(s);
-    const qsa = (s) => document.querySelectorAll(s);
+    function qs(s) { return document.querySelector(s); }
+    function qsa(s) { return document.querySelectorAll(s); }
 
     function setLang(lang) {
       const t = dict[lang] || dict.uz;
       localStorage.setItem('sellgram_landing_lang', lang);
       document.documentElement.lang = lang;
+
       qsa('[data-i18n]').forEach((el) => {
         const key = el.getAttribute('data-i18n');
-        if (key && t[key]) el.textContent = t[key];
+        if (key && t[key] !== undefined) el.innerHTML = t[key];
       });
+
+      qsa('[data-i18n-list]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-list');
+        const items = t[key];
+        if (Array.isArray(items)) {
+          el.innerHTML = items.map((item) => `<li>${item}</li>`).join('');
+        }
+      });
+
       qs('#lang-uz').classList.toggle('active', lang === 'uz');
       qs('#lang-ru').classList.toggle('active', lang === 'ru');
     }
@@ -331,11 +509,10 @@
     qs('#lang-uz').addEventListener('click', () => setLang('uz'));
     qs('#lang-ru').addEventListener('click', () => setLang('ru'));
 
-    const browserLang = (navigator.language || '').toLowerCase();
     const saved = localStorage.getItem('sellgram_landing_lang');
-    const initial = saved || (browserLang.startsWith('ru') ? 'ru' : 'uz');
+    const browserLang = (navigator.language || '').toLowerCase();
+    setLang(saved || (browserLang.startsWith('ru') ? 'ru' : 'uz'));
 
-    setLang(initial);
     qs('#year').textContent = new Date().getFullYear();
   </script>
 </body>
