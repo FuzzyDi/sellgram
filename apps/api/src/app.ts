@@ -271,7 +271,7 @@ async function main() {
 
   // Image proxy (MinIO -> public)
   fastify.get('/uploads/*', { config: { rateLimit: false } }, async (request, reply) => {
-    const rawPath = (request.params as any)['*'] as string;
+    const rawPath = (request.params as { '*': string })['*'];
     try {
       const { getS3 } = await import('./lib/s3.js');
       const resolved = resolveBucketAndObjectPath(rawPath);
