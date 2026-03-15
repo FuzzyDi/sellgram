@@ -23,6 +23,13 @@ export default function Orders() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [pendingOrders, setPendingOrders] = useState<Set<string>>(new Set());
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+
+  function showNotice(tone: 'success' | 'error', message: string) {
+    setNotice({ tone, message });
+    setTimeout(() => setNotice(null), 3200);
+  }
 
   const statusLabels: Record<string, string> = useMemo(
     () => ({
@@ -69,18 +76,40 @@ export default function Orders() {
 
   const handleStatusChange = useCallback(
     async (orderId: string, newStatus: string) => {
+      if (pendingOrders.has(orderId)) return;
+      setPendingOrders((prev) => new Set(prev).add(orderId));
       try {
         await adminApi.updateOrderStatus(orderId, { status: newStatus });
         loadOrders();
       } catch (err: any) {
-        alert(err.message);
+        showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xatolik'));
+      } finally {
+        setPendingOrders((prev) => {
+          const next = new Set(prev);
+          next.delete(orderId);
+          return next;
+        });
       }
     },
-    [loadOrders]
+    [loadOrders, pendingOrders]
   );
+
+  const noticeNode = notice ? (
+    <div style={{
+      position: 'fixed', right: 16, top: 16, zIndex: 200, minWidth: 260, maxWidth: 420,
+      borderRadius: 12, padding: '12px 16px', fontSize: 13, fontWeight: 700,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.1)', animation: 'sg-fade-in 0.2s ease both',
+      color: notice.tone === 'error' ? '#991b1b' : '#065f46',
+      background: notice.tone === 'error' ? '#fee2e2' : '#d1fae5',
+      border: `1px solid ${notice.tone === 'error' ? '#fecaca' : '#a7f3d0'}`,
+    }}>
+      {notice.message}
+    </div>
+  ) : null;
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      {noticeNode}
       <header>
         <h2 className="sg-title">{tr('Заказы', 'Buyurtmalar')}</h2>
         <p className="sg-subtitle">{tr('Управление входящими заказами и статусами', 'Buyurtmalar va statuslarni boshqarish')}</p>
@@ -130,7 +159,16 @@ export default function Orders() {
       </div>
 
       {loading ? (
-        <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
+        <div className="sg-grid">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="sg-card" style={{ display: 'grid', gap: 10 }}>
+              <div className="sg-skeleton" style={{ height: 20, width: '40%' }} />
+              <div className="sg-skeleton" style={{ height: 14, width: '60%' }} />
+              <div className="sg-skeleton" style={{ height: 14, width: '80%' }} />
+              <div className="sg-skeleton" style={{ height: 32, width: '30%' }} />
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="sg-grid">
           {data?.items?.map((order: any) => (
@@ -150,7 +188,10 @@ export default function Orders() {
                   <span className="sg-badge" style={{ background: `${statusColors[order.status] || '#4b5563'}1a`, color: statusColors[order.status] || '#4b5563' }}>
                     {statusLabels[order.status]}
                   </span>
-                  <span className="sg-badge" style={{ background: '#eef3f0', color: '#4a5e53' }}>
+                  <span className="sg-badge" style={{
+                    background: order.paymentStatus === 'PAID' ? '#d1fae5' : order.paymentStatus === 'REFUNDED' ? '#fee2e2' : '#fef3c7',
+                    color: order.paymentStatus === 'PAID' ? '#065f46' : order.paymentStatus === 'REFUNDED' ? '#991b1b' : '#92400e',
+                  }}>
                     {paymentLabels[order.paymentStatus] || order.paymentStatus}
                   </span>
                 </div>
@@ -165,36 +206,36 @@ export default function Orders() {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {order.status === 'NEW' && (
                     <>
-                      <Button onClick={() => handleStatusChange(order.id, 'CONFIRMED')} className="sg-btn primary">
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'CONFIRMED')} className="sg-btn primary">
                         {tr('Подтвердить', 'Tasdiqlash')}
                       </Button>
-                      <Button onClick={() => handleStatusChange(order.id, 'CANCELLED')} className="sg-btn danger">
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'CANCELLED')} className="sg-btn danger">
                         {tr('Отменить', 'Bekor qilish')}
                       </Button>
                     </>
                   )}
                   {order.status === 'CONFIRMED' && (
-                    <Button onClick={() => handleStatusChange(order.id, 'PREPARING')} className="sg-btn ghost">
+                    <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'PREPARING')} className="sg-btn ghost">
                       {tr('Готовить', 'Tayyorlash')}
                     </Button>
                   )}
                   {order.status === 'PREPARING' && (
-                    <Button onClick={() => handleStatusChange(order.id, 'READY')} className="sg-btn ghost">
+                    <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'READY')} className="sg-btn ghost">
                       {tr('Готов', 'Tayyor')}
                     </Button>
                   )}
                   {order.status === 'READY' && (
-                    <Button onClick={() => handleStatusChange(order.id, 'SHIPPED')} className="sg-btn ghost">
+                    <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'SHIPPED')} className="sg-btn ghost">
                       {tr('Отправить', "Jo'natish")}
                     </Button>
                   )}
                   {order.status === 'SHIPPED' && (
-                    <Button onClick={() => handleStatusChange(order.id, 'DELIVERED')} className="sg-btn ghost">
+                    <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'DELIVERED')} className="sg-btn ghost">
                       {tr('Доставлен', 'Yetkazildi')}
                     </Button>
                   )}
                   {order.status === 'DELIVERED' && (
-                    <Button onClick={() => handleStatusChange(order.id, 'COMPLETED')} className="sg-btn primary">
+                    <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'COMPLETED')} className="sg-btn primary">
                       {tr('Завершить', 'Yakunlash')}
                     </Button>
                   )}

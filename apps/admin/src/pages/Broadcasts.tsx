@@ -79,10 +79,16 @@ export default function Broadcasts() {
     (targetType === 'ALL' || selectedCustomerIds.length > 0);
 
   const statusLabel: Record<string, string> = {
-    DRAFT: tr('Черновик', 'Qoralama'),
-    SENT: tr('Отправлена', 'Yuborildi'),
-    FAILED: tr('Ошибка', 'Xato'),
+    DRAFT: tr('\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a', 'Qoralama'),
+    SENT: tr('\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0430', 'Yuborildi'),
+    FAILED: tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xato'),
   };
+
+  function campaignBadgeStyle(status: string): React.CSSProperties {
+    if (status === 'SENT')   return { background: '#d1fae5', color: '#065f46' };
+    if (status === 'FAILED') return { background: '#fee2e2', color: '#991b1b' };
+    return { background: '#f3f4f6', color: '#4b5563' };
+  }
 
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
@@ -172,11 +178,15 @@ export default function Broadcasts() {
           <label style={{ fontSize: 12, color: '#5f6d64' }}>{tr('Заголовок (необязательно)', 'Sarlavha (ixtiyoriy)')}</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
 
-          <label style={{ fontSize: 12, color: '#5f6d64' }}>{tr('Сообщение', 'Xabar')}</label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label style={{ fontSize: 12, color: '#5f6d64' }}>{tr('\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435', 'Xabar')}</label>
+            <span style={{ fontSize: 11, color: message.length > 3800 ? '#b91c1c' : '#9ca3af' }}>{message.length} / 4096</span>
+          </div>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={5}
+            maxLength={4096}
             className="w-full"
             style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }}
           />
@@ -229,19 +239,19 @@ export default function Broadcasts() {
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Последние рассылки', "So'nggi xabarnomalar")}</h3>
 
           {(campaigns || []).map((campaign) => (
-            <div key={campaign.id} style={{ border: '1px solid #e0e8e2', borderRadius: 10, padding: 12 }}>
+            <div key={campaign.id} className="sg-card soft" style={{ padding: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                <p style={{ margin: 0, fontWeight: 700 }}>{campaign.title || tr('Без заголовка', 'Sarlavhasiz')}</p>
-                <span className="sg-badge" style={{ background: '#eef3f0', color: '#476154' }}>{statusLabel[campaign.status] || campaign.status}</span>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{campaign.title || tr('\u0411\u0435\u0437 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043a\u0430', 'Sarlavhasiz')}</p>
+                <span className="sg-badge" style={campaignBadgeStyle(campaign.status)}>{statusLabel[campaign.status] || campaign.status}</span>
               </div>
-              <p style={{ margin: '8px 0 0', color: '#5f6d64', fontSize: 13 }}>{campaign.message}</p>
-              <p style={{ margin: '8px 0 0', color: '#748278', fontSize: 12 }}>
-                {new Date(campaign.createdAt).toLocaleString(locale)}
-              </p>
-              <p style={{ margin: '6px 0 0', color: '#748278', fontSize: 12 }}>
-                {tr('Получатели', 'Qabul qiluvchilar')}: {campaign.totalRecipients} | {tr('Отправлено', 'Yuborildi')}:{' '}
-                {campaign.sentCount} | {tr('Ошибки', 'Xatolar')}: {campaign.failedCount}
-              </p>
+              <p style={{ margin: '8px 0 0', color: '#5f6d64', fontSize: 13, lineHeight: 1.5 }}>{campaign.message}</p>
+              <div style={{ marginTop: 8, display: 'flex', gap: 14, fontSize: 12, color: '#748278', flexWrap: 'wrap' }}>
+                <span>{new Date(campaign.createdAt).toLocaleString(locale)}</span>
+                <span>{tr('\u041f\u043e\u043b\u0443\u0447\u0430\u0442\u0435\u043b\u0435\u0439', 'Qabul qiluvchilar')}: <strong>{campaign.totalRecipients}</strong></span>
+                <span style={{ color: campaign.failedCount > 0 ? '#b91c1c' : undefined }}>
+                  {tr('\u041e\u0448\u0438\u0431\u043a\u0438', 'Xatolar')}: {campaign.failedCount}
+                </span>
+              </div>
             </div>
           ))}
 
