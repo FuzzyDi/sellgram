@@ -21,6 +21,13 @@ export default function PaymentMethods() {
   const [editing, setEditing] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(emptyPaymentMethodForm(0));
+  const [pendingArchive, setPendingArchive] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+
+  function showNotice(tone: 'success' | 'error', message: string) {
+    setNotice({ tone, message });
+    setTimeout(() => setNotice(null), 3200);
+  }
 
   async function loadStores() {
     const list = await adminApi.getStores();
@@ -101,26 +108,49 @@ export default function PaymentMethods() {
       setFormOpen(false);
       await loadMethods(storeId);
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f', 'Saqlashda xato'));
     } finally {
       setSaving(false);
     }
   }
 
   async function archiveMethod(methodId: string) {
-    if (!confirm(tr('Архивировать этот способ оплаты?', "Ushbu to'lov usulini arxivlaysizmi?"))) return;
+    setPendingArchive(null);
     try {
       await adminApi.deleteStorePaymentMethod(storeId, methodId);
       await loadMethods(storeId);
+      showNotice('success', tr('\u0421\u043f\u043e\u0441\u043e\u0431 \u043e\u043f\u043b\u0430\u0442\u044b \u0430\u0440\u0445\u0438\u0432\u0438\u0440\u043e\u0432\u0430\u043d', "To'lov usuli arxivlandi"));
     } catch (err: any) {
-      alert(err.message);
+      showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xatolik'));
     }
   }
 
-  if (loading) return <p className="sg-subtitle">{tr('Загрузка способов оплаты...', "To'lov usullari yuklanmoqda...")}</p>;
+  const noticeNode = notice ? (
+    <div style={{
+      position: 'fixed', right: 16, top: 16, zIndex: 200, minWidth: 260, maxWidth: 420,
+      borderRadius: 12, padding: '12px 16px', fontSize: 13, fontWeight: 700,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.1)', animation: 'sg-fade-in 0.2s ease both',
+      color: notice.tone === 'error' ? '#991b1b' : '#065f46',
+      background: notice.tone === 'error' ? '#fee2e2' : '#d1fae5',
+      border: `1px solid ${notice.tone === 'error' ? '#fecaca' : '#a7f3d0'}`,
+    }}>
+      {notice.message}
+    </div>
+  ) : null;
+
+  if (loading) {
+    return (
+      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+        <div className="sg-skeleton" style={{ height: 36, width: '30%' }} />
+        <div className="sg-skeleton" style={{ height: 20, width: '55%' }} />
+        <div className="sg-skeleton" style={{ height: 120 }} />
+      </section>
+    );
+  }
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      {noticeNode}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <div>
           <h2 className="sg-title">{tr('Способы оплаты', "To'lov usullari")}</h2>
@@ -173,24 +203,40 @@ export default function PaymentMethods() {
                 <td>{method.provider}</td>
                 <td>{method.code}</td>
                 <td>
-                  <span className="sg-badge" style={{ background: '#eef3f0', color: '#476154', marginRight: 6 }}>
-                    {method.isActive ? tr('Активен', 'Faol') : tr('Отключен', "O'chirilgan")}
-                  </span>
-                  {method.isDefault && (
-                    <span className="sg-badge" style={{ background: '#e8f7ef', color: '#0b7f57' }}>
-                      {tr('По умолчанию', 'Asosiy')}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <span className="sg-badge" style={method.isActive
+                      ? { background: '#d1fae5', color: '#065f46' }
+                      : { background: '#f3f4f6', color: '#4b5563' }}>
+                      {method.isActive ? tr('\u0410\u043a\u0442\u0438\u0432\u0435\u043d', 'Faol') : tr('\u041e\u0442\u043a\u043b\u044e\u0447\u0435\u043d', "O'chirilgan")}
                     </span>
-                  )}
+                    {method.isDefault && (
+                      <span className="sg-badge" style={{ background: '#ede9fe', color: '#5b21b6' }}>
+                        {tr('\u041f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e', 'Asosiy')}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="sg-btn ghost" type="button" onClick={() => openEdit(method)}>
-                      {tr('Изменить', 'Tahrirlash')}
-                    </button>
-                    <button className="sg-btn danger" type="button" onClick={() => archiveMethod(method.id)}>
-                      {tr('Архив', 'Arxiv')}
-                    </button>
-                  </div>
+                  {pendingArchive === method.id ? (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: 12, color: '#4b5563' }}>{tr('\u0423\u0434\u0430\u043b\u0438\u0442\u044c?', "O'chirish?")}</span>
+                      <button className="sg-btn danger" type="button" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => archiveMethod(method.id)}>
+                        {tr('\u0414\u0430', 'Ha')}
+                      </button>
+                      <button className="sg-btn ghost" type="button" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setPendingArchive(null)}>
+                        {tr('\u041d\u0435\u0442', "Yo'q")}
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="sg-btn ghost" type="button" onClick={() => openEdit(method)}>
+                        {tr('\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c', 'Tahrirlash')}
+                      </button>
+                      <button className="sg-btn danger" type="button" onClick={() => setPendingArchive(method.id)}>
+                        {tr('\u0410\u0440\u0445\u0438\u0432', 'Arxiv')}
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
