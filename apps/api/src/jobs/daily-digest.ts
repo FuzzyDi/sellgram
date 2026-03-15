@@ -20,9 +20,10 @@ export function createDailyDigestWorker(): Worker {
         include: { tenant: true },
       });
 
+      const now = new Date();
+      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
       for (const store of stores) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
 
         const [todayOrders, todayRevenue, newCustomers] = await Promise.all([
           prisma.order.count({
@@ -64,7 +65,7 @@ export function createDailyDigestWorker(): Worker {
         if (lowStockProducts.length > 0) {
           digest.push('', '?? Low stock:');
           lowStockProducts.forEach((p: any) => {
-            digest.push(`  • ${p.name}: ${p.stockQty} pcs`);
+            digest.push(`  ï¿½ ${p.name}: ${p.stockQty} pcs`);
           });
         }
 
