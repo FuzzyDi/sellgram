@@ -93,8 +93,39 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <section className="sg-page">
-        <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
+      <section className="sg-page sg-grid" style={{ gap: 18 }}>
+        <div>
+          <div className="sg-skeleton" style={{ height: 28, width: '40%' }} />
+          <div className="sg-skeleton" style={{ height: 14, width: '60%', marginTop: 8 }} />
+        </div>
+        <div className="sg-card soft">
+          <div className="sg-skeleton" style={{ height: 22, width: '35%' }} />
+          <div className="sg-skeleton" style={{ height: 7, borderRadius: 999, marginTop: 14 }} />
+          <div className="sg-grid" style={{ marginTop: 14, gap: 8 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="sg-skeleton" style={{ height: 44, borderRadius: 10 }} />
+            ))}
+          </div>
+        </div>
+        <div className="sg-grid cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="sg-card">
+              <div className="sg-skeleton" style={{ height: 13, width: '60%' }} />
+              <div className="sg-skeleton" style={{ height: 28, width: '50%', marginTop: 8 }} />
+            </div>
+          ))}
+        </div>
+        <div className="sg-card">
+          <div className="sg-skeleton" style={{ height: 22, width: '25%' }} />
+          <div className="sg-skeleton" style={{ height: 14, width: '40%', marginTop: 8 }} />
+          {[1, 2, 3].map((i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid #edf2ee' }}>
+              <div className="sg-skeleton" style={{ height: 14, width: 20 }} />
+              <div className="sg-skeleton" style={{ height: 14, flex: 1 }} />
+              <div className="sg-skeleton" style={{ height: 14, width: 100 }} />
+            </div>
+          ))}
+        </div>
       </section>
     );
   }
