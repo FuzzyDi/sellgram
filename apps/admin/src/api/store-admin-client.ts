@@ -76,6 +76,17 @@ export const adminApi = {
   register: (data: any) =>
     request<any>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   me: () => request<any>('/auth/me'),
+  updateMe: (data: any) => request<any>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
+  changeMyPassword: (currentPassword: string, newPassword: string) =>
+    request<any>('/auth/me/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  getTeamUsers: () => request<any>('/auth/team'),
+  createTeamUser: (data: any) => request<any>('/auth/team', { method: 'POST', body: JSON.stringify(data) }),
+  updateTeamUser: (id: string, data: any) => request<any>(`/auth/team/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  resetTeamUserPassword: (id: string, newPassword: string) =>
+    request<any>(`/auth/team/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ newPassword }) }),
   createTelegramLinkCode: () => request<any>('/auth/telegram-link-code', { method: 'POST' }),
 
   getProducts: (params?: string) => request<any>(`/products${params ? '?' + params : ''}`),
@@ -188,3 +199,5 @@ export const adminApi = {
   getBroadcast: (id: string) => request<any>(`/broadcasts/${id}`),
   sendBroadcast: (data: any) => request<any>('/broadcasts/send', { method: 'POST', body: JSON.stringify(data) }),
 };
+
+

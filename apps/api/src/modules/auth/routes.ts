@@ -1,6 +1,15 @@
 import { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
-import { registerSchema, loginSchema, refreshSchema } from './schema.js';
+import {
+  registerSchema,
+  loginSchema,
+  refreshSchema,
+  changeMyPasswordSchema,
+  resetTeamPasswordSchema,
+  teamUserCreateSchema,
+  teamUserUpdateSchema,
+  updateMeSchema,
+} from './schema.js';
 import * as authService from './service.js';
 import { AuthServiceError } from './service.js';
 import prisma from '../../lib/prisma.js';
@@ -14,6 +23,9 @@ function mapAuthError(err: unknown) {
   }
 
   if (err instanceof Error) {
+    if (err.message === 'FORBIDDEN') return { status: 403, error: 'Forbidden' };
+    if (err.message === 'USER_NOT_FOUND') return { status: 404, error: 'User not found' };
+    if (err.message === 'NOTHING_TO_UPDATE') return { status: 400, error: 'Nothing to update' };
     return { status: 400, error: err.message };
   }
 
@@ -85,12 +97,112 @@ export default async function authRoutes(fastify: FastifyInstance) {
         email: true,
         name: true,
         role: true,
+        permissions: true,
+        isActive: true,
         tenant: {
           select: { id: true, name: true, slug: true, plan: true },
         },
       },
     });
-    return { success: true, data: user };
+
+    const effectivePermissions = user ? authService.getEffectivePermissions(user as any) : null;
+    return {
+      success: true,
+      data: user ? { ...user, effectivePermissions } : null,
+    };
+  });
+
+  fastify.patch('/auth/me', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    try {
+      const body = updateMeSchema.parse(request.body);
+      const data = await authService.updateMyProfile({ userId: request.user!.userId, ...body });
+      return { success: true, data };
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
+  });
+
+  fastify.post('/auth/me/change-password', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    try {
+      const body = changeMyPasswordSchema.parse(request.body);
+      const data = await authService.changeMyPassword({ userId: request.user!.userId, ...body });
+      return { success: true, data };
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
+  });
+
+  fastify.get('/auth/team', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    try {
+      const data = await authService.listTeamUsers({ userId: request.user!.userId, tenantId: request.user!.tenantId });
+      return { success: true, data };
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
+  });
+
+  fastify.post('/auth/team', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    try {
+      const body = teamUserCreateSchema.parse(request.body);
+      const data = await authService.createTeamUser({
+        actorUserId: request.user!.userId,
+        tenantId: request.user!.tenantId,
+        ...body,
+      });
+      return { success: true, data };
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
+  });
+
+  fastify.patch('/auth/team/:id', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    try {
+      const body = teamUserUpdateSchema.parse(request.body);
+      const params = request.params as { id: string };
+      const data = await authService.updateTeamUser({
+        actorUserId: request.user!.userId,
+        tenantId: request.user!.tenantId,
+        targetUserId: params.id,
+        ...body,
+      });
+      return { success: true, data };
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
+  });
+
+  fastify.post('/auth/team/:id/reset-password', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    try {
+      const body = resetTeamPasswordSchema.parse(request.body);
+      const params = request.params as { id: string };
+      const data = await authService.resetTeamUserPassword({
+        actorUserId: request.user!.userId,
+        tenantId: request.user!.tenantId,
+        targetUserId: params.id,
+        newPassword: body.newPassword,
+      });
+      return { success: true, data };
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
   });
 
   fastify.post('/auth/telegram-link-code', {

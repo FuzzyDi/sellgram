@@ -21,6 +21,7 @@ enum Plan {
 enum UserRole {
   OWNER
   MANAGER
+  OPERATOR
 }
 
 enum OrderStatus {
@@ -121,6 +122,7 @@ model User {
   passwordHash    String
   name            String
   role            UserRole @default(OWNER)
+  permissions     Json?
   adminTelegramId BigInt?  // For receiving order notifications in Telegram
   telegramLinkCode String?
   telegramLinkCodeExpiresAt DateTime?

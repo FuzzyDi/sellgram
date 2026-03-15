@@ -576,3 +576,89 @@ export async function rejectSystemInvoice(input: { id: string; confirmedBy: stri
     },
   });
 }
+
+export async function listSystemUsers(input: {
+  tenantId?: string;
+  search?: string;
+  role?: 'OWNER' | 'MANAGER' | 'OPERATOR';
+  page: number;
+  pageSize: number;
+}) {
+  const skip = (input.page - 1) * input.pageSize;
+  const where: any = {};
+
+  if (input.tenantId) where.tenantId = input.tenantId;
+  if (input.role) where.role = input.role;
+  if (input.search) {
+    where.OR = [
+      { email: { contains: input.search, mode: 'insensitive' } },
+      { name: { contains: input.search, mode: 'insensitive' } },
+      { tenant: { name: { contains: input.search, mode: 'insensitive' } } },
+    ];
+  }
+
+  const [items, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        tenantId: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        tenant: {
+          select: { id: true, name: true, slug: true, plan: true },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      skip,
+      take: input.pageSize,
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  return {
+    items,
+    total,
+    page: input.page,
+    pageSize: input.pageSize,
+    totalPages: Math.ceil(total / input.pageSize),
+  };
+}
+
+export async function resetSystemUserPassword(input: {
+  id: string;
+  newPassword: string;
+  changedBy: string;
+}) {
+  const user = await prisma.user.findUnique({ where: { id: input.id } });
+  if (!user) {
+    throw new Error('USER_NOT_FOUND');
+  }
+
+  const passwordHash = await bcrypt.hash(input.newPassword, 12);
+  await prisma.user.update({
+    where: { id: input.id },
+    data: { passwordHash },
+  });
+
+  await prisma.systemAuditLog.create({
+    data: {
+      action: 'TENANT_PLAN_UPDATED',
+      actorEmail: input.changedBy,
+      targetType: 'tenant',
+      targetId: user.tenantId,
+      details: {
+        event: 'USER_PASSWORD_RESET',
+        userId: user.id,
+        userEmail: user.email,
+        changedBy: input.changedBy,
+      } as any,
+    },
+  });
+
+  return { ok: true };
+}

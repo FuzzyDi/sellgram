@@ -7,9 +7,11 @@ import {
   systemAdminLoginSchema,
   systemAdminReminderSettingsUpdateSchema,
   systemAdminReportsUsageQuerySchema,
+  systemAdminResetUserPasswordSchema,
   systemAdminStoreListQuerySchema,
   systemAdminTenantListQuerySchema,
   systemAdminUpdateTenantPlanSchema,
+  systemAdminUserListQuerySchema,
 } from './dto.js';
 import {
   confirmSystemInvoice,
@@ -22,8 +24,10 @@ import {
   listSystemInvoices,
   listSystemStores,
   listSystemTenants,
+  listSystemUsers,
   loginSystemAdmin,
   rejectSystemInvoice,
+  resetSystemUserPassword,
   updateSystemSubscriptionReminderSettings,
   updateSystemTenantPlan,
 } from './service.js';
@@ -71,7 +75,6 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
     return { success: true, data };
   });
 
-
   fastify.get('/settings/reminders', { preHandler: [authenticateSystem] }, async () => {
     const data = await getSystemSubscriptionReminderSettings();
     return { success: true, data };
@@ -86,6 +89,7 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ success: false, error: err.message });
     }
   });
+
   fastify.get('/activity', { preHandler: [authenticateSystem] }, async (request, reply) => {
     try {
       const query = systemAdminActivityQuerySchema.parse(request.query);
@@ -129,6 +133,35 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ success: false, error: err.message });
     }
   });
+
+  fastify.get('/users', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const query = systemAdminUserListQuerySchema.parse(request.query);
+      const data = await listSystemUsers(query);
+      return { success: true, data };
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  fastify.post('/users/:id/reset-password', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { id } = systemAdminIdParamSchema.parse(request.params);
+      const body = systemAdminResetUserPasswordSchema.parse(request.body);
+      const data = await resetSystemUserPassword({
+        id,
+        newPassword: body.newPassword,
+        changedBy: request.systemAdmin?.email || 'system',
+      });
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'USER_NOT_FOUND') {
+        return reply.status(404).send({ success: false, error: 'User not found' });
+      }
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
   fastify.get('/reports/usage', { preHandler: [authenticateSystem] }, async (request, reply) => {
     try {
       const query = systemAdminReportsUsageQuerySchema.parse(request.query);
@@ -138,6 +171,7 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ success: false, error: err.message });
     }
   });
+
   fastify.get('/invoices/pending', { preHandler: [authenticateSystem] }, async () => {
     const data = await listPendingSystemInvoices();
     return { success: true, data };

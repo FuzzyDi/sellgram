@@ -55,6 +55,12 @@ export const systemApi = {
   activity: (params?: string) => systemRequest<any>(`/activity${params ? `?${params}` : ''}`),
   tenants: (params?: string) => systemRequest<any>(`/tenants${params ? `?${params}` : ''}`),
   stores: (params?: string) => systemRequest<any>(`/stores${params ? `?${params}` : ''}`),
+  users: (params?: string) => systemRequest<any>(`/users${params ? `?${params}` : ''}`),
+  resetUserPassword: (id: string, newPassword: string) =>
+    systemRequest<any>(`/users/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ newPassword }),
+    }),
   pendingInvoices: () => systemRequest<any>('/invoices/pending'),
   invoices: (params?: string) => systemRequest<any>(`/invoices${params ? `?${params}` : ''}`),
   confirmInvoice: (id: string) => systemRequest<any>(`/invoices/${id}/confirm`, { method: 'PATCH' }),

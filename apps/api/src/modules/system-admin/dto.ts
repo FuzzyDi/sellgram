@@ -52,3 +52,15 @@ export const systemAdminReportsUsageQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });
+
+export const systemAdminUserListQuerySchema = z.object({
+  tenantId: z.string().optional(),
+  search: z.string().trim().optional(),
+  role: z.enum(['OWNER', 'MANAGER', 'OPERATOR']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+export const systemAdminResetUserPasswordSchema = z.object({
+  newPassword: z.string().min(6),
+});

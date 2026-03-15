@@ -42,19 +42,20 @@ function Sidebar({ route, navigate, auth, onLogout }: { route: string; navigate:
   const links = useMemo(
     () => [
       { to: '/', label: t('dashboard') },
-      { to: '/orders', label: t('orders') },
-      { to: '/products', label: t('products') },
-      { to: '/categories', label: t('categories') },
-      { to: '/customers', label: t('customers') },
-      { to: '/payments', label: t('payments') },
-      { to: '/broadcasts', label: t('broadcasts') },
-      { to: '/reports', label: t('reports') },
+      { to: '/orders', label: t('orders'), perm: 'manageOrders' },
+      { to: '/products', label: t('products'), perm: 'manageCatalog' },
+      { to: '/categories', label: t('categories'), perm: 'manageCatalog' },
+      { to: '/customers', label: t('customers'), perm: 'manageCustomers' },
+      { to: '/payments', label: t('payments'), perm: 'manageBilling' },
+      { to: '/broadcasts', label: t('broadcasts'), perm: 'manageMarketing' },
+      { to: '/reports', label: t('reports'), perm: 'viewReports' },
       { to: '/settings', label: t('settings') },
-      { to: '/billing', label: t('plans') },
+      { to: '/billing', label: t('plans'), perm: 'manageBilling' },
     ],
     [t]
   );
-
+  const effectivePermissions = auth.user?.effectivePermissions || {};
+  const visibleLinks = links.filter((link: any) => !link.perm || Boolean((effectivePermissions as any)[link.perm]));
   return (
     <aside
       style={{
@@ -77,7 +78,7 @@ function Sidebar({ route, navigate, auth, onLogout }: { route: string; navigate:
       </div>
 
       <nav style={{ flex: 1, padding: 10, display: 'grid', gap: 4 }}>
-        {links.map((link) => {
+        {visibleLinks.map((link: any) => {
           const active = route === link.to;
           return (
             <Button
@@ -136,7 +137,22 @@ function Sidebar({ route, navigate, auth, onLogout }: { route: string; navigate:
   );
 }
 
-function PageRouter({ route }: { route: string }) {
+function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
+  const perms = auth.user?.effectivePermissions || {};
+  const routePermMap: Record<string, string> = {
+    '/orders': 'manageOrders',
+    '/products': 'manageCatalog',
+    '/categories': 'manageCatalog',
+    '/customers': 'manageCustomers',
+    '/payments': 'manageBilling',
+    '/broadcasts': 'manageMarketing',
+    '/reports': 'viewReports',
+    '/billing': 'manageBilling',
+  };
+  const needPerm = routePermMap[route];
+  if (needPerm && !perms[needPerm]) {
+    return <Dashboard />;
+  }
   switch (route) {
     case '/system-admin':
       return <SystemAdmin />;
@@ -220,8 +236,11 @@ export default function App() {
     <div style={{ minHeight: '100vh', display: 'flex' }}>
       <Sidebar route={route} navigate={navigate} auth={auth} onLogout={logout} />
       <main style={{ flex: 1, padding: 20, overflow: 'auto' }}>
-        <PageRouter route={route} />
+        <PageRouter route={route} auth={auth} />
       </main>
     </div>
   );
 }
+
+
+
