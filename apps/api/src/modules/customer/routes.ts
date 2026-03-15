@@ -70,30 +70,47 @@ export default async function customerRoutes(fastify: FastifyInstance) {
   fastify.post('/customers/:id/loyalty', async (request, reply) => {
     const { id } = request.params as { id: string };
     const { points, description } = request.body as { points: number; description: string };
+    const tenantId = request.tenantId!;
 
-    const customer = await prisma.customer.findFirst({
-      where: { id, tenantId: request.tenantId! },
-    });
-    if (!customer) return reply.status(404).send({ success: false, error: 'Not found' });
+    let newBalance: number;
+    try {
+      newBalance = await prisma.$transaction(async (tx) => {
+        const customer = await tx.customer.findFirst({
+          where: { id, tenantId },
+          select: { loyaltyPoints: true },
+        });
+        if (!customer) throw new Error('NOT_FOUND');
 
-    const newBalance = customer.loyaltyPoints + points;
-    if (newBalance < 0) return reply.status(400).send({ success: false, error: 'Insufficient points' });
+        const balance = customer.loyaltyPoints + points;
+        if (balance < 0) throw new Error('INSUFFICIENT_POINTS');
 
-    await prisma.customer.update({
-      where: { id },
-      data: { loyaltyPoints: newBalance },
-    });
+        await tx.customer.update({
+          where: { id },
+          data: { loyaltyPoints: balance },
+        });
 
-    await prisma.loyaltyTransaction.create({
-      data: {
-        customerId: id,
-        tenantId: request.tenantId!,
-        type: 'ADJUST',
-        points,
-        balanceAfter: newBalance,
-        description: description || 'Manual adjustment',
-      },
-    });
+        await tx.loyaltyTransaction.create({
+          data: {
+            customerId: id,
+            tenantId,
+            type: 'ADJUST',
+            points,
+            balanceAfter: balance,
+            description: description || 'Manual adjustment',
+          },
+        });
+
+        return balance;
+      });
+    } catch (err: any) {
+      if (err.message === 'NOT_FOUND') {
+        return reply.status(404).send({ success: false, error: 'Not found' });
+      }
+      if (err.message === 'INSUFFICIENT_POINTS') {
+        return reply.status(400).send({ success: false, error: 'Insufficient points' });
+      }
+      return reply.status(400).send({ success: false, error: err.message });
+    }
 
     return { success: true, data: { loyaltyPoints: newBalance } };
   });
