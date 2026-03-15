@@ -30,6 +30,7 @@ export default function Checkout() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.getDeliveryZones().then(setZones).catch(() => {});
@@ -68,14 +69,15 @@ export default function Checkout() {
 
   const submit = async () => {
     if (form.deliveryType === 'LOCAL' && !form.deliveryAddress) {
-      alert(tr('Укажите адрес', 'Manzilni kiriting'));
+      setError(tr('Укажите адрес доставки', 'Yetkazib berish manzilini kiriting'));
       return;
     }
     if (!form.paymentMethodId) {
-      alert(tr('Выберите способ оплаты', "To'lov usulini tanlang"));
+      setError(tr("Выберите способ оплаты", "To'lov usulini tanlang"));
       return;
     }
 
+    setError(null);
     setSubmitting(true);
     try {
       const order = await api.checkout({
@@ -85,7 +87,8 @@ export default function Checkout() {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       navigate(`/order/${order.id}`);
     } catch (err: any) {
-      alert(err.message);
+      setError(err.message || tr('Ошибка при оформлении', 'Buyurtmada xatolik'));
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
     }
     setSubmitting(false);
   };
@@ -215,6 +218,11 @@ export default function Checkout() {
       </div>
 
       <div className="glass" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30, padding: '10px 16px max(env(safe-area-inset-bottom, 0px), 10px)', borderTop: '0.5px solid var(--divider)' }}>
+        {error && (
+          <div style={{ marginBottom: 8, padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,59,48,0.1)', color: 'var(--danger)', fontSize: 13, fontWeight: 600 }}>
+            {error}
+          </div>
+        )}
         <button onClick={submit} disabled={submitting || paymentMethods.length === 0} className="pressable" style={{ width: '100%', padding: 16, borderRadius: 'var(--radius)', border: 'none', fontSize: 16, fontWeight: 700, cursor: 'pointer', background: submitting ? 'var(--hint)' : 'var(--success)', color: '#fff', transition: 'all 0.2s' }}>
           {submitting ? tr('Оформляем...', 'Yuborilmoqda...') : `${tr('Подтвердить', 'Tasdiqlash')} · ${total.toLocaleString()} ${tr('сум', "so'm")}`}
         </button>
