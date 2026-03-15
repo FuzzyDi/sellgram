@@ -276,8 +276,8 @@ async function registerBot(
       return;
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const [todayOrders, weekOrders, todayRevenue, weekRevenue, newCustomers, pendingOrders] = await Promise.all([
