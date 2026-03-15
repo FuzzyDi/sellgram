@@ -40,7 +40,12 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
 
   fastify.patch('/categories/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = categorySchema.partial().parse(request.body);
+    let body: z.infer<ReturnType<typeof categorySchema.partial>>;
+    try {
+      body = categorySchema.partial().parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
     const result = await prisma.category.updateMany({
       where: { id, tenantId: request.tenantId! },
       data: body as any,

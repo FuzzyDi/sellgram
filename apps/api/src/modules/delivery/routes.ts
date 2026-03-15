@@ -50,7 +50,12 @@ export default async function deliveryRoutes(fastify: FastifyInstance) {
 
   fastify.patch('/delivery-zones/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = zoneSchema.partial().parse(request.body);
+    let body: z.infer<ReturnType<typeof zoneSchema.partial>>;
+    try {
+      body = zoneSchema.partial().parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
     if (body.storeId) {
       const store = await prisma.store.findFirst({
         where: { id: body.storeId, tenantId: request.tenantId!, isActive: true },
