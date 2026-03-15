@@ -92,7 +92,12 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     { preHandler: [permissionGuard('manageOrders')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const body = updateStatusSchema.parse(request.body);
+      let body: z.infer<typeof updateStatusSchema>;
+      try {
+        body = updateStatusSchema.parse(request.body);
+      } catch (err: any) {
+        return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+      }
 
       try {
         const result = await updateOrderStatus({
@@ -139,7 +144,12 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
   fastify.patch('/orders/:id/payment', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = updatePaymentSchema.parse(request.body);
+    let body: z.infer<typeof updatePaymentSchema>;
+    try {
+      body = updatePaymentSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
 
     try {
       await applyOrderPaymentStatus(prisma, {
