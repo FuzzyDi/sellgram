@@ -301,3 +301,20 @@ textarea:focus-visible {
   .sg-sidebar-overlay { display: none !important; }
   .sg-mobile-header { display: none !important; }
 }
+
+/* ─── Login layout ──────────────────────────────────────── */
+
+.sg-login {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  background: linear-gradient(130deg, #0f2134 0%, #162f4a 46%, #0c1724 100%);
+}
+
+.sg-login-hero { display: flex; flex-direction: column; justify-content: center; }
+.sg-login-form { display: grid; place-items: center; padding: 18px; }
+
+@media (max-width: 720px) {
+  .sg-login { grid-template-columns: 1fr; }
+  .sg-login-hero { display: none; }
+}
