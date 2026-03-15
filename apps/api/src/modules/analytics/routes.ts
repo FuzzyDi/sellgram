@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { getRedis } from '../../lib/redis.js';
 import { PLANS, type PlanCode, type ReportsLevel } from '@sellgram/shared';
@@ -28,6 +29,26 @@ function clampDays(raw: unknown, maxDays: number, fallback: number) {
   if (!Number.isFinite(val) || val <= 0) return Math.min(fallback, maxDays);
   return Math.max(1, Math.min(Math.round(val), maxDays));
 }
+
+const topProductsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  period: z.coerce.number().int().min(1).max(365).default(30),
+});
+const revenueQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
+const categoriesQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+const customersReportQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(90),
+  limit: z.coerce.number().int().min(1).max(200).default(30),
+});
+const exportQuerySchema = z.object({
+  type: z.enum(['top-products', 'revenue', 'categories', 'customers']).default('top-products'),
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
 
 function getReportAccess(reportLimits: ReportLimits) {
   return {
@@ -388,9 +409,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Reports are not available on your current plan. Please upgrade.' });
     }
 
-    const { limit = 10, period = '30' } = request.query as any;
+    const { limit, period } = topProductsQuerySchema.parse(request.query);
     const safePeriod = clampDays(period, Number(reportLimits.reportsHistoryDays || 30), 30);
-    const safeLimit = Math.max(1, Math.min(Number(limit) || 10, 100));
+    const safeLimit = Math.max(1, Math.min(limit, 100));
     const data = await fetchTopProducts(tenantId, safePeriod, safeLimit);
 
     return { success: true, data, reportLimits, reportAccess: getReportAccess(reportLimits) };
@@ -404,7 +425,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Advanced reports are available on PRO/BUSINESS plans only.' });
     }
 
-    const { days = 30 } = request.query as any;
+    const { days } = revenueQuerySchema.parse(request.query);
     const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 30), 30);
     const data = await fetchRevenueSeries(tenantId, safeDays);
 
@@ -419,9 +440,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Advanced reports are available on PRO/BUSINESS plans only.' });
     }
 
-    const { days = 30, limit = 20 } = request.query as any;
+    const { days, limit } = categoriesQuerySchema.parse(request.query);
     const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 30), 30);
-    const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
+    const safeLimit = Math.max(1, Math.min(limit, 100));
     const data = await fetchCategoryReport(tenantId, safeDays, safeLimit);
 
     return { success: true, data, reportLimits, reportAccess: getReportAccess(reportLimits) };
@@ -435,9 +456,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Full reports are available on BUSINESS plan only.' });
     }
 
-    const { days = 90, limit = 30 } = request.query as any;
+    const { days, limit } = customersReportQuerySchema.parse(request.query);
     const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 90), 90);
-    const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 200));
+    const safeLimit = Math.max(1, Math.min(limit, 200));
     const data = await fetchCustomersReport(tenantId, safeDays, safeLimit);
 
     return { success: true, data, reportLimits, reportAccess: getReportAccess(reportLimits) };
@@ -447,8 +468,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   fastify.get('/analytics/reports/export', async (request, reply) => {
     const tenantId = request.tenantId!;
     const reportLimits = await getTenantReportLimits(tenantId);
-    const { type = 'top-products', days = 30 } = request.query as any;
-    const reportType = String(type);
+    const { type: reportType, days } = exportQuerySchema.parse(request.query);
 
     if (!reportLimits.allowReportExport) {
       return reply.status(402).send({ success: false, error: 'Export is not available on your current plan.' });

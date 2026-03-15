@@ -39,7 +39,7 @@ function providerFromOrderPaymentMethod(method: string): string {
 
 export default async function paymentRoutes(fastify: FastifyInstance) {
   fastify.post('/payments/webhook/:provider', { config: { rateLimit: false } }, async (request, reply) => {
-    const provider = String((request.params as any).provider || '').toUpperCase();
+    const provider = String((request.params as { provider: string }).provider || '').toUpperCase();
     const body = webhookSchema.parse(request.body);
     const normalized = normalizeProviderWebhook(provider, body);
 

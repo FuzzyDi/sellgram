@@ -16,9 +16,13 @@ const zoneSchema = z.object({
 export default async function deliveryRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
 
+  const deliveryZonesQuerySchema = z.object({
+    storeId: z.string().optional(),
+  });
+
   fastify.get('/delivery-zones', async (request) => {
-    const { storeId } = request.query as any;
-    const where: any = { tenantId: request.tenantId! };
+    const { storeId } = deliveryZonesQuerySchema.parse(request.query);
+    const where: { tenantId: string; storeId?: string } = { tenantId: request.tenantId! };
     if (storeId) where.storeId = storeId;
 
     const zones = await prisma.deliveryZone.findMany({
