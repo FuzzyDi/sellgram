@@ -6,19 +6,19 @@ const STORAGE_KEY = 'sellgram_admin_lang';
 
 const dict = {
   ru: {
-    dashboard: 'Дашборд',
-    orders: 'Заказы',
-    products: 'Товары',
-    categories: 'Категории',
-    customers: 'Клиенты',
-    payments: 'Оплата',
-    broadcasts: 'Рассылки',
-    reports: 'Отчеты',
-    settings: 'Настройки',
-    plans: 'Тарифы',
-    loading: 'Загрузка...',
-    sign_out: 'Выйти',
-    language: 'Язык',
+    dashboard: '\u0414\u0430\u0448\u0431\u043e\u0440\u0434',
+    orders: '\u0417\u0430\u043a\u0430\u0437\u044b',
+    products: '\u0422\u043e\u0432\u0430\u0440\u044b',
+    categories: '\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438',
+    customers: '\u041a\u043b\u0438\u0435\u043d\u0442\u044b',
+    payments: '\u041e\u043f\u043b\u0430\u0442\u0430',
+    broadcasts: '\u0420\u0430\u0441\u0441\u044b\u043b\u043a\u0438',
+    reports: '\u041e\u0442\u0447\u0435\u0442\u044b',
+    settings: '\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438',
+    plans: '\u0422\u0430\u0440\u0438\u0444\u044b',
+    loading: '\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...',
+    sign_out: '\u0412\u044b\u0439\u0442\u0438',
+    language: '\u042f\u0437\u044b\u043a',
   },
   uz: {
     dashboard: 'Boshqaruv paneli',
@@ -105,15 +105,15 @@ const CP1251_EXTRA_MAP: Record<number, number> = {
 
 function looksLikeBrokenCyrillic(input: string): boolean {
   if (!input) return false;
-  return /Р[\u00A0-\u04ff]|С[\u00A0-\u04ff]|вЂ|Ð|Ñ/.test(input);
+  return /Р[\u0000-\u04ff]|С[\u0000-\u04ff]|вЂ|Гђ|Г‘/.test(input);
 }
 
-function fixBrokenCyrillic(input: string): string {
-  if (!looksLikeBrokenCyrillic(input)) return input;
-
+function decodeBrokenCyrillicOnce(input: string): string {
   const bytes: number[] = [];
+
   for (const ch of input) {
     const code = ch.charCodeAt(0);
+
     if (code <= 0x7f) {
       bytes.push(code);
       continue;
@@ -130,11 +130,29 @@ function fixBrokenCyrillic(input: string): string {
       bytes.push(code);
       continue;
     }
-    return input;
+
+    for (const b of new TextEncoder().encode(ch)) bytes.push(b);
   }
 
-  const decoded = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(bytes));
-  return /[\u0410-\u044f\u0401\u0451]/.test(decoded) ? decoded : input;
+  return new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(bytes));
+}
+
+function hasReadableCyrillic(input: string): boolean {
+  return /[\u0410-\u044f\u0401\u0451]/.test(input);
+}
+
+function fixBrokenCyrillic(input: string): string {
+  if (!looksLikeBrokenCyrillic(input)) return input;
+
+  let current = input;
+  for (let i = 0; i < 3; i += 1) {
+    const next = decodeBrokenCyrillicOnce(current);
+    if (next === current) break;
+    current = next;
+    if (!looksLikeBrokenCyrillic(current)) break;
+  }
+
+  return hasReadableCyrillic(current) ? current : input;
 }
 
 type Key = keyof typeof dict.ru;
