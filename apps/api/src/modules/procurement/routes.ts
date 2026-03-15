@@ -3,6 +3,21 @@ import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
 
+const PO_STATUS = ['DRAFT', 'ORDERED', 'IN_TRANSIT', 'RECEIVED', 'CANCELLED'] as const;
+type POStatus = typeof PO_STATUS[number];
+
+const PO_TRANSITIONS: Record<POStatus, POStatus[]> = {
+  DRAFT:      ['ORDERED', 'CANCELLED'],
+  ORDERED:    ['IN_TRANSIT', 'CANCELLED'],
+  IN_TRANSIT: ['CANCELLED'],     // RECEIVED only via /receive endpoint
+  RECEIVED:   [],
+  CANCELLED:  [],
+};
+
+function canTransitionPO(from: POStatus, to: POStatus): boolean {
+  return PO_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
 const createPOSchema = z.object({
   supplierName: z.string().min(1),
   currency: z.string().default('USD'),
@@ -60,16 +75,17 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ success: false, error: 'One or more products are invalid for tenant' });
       }
 
-      // Get next PO number
-      const lastPO = await prisma.purchaseOrder.findFirst({
-        where: { tenantId: request.tenantId! },
-        orderBy: { poNumber: 'desc' },
-      });
-      const poNumber = (lastPO?.poNumber ?? 0) + 1;
-
       const totalCost = body.items.reduce((sum: number, item: any) => sum + item.qty * item.unitCost, 0);
 
-      const po = await prisma.purchaseOrder.create({
+      // Advisory lock per tenant prevents concurrent POs from getting duplicate poNumbers
+      const po = await prisma.$transaction(async (tx: any) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${request.tenantId!}::text || ':po'))`;
+        const lastPO = await tx.purchaseOrder.findFirst({
+          where: { tenantId: request.tenantId! },
+          orderBy: { poNumber: 'desc' },
+        });
+        const poNumber = (lastPO?.poNumber ?? 0) + 1;
+        return tx.purchaseOrder.create({
         data: {
           tenantId: request.tenantId!,
           poNumber,
@@ -90,6 +106,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
           },
         },
         include: { items: true },
+        });
       });
 
       return { success: true, data: po };
@@ -102,6 +119,20 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
   fastify.patch('/purchase-orders/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     const { status, fxRate, shippingCost, customsCost, note } = request.body as any;
+
+    if (status !== undefined) {
+      if (!PO_STATUS.includes(status as POStatus)) {
+        return reply.status(400).send({ success: false, error: `Invalid status: ${status}` });
+      }
+      if (status === 'RECEIVED') {
+        return reply.status(400).send({ success: false, error: 'Use POST /receive to mark PO as received' });
+      }
+      const po = await prisma.purchaseOrder.findFirst({ where: { id, tenantId: request.tenantId! } });
+      if (!po) return reply.status(404).send({ success: false, error: 'PO not found' });
+      if (!canTransitionPO(po.status as POStatus, status as POStatus)) {
+        return reply.status(400).send({ success: false, error: `Cannot transition PO from ${po.status} to ${status}` });
+      }
+    }
 
     const data: any = {};
     if (status) data.status = status;
@@ -137,52 +168,55 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
     const totalForeignCost = po.items.reduce((sum: number, i: any) => sum + Number(i.totalCost), 0);
     const totalLocalCost = totalForeignCost * fxRate;
     const totalLanded = totalLocalCost + Number(po.shippingCost) + Number(po.customsCost);
+    const tenantId = request.tenantId!;
 
-    // Update each PO item + product stock + costPrice
-    for (const receivedItem of items) {
-      const poItem = po.items.find((i: any) => i.id === receivedItem.itemId);
-      if (!poItem) continue;
+    // Wrap all stock + status updates in a transaction so a mid-flight failure
+    // cannot leave stock partially updated with PO still marked IN_TRANSIT.
+    try {
+    await prisma.$transaction(async (tx: any) => {
+      for (const receivedItem of items) {
+        const poItem = po.items.find((i: any) => i.id === receivedItem.itemId);
+        if (!poItem) continue;
 
-      // Update PO item
-      await prisma.purchaseOrderItem.update({
-        where: { id: poItem.id },
-        data: { qtyReceived: receivedItem.qtyReceived },
+        await tx.purchaseOrderItem.update({
+          where: { id: poItem.id },
+          data: { qtyReceived: receivedItem.qtyReceived },
+        });
+
+        const stockUpdate = await tx.product.updateMany({
+          where: { id: poItem.productId, tenantId },
+          data: { stockQty: { increment: receivedItem.qtyReceived } },
+        });
+        if (stockUpdate.count === 0) {
+          throw new Error('PRODUCT_TENANT_MISMATCH');
+        }
+
+        const itemShare = Number(poItem.totalCost) / totalForeignCost;
+        const itemLandedCost = totalLanded * itemShare;
+        const perUnitLanded = receivedItem.qtyReceived > 0
+          ? itemLandedCost / receivedItem.qtyReceived
+          : 0;
+
+        if (perUnitLanded > 0) {
+          await tx.product.updateMany({
+            where: { id: poItem.productId, tenantId },
+            data: { costPrice: Math.round(perUnitLanded) },
+          });
+        }
+      }
+
+      await tx.purchaseOrder.update({
+        where: { id },
+        data: { status: 'RECEIVED', receivedAt: new Date(), totalLanded: Math.round(totalLanded) },
       });
+    });
 
-      // Update product stock
-      const stockUpdate = await prisma.product.updateMany({
-        where: { id: poItem.productId, tenantId: request.tenantId! },
-        data: { stockQty: { increment: receivedItem.qtyReceived } },
-      });
-      if (stockUpdate.count === 0) {
+    } catch (err: any) {
+      if (err.message === 'PRODUCT_TENANT_MISMATCH') {
         return reply.status(400).send({ success: false, error: 'Product does not belong to tenant' });
       }
-
-      // Calculate landed cost per unit
-      const itemShare = Number(poItem.totalCost) / totalForeignCost;
-      const itemLandedCost = totalLanded * itemShare;
-      const perUnitLanded = receivedItem.qtyReceived > 0
-        ? itemLandedCost / receivedItem.qtyReceived
-        : 0;
-
-      // Update product cost price (simplified: overwrite with latest)
-      if (perUnitLanded > 0) {
-        await prisma.product.updateMany({
-          where: { id: poItem.productId, tenantId: request.tenantId! },
-          data: { costPrice: Math.round(perUnitLanded) },
-        });
-      }
+      return reply.status(500).send({ success: false, error: 'Failed to receive PO' });
     }
-
-    // Update PO status
-    await prisma.purchaseOrder.update({
-      where: { id },
-      data: {
-        status: 'RECEIVED',
-        receivedAt: new Date(),
-        totalLanded: Math.round(totalLanded),
-      },
-    });
 
     return { success: true, message: 'PO received, stock and cost prices updated', totalLanded: Math.round(totalLanded) };
   });
