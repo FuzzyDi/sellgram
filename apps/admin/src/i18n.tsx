@@ -189,7 +189,11 @@ export function AdminI18nProvider({ children }: { children: React.ReactNode }) {
         const value = lang === 'uz' ? dict.uz[key] : dict.ru[key];
         return lang === 'ru' ? fixBrokenCyrillic(value) : value;
       },
-      tr: (ru: string, uz: string) => (lang === 'uz' ? uz : fixBrokenCyrillic(ru)),
+      tr: (ru: string, uz: string) => {
+        if (lang === 'uz') return uz;
+        const fixed = fixBrokenCyrillic(ru);
+        return looksLikeBrokenCyrillic(fixed) ? uz : fixed;
+      },
     }),
     [lang]
   );
