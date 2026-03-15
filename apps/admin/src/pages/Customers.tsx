@@ -45,7 +45,20 @@ export default function Customers() {
       </div>
 
       {loading ? (
-        <p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p>
+        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} style={{ display: 'flex', gap: 16, padding: '12px 16px', borderBottom: '1px solid #edf2ee', alignItems: 'center' }}>
+              <div style={{ flex: 2, display: 'grid', gap: 6 }}>
+                <div className="sg-skeleton" style={{ height: 14, width: '50%' }} />
+                <div className="sg-skeleton" style={{ height: 11, width: '30%' }} />
+              </div>
+              <div className="sg-skeleton" style={{ height: 14, width: 80 }} />
+              <div className="sg-skeleton" style={{ height: 14, width: 40 }} />
+              <div className="sg-skeleton" style={{ height: 14, width: 80 }} />
+              <div className="sg-skeleton" style={{ height: 14, width: 40 }} />
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
           <table className="sg-table">
