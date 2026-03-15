@@ -92,7 +92,7 @@ export default function Settings() {
 
   async function changeMyPassword() {
     if (!passwordForm.currentPassword || !passwordForm.newPassword) {
-      showNotice('error', tr('Р В РІР‚вЂќР В Р’В°Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р В Р вЂ¦Р В РЎвЂР РЋРІР‚С™Р В Р’Вµ Р РЋРІР‚С™Р В Р’ВµР В РЎвЂќР РЋРЎвЂњР РЋРІР‚В°Р В РЎвЂР В РІвЂћвЂ“ Р В РЎвЂ Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Joriy va yangi parolni kiriting'));
+      showNotice('error', tr('Введите текущий и новый пароль', 'Joriy va yangi parolni kiriting'));
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -139,7 +139,7 @@ export default function Settings() {
   }
 
   async function resetTeamUserPassword(user: any) {
-    const nextPassword = prompt(tr(`РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ РґР»СЏ ${user.email}`, `${user.email} uchun yangi parol`));
+    const nextPassword = prompt(tr(`\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c \u0434\u043b\u044f ${user.email}`, `${user.email} uchun yangi parol`));
     if (!nextPassword) return;
     try {
       await adminApi.resetTeamUserPassword(user.id, nextPassword);
@@ -338,7 +338,7 @@ export default function Settings() {
       {noticeNode}
       <header>
         <h2 className="sg-title">{tr('Р СњР В°РЎРѓРЎвЂљРЎР‚Р С•Р в„–Р С”Р С‘', 'Sozlamalar')}</h2>
-        <p className="sg-subtitle">{tr('Р СљР В°Р С–Р В°Р В·Р С‘Р Р…РЎвЂ№, Р Т‘Р С•РЎРѓРЎвЂљР В°Р Р†Р С”Р В°, Р В»Р С•РЎРЏР В»РЎРЉР Р…Р С•РЎРѓРЎвЂљРЎРЉ Р С‘ Telegram-Р С—РЎР‚Р С‘Р Р†РЎРЏР В·Р С”Р В°', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
+        <p className="sg-subtitle">{tr('Магазины, доставка, лояльность и Telegram-привязка', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
       </header>
 
       <div className="sg-card soft">
@@ -346,11 +346,11 @@ export default function Settings() {
           <div>
             <p style={{ margin: 0, fontWeight: 800 }}>{tr('Р СџРЎР‚Р С‘Р Р†РЎРЏР В·Р С”Р В° Telegram-Р В°Р Т‘Р СР С‘Р Р…Р В°', 'Telegram adminini bog\'lash')}</p>
             <p className="sg-subtitle" style={{ marginTop: 4 }}>
-              {tr('Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚РЎС“Р в„–РЎвЂљР Вµ Р С”Р С•Р Т‘ Р С‘ Р С•РЎвЂљР С—РЎР‚Р В°Р Р†РЎРЉРЎвЂљР Вµ Р В±Р С•РЎвЂљРЎС“: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
+              {tr('Сгенерируйте код и отправьте боту: /admin CODE', 'Kod yarating va botga yuboring: /admin CODE')}
             </p>
           </div>
           <button className="sg-btn primary" type="button" onClick={generateTelegramLinkCode}>
-            {telegramLinkLoading ? tr('Р вЂњР ВµР Р…Р ВµРЎР‚Р В°РЎвЂ Р С‘РЎРЏ...','Yaratilmoqda...') : tr('Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С”Р С•Р Т‘', 'Kod yaratish')}
+            {telegramLinkLoading ? tr('Генерируется...', 'Yaratilmoqda...') : tr('Сгенерировать код', 'Kod yaratish')}
           </button>
         </div>
 
@@ -564,15 +564,15 @@ export default function Settings() {
               <input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
             </div>
             <div style={{ marginTop: 10 }}>
-              <button className="sg-btn primary" type="button" onClick={() => void saveMyProfile()}>{tr('Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р С‘РЎвЂљРЎРЉ Р С—РЎР‚Р С•РЎвЂћР С‘Р В»РЎРЉ', 'Profilni saqlash')}</button>
+              <button className="sg-btn primary" type="button" onClick={() => void saveMyProfile()}>{tr('Сохранить профиль', 'Profilni saqlash')}</button>
             </div>
           </article>
 
           <article className="sg-card">
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Р РЋР СР ВµР Р…Р В° Р С—Р В°РЎР‚Р С•Р В»РЎРЏ', 'Parolni almashtirish')}</h3>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Смена пароля', 'Parolni almashtirish')}</h3>
             <div className="sg-grid cols-3" style={{ marginTop: 10 }}>
               <input type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р СћР ВµР С”РЎС“РЎвЂ°Р С‘Р в„– Р С—Р В°РЎР‚Р С•Р В»РЎРЉ', 'Joriy parol')} />
-              <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р В РЎСљР В РЎвЂўР В Р вЂ Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Yangi parol')} />
+              <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Новый пароль', 'Yangi parol')} />
               <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Р В РЎСџР В РЎвЂўР В РўвЂР РЋРІР‚С™Р В Р вЂ Р В Р’ВµР РЋР вЂљР В РўвЂР В РЎвЂР РЋРІР‚С™Р В Р’Вµ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР В РЎвЂўР В Р’В»Р РЋР Р‰', 'Parolni tasdiqlang')} />
             </div>
             <div style={{ marginTop: 10 }}>
