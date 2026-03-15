@@ -33,6 +33,52 @@ jobs:
       - name: Lint API and shared packages
         run: pnpm --filter @sellgram/api lint && pnpm --filter @sellgram/shared lint
 
-      - name: Test API
-        run: pnpm --filter @sellgram/api exec vitest run --passWithNoTests
+      - name: Unit tests
+        run: pnpm --filter @sellgram/api exec vitest run --config vitest.config.ts
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: verify
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sellgram_test
+          POSTGRES_USER: sellgram
+          POSTGRES_PASSWORD: sellgram_pass
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace (generates Prisma client)
+        run: pnpm build
+
+      - name: Integration tests
+        working-directory: apps/api
+        env:
+          DATABASE_URL_TEST: postgresql://sellgram:sellgram_pass@localhost:5433/sellgram_test
+        run: pnpm test:integration
 

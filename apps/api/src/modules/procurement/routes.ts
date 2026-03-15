@@ -18,6 +18,23 @@ function canTransitionPO(from: POStatus, to: POStatus): boolean {
   return PO_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+const updatePOSchema = z.object({
+  status: z.enum(PO_STATUS).optional(),
+  fxRate: z.number().positive().optional(),
+  shippingCost: z.number().min(0).optional(),
+  customsCost: z.number().min(0).optional(),
+  note: z.string().optional(),
+});
+
+const receiveItemSchema = z.object({
+  itemId: z.string(),
+  qtyReceived: z.number().int().min(0),
+});
+
+const receivePOSchema = z.object({
+  items: z.array(receiveItemSchema).min(1),
+});
+
 const createPOSchema = z.object({
   supplierName: z.string().min(1),
   currency: z.string().default('USD'),
@@ -35,11 +52,20 @@ const createPOSchema = z.object({
 export default async function procurementRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
 
+  const listPOQuerySchema = z.object({
+    status: z.enum(PO_STATUS).optional(),
+  });
+
   // List POs
-  fastify.get('/purchase-orders', async (request) => {
-    const { status } = request.query as any;
+  fastify.get('/purchase-orders', async (request, reply) => {
+    let query: z.infer<typeof listPOQuerySchema>;
+    try {
+      query = listPOQuerySchema.parse(request.query);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
     const where: any = { tenantId: request.tenantId! };
-    if (status) where.status = status;
+    if (query.status) where.status = query.status;
 
     const pos = await prisma.purchaseOrder.findMany({
       where,
@@ -118,42 +144,61 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
   // Update PO
   fastify.patch('/purchase-orders/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { status, fxRate, shippingCost, customsCost, note } = request.body as any;
-
-    if (status !== undefined) {
-      if (!PO_STATUS.includes(status as POStatus)) {
-        return reply.status(400).send({ success: false, error: `Invalid status: ${status}` });
-      }
-      if (status === 'RECEIVED') {
-        return reply.status(400).send({ success: false, error: 'Use POST /receive to mark PO as received' });
-      }
-      const po = await prisma.purchaseOrder.findFirst({ where: { id, tenantId: request.tenantId! } });
-      if (!po) return reply.status(404).send({ success: false, error: 'PO not found' });
-      if (!canTransitionPO(po.status as POStatus, status as POStatus)) {
-        return reply.status(400).send({ success: false, error: `Cannot transition PO from ${po.status} to ${status}` });
-      }
+    let body: z.infer<typeof updatePOSchema>;
+    try {
+      body = updatePOSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
 
-    const data: any = {};
-    if (status) data.status = status;
-    if (fxRate !== undefined) data.fxRate = fxRate;
-    if (shippingCost !== undefined) data.shippingCost = shippingCost;
-    if (customsCost !== undefined) data.customsCost = customsCost;
-    if (note !== undefined) data.note = note;
-    if (status === 'ORDERED') data.orderedAt = new Date();
+    const { status, fxRate, shippingCost, customsCost, note } = body;
 
-    const result = await prisma.purchaseOrder.updateMany({
-      where: { id, tenantId: request.tenantId! },
-      data,
-    });
-    if (result.count === 0) return reply.status(404).send({ success: false, error: 'PO not found' });
+    if (status === 'RECEIVED') {
+      return reply.status(400).send({ success: false, error: 'Use POST /receive to mark PO as received' });
+    }
+
+    try {
+      await prisma.$transaction(async (tx: any) => {
+        const po = await tx.purchaseOrder.findFirst({ where: { id, tenantId: request.tenantId! } });
+        if (!po) throw new Error('PO_NOT_FOUND');
+        if (status !== undefined && !canTransitionPO(po.status as POStatus, status as POStatus)) {
+          throw new Error(`INVALID_TRANSITION:${po.status}:${status}`);
+        }
+
+        const data: any = {};
+        if (status !== undefined) data.status = status;
+        if (fxRate !== undefined) data.fxRate = fxRate;
+        if (shippingCost !== undefined) data.shippingCost = shippingCost;
+        if (customsCost !== undefined) data.customsCost = customsCost;
+        if (note !== undefined) data.note = note;
+        if (status === 'ORDERED') data.orderedAt = new Date();
+
+        await tx.purchaseOrder.update({ where: { id }, data });
+      });
+    } catch (err: any) {
+      if (err.message === 'PO_NOT_FOUND') {
+        return reply.status(404).send({ success: false, error: 'PO not found' });
+      }
+      if (err.message.startsWith('INVALID_TRANSITION:')) {
+        const [, from, to] = err.message.split(':');
+        return reply.status(400).send({ success: false, error: `Cannot transition PO from ${from} to ${to}` });
+      }
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+
     return { success: true, message: 'PO updated' };
   });
 
   // Receive PO (critical business logic)
   fastify.post('/purchase-orders/:id/receive', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { items } = request.body as { items: Array<{ itemId: string; qtyReceived: number }> };
+    let receiveBody: z.infer<typeof receivePOSchema>;
+    try {
+      receiveBody = receivePOSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const { items } = receiveBody;
 
     const po = await prisma.purchaseOrder.findFirst({
       where: { id, tenantId: request.tenantId! },
@@ -191,7 +236,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
           throw new Error('PRODUCT_TENANT_MISMATCH');
         }
 
-        const itemShare = Number(poItem.totalCost) / totalForeignCost;
+        const itemShare = totalForeignCost > 0 ? Number(poItem.totalCost) / totalForeignCost : 0;
         const itemLandedCost = totalLanded * itemShare;
         const perUnitLanded = receivedItem.qtyReceived > 0
           ? itemLandedCost / receivedItem.qtyReceived

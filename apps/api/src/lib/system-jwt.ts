@@ -22,5 +22,9 @@ export async function signSystemToken(payload: SystemJwtPayload): Promise<string
 
 export async function verifySystemToken(token: string): Promise<SystemJwtPayload> {
   const { payload } = await jose.jwtVerify(token, getSystemSecret());
-  return payload as unknown as SystemJwtPayload;
+  const typed = payload as unknown as SystemJwtPayload;
+  if (typed.type !== 'system_admin') {
+    throw new Error('Invalid token type');
+  }
+  return typed;
 }

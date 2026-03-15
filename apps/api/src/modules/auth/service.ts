@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library.js';
 import prisma from '../../lib/prisma.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js';
 import type { RegisterInput, LoginInput } from './schema.js';
@@ -45,6 +46,23 @@ function normalizeOperatorPermissions(input?: Partial<TeamPermissions> | null): 
     ...OPERATOR_DEFAULT_PERMISSIONS,
     ...(input || {}),
   };
+}
+
+/**
+ * Ensures an actor cannot grant permissions they don't possess themselves.
+ * OWNER and MANAGER are exempt — they can grant any permission.
+ */
+function clampPermissionsToActor(
+  permissions: TeamPermissions,
+  actor: { role: string; permissions?: Prisma.JsonValue | null }
+): TeamPermissions {
+  if (actor.role === 'OWNER' || actor.role === 'MANAGER') return permissions;
+  const actorPerms = getEffectivePermissions(actor);
+  const clamped = { ...permissions };
+  for (const key of Object.keys(clamped) as TeamPermissionKey[]) {
+    if (!actorPerms[key]) clamped[key] = false;
+  }
+  return clamped;
 }
 
 function getEffectivePermissions(user: { role: string; permissions?: Prisma.JsonValue | null }): TeamPermissions {
@@ -134,6 +152,13 @@ export async function register(input: RegisterInput) {
     });
 
     return { tenant, user };
+  }).catch((err) => {
+    if (err instanceof PrismaClientKnownRequestError && err.code === 'P2002') {
+      const fields = (err.meta?.target as string[] | undefined) ?? [];
+      if (fields.includes('email')) throw new AuthServiceError('EMAIL_ALREADY_REGISTERED');
+      if (fields.includes('slug')) throw new AuthServiceError('TENANT_SLUG_TAKEN');
+    }
+    throw err;
   });
 
   const payload = { userId: user.id, tenantId: tenant.id, role: user.role };
@@ -201,15 +226,22 @@ export async function updateMyProfile(input: {
     if (existing) throw new Error('EMAIL_ALREADY_REGISTERED');
   }
 
-  const updated = await prisma.user.update({
-    where: { id: input.userId },
-    data: {
-      ...(input.name ? { name: input.name } : {}),
-      ...(input.email ? { email: input.email } : {}),
-    },
-  });
+  try {
+    const updated = await prisma.user.update({
+      where: { id: input.userId },
+      data: {
+        ...(input.name ? { name: input.name } : {}),
+        ...(input.email ? { email: input.email } : {}),
+      },
+    });
 
-  return mapPublicUser(updated);
+    return mapPublicUser(updated);
+  } catch (err) {
+    if (err instanceof PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new Error('EMAIL_ALREADY_REGISTERED');
+    }
+    throw err;
+  }
 }
 
 export async function changeMyPassword(input: {
@@ -279,6 +311,8 @@ export async function createTeamUser(input: {
   if (exists) throw new AuthServiceError('EMAIL_ALREADY_REGISTERED');
 
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+  const rawPermissions = normalizeOperatorPermissions(input.permissions);
+  const permissions = input.role === 'OPERATOR' ? clampPermissionsToActor(rawPermissions, actor) : null;
   const created = await prisma.user.create({
     data: {
       tenantId: input.tenantId,
@@ -286,7 +320,7 @@ export async function createTeamUser(input: {
       passwordHash,
       name: input.name,
       role: input.role,
-      permissions: input.role === 'OPERATOR' ? (normalizeOperatorPermissions(input.permissions) as any) : Prisma.DbNull,
+      permissions: permissions ? (permissions as any) : Prisma.DbNull,
     },
   });
 
@@ -322,10 +356,10 @@ export async function updateTeamUser(input: {
   }
 
   const nextRole = input.role || (target.role as 'MANAGER' | 'OPERATOR');
-  const permissions =
-    nextRole === 'OPERATOR'
-      ? normalizeOperatorPermissions(input.permissions || (target.permissions as Partial<TeamPermissions> | null) || undefined)
-      : null;
+  const rawPermissions = normalizeOperatorPermissions(
+    input.permissions || (target.permissions as Partial<TeamPermissions> | null) || undefined
+  );
+  const permissions = nextRole === 'OPERATOR' ? clampPermissionsToActor(rawPermissions, actor) : null;
 
   const updated = await prisma.user.update({
     where: { id: target.id },

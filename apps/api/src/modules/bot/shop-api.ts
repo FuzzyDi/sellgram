@@ -100,7 +100,9 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     return { success: true, data };
   });
 
-  fastify.post('/shop/checkout', async (request, reply) => {
+  fastify.post('/shop/checkout', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     try {
       const body = checkoutSchema.parse(request.body);
       const order = await createShopCheckoutOrder({

@@ -38,19 +38,29 @@ describe('permissionGuard', () => {
     expect(reply._status).toBe(401);
   });
 
-  it('passes OWNER without DB lookup', async () => {
+  it('passes active OWNER (does DB lookup to check isActive)', async () => {
+    mocks.prisma.user.findUnique.mockResolvedValue({ role: 'OWNER', isActive: true, permissions: null });
     const guard = permissionGuard('manageOrders');
     const reply = makeReply();
     await guard(makeRequest({ role: 'OWNER' }), reply as any);
-    expect(mocks.prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(mocks.prisma.user.findUnique).toHaveBeenCalledTimes(1);
     expect(reply._status).toBe(0); // never called status()
   });
 
-  it('passes MANAGER without DB lookup', async () => {
+  it('returns 403 for inactive OWNER (deactivated accounts must be blocked)', async () => {
+    mocks.prisma.user.findUnique.mockResolvedValue({ role: 'OWNER', isActive: false, permissions: null });
+    const guard = permissionGuard('manageOrders');
+    const reply = makeReply();
+    await guard(makeRequest({ role: 'OWNER' }), reply as any);
+    expect(reply._status).toBe(403);
+  });
+
+  it('passes active MANAGER (does DB lookup to check isActive)', async () => {
+    mocks.prisma.user.findUnique.mockResolvedValue({ role: 'MANAGER', isActive: true, permissions: null });
     const guard = permissionGuard('manageCatalog');
     const reply = makeReply();
     await guard(makeRequest({ role: 'MANAGER' }), reply as any);
-    expect(mocks.prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(mocks.prisma.user.findUnique).toHaveBeenCalledTimes(1);
     expect(reply._status).toBe(0);
   });
 

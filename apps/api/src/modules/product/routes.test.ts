@@ -229,5 +229,29 @@ describe('product.routes', () => {
       );
       await app.close();
     });
+
+    it('rejects negative qty with 400', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/products/p-1/stock',
+        payload: { qty: -5 },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.product.updateMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('rejects non-integer qty with 400', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/products/p-1/stock',
+        payload: { qty: 1.5 },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.product.updateMany).not.toHaveBeenCalled();
+      await app.close();
+    });
   });
 });

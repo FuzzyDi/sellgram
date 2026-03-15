@@ -1,12 +1,36 @@
 import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+
+const loyaltyAdjustSchema = z.object({
+  points: z.number().int().refine((n) => n !== 0, { message: 'points must be non-zero' }),
+  description: z.string().optional(),
+});
+
+const listCustomersQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().max(200).optional(),
+});
+
+const updateCustomerSchema = z.object({
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  note: z.string().max(2000).nullable().optional(),
+  phone: z.string().max(20).nullable().optional(),
+});
 
 export default async function customerRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
 
-  fastify.get('/customers', async (request) => {
-    const { page = 1, pageSize = 20, search } = request.query as any;
-    const skip = (Number(page) - 1) * Number(pageSize);
+  fastify.get('/customers', async (request, reply) => {
+    let query: z.infer<typeof listCustomersQuerySchema>;
+    try {
+      query = listCustomersQuerySchema.parse(request.query);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const { page, pageSize, search } = query;
+    const skip = (page - 1) * pageSize;
 
     const where: any = { tenantId: request.tenantId! };
     if (search) {
@@ -23,7 +47,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
         where,
         orderBy: { createdAt: 'desc' },
         skip,
-        take: Number(pageSize),
+        take: pageSize,
       }),
       prisma.customer.count({ where }),
     ]);
@@ -33,7 +57,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
     return {
       success: true,
-      data: { items: serializedItems, total, page: Number(page), pageSize: Number(pageSize), totalPages: Math.ceil(total / Number(pageSize)) },
+      data: { items: serializedItems, total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
     };
   });
 
@@ -52,7 +76,13 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   fastify.patch('/customers/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { tags, note, phone } = request.body as any;
+    let patchBody: z.infer<typeof updateCustomerSchema>;
+    try {
+      patchBody = updateCustomerSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const { tags, note, phone } = patchBody;
     const data: any = {};
     if (tags !== undefined) data.tags = tags;
     if (note !== undefined) data.note = note;
@@ -69,7 +99,13 @@ export default async function customerRoutes(fastify: FastifyInstance) {
   // Manual loyalty adjustment
   fastify.post('/customers/:id/loyalty', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { points, description } = request.body as { points: number; description: string };
+    let loyaltyBody: z.infer<typeof loyaltyAdjustSchema>;
+    try {
+      loyaltyBody = loyaltyAdjustSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const { points, description } = loyaltyBody;
     const tenantId = request.tenantId!;
 
     let newBalance: number;

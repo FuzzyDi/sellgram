@@ -5,6 +5,14 @@ import { planGuard } from '../../plugins/plan-guard.js';
 import { uploadFile, ensureBucket, resolveBucketAndObjectPath, buildProductImageObjectPath } from '../../lib/s3.js';
 import crypto from 'node:crypto';
 
+const listProductsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().max(200).optional(),
+  categoryId: z.string().optional(),
+  active: z.enum(['true', 'false']).optional(),
+});
+
 const createProductSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -39,9 +47,15 @@ export default async function productRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
 
   // List products
-  fastify.get('/products', async (request) => {
-    const { page = 1, pageSize = 20, search, categoryId, active } = request.query as any;
-    const skip = (Number(page) - 1) * Number(pageSize);
+  fastify.get('/products', async (request, reply) => {
+    let query: z.infer<typeof listProductsQuerySchema>;
+    try {
+      query = listProductsQuerySchema.parse(request.query);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const { page, pageSize, search, categoryId, active } = query;
+    const skip = (page - 1) * pageSize;
 
     const where: any = { tenantId: request.tenantId! };
     if (search) {
@@ -52,7 +66,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
       ];
     }
     if (categoryId) where.categoryId = categoryId;
-    if (active !== undefined) where.isActive = active === 'true';
+    if (active !== undefined) where.isActive = active === 'true'; // active is 'true'|'false' from schema
 
     const [items, total] = await Promise.all([
       prisma.product.findMany({
@@ -65,14 +79,14 @@ export default async function productRoutes(fastify: FastifyInstance) {
         },
         orderBy: { sortOrder: 'asc' },
         skip,
-        take: Number(pageSize),
+        take: pageSize,
       }),
       prisma.product.count({ where }),
     ]);
 
     return {
       success: true,
-      data: { items, total, page: Number(page), pageSize: Number(pageSize), totalPages: Math.ceil(total / Number(pageSize)) },
+      data: { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
     };
   });
 
@@ -161,10 +175,21 @@ export default async function productRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Product deactivated' };
   });
 
+  const stockAdjustSchema = z.object({
+    qty: z.number().int().min(0),
+    variantId: z.string().optional(),
+  });
+
   // Adjust stock
   fastify.patch('/products/:id/stock', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { qty, variantId } = request.body as { qty: number; variantId?: string };
+    let qty: number;
+    let variantId: string | undefined;
+    try {
+      ({ qty, variantId } = stockAdjustSchema.parse(request.body));
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
 
     if (variantId) {
       const variant = await prisma.productVariant.findFirst({
@@ -195,9 +220,9 @@ export default async function productRoutes(fastify: FastifyInstance) {
     });
     if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
 
-    // Max 10 images per product
-    const imageCount = await prisma.productImage.count({ where: { productId: id } });
-    if (imageCount >= 10) {
+    // Fast pre-check before processing the file (avoids unnecessary upload work)
+    const imageCountPre = await prisma.productImage.count({ where: { productId: id } });
+    if (imageCountPre >= 10) {
       return reply.status(400).send({ success: false, error: 'Maximum 10 images per product' });
     }
 
@@ -238,12 +263,19 @@ export default async function productRoutes(fastify: FastifyInstance) {
       const fileName = buildProductImageObjectPath(request.tenantId!, id, `${crypto.randomUUID()}.webp`);
       const url = await uploadFile(fileName, buffer, 'image/webp');
 
-      const image = await prisma.productImage.create({
-        data: { productId: id, url, sortOrder: imageCount },
+      // Re-check the limit inside a transaction to prevent concurrent uploads
+      // from exceeding 10 images per product.
+      const image = await prisma.$transaction(async (tx: any) => {
+        const imageCount = await tx.productImage.count({ where: { productId: id } });
+        if (imageCount >= 10) throw new Error('LIMIT_EXCEEDED');
+        return tx.productImage.create({ data: { productId: id, url, sortOrder: imageCount } });
       });
 
       return { success: true, data: image };
-    } catch {
+    } catch (err: any) {
+      if (err?.message === 'LIMIT_EXCEEDED') {
+        return reply.status(400).send({ success: false, error: 'Maximum 10 images per product' });
+      }
       return reply.status(500).send({ success: false, error: 'Upload failed' });
     }
   });

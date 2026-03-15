@@ -91,15 +91,19 @@ describe('system-admin.routes', () => {
 
   it('confirms pending invoice and applies tenant plan', async () => {
     mocks.verifySystemToken.mockResolvedValue({ type: 'system_admin', adminId: 'sa-42', email: 'root@sellgram.uz' });
-    mocks.prisma.invoice.findUnique.mockResolvedValue({
-      id: 'inv-1',
-      tenantId: 'tenant-1',
-      plan: 'PRO',
-      status: 'PENDING',
-    });
     mocks.prisma.invoice.update.mockResolvedValue({ id: 'inv-1' });
     mocks.prisma.tenant.update.mockResolvedValue({ id: 'tenant-1' });
-    mocks.prisma.$transaction.mockResolvedValue(undefined);
+    // Simulate interactive $transaction: run the callback with a tx that delegates to outer mocks
+    mocks.prisma.$transaction.mockImplementation(async (cb: any) => {
+      const tx = {
+        invoice: {
+          findUnique: vi.fn().mockResolvedValue({ id: 'inv-1', tenantId: 'tenant-1', plan: 'PRO', status: 'PENDING' }),
+          update: mocks.prisma.invoice.update,
+        },
+        tenant: { update: mocks.prisma.tenant.update },
+      };
+      return cb(tx);
+    });
 
     const app = await buildApp();
     const response = await app.inject({
@@ -112,10 +116,7 @@ describe('system-admin.routes', () => {
     expect(response.json()).toEqual({ success: true, message: 'Plan PRO activated' });
     expect(mocks.prisma.invoice.update).toHaveBeenCalledWith({
       where: { id: 'inv-1' },
-      data: expect.objectContaining({
-        status: 'PAID',
-        confirmedBy: 'sa-42',
-      }),
+      data: expect.objectContaining({ status: 'PAID', confirmedBy: 'sa-42' }),
     });
     expect(mocks.prisma.tenant.update).toHaveBeenCalledWith({
       where: { id: 'tenant-1' },

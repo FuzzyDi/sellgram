@@ -28,6 +28,23 @@ async function buildApp() {
 describe('loyalty.routes', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
+  describe('GET /loyalty/config', () => {
+    it('uses upsert (not findUnique+create) to avoid race condition', async () => {
+      mocks.prisma.loyaltyConfig.upsert.mockResolvedValue({ tenantId: 'tenant-1', isEnabled: false });
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/loyalty/config' });
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.loyaltyConfig.upsert).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1' },
+        update: {},
+        create: { tenantId: 'tenant-1' },
+      });
+      expect(mocks.prisma.loyaltyConfig.findUnique).not.toHaveBeenCalled();
+      expect(mocks.prisma.loyaltyConfig.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
   describe('PATCH /loyalty/config — validation', () => {
     it('rejects unitAmount = 0 (would cause division by zero)', async () => {
       const app = await buildApp();

@@ -60,26 +60,33 @@ export async function upgradeTenantPlan(input: { tenantId: string; plan: PlanCod
     return { message: 'Plan switched to FREE' };
   }
 
-  const existing = await prisma.invoice.findFirst({
-    where: { tenantId: input.tenantId, status: 'PENDING', plan: input.plan as any },
-  });
-  if (existing) {
-    return { invoice: existing, bankDetails };
-  }
+  const { invoice, created } = await prisma.$transaction(async (tx: any) => {
+    // Advisory lock prevents concurrent upgrade requests from creating
+    // duplicate pending invoices for the same tenant.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.tenantId} || ':upgrade'))`;
 
-  const invoice = await prisma.invoice.create({
-    data: {
-      tenantId: input.tenantId,
-      plan: input.plan as any,
-      amount: planData.price,
-      expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-    },
+    const existing = await tx.invoice.findFirst({
+      where: { tenantId: input.tenantId, status: 'PENDING', plan: input.plan as any },
+    });
+    if (existing) return { invoice: existing, created: false };
+
+    const invoice = await tx.invoice.create({
+      data: {
+        tenantId: input.tenantId,
+        plan: input.plan as any,
+        amount: planData.price,
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+    return { invoice, created: true };
   });
 
   return {
     invoice,
     bankDetails,
-    message: `Invoice created for ${planData.price.toLocaleString()} UZS and sent for payment.`,
+    ...(created
+      ? { message: `Invoice created for ${planData.price.toLocaleString()} UZS and sent for payment.` }
+      : {}),
   };
 }
 

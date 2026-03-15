@@ -102,6 +102,91 @@ describe('order.routes', () => {
     });
   });
 
+  // ─── GET /orders — query validation ──────────────────────────────────────
+
+  describe('GET /orders', () => {
+    it('returns 400 when pageSize exceeds 100', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/orders?pageSize=999' });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.order.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 for invalid status enum', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/orders?status=FLYING' });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('returns 400 for invalid paymentStatus enum', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/orders?paymentStatus=CHARGED' });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('returns paginated orders for valid query', async () => {
+      mocks.prisma.order.findMany.mockResolvedValue([{ id: 'o-1' }]);
+      mocks.prisma.order.count.mockResolvedValue(1);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/orders?page=1&pageSize=10&status=NEW' });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.items).toHaveLength(1);
+      expect(mocks.prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 10, skip: 0 })
+      );
+      await app.close();
+    });
+  });
+
+  // ─── PATCH /delivery ──────────────────────────────────────────────────────
+
+  describe('PATCH /orders/:id/delivery', () => {
+    it('updates delivery info on valid body', async () => {
+      mocks.prisma.order.updateMany.mockResolvedValue({ count: 1 });
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/orders/o-1/delivery',
+        payload: { deliveryPrice: 15000, trackingNumber: 'TRK-123' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'o-1', tenantId: 'tenant-1' }),
+          data: expect.objectContaining({ deliveryPrice: 15000, trackingNumber: 'TRK-123' }),
+        })
+      );
+      await app.close();
+    });
+
+    it('returns 404 when order not found', async () => {
+      mocks.prisma.order.updateMany.mockResolvedValue({ count: 0 });
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/orders/o-999/delivery',
+        payload: { deliveryPrice: 5000 },
+      });
+      expect(response.statusCode).toBe(404);
+      await app.close();
+    });
+
+    it('returns 400 for negative deliveryPrice', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/orders/o-1/delivery',
+        payload: { deliveryPrice: -100 },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.order.updateMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
   // ─── PATCH /payment — input validation ────────────────────────────────────
 
   describe('PATCH /orders/:id/payment', () => {

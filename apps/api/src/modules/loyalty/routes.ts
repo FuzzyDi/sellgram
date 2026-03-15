@@ -15,14 +15,11 @@ export default async function loyaltyRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
 
   fastify.get('/loyalty/config', async (request) => {
-    let config = await prisma.loyaltyConfig.findUnique({
+    const config = await prisma.loyaltyConfig.upsert({
       where: { tenantId: request.tenantId! },
+      update: {},
+      create: { tenantId: request.tenantId! },
     });
-    if (!config) {
-      config = await prisma.loyaltyConfig.create({
-        data: { tenantId: request.tenantId! },
-      });
-    }
     return { success: true, data: config };
   });
 

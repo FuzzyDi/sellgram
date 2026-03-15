@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
@@ -7,6 +8,7 @@ import { loadConfig, getConfig } from './config/index.js';
 import authPlugin from './plugins/auth.js';
 import { getRedis } from './lib/redis.js';
 import { resolveBucketAndObjectPath } from './lib/s3.js';
+import prisma from './lib/prisma.js';
 
 function buildAnalyticsSnippet(config: ReturnType<typeof getConfig>) {
   const gaId = config.GA_MEASUREMENT_ID?.trim();
@@ -54,13 +56,23 @@ async function main() {
 
   const fastify = Fastify({
     trustProxy: config.TRUST_PROXY || config.NODE_ENV === 'production',
-    logger: {
-      level: 'info',
-      transport: {
-        target: 'pino-pretty',
-        options: { colorize: true, translateTime: 'HH:MM:ss' },
-      },
-    },
+    logger: config.NODE_ENV === 'production'
+      ? { level: 'info' }
+      : {
+          level: 'info',
+          transport: {
+            target: 'pino-pretty',
+            options: { colorize: true, translateTime: 'HH:MM:ss' },
+          },
+        },
+    // Honour upstream X-Request-Id (e.g. from a proxy/load balancer), otherwise generate one
+    genReqId: (req) =>
+      (req.headers['x-request-id'] as string | undefined) ?? crypto.randomUUID(),
+  });
+
+  // Propagate request ID to every response so clients can reference it in support tickets
+  fastify.addHook('onSend', async (request, reply) => {
+    reply.header('X-Request-Id', request.id);
   });
 
   // CORS
@@ -94,9 +106,10 @@ async function main() {
     redis: getRedis(),
     skipOnError: true,
     keyGenerator: (request) => request.ip,
-    errorResponseBuilder: (_request, context) => ({
+    errorResponseBuilder: (request, context) => ({
       success: false,
       error: `Too many requests. Retry in ${context.after}.`,
+      requestId: request.id,
     }),
   });
 
@@ -104,9 +117,9 @@ async function main() {
   fastify.setErrorHandler((error, request, reply) => {
     const statusCode = error.statusCode || 500;
 
-    // Log full error server-side
+    // Use request.log so the log line automatically includes reqId, method, url
     if (statusCode >= 500) {
-      fastify.log.error(error);
+      request.log.error({ err: error }, 'Unhandled server error');
     }
 
     // Don't leak Prisma / internal errors to client
@@ -117,6 +130,7 @@ async function main() {
     reply.status(statusCode).send({
       success: false,
       error: safeMessage,
+      requestId: request.id,
     });
   });
 
@@ -187,11 +201,33 @@ async function main() {
     reply.redirect(config.ADMIN_URL);
   });
 
-  // Health check
-  fastify.get('/health', { config: { rateLimit: false } }, async () => ({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-  }));
+  // Health check — verifies DB and Redis connectivity for k8s liveness/readiness probes
+  fastify.get('/health', { config: { rateLimit: false } }, async (_request, reply) => {
+    const checks: Record<string, 'ok' | 'error'> = {};
+    let healthy = true;
+
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      checks.db = 'ok';
+    } catch {
+      checks.db = 'error';
+      healthy = false;
+    }
+
+    try {
+      await getRedis().ping();
+      checks.redis = 'ok';
+    } catch {
+      checks.redis = 'error';
+      healthy = false;
+    }
+
+    return reply.status(healthy ? 200 : 503).send({
+      status: healthy ? 'ok' : 'degraded',
+      checks,
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   // Store Admin API (/api/store-admin/*)
   const authRoutes = (await import('./modules/auth/routes.js')).default;
@@ -261,6 +297,22 @@ async function main() {
     fastify.log.error(`Bot manager failed: ${err.message}`);
     fastify.log.error(err.stack);
   }
+
+  // Graceful shutdown: drain in-flight requests before exiting
+  const shutdown = async (signal: string) => {
+    fastify.log.info(`Received ${signal}, shutting down gracefully...`);
+    try {
+      await fastify.close();
+      await prisma.$disconnect();
+      fastify.log.info('Server closed');
+      process.exit(0);
+    } catch (err) {
+      fastify.log.error(err, 'Error during shutdown');
+      process.exit(1);
+    }
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
   // Start
   try {

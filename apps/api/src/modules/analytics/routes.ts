@@ -322,11 +322,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       weekRevenue,
       monthRevenue,
       totalCustomers,
-      customersFromOrders,
+      customersFromOrdersResult,
       totalProducts,
       newCustomersWeek,
       pendingOrders,
-      soldProductIds,
+      soldProductsResult,
+      repeatCustomers,
     ] = await Promise.all([
       prisma.order.count({ where: { tenantId } }),
       prisma.order.count({ where: { tenantId, createdAt: { gte: today } } }),
@@ -336,15 +337,24 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       prisma.order.aggregate({ where: { tenantId, status: { in: ['COMPLETED', 'DELIVERED'] }, createdAt: { gte: weekAgo } }, _sum: { total: true } }),
       prisma.order.aggregate({ where: { tenantId, status: { in: ['COMPLETED', 'DELIVERED'] }, createdAt: { gte: monthStart } }, _sum: { total: true }, _avg: { total: true } }),
       prisma.customer.count({ where: { tenantId } }),
-      prisma.order.findMany({ where: { tenantId }, distinct: ['customerId'], select: { customerId: true } }),
+      // COUNT(DISTINCT) avoids loading all rows into memory
+      prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(DISTINCT customer_id)::bigint AS count FROM orders WHERE tenant_id = ${tenantId}
+      `,
       prisma.product.count({ where: { tenantId } }),
       prisma.customer.count({ where: { tenantId, createdAt: { gte: weekAgo } } }),
       prisma.order.count({ where: { tenantId, status: 'NEW' } }),
-      prisma.orderItem.findMany({ where: { order: { tenantId, status: { in: ['COMPLETED', 'DELIVERED'] } } }, distinct: ['productId'], select: { productId: true } }),
+      prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(DISTINCT oi.product_id)::bigint AS count
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE o.tenant_id = ${tenantId} AND o.status IN ('COMPLETED', 'DELIVERED')
+      `,
+      prisma.customer.count({ where: { tenantId, ordersCount: { gt: 1 } } }),
     ]);
 
-    const repeatCustomers = await prisma.customer.count({ where: { tenantId, ordersCount: { gt: 1 } } });
-    const soldProductsCount = soldProductIds.length;
+    const customersFromOrdersCount = Number(customersFromOrdersResult[0]?.count ?? 0);
+    const soldProductsCount = Number(soldProductsResult[0]?.count ?? 0);
     const productsTotal = Math.max(totalProducts, soldProductsCount);
 
     return {
@@ -358,8 +368,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           avgCheck: Math.round(Number(monthRevenue._avg.total) || 0),
         },
         customers: {
-          total: Math.max(totalCustomers, customersFromOrders.length),
-          fromOrders: customersFromOrders.length,
+          total: Math.max(totalCustomers, customersFromOrdersCount),
+          fromOrders: customersFromOrdersCount,
           newThisWeek: newCustomersWeek,
           repeatRate: totalCustomers > 0 ? Math.round((repeatCustomers / totalCustomers) * 100) : 0,
         },

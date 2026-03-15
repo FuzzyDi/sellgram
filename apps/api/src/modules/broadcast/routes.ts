@@ -48,7 +48,9 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
     return { success: true, data: campaign };
   });
 
-  fastify.post('/broadcasts/send', async (request, reply) => {
+  fastify.post('/broadcasts/send', {
+    config: { rateLimit: { max: 3, timeWindow: '10 minutes' } },
+  }, async (request, reply) => {
     try {
       const body = createBroadcastSchema.parse(request.body);
       const store = await prisma.store.findFirst({

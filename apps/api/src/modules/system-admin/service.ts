@@ -142,7 +142,8 @@ async function logSystemAction(input: {
 }
 
 export async function getSystemDashboard() {
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const now = new Date();
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
   const [tenants, activeStores, pendingInvoices, monthlyOrders, pendingAmountAgg, paidInvoicesMonth, paidRevenueMonthAgg] = await Promise.all([
     prisma.tenant.count(),
@@ -511,28 +512,27 @@ export async function listSystemInvoices(input: {
 }
 
 export async function confirmSystemInvoice(input: { id: string; confirmedBy: string }) {
-  const invoice = await prisma.invoice.findUnique({ where: { id: input.id } });
-  if (!invoice || invoice.status !== 'PENDING') {
-    throw new Error('INVOICE_NOT_FOUND');
-  }
+  const invoice = await prisma.$transaction(async (tx: any) => {
+    const inv = await tx.invoice.findUnique({ where: { id: input.id } });
+    if (!inv || inv.status !== 'PENDING') {
+      throw new Error('INVOICE_NOT_FOUND');
+    }
 
-  await prisma.$transaction([
-    prisma.invoice.update({
+    await tx.invoice.update({
       where: { id: input.id },
+      data: { status: 'PAID', confirmedBy: input.confirmedBy, confirmedAt: new Date() },
+    });
+
+    await tx.tenant.update({
+      where: { id: inv.tenantId },
       data: {
-        status: 'PAID',
-        confirmedBy: input.confirmedBy,
-        confirmedAt: new Date(),
-      },
-    }),
-    prisma.tenant.update({
-      where: { id: invoice.tenantId },
-      data: {
-        plan: invoice.plan,
+        plan: inv.plan,
         planExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
-    }),
-  ]);
+    });
+
+    return inv;
+  });
 
   await logSystemAction({
     action: 'INVOICE_CONFIRMED',
@@ -552,14 +552,18 @@ export async function confirmSystemInvoice(input: { id: string; confirmedBy: str
 }
 
 export async function rejectSystemInvoice(input: { id: string; confirmedBy: string }) {
-  const invoice = await prisma.invoice.findUnique({ where: { id: input.id } });
-  if (!invoice || invoice.status !== 'PENDING') {
-    throw new Error('INVOICE_NOT_FOUND');
-  }
+  const invoice = await prisma.$transaction(async (tx: any) => {
+    const inv = await tx.invoice.findUnique({ where: { id: input.id } });
+    if (!inv || inv.status !== 'PENDING') {
+      throw new Error('INVOICE_NOT_FOUND');
+    }
 
-  await prisma.invoice.update({
-    where: { id: input.id },
-    data: { status: 'CANCELLED', confirmedBy: input.confirmedBy, confirmedAt: new Date() },
+    await tx.invoice.update({
+      where: { id: input.id },
+      data: { status: 'CANCELLED', confirmedBy: input.confirmedBy, confirmedAt: new Date() },
+    });
+
+    return inv;
   });
 
   await logSystemAction({

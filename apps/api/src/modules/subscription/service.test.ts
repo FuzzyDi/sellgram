@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     order: { count: vi.fn() },
     deliveryZone: { count: vi.fn() },
     invoice: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+    $transaction: vi.fn(),
   },
   getConfig: vi.fn(),
 }));
@@ -60,14 +61,44 @@ describe('subscription.service', () => {
   });
 
   it('creates invoice for paid plan when no pending invoice exists', async () => {
-    mocks.prisma.invoice.findFirst.mockResolvedValue(null);
-    mocks.prisma.invoice.create.mockResolvedValue({ id: 'inv-1', plan: 'PRO', amount: 149000 });
+    const createdInvoice = { id: 'inv-1', plan: 'PRO', amount: 149000 };
+    // Simulate the $transaction callback: advisory lock, findFirst → null, create
+    mocks.prisma.$transaction.mockImplementation(async (cb: any) => {
+      const tx = {
+        $executeRaw: vi.fn().mockResolvedValue(1),
+        invoice: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue(createdInvoice),
+        },
+      };
+      return cb(tx);
+    });
 
     const result = await upgradeTenantPlan({ tenantId: 't-1', plan: 'PRO' });
 
-    expect(mocks.prisma.invoice.create).toHaveBeenCalledTimes(1);
-    expect(result.invoice).toEqual({ id: 'inv-1', plan: 'PRO', amount: 149000 });
+    expect((result as any).invoice).toEqual(createdInvoice);
     expect(result).toHaveProperty('bankDetails.bank', 'Test Bank');
+    expect(result).toHaveProperty('message');
+  });
+
+  it('returns existing invoice when a pending one already exists', async () => {
+    const existingInvoice = { id: 'inv-0', plan: 'PRO', status: 'PENDING', amount: 149000 };
+    mocks.prisma.$transaction.mockImplementation(async (cb: any) => {
+      const tx = {
+        $executeRaw: vi.fn().mockResolvedValue(1),
+        invoice: {
+          findFirst: vi.fn().mockResolvedValue(existingInvoice),
+          create: vi.fn(),
+        },
+      };
+      return cb(tx);
+    });
+
+    const result = await upgradeTenantPlan({ tenantId: 't-1', plan: 'PRO' });
+
+    expect((result as any).invoice).toEqual(existingInvoice);
+    // No message when returning existing invoice
+    expect(result).not.toHaveProperty('message');
   });
 
   it('throws INVOICE_NOT_FOUND on payment submit for missing invoice', async () => {

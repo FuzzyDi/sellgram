@@ -26,7 +26,7 @@ function parseFilenameFromDisposition(disposition: string | null, fallback: stri
     return raw;
   }
 }
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(path: string, options?: RequestInit, retried = false): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -46,7 +46,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (res.status === 401) {
     const refreshToken = localStorage.getItem('refreshToken');
-    if (refreshToken && !path.includes('/auth/')) {
+    if (!retried && refreshToken && !path.includes('/auth/')) {
       try {
         const refreshRes = await fetch(`${ADMIN_API_BASE}/auth/refresh`, {
           method: 'POST',
@@ -56,7 +56,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
         const refreshData = await refreshRes.json();
         if (refreshData.success) {
           setTokens(refreshData.data.accessToken, refreshData.data.refreshToken);
-          return request(path, options);
+          return request(path, options, true);
         }
       } catch {}
     }
@@ -122,7 +122,7 @@ export const adminApi = {
   deleteStorePaymentMethod: (storeId: string, methodId: string) =>
     request<any>(`/stores/${storeId}/payment-methods/${methodId}`, { method: 'DELETE' }),
 
-  getDeliveryZones: (storeId?: string) => request<any>(`/delivery-zones${storeId ? '?storeId=' + storeId : ''}`),
+  getDeliveryZones: (storeId?: string) => request<any>(`/delivery-zones${storeId ? '?storeId=' + encodeURIComponent(storeId) : ''}`),
   createDeliveryZone: (data: any) => request<any>('/delivery-zones', { method: 'POST', body: JSON.stringify(data) }),
   updateDeliveryZone: (id: string, data: any) => request<any>(`/delivery-zones/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteDeliveryZone: (id: string) => request<any>(`/delivery-zones/${id}`, { method: 'DELETE' }),
@@ -195,7 +195,7 @@ export const adminApi = {
     window.URL.revokeObjectURL(url);
   },
 
-  getBroadcasts: (storeId?: string) => request<any>(`/broadcasts${storeId ? `?storeId=${storeId}` : ''}`),
+  getBroadcasts: (storeId?: string) => request<any>(`/broadcasts${storeId ? `?storeId=${encodeURIComponent(storeId)}` : ''}`),
   getBroadcast: (id: string) => request<any>(`/broadcasts/${id}`),
   sendBroadcast: (data: any) => request<any>('/broadcasts/send', { method: 'POST', body: JSON.stringify(data) }),
 };

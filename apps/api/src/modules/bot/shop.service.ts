@@ -47,29 +47,41 @@ export async function getCustomerCart(customerId: string, storeId: string) {
     where: { customerId, storeId },
   });
 
-  const enrichedItems = await Promise.all(
-    items.map(async (item: any) => {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-        include: { images: { take: 1, orderBy: { sortOrder: 'asc' } } },
-      });
-      const variant = item.variantId ? await prisma.productVariant.findUnique({ where: { id: item.variantId } }) : null;
+  if (items.length === 0) return { items: [], subtotal: 0 };
 
-      const price = variant?.price ?? product?.price ?? 0;
-      return {
-        id: item.id,
-        productId: item.productId,
-        variantId: item.variantId,
-        name: product?.name ?? 'Unknown',
-        variantName: variant?.name,
-        price: Number(price),
-        qty: item.qty,
-        total: Number(price) * item.qty,
-        image: product?.images[0]?.url,
-        inStock: product ? product.stockQty >= item.qty : false,
-      };
-    })
-  );
+  const productIds = [...new Set(items.map((item) => item.productId))];
+  const variantIds = items.map((item) => item.variantId).filter((id): id is string => id != null);
+
+  const [products, variants] = await Promise.all([
+    prisma.product.findMany({
+      where: { id: { in: productIds } },
+      include: { images: { take: 1, orderBy: { sortOrder: 'asc' } } },
+    }),
+    variantIds.length > 0
+      ? prisma.productVariant.findMany({ where: { id: { in: variantIds } } })
+      : Promise.resolve([] as any[]),
+  ]);
+
+  const productMap = new Map(products.map((p) => [p.id, p]));
+  const variantMap = new Map(variants.map((v) => [v.id, v]));
+
+  const enrichedItems = items.map((item) => {
+    const product = productMap.get(item.productId);
+    const variant = item.variantId ? variantMap.get(item.variantId) : null;
+    const price = variant?.price ?? product?.price ?? 0;
+    return {
+      id: item.id,
+      productId: item.productId,
+      variantId: item.variantId,
+      name: product?.name ?? 'Unknown',
+      variantName: variant?.name,
+      price: Number(price),
+      qty: item.qty,
+      total: Number(price) * item.qty,
+      image: product?.images[0]?.url,
+      inStock: product ? product.stockQty >= item.qty : false,
+    };
+  });
 
   const subtotal = enrichedItems.reduce((sum, item) => sum + item.total, 0);
   return { items: enrichedItems, subtotal };

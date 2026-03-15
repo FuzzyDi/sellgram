@@ -25,9 +25,6 @@ export function permissionGuard(permission: PermissionKey) {
       return;
     }
 
-    // OWNER and MANAGER have full access — skip DB lookup
-    if (user.role === 'OWNER' || user.role === 'MANAGER') return;
-
     const dbUser = await prisma.user.findUnique({
       where: { id: user.userId },
       select: { role: true, permissions: true, isActive: true },
@@ -37,6 +34,9 @@ export function permissionGuard(permission: PermissionKey) {
       reply.status(403).send({ success: false, error: 'Forbidden' });
       return;
     }
+
+    // OWNER and MANAGER have full access to all features
+    if (user.role === 'OWNER' || user.role === 'MANAGER') return;
 
     const perms = getEffectivePermissions(dbUser);
     if (!perms[permission]) {

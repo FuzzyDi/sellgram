@@ -41,21 +41,17 @@ export async function telegramShopAuth(request: FastifyRequest, reply: FastifyRe
     if (tgUser) {
       request.telegramUser = tgUser;
 
-      let customer = await prisma.customer.findUnique({
+      const customer = await prisma.customer.upsert({
         where: { tenantId_telegramId: { tenantId: store.tenantId, telegramId: BigInt(tgUser.id) } },
+        create: {
+          tenantId: store.tenantId,
+          telegramId: BigInt(tgUser.id),
+          telegramUser: tgUser.username,
+          firstName: tgUser.first_name,
+          lastName: tgUser.last_name,
+        },
+        update: {},
       });
-
-      if (!customer) {
-        customer = await prisma.customer.create({
-          data: {
-            tenantId: store.tenantId,
-            telegramId: BigInt(tgUser.id),
-            telegramUser: tgUser.username,
-            firstName: tgUser.first_name,
-            lastName: tgUser.last_name,
-          },
-        });
-      }
 
       request.customer = { id: customer.id, tenantId: store.tenantId };
       return;
@@ -64,8 +60,10 @@ export async function telegramShopAuth(request: FastifyRequest, reply: FastifyRe
 
   const cfg = getConfig();
   if (process.env.NODE_ENV !== 'production' && cfg.ALLOW_DEV_AUTH_BYPASS) {
+    // WARNING: dev-only bypass — never enable ALLOW_DEV_AUTH_BYPASS in production
     const firstCustomer = await prisma.customer.findFirst({ where: { tenantId: store.tenantId } });
     if (firstCustomer) {
+      request.log.warn({ storeId, customerId: firstCustomer.id }, 'DEV_AUTH_BYPASS used — disable in production');
       request.customer = { id: firstCustomer.id, tenantId: store.tenantId };
       return;
     }

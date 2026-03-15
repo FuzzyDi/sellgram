@@ -7,7 +7,7 @@ import {
 } from './payment-methods.service.js';
 
 function createDbMock() {
-  return {
+  const db: any = {
     storePaymentMethod: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -15,7 +15,10 @@ function createDbMock() {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
-  } as any;
+  };
+  // Run the callback with a tx that shares the same mock methods
+  db.$transaction = async (cb: any) => cb(db);
+  return db;
 }
 
 describe('payment-methods.service', () => {

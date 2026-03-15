@@ -29,21 +29,23 @@ export async function createStorePaymentMethod(
 ) {
   validateStorePaymentMethodConfig({ provider: input.data.provider, meta: input.data.meta as any });
 
-  if (input.data.isDefault) {
-    await db.storePaymentMethod.updateMany({
-      where: { storeId: input.storeId, tenantId: input.tenantId },
-      data: { isDefault: false },
-    });
-  }
+  return db.$transaction(async (tx: any) => {
+    if (input.data.isDefault) {
+      await tx.storePaymentMethod.updateMany({
+        where: { storeId: input.storeId, tenantId: input.tenantId },
+        data: { isDefault: false },
+      });
+    }
 
-  return db.storePaymentMethod.create({
-    data: {
-      tenantId: input.tenantId,
-      storeId: input.storeId,
-      ...input.data,
-      isDefault: input.data.isDefault ?? false,
-      sortOrder: input.data.sortOrder ?? 0,
-    },
+    return tx.storePaymentMethod.create({
+      data: {
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        ...input.data,
+        isDefault: input.data.isDefault ?? false,
+        sortOrder: input.data.sortOrder ?? 0,
+      },
+    });
   });
 }
 
@@ -64,16 +66,18 @@ export async function updateStorePaymentMethod(
     meta: (input.data.meta ?? method.meta) as any,
   });
 
-  if (input.data.isDefault) {
-    await db.storePaymentMethod.updateMany({
-      where: { storeId: input.storeId, tenantId: input.tenantId },
-      data: { isDefault: false },
-    });
-  }
+  return db.$transaction(async (tx: any) => {
+    if (input.data.isDefault) {
+      await tx.storePaymentMethod.updateMany({
+        where: { storeId: input.storeId, tenantId: input.tenantId },
+        data: { isDefault: false },
+      });
+    }
 
-  return db.storePaymentMethod.update({
-    where: { id: input.methodId },
-    data: input.data as any,
+    return tx.storePaymentMethod.update({
+      where: { id: input.methodId },
+      data: input.data as any,
+    });
   });
 }
 

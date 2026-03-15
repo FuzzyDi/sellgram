@@ -52,7 +52,14 @@ async function authenticateSystem(request: FastifyRequest, reply: FastifyReply) 
 }
 
 export default async function systemAdminRoutes(fastify: FastifyInstance) {
-  fastify.post('/auth/login', async (request, reply) => {
+  fastify.post('/auth/login', {
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: '15 minutes',
+      },
+    },
+  }, async (request, reply) => {
     try {
       const body = systemAdminLoginSchema.parse(request.body);
       const data = await loginSystemAdmin(body);

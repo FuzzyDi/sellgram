@@ -33,6 +33,40 @@ async function buildApp() {
 describe('customer.routes', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
+  // ─── GET /customers — query validation ───────────────────────────────────
+
+  describe('GET /customers', () => {
+    it('returns paginated customers for valid query', async () => {
+      mocks.prisma.customer.findMany.mockResolvedValue([{ id: 'c-1', telegramId: BigInt(1001), firstName: 'Alice' }]);
+      mocks.prisma.customer.count.mockResolvedValue(1);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/customers?page=1&pageSize=10' });
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.items).toHaveLength(1);
+      expect(body.data.pageSize).toBe(10);
+      expect(mocks.prisma.customer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 10, skip: 0 })
+      );
+      await app.close();
+    });
+
+    it('returns 400 when pageSize exceeds 100', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/customers?pageSize=500' });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.customer.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 for non-numeric page', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/customers?page=abc' });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+  });
+
   // ─── PATCH /customers/:id ──────────────────────────────────────────────────
 
   describe('PATCH /customers/:id', () => {
@@ -60,6 +94,30 @@ describe('customer.routes', () => {
       expect(mocks.prisma.customer.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1' }) })
       );
+      await app.close();
+    });
+
+    it('returns 400 when tags is not an array', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/customers/c-1',
+        payload: { tags: 'vip' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.customer.updateMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 when note exceeds 2000 characters', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/customers/c-1',
+        payload: { note: 'x'.repeat(2001) },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.customer.updateMany).not.toHaveBeenCalled();
       await app.close();
     });
   });
@@ -133,6 +191,28 @@ describe('customer.routes', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json().error).toMatch(/insufficient/i);
       expect(tx.customer.update).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('rejects float points with 400 (Zod)', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/customers/c-1/loyalty',
+        payload: { points: 1.5 },
+      });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('rejects zero points with 400 (Zod)', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/customers/c-1/loyalty',
+        payload: { points: 0 },
+      });
+      expect(response.statusCode).toBe(400);
       await app.close();
     });
 

@@ -15,14 +15,18 @@ export async function createShopCheckoutOrder(input: {
     throw new Error('Cart is empty');
   }
 
+  const productIds = [...new Set(cartItems.map((item) => item.productId))];
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds }, tenantId, isActive: true },
+    include: { variants: true },
+  });
+  const productMap = new Map(products.map((p) => [p.id, p]));
+
   const orderItems: any[] = [];
   let subtotal = 0;
 
   for (const cartItem of cartItems) {
-    const product = await prisma.product.findFirst({
-      where: { id: cartItem.productId, tenantId, isActive: true },
-      include: { variants: true },
-    });
+    const product = productMap.get(cartItem.productId);
     if (!product) continue;
 
     const variant = cartItem.variantId ? product.variants.find((v: any) => v.id === cartItem.variantId && v.isActive) : null;
@@ -86,32 +90,35 @@ export async function createShopCheckoutOrder(input: {
     throw new Error('Payment method unavailable');
   }
 
-  let loyaltyDiscount = 0;
-  let loyaltyPointsUsed = 0;
-  if (body.loyaltyPointsToUse > 0) {
-    const loyaltyConfig = await prisma.loyaltyConfig.findUnique({ where: { tenantId } });
-    const customer = await prisma.customer.findUnique({ where: { id: customerId } });
-
-    if (loyaltyConfig?.isEnabled && customer) {
-      const maxDiscount = Math.floor((subtotal * loyaltyConfig.maxDiscountPct) / 100);
-      const maxPointsByDiscount = Math.floor(maxDiscount / loyaltyConfig.pointValue);
-      loyaltyPointsUsed = Math.min(body.loyaltyPointsToUse, customer.loyaltyPoints, maxPointsByDiscount);
-      if (loyaltyPointsUsed >= loyaltyConfig.minPointsToRedeem) {
-        loyaltyDiscount = loyaltyPointsUsed * loyaltyConfig.pointValue;
-      } else {
-        loyaltyPointsUsed = 0;
-      }
-    }
-  }
-
-  const total = subtotal + deliveryPrice - loyaltyDiscount;
-
   const order = await prisma.$transaction(async (tx: any) => {
     // Advisory lock scoped per tenant — prevents concurrent checkouts from
-    // racing on orderNumber. Released automatically when the transaction ends.
+    // racing on orderNumber and loyalty balance. Released automatically when
+    // the transaction ends.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}))`;
     const lastOrder = await tx.order.findFirst({ where: { tenantId }, orderBy: { orderNumber: 'desc' } });
     const orderNumber = (lastOrder?.orderNumber ?? 0) + 1;
+
+    // Loyalty calculation happens inside the lock so the balance read is
+    // consistent with the decrement that follows (prevents negative balances).
+    let loyaltyDiscount = 0;
+    let loyaltyPointsUsed = 0;
+    if (body.loyaltyPointsToUse > 0) {
+      const loyaltyConfig = await tx.loyaltyConfig.findUnique({ where: { tenantId } });
+      const customer = await tx.customer.findUnique({ where: { id: customerId } });
+
+      if (loyaltyConfig?.isEnabled && customer) {
+        const maxDiscount = Math.floor((subtotal * loyaltyConfig.maxDiscountPct) / 100);
+        const maxPointsByDiscount = Math.floor(maxDiscount / loyaltyConfig.pointValue);
+        loyaltyPointsUsed = Math.min(body.loyaltyPointsToUse, customer.loyaltyPoints, maxPointsByDiscount);
+        if (loyaltyPointsUsed >= loyaltyConfig.minPointsToRedeem) {
+          loyaltyDiscount = loyaltyPointsUsed * loyaltyConfig.pointValue;
+        } else {
+          loyaltyPointsUsed = 0;
+        }
+      }
+    }
+
+    const total = subtotal + deliveryPrice - loyaltyDiscount;
 
     const preparedPayment = prepareOrderPayment({
       method: {

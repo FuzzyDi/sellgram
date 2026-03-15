@@ -111,8 +111,19 @@ describe('procurement.routes', () => {
 
   // ─── PATCH PO: status validation ─────────────────────────────────────────
 
+  function makePatchTx(po: any) {
+    const tx = {
+      purchaseOrder: {
+        findFirst: vi.fn().mockResolvedValue(po),
+        update: vi.fn().mockResolvedValue({}),
+      },
+    };
+    mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+    return tx;
+  }
+
   describe('PATCH /purchase-orders/:id', () => {
-    it('rejects invalid status string', async () => {
+    it('rejects invalid status string (Zod)', async () => {
       const app = await buildApp();
       const response = await app.inject({
         method: 'PATCH',
@@ -121,7 +132,6 @@ describe('procurement.routes', () => {
       });
 
       expect(response.statusCode).toBe(400);
-      expect(response.json().error).toMatch(/invalid status/i);
       await app.close();
     });
 
@@ -139,7 +149,7 @@ describe('procurement.routes', () => {
     });
 
     it('rejects illegal transition DRAFT → IN_TRANSIT', async () => {
-      mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po-1', status: 'DRAFT' });
+      makePatchTx({ id: 'po-1', status: 'DRAFT' });
 
       const app = await buildApp();
       const response = await app.inject({
@@ -154,8 +164,7 @@ describe('procurement.routes', () => {
     });
 
     it('allows valid transition DRAFT → ORDERED', async () => {
-      mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po-1', status: 'DRAFT' });
-      mocks.prisma.purchaseOrder.updateMany.mockResolvedValue({ count: 1 });
+      const tx = makePatchTx({ id: 'po-1', status: 'DRAFT' });
 
       const app = await buildApp();
       const response = await app.inject({
@@ -165,12 +174,14 @@ describe('procurement.routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
+      expect(tx.purchaseOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'ORDERED' }) })
+      );
       await app.close();
     });
 
     it('allows ORDERED → CANCELLED', async () => {
-      mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po-1', status: 'ORDERED' });
-      mocks.prisma.purchaseOrder.updateMany.mockResolvedValue({ count: 1 });
+      makePatchTx({ id: 'po-1', status: 'ORDERED' });
 
       const app = await buildApp();
       const response = await app.inject({
@@ -184,13 +195,39 @@ describe('procurement.routes', () => {
     });
 
     it('rejects from RECEIVED (terminal state)', async () => {
-      mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po-1', status: 'RECEIVED' });
+      makePatchTx({ id: 'po-1', status: 'RECEIVED' });
 
       const app = await buildApp();
       const response = await app.inject({
         method: 'PATCH',
         url: '/purchase-orders/po-1',
         payload: { status: 'ORDERED' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('returns 404 when PO not found for tenant', async () => {
+      makePatchTx(null);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-999',
+        payload: { note: 'update' },
+      });
+
+      expect(response.statusCode).toBe(404);
+      await app.close();
+    });
+
+    it('rejects negative shippingCost (Zod)', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1',
+        payload: { shippingCost: -100 },
       });
 
       expect(response.statusCode).toBe(400);
@@ -268,11 +305,35 @@ describe('procurement.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/purchase-orders/po-1/receive',
-        payload: { items: [] },
+        payload: { items: [{ itemId: 'poi-1', qtyReceived: 5 }] },
       });
 
       expect(response.statusCode).toBe(400);
       expect(response.json().error).toContain('RECEIVED');
+      await app.close();
+    });
+
+    it('rejects missing items with 400 (Zod)', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/purchase-orders/po-1/receive',
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('rejects negative qtyReceived with 400 (Zod)', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/purchase-orders/po-1/receive',
+        payload: { items: [{ itemId: 'poi-1', qtyReceived: -3 }] },
+      });
+
+      expect(response.statusCode).toBe(400);
       await app.close();
     });
   });

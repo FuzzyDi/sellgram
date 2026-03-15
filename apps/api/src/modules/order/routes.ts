@@ -18,13 +18,31 @@ const updatePaymentSchema = z.object({
   paymentStatus: z.enum(['PENDING', 'PAID', 'REFUNDED']),
 });
 
+const listOrdersQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(['NEW', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'REFUNDED']).optional(),
+  storeId: z.string().optional(),
+  paymentStatus: z.enum(['PENDING', 'PAID', 'REFUNDED']).optional(),
+  search: z.string().max(200).optional(),
+});
+
+const updateDeliverySchema = z.object({
+  deliveryPrice: z.number().min(0).optional(),
+  trackingNumber: z.string().max(100).nullable().optional(),
+});
+
 export default async function orderRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
 
-  fastify.get('/orders', async (request) => {
-    const { page = 1, pageSize = 20, status, storeId, paymentStatus, search } = request.query as any;
-    const pageNum = Number(page);
-    const pageSizeNum = Number(pageSize);
+  fastify.get('/orders', async (request, reply) => {
+    let query: z.infer<typeof listOrdersQuerySchema>;
+    try {
+      query = listOrdersQuerySchema.parse(request.query);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const { page: pageNum, pageSize: pageSizeNum, status, storeId, paymentStatus, search } = query;
     const skip = (pageNum - 1) * pageSizeNum;
 
     const where: any = { tenantId: request.tenantId! };
@@ -67,7 +85,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
     return {
       success: true,
-      data: { items, total, page: pageNum, pageSize: pageSizeNum, totalPages: Math.ceil(total / pageSizeNum) },
+      data: { items, total, page: pageNum, pageSize: pageSizeNum, totalPages: Math.ceil(total / pageSizeNum)  },
     };
   });
 
@@ -125,6 +143,9 @@ export default async function orderRoutes(fastify: FastifyInstance) {
           const [, itemName] = err.message.split(':');
           return reply.status(400).send({ success: false, error: `Not enough stock for ${itemName}` });
         }
+        if (err.message === 'ORDER_CONCURRENT_MODIFICATION') {
+          return reply.status(409).send({ success: false, error: 'Order was modified concurrently. Please refresh and try again.' });
+        }
         return reply.status(400).send({ success: false, error: err.message });
       }
     }
@@ -132,7 +153,13 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
   fastify.patch('/orders/:id/delivery', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { deliveryPrice, trackingNumber } = request.body as any;
+    let deliveryBody: z.infer<typeof updateDeliverySchema>;
+    try {
+      deliveryBody = updateDeliverySchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const { deliveryPrice, trackingNumber } = deliveryBody;
 
     const result = await prisma.order.updateMany({
       where: { id, tenantId: request.tenantId! },

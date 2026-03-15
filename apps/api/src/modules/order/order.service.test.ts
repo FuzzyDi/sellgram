@@ -28,11 +28,11 @@ function makeTx(orderOverrides: any = {}) {
   return {
     order: {
       findFirst: vi.fn(),
-      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       ...orderOverrides,
     },
-    product: { findFirst: vi.fn(), update: vi.fn().mockResolvedValue({}) },
-    productVariant: { findFirst: vi.fn(), update: vi.fn().mockResolvedValue({}) },
+    product: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({}) },
+    productVariant: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({}) },
     customer: { update: vi.fn().mockResolvedValue({ loyaltyPoints: 0 }) },
     orderStatusLog: { create: vi.fn().mockResolvedValue({}) },
     loyaltyConfig: { findUnique: vi.fn().mockResolvedValue(null) },
@@ -74,7 +74,7 @@ describe('updateOrderStatus', () => {
         customer: { loyaltyPoints: 0 }, loyaltyPointsUsed: 0,
       }),
     });
-    tx.product.findFirst.mockResolvedValue({ id: 'p-1', stockQty: 2 });
+    tx.product.findMany.mockResolvedValue([{ id: 'p-1', stockQty: 2 }]);
     mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
 
     await expect(
@@ -90,7 +90,7 @@ describe('updateOrderStatus', () => {
         customer: { loyaltyPoints: 0 }, loyaltyPointsUsed: 0,
       }),
     });
-    tx.product.findFirst.mockResolvedValue({ id: 'p-1', stockQty: 10 });
+    tx.product.findMany.mockResolvedValue([{ id: 'p-1', stockQty: 10 }]);
     mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
 
     await updateOrderStatus({ orderId: 'o-1', tenantId: 't-1', actorUserId: 'u-1', status: 'CONFIRMED' });
@@ -147,7 +147,7 @@ describe('updateOrderStatus', () => {
     expect(tx.loyaltyTransaction.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ type: 'EARN', points: 10 }) })
     );
-    expect(tx.order.update).toHaveBeenCalledWith(
+    expect(tx.order.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ paymentStatus: 'PAID' }) })
     );
   });
@@ -170,6 +170,23 @@ describe('updateOrderStatus', () => {
         data: expect.objectContaining({ changedBy: 'actor-99', fromStatus: 'NEW', toStatus: 'CONFIRMED' }),
       })
     );
+  });
+
+  it('throws ORDER_CONCURRENT_MODIFICATION when another process already changed the status', async () => {
+    const tx = makeTx({
+      findFirst: vi.fn().mockResolvedValue({
+        id: 'o-1', status: 'DELIVERED', storeId: 's-1',
+        items: [], customer: { loyaltyPoints: 0 }, customerId: 'cust-1',
+        loyaltyPointsUsed: 0, total: 0, orderNumber: 1,
+      }),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }), // another process won the race
+    });
+    tx.loyaltyConfig.findUnique.mockResolvedValue(null);
+    mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
+
+    await expect(
+      updateOrderStatus({ orderId: 'o-1', tenantId: 't-1', actorUserId: 'u-1', status: 'COMPLETED' })
+    ).rejects.toThrow('ORDER_CONCURRENT_MODIFICATION');
   });
 
   it('returns storeId from the order', async () => {

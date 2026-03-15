@@ -23,11 +23,34 @@ export async function updateOrderStatus(input: {
     }
 
     if (input.status === 'CONFIRMED') {
+      const itemsWithVariant = order.items.filter((i: any) => i.variantId);
+      const itemsWithoutVariant = order.items.filter((i: any) => !i.variantId);
+
+      const [variantRows, productRows] = await Promise.all([
+        itemsWithVariant.length > 0
+          ? tx.productVariant.findMany({
+              where: {
+                id: { in: itemsWithVariant.map((i: any) => i.variantId) },
+                product: { tenantId: input.tenantId },
+              },
+            })
+          : Promise.resolve([] as any[]),
+        itemsWithoutVariant.length > 0
+          ? tx.product.findMany({
+              where: {
+                id: { in: itemsWithoutVariant.map((i: any) => i.productId) },
+                tenantId: input.tenantId,
+              },
+            })
+          : Promise.resolve([] as any[]),
+      ]);
+
+      const variantMap = new Map<string, any>(variantRows.map((v: any) => [v.id, v]));
+      const productMap = new Map<string, any>(productRows.map((p: any) => [p.id, p]));
+
       for (const item of order.items) {
         if (item.variantId) {
-          const variant = await tx.productVariant.findFirst({
-            where: { id: item.variantId, product: { tenantId: input.tenantId } },
-          });
+          const variant = variantMap.get(item.variantId);
           if (!variant || variant.stockQty < item.qty) {
             throw new Error(`INSUFFICIENT_STOCK:${item.name}`);
           }
@@ -36,9 +59,7 @@ export async function updateOrderStatus(input: {
             data: { stockQty: { decrement: item.qty } },
           });
         } else {
-          const product = await tx.product.findFirst({
-            where: { id: item.productId, tenantId: input.tenantId },
-          });
+          const product = productMap.get(item.productId);
           if (!product || product.stockQty < item.qty) {
             throw new Error(`INSUFFICIENT_STOCK:${item.name}`);
           }
@@ -119,7 +140,14 @@ export async function updateOrderStatus(input: {
     if (input.deliveryPrice !== undefined) updateData.deliveryPrice = input.deliveryPrice;
     if (input.status === 'COMPLETED') updateData.paymentStatus = 'PAID';
 
-    await tx.order.update({ where: { id: order.id }, data: updateData });
+    // Guard against concurrent status changes (e.g. bot timer and HTTP route both
+    // completing the same DELIVERED order). If another process already changed the
+    // status, this update matches 0 rows and we abort — preventing double loyalty award.
+    const updated = await tx.order.updateMany({
+      where: { id: order.id, status: order.status },
+      data: updateData,
+    });
+    if (updated.count === 0) throw new Error('ORDER_CONCURRENT_MODIFICATION');
     await tx.orderStatusLog.create({
       data: {
         orderId: order.id,

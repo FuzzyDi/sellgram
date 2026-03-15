@@ -58,7 +58,13 @@ describe('system-admin.service', () => {
   });
 
   it('throws INVOICE_NOT_FOUND when confirming non-pending invoice', async () => {
-    mocks.prisma.invoice.findUnique.mockResolvedValue({ id: 'inv-1', status: 'PAID' });
+    mocks.prisma.$transaction.mockImplementation(async (cb: any) => {
+      const tx = {
+        invoice: { findUnique: vi.fn().mockResolvedValue({ id: 'inv-1', status: 'PAID' }), update: vi.fn() },
+        tenant: { update: vi.fn() },
+      };
+      return cb(tx);
+    });
 
     await expect(
       confirmSystemInvoice({ id: 'inv-1', confirmedBy: 'sa-1' })
@@ -66,12 +72,21 @@ describe('system-admin.service', () => {
   });
 
   it('rejects pending invoice', async () => {
-    mocks.prisma.invoice.findUnique.mockResolvedValue({ id: 'inv-1', status: 'PENDING' });
-    mocks.prisma.invoice.update.mockResolvedValue({ id: 'inv-1' });
+    const txInvoiceUpdate = vi.fn().mockResolvedValue({});
+    mocks.prisma.$transaction.mockImplementation(async (cb: any) => {
+      const tx = {
+        invoice: {
+          findUnique: vi.fn().mockResolvedValue({ id: 'inv-1', status: 'PENDING', tenantId: 't-1', plan: 'FREE', amount: 0 }),
+          update: txInvoiceUpdate,
+        },
+        tenant: { update: vi.fn() },
+      };
+      return cb(tx);
+    });
 
     await rejectSystemInvoice({ id: 'inv-1', confirmedBy: 'sa-1' });
 
-    expect(mocks.prisma.invoice.update).toHaveBeenCalledWith({
+    expect(txInvoiceUpdate).toHaveBeenCalledWith({
       where: { id: 'inv-1' },
       data: expect.objectContaining({ status: 'CANCELLED', confirmedBy: 'sa-1' }),
     });

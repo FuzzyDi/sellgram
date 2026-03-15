@@ -339,30 +339,59 @@ async function registerBot(
       return;
     }
 
-    if (newStatus === 'CONFIRMED' || newStatus === 'PREPARING') {
-      for (const item of order.items) {
-        const product = await prisma.product.findUnique({ where: { id: item.productId } });
-        if (!product || product.stockQty < item.qty) {
-          await ctx.answerCallbackQuery({ text: tCtx(ctx, `\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u043E\u0441\u0442\u0430\u0442\u043A\u0430: ${item.name}`, `${item.name} uchun qoldiq yetarli emas`) });
-          return;
-        }
-      }
-    }
-
-    if (newStatus === 'CONFIRMED') {
-      for (const item of order.items) {
-        await prisma.product.update({
-          where: { id: item.productId },
-          data: { stockQty: { decrement: item.qty } },
-        });
-      }
-    }
-
     const updateData: any = { status: newStatus };
     if (newStatus === 'SHIPPED') updateData.trackingNumber = order.trackingNumber || `TRK-${Date.now()}`;
     if (newStatus === 'CANCELLED') updateData.cancelReason = '\u041E\u0442\u043C\u0435\u043D\u0435\u043D\u043E \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u043E\u043C';
 
-    await prisma.order.update({ where: { id: order.id }, data: updateData });
+    // Wrap stock check + decrement + status update in a single transaction so concurrent
+    // admin clicks cannot both decrement stock or double-confirm the order.
+    let txError: string | null = null;
+    await prisma.$transaction(async (tx: any) => {
+      // Re-check current status inside the transaction to guard against double-confirm.
+      const fresh = await tx.order.findUnique({ where: { id: order.id }, select: { status: true } });
+      if (!fresh || fresh.status !== order.status) {
+        txError = 'STALE';
+        throw new Error('STALE');
+      }
+
+      if (newStatus === 'CONFIRMED' || newStatus === 'PREPARING') {
+        for (const item of order.items) {
+          const product = await tx.product.findUnique({ where: { id: item.productId } });
+          if (!product || product.stockQty < item.qty) {
+            txError = `STOCK:${item.name}`;
+            throw new Error(txError);
+          }
+        }
+      }
+
+      if (newStatus === 'CONFIRMED') {
+        for (const item of order.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stockQty: { decrement: item.qty } },
+          });
+        }
+      }
+
+      await tx.order.update({ where: { id: order.id }, data: updateData });
+    });
+
+    // TypeScript doesn't track mutations inside async callbacks, so we cast to
+    // re-inform the type checker that txError may have been set inside the transaction.
+    const txErrMsg = txError as string | null;
+    if (txErrMsg) {
+      if (txErrMsg === 'STALE') {
+        await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u0423\u0436\u0435 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D\u043E', 'Allaqachon qayta ishlangan') });
+        return;
+      }
+      if (txErrMsg.startsWith('STOCK:')) {
+        const itemName = txErrMsg.slice(6);
+        await ctx.answerCallbackQuery({ text: tCtx(ctx, `\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u043E\u0441\u0442\u0430\u0442\u043A\u0430: ${itemName}`, `${itemName} uchun qoldiq yetarli emas`) });
+        return;
+      }
+      await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u041E\u0448\u0438\u0431\u043A\u0430', 'Xato') });
+      return;
+    }
 
     const updated = await prisma.order.findUnique({ where: { id: order.id } });
     if (updated) {
@@ -407,13 +436,20 @@ async function registerBot(
 }
 
 async function completeDeliveredOrder(orderId: string, storeId: string): Promise<void> {
+  // Atomic status guard: only the call that transitions DELIVERED→COMPLETED actually wins.
+  // Concurrent calls (timer + customer button) both arrive here, but only one gets count=1.
+  const transitioned = await prisma.order.updateMany({
+    where: { id: orderId, status: 'DELIVERED' },
+    data: { status: 'COMPLETED' },
+  });
+  if (transitioned.count === 0) return; // already processed
+
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { store: true },
   });
-  if (!order || order.status !== 'DELIVERED') return;
+  if (!order) return;
 
-  await prisma.order.update({ where: { id: order.id }, data: { status: 'COMPLETED' } });
   await awardLoyaltyPoints(order.id);
 
   const customer = await prisma.customer.findUnique({ where: { id: order.customerId } });

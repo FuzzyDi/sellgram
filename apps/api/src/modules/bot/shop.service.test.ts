@@ -53,13 +53,13 @@ describe('shop.service', () => {
 
   it('returns enriched customer cart', async () => {
     mocks.prisma.cartItem.findMany.mockResolvedValue([{ id: 'ci-1', productId: 'p-1', variantId: null, qty: 2 }]);
-    mocks.prisma.product.findUnique.mockResolvedValue({
+    mocks.prisma.product.findMany.mockResolvedValue([{
       id: 'p-1',
       name: 'Demo',
       price: 1000,
       stockQty: 5,
       images: [{ url: '/img.jpg' }],
-    });
+    }]);
 
     const result = await getCustomerCart('cust-1', 'store-1');
 
