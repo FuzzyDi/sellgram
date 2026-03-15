@@ -151,7 +151,26 @@ export default function Broadcasts() {
   ) : null;
 
   if (loading) {
-    return <p className="sg-subtitle">{tr('Загрузка рассылок...', 'Xabarnomalar yuklanmoqda...')}</p>;
+    return (
+      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+        <div>
+          <div className="sg-skeleton" style={{ height: 28, width: '30%' }} />
+          <div className="sg-skeleton" style={{ height: 14, width: '55%', marginTop: 8 }} />
+        </div>
+        <div className="sg-grid cols-2">
+          <div className="sg-card sg-grid" style={{ gap: 10 }}>
+            <div className="sg-skeleton" style={{ height: 22, width: '50%' }} />
+            {[1, 2, 3, 4].map((i) => <div key={i} className="sg-skeleton" style={{ height: 40, borderRadius: 10 }} />)}
+            <div className="sg-skeleton" style={{ height: 80, borderRadius: 10 }} />
+            <div className="sg-skeleton" style={{ height: 38, borderRadius: 10, width: '40%' }} />
+          </div>
+          <div className="sg-card sg-grid" style={{ gap: 10 }}>
+            <div className="sg-skeleton" style={{ height: 22, width: '55%' }} />
+            {[1, 2].map((i) => <div key={i} className="sg-skeleton" style={{ height: 80, borderRadius: 12 }} />)}
+          </div>
+        </div>
+      </section>
+    );
   }
 
   return (

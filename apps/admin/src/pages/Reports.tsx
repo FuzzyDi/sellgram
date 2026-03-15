@@ -186,7 +186,16 @@ export default function Reports() {
       </div>
 
       {loading ? (
-        <div className="sg-card"><p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p></div>
+        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} style={{ display: 'flex', gap: 16, padding: '12px 16px', borderBottom: '1px solid #edf2ee', alignItems: 'center' }}>
+              <div className="sg-skeleton" style={{ height: 14, flex: 2 }} />
+              <div className="sg-skeleton" style={{ height: 14, flex: 1 }} />
+              <div className="sg-skeleton" style={{ height: 14, width: 80 }} />
+              <div className="sg-skeleton" style={{ height: 14, width: 60 }} />
+            </div>
+          ))}
+        </div>
       ) : (
         <>
           <section className="sg-card">

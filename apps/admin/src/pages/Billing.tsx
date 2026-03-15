@@ -150,7 +150,22 @@ export default function Billing() {
     };
   }, [sub?.planExpiresAt]);
 
-  if (loading) return <section className="sg-page"><p className="sg-subtitle">{tr('Загрузка...', 'Yuklanmoqda...')}</p></section>;
+  if (loading) {
+    return (
+      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+        <div>
+          <div className="sg-skeleton" style={{ height: 28, width: '30%' }} />
+          <div className="sg-skeleton" style={{ height: 14, width: '50%', marginTop: 8 }} />
+        </div>
+        <div className="sg-grid cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="sg-skeleton" style={{ height: 260, borderRadius: 16 }} />
+          ))}
+        </div>
+        <div className="sg-skeleton" style={{ height: 120, borderRadius: 14 }} />
+      </section>
+    );
+  }
 
   const noticeNode = notice ? (
     <div
