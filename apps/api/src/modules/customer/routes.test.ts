@@ -13,9 +13,11 @@ const mocks = vi.hoisted(() => ({
     loyaltyTransaction: { create: vi.fn() },
     $transaction: vi.fn(),
   },
+  permissionGuard: vi.fn((_key: string) => async () => {}),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
+vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
 
 import customerRoutes from './routes.js';
 

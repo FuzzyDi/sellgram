@@ -11,10 +11,12 @@ const mocks = vi.hoisted(() => ({
     store: { findFirst: vi.fn() },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
+  permissionGuard: vi.fn((_key: string) => async () => {}),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../plugins/plan-guard.js', () => ({ planGuard: mocks.planGuard }));
+vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
 
 import deliveryRoutes from './routes.js';
 

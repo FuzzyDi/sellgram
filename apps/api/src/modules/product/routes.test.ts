@@ -9,11 +9,13 @@ const mocks = vi.hoisted(() => ({
     productImage: { count: vi.fn(), create: vi.fn(), findFirst: vi.fn(), delete: vi.fn() },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
+  permissionGuard: vi.fn((_key: string) => async () => {}),
   // s3 / sharp stubs not needed — image tests are skipped
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../plugins/plan-guard.js', () => ({ planGuard: mocks.planGuard }));
+vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
 vi.mock('../../lib/s3.js', () => ({
   uploadFile: vi.fn(),
   ensureBucket: vi.fn(),

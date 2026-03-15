@@ -151,7 +151,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.patch('/orders/:id/delivery', async (request, reply) => {
+  fastify.patch('/orders/:id/delivery', { preHandler: [permissionGuard('manageOrders')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let deliveryBody: z.infer<typeof updateDeliverySchema>;
     try {
@@ -169,7 +169,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Delivery info updated' };
   });
 
-  fastify.patch('/orders/:id/payment', async (request, reply) => {
+  fastify.patch('/orders/:id/payment', { preHandler: [permissionGuard('manageOrders')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let body: z.infer<typeof updatePaymentSchema>;
     try {

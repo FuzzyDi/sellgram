@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 
 const loyaltyAdjustSchema = z.object({
   points: z.number().int().refine((n) => n !== 0, { message: 'points must be non-zero' }),
@@ -74,7 +75,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
     return { success: true, data: { ...customer, telegramId: customer.telegramId.toString() } };
   });
 
-  fastify.patch('/customers/:id', async (request, reply) => {
+  fastify.patch('/customers/:id', { preHandler: [permissionGuard('manageCustomers')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let patchBody: z.infer<typeof updateCustomerSchema>;
     try {
@@ -97,7 +98,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
   });
 
   // Manual loyalty adjustment
-  fastify.post('/customers/:id/loyalty', async (request, reply) => {
+  fastify.post('/customers/:id/loyalty', { preHandler: [permissionGuard('manageCustomers')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let loyaltyBody: z.infer<typeof loyaltyAdjustSchema>;
     try {

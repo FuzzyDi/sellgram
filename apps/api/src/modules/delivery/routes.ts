@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 
 const zoneSchema = z.object({
   storeId: z.string(),
@@ -33,7 +34,7 @@ export default async function deliveryRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/delivery-zones', {
-    preHandler: [planGuard('maxDeliveryZones')],
+    preHandler: [permissionGuard('manageSettings'), planGuard('maxDeliveryZones')],
   }, async (request, reply) => {
     try {
       const body = zoneSchema.parse(request.body);
@@ -52,7 +53,7 @@ export default async function deliveryRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.patch('/delivery-zones/:id', async (request, reply) => {
+  fastify.patch('/delivery-zones/:id', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let body: z.infer<ReturnType<typeof zoneSchema.partial>>;
     try {
@@ -76,7 +77,7 @@ export default async function deliveryRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Zone updated' };
   });
 
-  fastify.delete('/delivery-zones/:id', async (request, reply) => {
+  fastify.delete('/delivery-zones/:id', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await prisma.deliveryZone.updateMany({
       where: { id, tenantId: request.tenantId! },

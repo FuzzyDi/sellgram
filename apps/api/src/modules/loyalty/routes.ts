@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 
 const loyaltyConfigSchema = z.object({
   isEnabled: z.boolean().optional(),
@@ -23,7 +24,7 @@ export default async function loyaltyRoutes(fastify: FastifyInstance) {
     return { success: true, data: config };
   });
 
-  fastify.patch('/loyalty/config', async (request, reply) => {
+  fastify.patch('/loyalty/config', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
     let parsed: z.infer<typeof loyaltyConfigSchema>;
     try {
       parsed = loyaltyConfigSchema.parse(request.body);

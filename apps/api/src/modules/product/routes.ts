@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 import { uploadFile, ensureBucket, resolveBucketAndObjectPath, buildProductImageObjectPath } from '../../lib/s3.js';
 import crypto from 'node:crypto';
 
@@ -107,7 +108,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
 
   // Create product
   fastify.post('/products', {
-    preHandler: [planGuard('maxProducts')],
+    preHandler: [permissionGuard('manageCatalog'), planGuard('maxProducts')],
   }, async (request, reply) => {
     try {
       const body = createProductSchema.parse(request.body);
@@ -141,7 +142,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
   });
 
   // Update product
-  fastify.patch('/products/:id', async (request, reply) => {
+  fastify.patch('/products/:id', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
       const body = updateProductSchema.parse(request.body);
@@ -165,7 +166,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
   });
 
   // Delete (soft)
-  fastify.delete('/products/:id', async (request, reply) => {
+  fastify.delete('/products/:id', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await prisma.product.updateMany({
       where: { id, tenantId: request.tenantId! },
@@ -181,7 +182,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
   });
 
   // Adjust stock
-  fastify.patch('/products/:id/stock', async (request, reply) => {
+  fastify.patch('/products/:id/stock', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let qty: number;
     let variantId: string | undefined;
@@ -212,7 +213,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
   });
 
   // Product images
-  fastify.post('/products/:id/images', async (request, reply) => {
+  fastify.post('/products/:id/images', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const product = await prisma.product.findFirst({
@@ -280,7 +281,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.delete('/products/:id/images/:imageId', async (request, reply) => {
+  fastify.delete('/products/:id/images/:imageId', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id, imageId } = request.params as { id: string; imageId: string };
 
     const product = await prisma.product.findFirst({
