@@ -1,6 +1,7 @@
 ﻿import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { timingSafeEqual } from 'node:crypto';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library.js';
 import prisma from '../../lib/prisma.js';
 import { applyOrderPaymentStatus } from '../../payments/service.js';
 import { normalizeProviderWebhook, verifyProviderWebhookAuth } from '../../payments/webhooks.js';
@@ -100,9 +101,20 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
     const targetRef = body.paymentRef || normalized.paymentRef;
     const targetEventId = body.eventId || normalized.eventId;
 
-    const prevMeta = (order.paymentMeta && typeof order.paymentMeta === 'object') ? (order.paymentMeta as Record<string, any>) : {};
-    if (targetEventId && prevMeta.lastProviderEventId === targetEventId && order.paymentStatus === targetStatus) {
-      return { success: true, data: { orderId: order.id, ignored: true } };
+    // Atomic idempotency: attempt to insert a unique (orderId, eventId) record.
+    // If the eventId was already processed, the unique constraint raises P2002
+    // and we return early — safe under concurrent duplicate deliveries.
+    if (targetEventId) {
+      try {
+        await prisma.paymentWebhookEvent.create({
+          data: { orderId: order.id, eventId: targetEventId, provider },
+        });
+      } catch (err: unknown) {
+        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2002') {
+          return { success: true, data: { orderId: order.id, ignored: true } };
+        }
+        throw err;
+      }
     }
 
     try {

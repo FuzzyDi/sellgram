@@ -383,6 +383,18 @@ model OrderStatusLog {
   @@map("order_status_logs")
 }
 
+model PaymentWebhookEvent {
+  id          String   @id @default(cuid())
+  orderId     String
+  eventId     String
+  provider    String
+  processedAt DateTime @default(now())
+
+  @@unique([orderId, eventId])
+  @@index([orderId])
+  @@map("payment_webhook_events")
+}
+
 // ============================================================
 // DELIVERY
 // ============================================================
