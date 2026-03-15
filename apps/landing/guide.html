@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SellGram - Руководство по подключению бота</title>
+  <title>SellGram — Руководство по подключению бота</title>
   <style>
     :root {
       --bg: #f2f6f3;
@@ -25,171 +25,273 @@
       line-height: 1.6;
     }
     .wrap { max-width: 860px; margin: 0 auto; padding: 22px; }
-    .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 900; }
-    .badge { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; display:grid; place-items:center; font-weight:900; }
+
+    /* ── Top bar ── */
+    .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 900; text-decoration: none; color: var(--text); }
+    .badge { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; display:grid; place-items:center; font-weight:900; font-size: 14px; }
     .lang { display: inline-flex; border-radius: 999px; background: #e8f0eb; padding: 4px; gap: 4px; }
-    .lang button { border: none; border-radius: 999px; padding: 8px 14px; font-weight: 800; font-size: 12px; cursor: pointer; background: transparent; color: #425247; }
+    .lang button {
+      border: none; border-radius: 999px; padding: 7px 14px;
+      font-weight: 800; font-size: 12px; cursor: pointer;
+      background: transparent; color: #425247;
+      transition: background 0.15s, color 0.15s;
+    }
+    .lang button:hover { background: rgba(0,0,0,0.06); }
     .lang button.active { background: #102117; color: #fff; }
 
-    .back { display: inline-block; color: var(--brand); text-decoration: none; font-weight: 700; margin-bottom: 12px; }
+    /* ── Back link ── */
+    .back {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--brand); text-decoration: none; font-weight: 700;
+      margin-bottom: 14px; font-size: 14px;
+      transition: gap 0.15s, opacity 0.15s;
+    }
+    .back:hover { gap: 10px; opacity: 0.8; }
 
-    h1 { font-size: 34px; line-height: 1.1; letter-spacing: -0.8px; margin-bottom: 10px; }
-    .lead { color: var(--muted); margin-bottom: 20px; }
+    /* ── Hero ── */
+    h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.1; letter-spacing: -0.8px; margin-bottom: 10px; }
+    .lead { color: var(--muted); margin-bottom: 24px; font-size: 16px; }
 
+    /* ── Step cards ── */
     .step {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      padding: 18px;
+      padding: 20px;
       margin-bottom: 12px;
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 16px;
+      align-items: start;
+      transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+    }
+    .step:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(0, 90, 40, 0.1);
+      border-color: #b8d8c6;
     }
 
-    .step h2 { font-size: 22px; margin-bottom: 10px; letter-spacing: -0.3px; }
-    .step p, .step li { color: #2f3e33; font-size: 15px; }
-    .step ul, .step ol { padding-left: 20px; margin-top: 8px; }
-    .step li { margin-bottom: 6px; }
+    .step-num {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      color: #fff; display: grid; place-items: center;
+      font-weight: 900; font-size: 18px;
+      box-shadow: 0 4px 12px rgba(0,135,90,0.28);
+    }
 
+    .step-body h2 { font-size: 20px; margin-bottom: 10px; letter-spacing: -0.3px; }
+    .step-body p, .step-body li { color: #2f3e33; font-size: 15px; }
+    .step-body ul, .step-body ol { padding-left: 20px; margin-top: 8px; }
+    .step-body li { margin-bottom: 6px; }
+
+    /* ── Code block ── */
     .code {
-      margin-top: 10px;
+      margin-top: 12px;
       background: #f4f8f5;
       border: 1px solid #dce6e0;
-      border-radius: 12px;
-      padding: 10px 12px;
+      border-radius: 11px;
+      padding: 10px 14px;
       font-family: "Consolas", "Menlo", monospace;
       font-size: 13px;
       word-break: break-all;
+      color: #1e4a30;
     }
 
+    /* ── Hint ── */
+    .hint {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: #fefce8;
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      font-size: 14px;
+      color: #713f12;
+    }
+
+    /* ── CTA ── */
     .cta {
-      margin-top: 20px;
+      margin-top: 24px;
       background: linear-gradient(135deg, var(--brand), var(--brand-2));
       color: #fff;
       border-radius: var(--radius);
-      padding: 22px;
+      padding: 28px 24px;
       text-align: center;
     }
-
+    .cta p { font-size: 17px; font-weight: 700; }
     .cta a {
-      margin-top: 10px;
+      margin-top: 14px;
       display: inline-block;
       text-decoration: none;
       background: #fff;
       color: #0e3f2b;
       font-weight: 800;
-      border-radius: 10px;
-      padding: 10px 16px;
+      border-radius: 11px;
+      padding: 11px 22px;
+      font-size: 15px;
+      transition: transform 0.14s, box-shadow 0.14s, background 0.14s;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    }
+    .cta a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 22px rgba(0,0,0,0.2);
+      background: #f0faf5;
+    }
+    .cta a:active { transform: scale(0.97); }
+
+    /* ── Footer ── */
+    .foot {
+      margin-top: 28px; padding-top: 18px;
+      border-top: 1px solid var(--line);
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+      font-size: 12px; color: var(--muted);
+    }
+    .foot a { color: var(--brand); text-decoration: none; font-weight: 700; }
+    .foot a:hover { text-decoration: underline; }
+
+    @media (max-width: 560px) {
+      .step { grid-template-columns: 1fr; }
+      .step-num { width: 40px; height: 40px; font-size: 16px; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header class="top">
-      <div class="brand"><span class="badge">S</span>SellGram</div>
+      <a href="/index.html" class="brand">
+        <span class="badge">S</span>SellGram
+      </a>
       <div class="lang">
         <button id="lang-uz" type="button">UZ</button>
         <button id="lang-ru" class="active" type="button">RU</button>
       </div>
     </header>
 
-    <a class="back" href="/index.html" data-i18n="back"></a>
+    <a class="back" href="/index.html">
+      <span>←</span>
+      <span data-i18n="back"></span>
+    </a>
     <h1 data-i18n="title"></h1>
     <p class="lead" data-i18n="lead"></p>
 
-    <section class="step">
-      <h2 data-i18n="s1_title"></h2>
-      <ol>
-        <li data-i18n="s1_i1"></li>
-        <li data-i18n="s1_i2"></li>
-        <li data-i18n="s1_i3"></li>
-      </ol>
-    </section>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h2 data-i18n="s1_title"></h2>
+        <ol>
+          <li data-i18n="s1_i1"></li>
+          <li data-i18n="s1_i2"></li>
+          <li data-i18n="s1_i3"></li>
+        </ol>
+      </div>
+    </div>
 
-    <section class="step">
-      <h2 data-i18n="s2_title"></h2>
-      <ol>
-        <li data-i18n="s2_i1"></li>
-        <li data-i18n="s2_i2"></li>
-        <li data-i18n="s2_i3"></li>
-      </ol>
-      <div class="code">https://app.sellgram.uz</div>
-    </section>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h2 data-i18n="s2_title"></h2>
+        <ol>
+          <li data-i18n="s2_i1"></li>
+          <li data-i18n="s2_i2"></li>
+          <li data-i18n="s2_i3"></li>
+        </ol>
+        <div class="code">https://app.sellgram.uz</div>
+      </div>
+    </div>
 
-    <section class="step">
-      <h2 data-i18n="s3_title"></h2>
-      <ol>
-        <li data-i18n="s3_i1"></li>
-        <li data-i18n="s3_i2"></li>
-        <li data-i18n="s3_i3"></li>
-      </ol>
-      <p style="margin-top:10px" data-i18n="s3_hint"></p>
-    </section>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h2 data-i18n="s3_title"></h2>
+        <ol>
+          <li data-i18n="s3_i1"></li>
+          <li data-i18n="s3_i2"></li>
+          <li data-i18n="s3_i3"></li>
+        </ol>
+        <p class="hint" data-i18n="s3_hint"></p>
+      </div>
+    </div>
 
-    <section class="step">
-      <h2 data-i18n="s4_title"></h2>
-      <ul>
-        <li data-i18n="s4_i1"></li>
-        <li data-i18n="s4_i2"></li>
-        <li data-i18n="s4_i3"></li>
-      </ul>
-    </section>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h2 data-i18n="s4_title"></h2>
+        <ul>
+          <li data-i18n="s4_i1"></li>
+          <li data-i18n="s4_i2"></li>
+          <li data-i18n="s4_i3"></li>
+        </ul>
+      </div>
+    </div>
 
     <div class="cta">
       <p data-i18n="cta_text"></p>
       <a href="https://app.sellgram.uz" data-i18n="cta_btn"></a>
     </div>
+
+    <footer class="foot">
+      <span>© 2025 SellGram</span>
+      <div style="display:flex;gap:14px">
+        <a href="/privacy.html" data-i18n="privacy"></a>
+        <a href="/terms.html" data-i18n="terms"></a>
+      </div>
+    </footer>
   </div>
 
   <script>
     const dict = {
       uz: {
-        back: '← Asosiy sahifaga qaytish',
-        title: 'Telegram botni SellGram ga qanday ulash kerak',
-        lead: 'Qisqa qo\'llanma: bot yaratish, panelga ulash va birinchi buyurtmani olish.',
-        s1_title: '1. BotFather da bot yarating',
-        s1_i1: '@BotFather ni oching va /newbot yuboring.',
-        s1_i2: 'Bot nomi va username kiriting (username oxiri bot bilan tugashi kerak).',
-        s1_i3: 'Berilgan bot tokenni nusxalab oling.',
-        s2_title: '2. SellGram admin paneliga kiring',
-        s2_i1: 'app.sellgram.uz ga o\'ting va ro\'yxatdan o\'ting/yoki tizimga kiring.',
-        s2_i2: 'Sozlamalar bo\'limini oching.',
-        s2_i3: 'Do\'konni tahrirlab bot tokenni kiriting.',
-        s3_title: '3. Botni tekshiring',
-        s3_i1: 'Telegram da o\'z botingizga kiring.',
-        s3_i2: '/start yuboring.',
-        s3_i3: '"Do\'konni ochish" tugmasi chiqishini tekshiring.',
-        s3_hint: 'Agar ishlamasa, tokenni qayta tekshiring va do\'kon sozlamasini saqlang.',
-        s4_title: '4. Savdoni ishga tushirish',
-        s4_i1: 'Toifa va mahsulotlarni qo\'shing.',
-        s4_i2: 'Yetkazib berish va to\'lov usullarini sozlang.',
-        s4_i3: 'Bot havolasini mijozlarga yuboring.',
-        cta_text: 'Do\'kon tayyor bo\'lsa, boshqaruv paneliga o\'ting.',
-        cta_btn: 'Admin panelni ochish'
+        back: "Asosiy sahifaga qaytish",
+        title: "Telegram botni SellGram ga qanday ulash kerak",
+        lead: "Qisqa qo'llanma: bot yarating, panelga ulang va birinchi buyurtmani oling.",
+        s1_title: "BotFather da bot yarating",
+        s1_i1: "@BotFather ni oching va /newbot yuboring.",
+        s1_i2: "Bot nomi va username kiriting (username oxiri bot bilan tugashi kerak).",
+        s1_i3: "Berilgan bot tokenni nusxalab oling.",
+        s2_title: "SellGram admin paneliga kiring",
+        s2_i1: "app.sellgram.uz ga o'ting va ro'yxatdan o'ting / tizimga kiring.",
+        s2_i2: "Sozlamalar bo'limini oching.",
+        s2_i3: "Do'konni tahrirlab, bot tokenni kiriting va saqlang.",
+        s3_title: "Botni tekshiring",
+        s3_i1: "Telegram da o'z botingizga kiring.",
+        s3_i2: "/start yuboring.",
+        s3_i3: "\"Do'konni ochish\" tugmasi chiqishini tekshiring.",
+        s3_hint: "Agar ishlamasa — tokenni qayta tekshiring va do'kon sozlamalarini qayta saqlang.",
+        s4_title: "Savdoni ishga tushiring",
+        s4_i1: "Toifa va mahsulotlar qo'shing.",
+        s4_i2: "Yetkazib berish va to'lov usullarini sozlang.",
+        s4_i3: "Bot havolasini mijozlarga yuboring.",
+        cta_text: "Do'kon tayyor — boshqaruv paneliga o'ting.",
+        cta_btn: "Admin panelni ochish",
+        privacy: "Maxfiylik",
+        terms: "Shartlar",
       },
       ru: {
-        back: '← Вернуться на главную',
-        title: 'Как подключить Telegram-бота к SellGram',
-        lead: 'Короткая инструкция: создайте бота, подключите в панели и получите первый заказ.',
-        s1_title: '1. Создайте бота в BotFather',
-        s1_i1: 'Откройте @BotFather и отправьте /newbot.',
-        s1_i2: 'Укажите имя и username бота (username должен заканчиваться на bot).',
-        s1_i3: 'Скопируйте выданный bot token.',
-        s2_title: '2. Войдите в панель SellGram',
-        s2_i1: 'Откройте app.sellgram.uz и зарегистрируйтесь/войдите.',
-        s2_i2: 'Перейдите в раздел настроек.',
-        s2_i3: 'Откройте магазин на редактирование и вставьте bot token.',
-        s3_title: '3. Проверьте бота',
-        s3_i1: 'Откройте бота в Telegram.',
-        s3_i2: 'Отправьте /start.',
-        s3_i3: 'Проверьте, что появилась кнопка "Открыть магазин".',
-        s3_hint: 'Если не работает, перепроверьте token и повторно сохраните настройки магазина.',
-        s4_title: '4. Запустите продажи',
-        s4_i1: 'Добавьте категории и товары.',
-        s4_i2: 'Настройте доставку и способы оплаты.',
-        s4_i3: 'Отправьте ссылку на бота клиентам.',
-        cta_text: 'Если магазин уже готов, переходите в панель управления.',
-        cta_btn: 'Открыть админ-панель'
-      }
+        back: "Вернуться на главную",
+        title: "Как подключить Telegram-бота к SellGram",
+        lead: "Короткая инструкция: создайте бота, подключите к панели и получите первый заказ.",
+        s1_title: "Создайте бота в BotFather",
+        s1_i1: "Откройте @BotFather и отправьте /newbot.",
+        s1_i2: "Укажите имя и username бота (username должен заканчиваться на bot).",
+        s1_i3: "Скопируйте выданный bot token.",
+        s2_title: "Войдите в панель SellGram",
+        s2_i1: "Откройте app.sellgram.uz и зарегистрируйтесь / войдите.",
+        s2_i2: "Перейдите в раздел Настроек.",
+        s2_i3: "Откройте магазин на редактирование, вставьте bot token и сохраните.",
+        s3_title: "Проверьте бота",
+        s3_i1: "Откройте бота в Telegram.",
+        s3_i2: "Отправьте /start.",
+        s3_i3: "Убедитесь, что появилась кнопка «Открыть магазин».",
+        s3_hint: "Если не работает — перепроверьте token и повторно сохраните настройки магазина.",
+        s4_title: "Запустите продажи",
+        s4_i1: "Добавьте категории и товары.",
+        s4_i2: "Настройте доставку и способы оплаты.",
+        s4_i3: "Отправьте ссылку на бота клиентам.",
+        cta_text: "Если магазин уже готов, переходите в панель управления.",
+        cta_btn: "Открыть админ-панель",
+        privacy: "Конфиденциальность",
+        terms: "Условия",
+      },
     };
 
     const qs = (s) => document.querySelector(s);
@@ -201,7 +303,7 @@
       document.documentElement.lang = lang;
       qsa('[data-i18n]').forEach((el) => {
         const key = el.getAttribute('data-i18n');
-        if (key && t[key]) el.textContent = t[key];
+        if (key && t[key] !== undefined) el.textContent = t[key];
       });
       qs('#lang-uz').classList.toggle('active', lang === 'uz');
       qs('#lang-ru').classList.toggle('active', lang === 'ru');
