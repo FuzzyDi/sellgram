@@ -41,7 +41,7 @@ function makeTx(orderOverrides: any = {}) {
 }
 
 describe('updateOrderStatus', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it('throws ORDER_NOT_FOUND when order does not exist', async () => {
     const tx = makeTx({ findFirst: vi.fn().mockResolvedValue(null) });

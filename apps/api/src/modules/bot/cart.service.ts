@@ -76,10 +76,11 @@ export async function addCartItem(input: {
 
 export async function updateCartItemQty(input: {
   customerId: string;
+  tenantId: string;
   itemId: string;
   qty: number;
 }) {
-  const { customerId, itemId, qty } = input;
+  const { customerId, tenantId, itemId, qty } = input;
 
   if (!Number.isInteger(qty) || qty < 0 || qty > 100) {
     throw new CartServiceError('INVALID_QTY', 'Invalid quantity');
@@ -95,8 +96,8 @@ export async function updateCartItemQty(input: {
     return { message: 'Item removed' };
   }
 
-  const product = await prisma.product.findUnique({
-    where: { id: item.productId },
+  const product = await prisma.product.findFirst({
+    where: { id: item.productId, tenantId, isActive: true },
     include: { variants: true },
   });
   if (!product || !product.isActive) {

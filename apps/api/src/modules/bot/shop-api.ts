@@ -69,6 +69,7 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
       const { qty } = cartUpdateQtySchema.parse(request.body);
       const result = await updateCartItemQty({
         customerId: request.customer!.id,
+        tenantId: request.customer!.tenantId,
         itemId: id,
         qty,
       });

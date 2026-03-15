@@ -444,12 +444,18 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Export is not available on your current plan.' });
     }
 
-    const usage = await getMonthlyExportUsage(tenantId);
-    if (reportLimits.maxExportsPerMonth >= 0 && usage.count >= reportLimits.maxExportsPerMonth) {
-      return reply.status(402).send({
-        success: false,
-        error: `Monthly export limit reached (${reportLimits.maxExportsPerMonth}).`,
-      });
+    // Atomic increment-first to prevent concurrent requests from bypassing the limit.
+    // If over limit, decrement (rollback) and reject.
+    let exportCount = -1;
+    if (reportLimits.maxExportsPerMonth >= 0) {
+      exportCount = await incrementMonthlyExportUsage(tenantId);
+      if (exportCount > reportLimits.maxExportsPerMonth) {
+        await getRedis().decr(exportUsageKey(tenantId, getMonthKey()));
+        return reply.status(402).send({
+          success: false,
+          error: `Monthly export limit reached (${reportLimits.maxExportsPerMonth}).`,
+        });
+      }
     }
 
     const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 30), 30);
@@ -519,10 +525,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ success: false, error: 'Unknown report type.' });
     }
 
-    const updatedCount = await incrementMonthlyExportUsage(tenantId);
     const exportsLeft = reportLimits.maxExportsPerMonth < 0
       ? -1
-      : Math.max(0, reportLimits.maxExportsPerMonth - updatedCount);
+      : Math.max(0, reportLimits.maxExportsPerMonth - exportCount);
 
     const csv = toCsv(rows, columns);
     const stamp = new Date().toISOString().slice(0, 10);

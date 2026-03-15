@@ -76,24 +76,38 @@ describe('cart.service', () => {
     mocks.prisma.cartItem.findFirst.mockResolvedValue(null);
 
     await expect(
-      updateCartItemQty({ customerId: 'c-1', itemId: 'missing', qty: 1 })
+      updateCartItemQty({ customerId: 'c-1', tenantId: 't-1', itemId: 'missing', qty: 1 })
     ).rejects.toMatchObject({ code: 'ITEM_NOT_FOUND' } satisfies Partial<CartServiceError>);
   });
 
   it('updates item qty when stock is sufficient', async () => {
     mocks.prisma.cartItem.findFirst.mockResolvedValue({ id: 'ci-1', productId: 'p-1', variantId: null });
-    mocks.prisma.product.findUnique.mockResolvedValue({ id: 'p-1', stockQty: 10, isActive: true, variants: [] });
+    mocks.prisma.product.findFirst.mockResolvedValue({ id: 'p-1', stockQty: 10, isActive: true, variants: [] });
 
-    const result = await updateCartItemQty({ customerId: 'c-1', itemId: 'ci-1', qty: 5 });
+    const result = await updateCartItemQty({ customerId: 'c-1', tenantId: 't-1', itemId: 'ci-1', qty: 5 });
 
     expect(result.message).toBe('Cart updated');
     expect(mocks.prisma.cartItem.update).toHaveBeenCalledWith({ where: { id: 'ci-1' }, data: { qty: 5 } });
+    // Verify tenant isolation: product must be looked up with tenantId
+    expect(mocks.prisma.product.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ tenantId: 't-1' }) })
+    );
+  });
+
+  it('rejects product from a different tenant on cart update', async () => {
+    mocks.prisma.cartItem.findFirst.mockResolvedValue({ id: 'ci-1', productId: 'p-foreign', variantId: null });
+    // findFirst with tenantId filter returns null (product belongs to another tenant)
+    mocks.prisma.product.findFirst.mockResolvedValue(null);
+
+    await expect(
+      updateCartItemQty({ customerId: 'c-1', tenantId: 't-1', itemId: 'ci-1', qty: 3 })
+    ).rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' } satisfies Partial<CartServiceError>);
   });
 
   it('deletes item on qty=0', async () => {
     mocks.prisma.cartItem.findFirst.mockResolvedValue({ id: 'ci-1', productId: 'p-1', variantId: null });
 
-    const result = await updateCartItemQty({ customerId: 'c-1', itemId: 'ci-1', qty: 0 });
+    const result = await updateCartItemQty({ customerId: 'c-1', tenantId: 't-1', itemId: 'ci-1', qty: 0 });
 
     expect(result.message).toBe('Item removed');
     expect(mocks.prisma.cartItem.delete).toHaveBeenCalledWith({ where: { id: 'ci-1' } });

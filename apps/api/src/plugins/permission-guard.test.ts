@@ -29,7 +29,7 @@ function makeReply() {
 }
 
 describe('permissionGuard', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it('returns 401 when request.user is missing', async () => {
     const guard = permissionGuard('manageOrders');
