@@ -309,9 +309,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     }
 
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
     const [
       totalOrders,

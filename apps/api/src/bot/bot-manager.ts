@@ -443,9 +443,7 @@ async function autoCompleteDelivered(): Promise<void> {
 }
 
 function toStartOfDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 function calcDaysLeft(planExpiresAt: Date, now = new Date()): number {
