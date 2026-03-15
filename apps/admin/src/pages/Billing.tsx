@@ -11,6 +11,8 @@ const planColors: Record<string, string> = {
   BUSINESS: '#7c3aed',
 };
 
+const planRank: Record<string, number> = { FREE: 0, PRO: 1, BUSINESS: 2 };
+
 const planLimitFallbacks: Record<
   string,
   { maxStores: number; maxProducts: number; maxOrdersPerMonth: number; maxDeliveryZones: number }
@@ -30,6 +32,7 @@ export default function Billing() {
   const [paymentRef, setPaymentRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
+  const [pendingDowngrade, setPendingDowngrade] = useState<string | null>(null);
 
   const statusMap = useMemo(
     () =>
@@ -104,7 +107,17 @@ export default function Billing() {
     return [];
   }, [plans]);
 
-  const handleUpgrade = async (plan: string) => {
+  const requestUpgrade = (plan: string) => {
+    const isDowngrade = (planRank[plan] ?? 0) < (planRank[currentPlan] ?? 0);
+    if (isDowngrade) {
+      setPendingDowngrade(plan);
+      return;
+    }
+    void doUpgrade(plan);
+  };
+
+  const doUpgrade = async (plan: string) => {
+    setPendingDowngrade(null);
     setSubmitting(true);
     try {
       const result = await adminApi.upgradePlan(plan);
@@ -113,6 +126,7 @@ export default function Billing() {
         setPaymentRef('');
       } else {
         await load();
+        showNotice('success', tr('Тариф изменён', 'Tarif o\'zgartirildi'));
       }
     } catch (err: any) {
       showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
@@ -343,12 +357,14 @@ export default function Billing() {
                       </div>
                     ) : (
                       <Button
-                        onClick={() => handleUpgrade(code)}
+                        onClick={() => requestUpgrade(code)}
                         disabled={submitting}
                         className="sg-btn primary"
                         style={{ width: '100%', ...(isPopular ? {} : { background: 'transparent', border: `1px solid ${planColors[code] ?? '#00875a'}`, color: planColors[code] ?? '#00875a' }) }}
                       >
-                        {price === 0 ? tr('Переключить', "O'tish") : tr('Выбрать', 'Tanlash')}
+                        {(planRank[code] ?? 0) < (planRank[currentPlan] ?? 0)
+                          ? tr('Понизить', 'Kamaytirish')
+                          : price === 0 ? tr('Переключить', "O'tish") : tr('Выбрать', 'Tanlash')}
                       </Button>
                     )}
                   </div>
@@ -361,36 +377,62 @@ export default function Billing() {
 
       <section className="sg-card">
         <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('История счетов', 'Hisoblar tarixi')}</h3>
-        <table className="sg-table" style={{ marginTop: 10 }}>
-          <thead>
-            <tr>
-              <th>{tr('Дата', 'Sana')}</th>
-              <th>{tr('Тариф', 'Tarif')}</th>
-              <th>{tr('Сумма', 'Summa')}</th>
-              <th>{tr('Статус', 'Holat')}</th>
-              <th>{tr('Транзакция', 'Tranzaksiya')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoices.map((inv) => {
-              const st = statusMap[inv.status] || { label: inv.status, color: '#6b7280' };
-              return (
-                <tr key={inv.id}>
-                  <td>{new Date(inv.createdAt).toLocaleDateString(locale)}</td>
-                  <td>{planLabel(inv.plan)}</td>
-                  <td>{Number(inv.amount).toLocaleString()} UZS</td>
-                  <td>
-                    <span className="sg-badge" style={{ background: `${st.color}1a`, color: st.color }}>
-                      {st.label}
-                    </span>
-                  </td>
-                  <td>{inv.paymentRef || '-'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {invoices.length === 0 ? (
+          <p className="sg-subtitle" style={{ marginTop: 10 }}>{tr('Счетов пока нет', "Hozircha hisoblar yo'q")}</p>
+        ) : (
+          <table className="sg-table" style={{ marginTop: 10 }}>
+            <thead>
+              <tr>
+                <th>{tr('Дата', 'Sana')}</th>
+                <th>{tr('Тариф', 'Tarif')}</th>
+                <th>{tr('Сумма', 'Summa')}</th>
+                <th>{tr('Статус', 'Holat')}</th>
+                <th>{tr('Транзакция', 'Tranzaksiya')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((inv) => {
+                const st = statusMap[inv.status] || { label: inv.status, color: '#6b7280' };
+                return (
+                  <tr key={inv.id}>
+                    <td>{new Date(inv.createdAt).toLocaleDateString(locale)}</td>
+                    <td>{planLabel(inv.plan)}</td>
+                    <td>{Number(inv.amount).toLocaleString()} UZS</td>
+                    <td>
+                      <span className="sg-badge" style={{ background: `${st.color}1a`, color: st.color }}>
+                        {st.label}
+                      </span>
+                    </td>
+                    <td>{inv.paymentRef || '-'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </section>
+
+      {pendingDowngrade && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(11, 20, 16, 0.5)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}>
+          <div className="sg-card" style={{ width: '100%', maxWidth: 440 }}>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Понизить тариф?', 'Tarifni kamaytirasizmi?')}</h3>
+            <p className="sg-subtitle" style={{ marginTop: 8 }}>
+              {tr(
+                `Вы переходите с ${planLabel(currentPlan)} на ${planLabel(pendingDowngrade)}. Часть функций станет недоступна.`,
+                `${planLabel(currentPlan)} dan ${planLabel(pendingDowngrade)} ga o'tasiz. Ba'zi funksiyalar mavjud bo'lmaydi.`
+              )}
+            </p>
+            <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+              <button onClick={() => doUpgrade(pendingDowngrade)} disabled={submitting} className="sg-btn" style={{ flex: 1, background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', fontWeight: 700 }}>
+                {submitting ? '...' : tr('Да, понизить', 'Ha, kamaytirish')}
+              </button>
+              <button onClick={() => setPendingDowngrade(null)} className="sg-btn ghost" style={{ flex: 1 }}>
+                {tr('Отмена', 'Bekor qilish')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showInvoice && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(11, 20, 16, 0.5)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}>
