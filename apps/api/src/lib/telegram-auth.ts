@@ -32,7 +32,10 @@ export function validateInitData(
       .update(dataCheckString)
       .digest('hex');
 
-    if (computedHash !== hash) return null;
+    // Constant-time comparison prevents timing-based hash oracle attacks
+    const computedBuf = Buffer.from(computedHash, 'hex');
+    const providedBuf = Buffer.from(hash, 'hex');
+    if (computedBuf.length !== providedBuf.length || !crypto.timingSafeEqual(computedBuf, providedBuf)) return null;
 
     const authDateRaw = params.get('auth_date');
     const authDate = authDateRaw ? Number(authDateRaw) : NaN;
