@@ -105,10 +105,10 @@ const CP1251_EXTRA_MAP: Record<number, number> = {
 
 function looksLikeBrokenCyrillic(input: string): boolean {
   if (!input) return false;
-  return /[\u0420\u0421][\u0000-\u04ff]|вЂ|Ð|Ñ/.test(input);
+  return /Р[\u0000-\u04ff]|С[\u0000-\u04ff]|вЂ|Гђ|Г‘/.test(input);
 }
 
-function decodeCyrillicViaCp1251Utf8(input: string): string {
+function decodeBrokenCyrillicOnce(input: string): string {
   const bytes: number[] = [];
 
   for (const ch of input) {
@@ -137,50 +137,22 @@ function decodeCyrillicViaCp1251Utf8(input: string): string {
   return new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(bytes));
 }
 
-function decodeCyrillicViaLatin1Utf8(input: string): string {
-  const bytes = new Uint8Array(Array.from(input, (ch) => ch.charCodeAt(0) & 0xff));
-  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-}
-
-function scoreText(input: string): number {
-  const cyr = (input.match(/[\u0410-\u044f\u0401\u0451]/g) || []).length;
-  const bad = (input.match(/[\u0420\u0421]|\u0000|�|вЂ|Ð|Ñ/g) || []).length;
-  return cyr * 3 - bad;
+function hasReadableCyrillic(input: string): boolean {
+  return /[\u0410-\u044f\u0401\u0451]/.test(input);
 }
 
 function fixBrokenCyrillic(input: string): string {
   if (!looksLikeBrokenCyrillic(input)) return input;
 
-  let best = input;
-  let bestScore = scoreText(input);
   let current = input;
-
-  for (let i = 0; i < 4; i += 1) {
-    const a = decodeCyrillicViaCp1251Utf8(current);
-    const b = decodeCyrillicViaLatin1Utf8(current);
-    const candidates = [a, b];
-
-    let localBest = current;
-    let localScore = scoreText(current);
-
-    for (const c of candidates) {
-      const s = scoreText(c);
-      if (s > localScore) {
-        localBest = c;
-        localScore = s;
-      }
-      if (s > bestScore) {
-        best = c;
-        bestScore = s;
-      }
-    }
-
-    if (localBest === current) break;
-    current = localBest;
+  for (let i = 0; i < 3; i += 1) {
+    const next = decodeBrokenCyrillicOnce(current);
+    if (next === current) break;
+    current = next;
     if (!looksLikeBrokenCyrillic(current)) break;
   }
 
-  return bestScore > scoreText(input) ? best : input;
+  return hasReadableCyrillic(current) ? current : input;
 }
 
 type Key = keyof typeof dict.ru;
