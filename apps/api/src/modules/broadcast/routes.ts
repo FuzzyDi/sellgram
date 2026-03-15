@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { sendPromoBroadcast } from '../../bot/bot-manager.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 
 const createBroadcastSchema = z.object({
   storeId: z.string(),
@@ -14,9 +15,11 @@ const createBroadcastSchema = z.object({
 export default async function broadcastRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
 
+  const broadcastsQuerySchema = z.object({ storeId: z.string().optional() });
+
   fastify.get('/broadcasts', async (request) => {
-    const { storeId } = request.query as { storeId?: string };
-    const where: any = { tenantId: request.tenantId! };
+    const { storeId } = broadcastsQuerySchema.parse(request.query);
+    const where: { tenantId: string; storeId?: string } = { tenantId: request.tenantId! };
     if (storeId) where.storeId = storeId;
 
     const campaigns = await prisma.broadcastCampaign.findMany({
@@ -49,6 +52,7 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/broadcasts/send', {
+    preHandler: [permissionGuard('manageMarketing')],
     config: { rateLimit: { max: 3, timeWindow: '10 minutes' } },
   }, async (request, reply) => {
     try {
@@ -58,30 +62,20 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
       });
       if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
 
-      let targetCustomerIds: string[] = [];
+      let recipientWhere: { tenantId: string; id?: { in: string[] } };
       if (body.targetType === 'SELECTED') {
-        targetCustomerIds = [...new Set(body.customerIds || [])];
+        const targetCustomerIds = [...new Set(body.customerIds || [])];
         if (!targetCustomerIds.length) {
           return reply.status(400).send({ success: false, error: 'customerIds required for SELECTED mode' });
         }
+        recipientWhere = { tenantId: request.tenantId!, id: { in: targetCustomerIds } };
       } else {
-        const allCustomers = await prisma.customer.findMany({
-          where: { tenantId: request.tenantId! },
-          select: { id: true },
-        });
-        targetCustomerIds = allCustomers.map((row: { id: string }) => row.id);
+        recipientWhere = { tenantId: request.tenantId! };
       }
 
       const recipients = await prisma.customer.findMany({
-        where: {
-          tenantId: request.tenantId!,
-          id: { in: targetCustomerIds },
-        },
-        select: {
-          telegramId: true,
-          firstName: true,
-          id: true,
-        },
+        where: recipientWhere,
+        select: { telegramId: true, firstName: true, id: true },
       });
 
       if (!recipients.length) {

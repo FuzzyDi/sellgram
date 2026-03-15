@@ -8,10 +8,12 @@ const mocks = vi.hoisted(() => ({
     customer: { findMany: vi.fn() },
   },
   sendPromoBroadcast: vi.fn(),
+  permissionGuard: vi.fn((_key: string) => async () => {}),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../bot/bot-manager.js', () => ({ sendPromoBroadcast: mocks.sendPromoBroadcast }));
+vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
 
 import broadcastRoutes from './routes.js';
 
