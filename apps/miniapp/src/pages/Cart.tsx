@@ -8,10 +8,12 @@ export default function Cart() {
   const { tr } = useMiniI18n();
   const [cart, setCart] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const loadCart = () => {
     setLoading(true);
-    api.getCart().then(setCart).catch(() => {}).finally(() => setLoading(false));
+    setError(false);
+    api.getCart().then(setCart).catch(() => setError(true)).finally(() => setLoading(false));
   };
 
   useEffect(loadCart, []);
@@ -29,6 +31,16 @@ export default function Cart() {
       <div style={{ padding: 16 }}>
         <div className="skeleton" style={{ height: 28, width: 100, marginBottom: 16 }} />
         {[1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 72, marginBottom: 8, borderRadius: 'var(--radius)' }} />)}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center' }}>
+        <p style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 12 }}>{tr('Не удалось загрузить корзину', "Savatni yuklab bo'lmadi")}</p>
+        <button onClick={loadCart} style={{ padding: '8px 20px', borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{tr('Повторить', 'Qayta urinish')}</button>
+        <BottomNav active="cart" />
       </div>
     );
   }

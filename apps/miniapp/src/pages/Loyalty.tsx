@@ -7,16 +7,31 @@ export default function Loyalty() {
   const { tr, locale } = useMiniI18n();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    api.getLoyalty().then(setData).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  function load() {
+    setLoading(true);
+    setError(false);
+    api.getLoyalty().then(setData).catch(() => setError(true)).finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(); }, []);
 
   if (loading) {
     return (
       <div style={{ padding: 16 }}>
         <div className="skeleton" style={{ height: 28, width: 100, marginBottom: 16 }} />
         <div className="skeleton" style={{ height: 160, borderRadius: 20 }} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center' }}>
+        <p style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 12 }}>{tr('Не удалось загрузить баллы', "Ballarni yuklab bo'lmadi")}</p>
+        <button onClick={load} style={{ padding: '8px 20px', borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{tr('Повторить', 'Qayta urinish')}</button>
+        <BottomNav active="loyalty" />
       </div>
     );
   }

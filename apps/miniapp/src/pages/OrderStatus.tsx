@@ -9,6 +9,7 @@ export default function OrderStatus({ id }: { id: string }) {
   const { tr, locale } = useMiniI18n();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const SC = useMemo(() => ({
     NEW: { emoji: '🆕', label: tr('Новый', 'Yangi'), color: 'var(--accent)' },
@@ -23,7 +24,7 @@ export default function OrderStatus({ id }: { id: string }) {
   }) as const, [tr]);
 
   useEffect(() => {
-    if (id) api.getOrder(id).then(setOrder).catch(() => {}).finally(() => setLoading(false));
+    if (id) api.getOrder(id).then(setOrder).catch(() => setError(true)).finally(() => setLoading(false));
   }, [id]);
 
   if (loading) {
@@ -31,6 +32,16 @@ export default function OrderStatus({ id }: { id: string }) {
       <div style={{ padding: 16 }}>
         <div className="skeleton" style={{ height: 200, borderRadius: 20, marginBottom: 16 }} />
         <div className="skeleton" style={{ height: 120, borderRadius: 'var(--radius)' }} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--hint)' }}>
+        <span style={{ fontSize: 48 }}>⚠️</span>
+        <p style={{ fontWeight: 600, marginTop: 8, color: 'var(--danger)' }}>{tr('Не удалось загрузить заказ', "Buyurtmani yuklab bo'lmadi")}</p>
+        <button onClick={() => navigate('/orders')} style={{ marginTop: 12, padding: '8px 20px', borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{tr('К заказам', 'Buyurtmalarga')}</button>
       </div>
     );
   }

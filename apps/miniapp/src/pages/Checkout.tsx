@@ -31,10 +31,18 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
 
-  useEffect(() => {
-    api.getDeliveryZones().then(setZones).catch(() => {});
-    api.getCart().then(setCart).catch(() => {});
+  function loadData() {
+    setLoadingData(true);
+    setLoadError(false);
+    Promise.all([
+      api.getDeliveryZones().then(setZones),
+      api.getCart().then(setCart),
+    ])
+      .catch(() => setLoadError(true))
+      .finally(() => setLoadingData(false));
     api.getLoyalty().then(setLoyalty).catch(() => {});
     api.getPaymentMethods()
       .then((methods: PaymentMethod[]) => {
@@ -46,7 +54,9 @@ export default function Checkout() {
         }
       })
       .catch(() => {});
-  }, []);
+  }
+
+  useEffect(() => { loadData(); }, []);
 
   const selectedPaymentMethod = useMemo(
     () => paymentMethods.find((method) => method.id === form.paymentMethodId) || null,
@@ -104,6 +114,24 @@ export default function Checkout() {
     background: 'var(--sec)',
     color: 'var(--text)',
   };
+
+  if (loadingData) {
+    return (
+      <div style={{ padding: 16 }}>
+        <div className="skeleton" style={{ height: 28, width: 140, marginBottom: 16 }} />
+        {[1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 56, marginBottom: 10, borderRadius: 'var(--radius-sm)' }} />)}
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center' }}>
+        <p style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 12 }}>{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
+        <button onClick={loadData} style={{ padding: '8px 20px', borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{tr('Повторить', 'Qayta urinish')}</button>
+      </div>
+    );
+  }
 
   return (
     <div className="anim-fade" style={{ paddingBottom: 96 }}>
