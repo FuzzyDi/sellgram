@@ -20,6 +20,20 @@ export default function Settings() {
 
   const [telegramLinkData, setTelegramLinkData] = useState<any | null>(null);
   const [telegramLinkLoading, setTelegramLinkLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [activating, setActivating] = useState<string | null>(null);
+  const [togglingUser, setTogglingUser] = useState<string | null>(null);
+
+  const PERM_LABELS: Record<string, { ru: string; uz: string }> = {
+    manageCatalog:   { ru: 'Каталог',   uz: 'Katalog' },
+    manageOrders:    { ru: 'Заказы',    uz: 'Buyurtmalar' },
+    manageCustomers: { ru: 'Клиенты',   uz: 'Mijozlar' },
+    manageMarketing: { ru: 'Рассылки',  uz: 'Xabarlar' },
+    manageSettings:  { ru: 'Настройки', uz: 'Sozlamalar' },
+    manageBilling:   { ru: 'Биллинг',   uz: 'Billing' },
+    manageUsers:     { ru: 'Команда',   uz: 'Jamoa' },
+    viewReports:     { ru: 'Отчёты',    uz: 'Hisobotlar' },
+  };
 
   const [showStoreForm, setShowStoreForm] = useState(false);
   const [editingStoreId, setEditingStoreId] = useState<string | null>(null);
@@ -86,12 +100,16 @@ export default function Settings() {
   const canManageUsers = me?.role === 'OWNER' || me?.role === 'MANAGER' || Boolean(me?.effectivePermissions?.manageUsers);
 
   async function saveMyProfile() {
+    if (saving) return;
+    setSaving(true);
     try {
       await adminApi.updateMe(profileForm);
       showNotice('success', tr('\u041f\u0440\u043e\u0444\u0438\u043b\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d', 'Profil saqlandi'));
       await load();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xatolik'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -104,18 +122,22 @@ export default function Settings() {
       showNotice('error', tr('\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435 \u043f\u0430\u0440\u043e\u043b\u044f \u043d\u0435 \u0441\u043e\u0432\u043f\u0430\u0434\u0430\u0435\u0442', 'Parol tasdig\'i mos emas'));
       return;
     }
-
+    if (saving) return;
+    setSaving(true);
     try {
       await adminApi.changeMyPassword(passwordForm.currentPassword, passwordForm.newPassword);
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       showNotice('success', tr('\u041f\u0430\u0440\u043e\u043b\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0451\u043d', 'Parol yangilandi'));
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xatolik'));
+    } finally {
+      setSaving(false);
     }
   }
 
   async function createTeamUser() {
-    if (!canManageUsers) return;
+    if (!canManageUsers || saving) return;
+    setSaving(true);
     try {
       const payload: any = {
         email: teamForm.email,
@@ -130,21 +152,28 @@ export default function Settings() {
       await load();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xatolik'));
+    } finally {
+      setSaving(false);
     }
   }
 
   async function toggleTeamUserActive(user: any) {
+    if (togglingUser) return;
+    setTogglingUser(user.id);
     try {
       await adminApi.updateTeamUser(user.id, { isActive: !user.isActive });
       await load();
       showNotice('success', tr('\u0421\u0442\u0430\u0442\u0443\u0441 \u043e\u0431\u043d\u043e\u0432\u043b\u0451\u043d', 'Status yangilandi'));
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xatolik'));
+    } finally {
+      setTogglingUser(null);
     }
   }
 
   async function resetTeamUserPassword(userId: string) {
-    if (!pendingResetPassword.trim()) return;
+    if (!pendingResetPassword.trim() || saving) return;
+    setSaving(true);
     try {
       await adminApi.resetTeamUserPassword(userId, pendingResetPassword);
       setPendingResetUser(null);
@@ -152,6 +181,8 @@ export default function Settings() {
       showNotice('success', tr('\u041f\u0430\u0440\u043e\u043b\u044c \u0441\u0431\u0440\u043e\u0448\u0435\u043d', 'Parol tiklandi'));
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xatolik'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -181,6 +212,12 @@ export default function Settings() {
   }
 
   async function saveStore() {
+    if (saving) return;
+    if (!editingStoreId && (!storeForm.name || !storeForm.botToken)) {
+      showNotice('error', tr('\u041d\u0443\u0436\u043d\u044b \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u0430 \u0438 bot token', "Do'kon nomi va bot token kerak"));
+      return;
+    }
+    setSaving(true);
     try {
       if (editingStoreId) {
         const payload: any = {
@@ -190,16 +227,14 @@ export default function Settings() {
         if (storeForm.botToken) payload.botToken = storeForm.botToken;
         await adminApi.updateStore(editingStoreId, payload);
       } else {
-        if (!storeForm.name || !storeForm.botToken) {
-          showNotice('error', tr('\u041d\u0443\u0436\u043d\u044b \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u0430 \u0438 bot token', "Do'kon nomi va bot token kerak"));
-          return;
-        }
         await adminApi.createStore(storeForm);
       }
       setShowStoreForm(false);
       await load();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -221,6 +256,8 @@ export default function Settings() {
   }
 
   async function saveZone() {
+    if (saving) return;
+    setSaving(true);
     try {
       const payload: any = {
         name: zoneForm.name,
@@ -236,6 +273,8 @@ export default function Settings() {
       await load();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -288,6 +327,8 @@ export default function Settings() {
   }
 
   async function activateStoreConnection(store: any) {
+    if (activating) return;
+    setActivating(store.id);
     try {
       const data = await adminApi.activateStore(store.id);
       const webhookUrl = data?.webhookUrl ? `\nWebhook: ${data.webhookUrl}` : '';
@@ -295,16 +336,22 @@ export default function Settings() {
       await load();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
+    } finally {
+      setActivating(null);
     }
   }
 
   async function saveLoyalty() {
+    if (saving) return;
+    setSaving(true);
     try {
       await adminApi.updateLoyaltyConfig(loyalty);
       showNotice('success', tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e', 'Saqlandi'));
       await load();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -461,8 +508,8 @@ export default function Settings() {
                     <button className="sg-btn ghost" type="button" onClick={() => checkStoreConnection(store)}>
                       {tr('\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u0431\u043e\u0442\u0430', 'Botni tekshirish')}
                     </button>
-                    <button className="sg-btn primary" type="button" onClick={() => activateStoreConnection(store)}>
-                      {tr('\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c', 'Ulash')}
+                    <button className="sg-btn primary" type="button" disabled={!!activating} onClick={() => void activateStoreConnection(store)}>
+                      {activating === store.id ? '...' : tr('\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c', 'Ulash')}
                     </button>
                     <button
                       className="sg-btn danger"
@@ -618,8 +665,8 @@ export default function Settings() {
               </div>
             </div>
 
-            <button className="sg-btn primary" type="submit">
-              {tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
+            <button className="sg-btn primary" type="submit" disabled={saving}>
+              {saving ? '...' : tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
             </button>
           </form>
         </section>
@@ -634,7 +681,7 @@ export default function Settings() {
               <input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
             </div>
             <div style={{ marginTop: 10 }}>
-              <button className="sg-btn primary" type="button" onClick={() => void saveMyProfile()}>{tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043f\u0440\u043e\u0444\u0438\u043b\u044c', 'Profilni saqlash')}</button>
+              <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void saveMyProfile()}>{saving ? '...' : tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043f\u0440\u043e\u0444\u0438\u043b\u044c', 'Profilni saqlash')}</button>
             </div>
           </article>
 
@@ -646,7 +693,7 @@ export default function Settings() {
               <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u043f\u0430\u0440\u043e\u043b\u044c', 'Parolni tasdiqlang')} />
             </div>
             <div style={{ marginTop: 10 }}>
-              <button className="sg-btn primary" type="button" onClick={() => void changeMyPassword()}>{tr('\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c', 'Parolni yangilash')}</button>
+              <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void changeMyPassword()}>{saving ? '...' : tr('\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c', 'Parolni yangilash')}</button>
             </div>
           </article>
 
@@ -671,14 +718,14 @@ export default function Settings() {
                     {Object.keys(teamForm.permissions).map((key) => (
                       <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                         <input type="checkbox" checked={(teamForm.permissions as any)[key]} onChange={(e) => setTeamForm({ ...teamForm, permissions: { ...teamForm.permissions, [key]: e.target.checked } })} />
-                        {key}
+                        {tr(PERM_LABELS[key]?.ru ?? key, PERM_LABELS[key]?.uz ?? key)}
                       </label>
                     ))}
                   </div>
                 )}
 
                 <div style={{ marginTop: 10 }}>
-                  <button className="sg-btn primary" type="button" onClick={() => void createTeamUser()}>{tr('\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f', "Foydalanuvchi qo'shish")}</button>
+                  <button className="sg-btn primary" type="button" disabled={saving || !teamForm.email || !teamForm.name || !teamForm.password} onClick={() => void createTeamUser()}>{saving ? '...' : tr('\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f', "Foydalanuvchi qo'shish")}</button>
                 </div>
               </div>
 
@@ -692,7 +739,7 @@ export default function Settings() {
                       </div>
                       {user.role !== 'OWNER' && (
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button className="sg-btn ghost" type="button" onClick={() => void toggleTeamUserActive(user)}>{user.isActive ? tr('\u041e\u0442\u043a\u043b\u044e\u0447\u0438\u0442\u044c', "O'chirish") : tr('\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c', 'Yoqish')}</button>
+                          <button className="sg-btn ghost" type="button" disabled={togglingUser === user.id} onClick={() => void toggleTeamUserActive(user)}>{togglingUser === user.id ? '...' : user.isActive ? tr('\u041e\u0442\u043a\u043b\u044e\u0447\u0438\u0442\u044c', "O'chirish") : tr('\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c', 'Yoqish')}</button>
                           <button className="sg-btn ghost" type="button" onClick={() => { setPendingResetUser(user.id); setPendingResetPassword(''); }}>
                             {tr('\u0421\u0431\u0440\u043e\u0441 \u043f\u0430\u0440\u043e\u043b\u044f', 'Parolni tiklash')}
                           </button>
@@ -710,8 +757,8 @@ export default function Settings() {
                           placeholder={tr('\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'Yangi parol')}
                           style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '7px 10px', fontSize: 13, flex: 1, minWidth: 160 }}
                         />
-                        <button className="sg-btn primary" type="button" style={{ padding: '7px 14px', fontSize: 13 }} disabled={!pendingResetPassword.trim()} onClick={() => void resetTeamUserPassword(user.id)}>
-                          {tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
+                        <button className="sg-btn primary" type="button" style={{ padding: '7px 14px', fontSize: 13 }} disabled={!pendingResetPassword.trim() || saving} onClick={() => void resetTeamUserPassword(user.id)}>
+                          {saving ? '...' : tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
                         </button>
                         <button className="sg-btn ghost" type="button" style={{ padding: '7px 12px', fontSize: 13 }} onClick={() => { setPendingResetUser(null); setPendingResetPassword(''); }}>
                           {tr('\u041e\u0442\u043c\u0435\u043d\u0430', 'Bekor')}
@@ -756,10 +803,10 @@ export default function Settings() {
                 placeholder={tr('\u041f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435', 'Xush kelibsiz xabari')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="sg-btn primary" type="button" onClick={() => void saveStore()}>
-                  {tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
+                <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void saveStore()}>
+                  {saving ? '...' : tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
                 </button>
-                <button className="sg-btn ghost" type="button" onClick={() => setShowStoreForm(false)}>
+                <button className="sg-btn ghost" type="button" disabled={saving} onClick={() => setShowStoreForm(false)}>
                   {tr('\u041e\u0442\u043c\u0435\u043d\u0430', 'Bekor qilish')}
                 </button>
               </div>
@@ -814,10 +861,10 @@ export default function Settings() {
                 placeholder={tr('\u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0439 \u043f\u043e\u0440\u043e\u0433', 'Bepul chegarasi')}
               />
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="sg-btn primary" type="button" onClick={() => void saveZone()}>
-                  {tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
+                <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void saveZone()}>
+                  {saving ? '...' : tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
                 </button>
-                <button className="sg-btn ghost" type="button" onClick={() => setShowZoneForm(false)}>
+                <button className="sg-btn ghost" type="button" disabled={saving} onClick={() => setShowZoneForm(false)}>
                   {tr('\u041e\u0442\u043c\u0435\u043d\u0430', 'Bekor qilish')}
                 </button>
               </div>

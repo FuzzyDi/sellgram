@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
+import { cartStore } from '../stores/cartStore';
 
 interface Product {
   id: string;
@@ -23,36 +24,43 @@ export default function Catalog() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  function load() {
+    setLoading(true);
+    setError(false);
+    api.getCatalog()
+      .then((d) => {
+        setCategories(d.categories || []);
+        setProducts(d.products || []);
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }
 
   useEffect(() => {
-    let cancelled = false;
-
-    const load = (isRetry = false) => {
-      api.getCatalog()
-        .then((d) => {
-          if (cancelled) return;
-          setCategories(d.categories || []);
-          setProducts(d.products || []);
-          setLoading(false);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          if (!isRetry) {
-            setTimeout(() => load(true), 700);
-            return;
-          }
-          setLoading(false);
-        });
-    };
-
     load();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
-  const filtered = selected ? products.filter((p) => p.category?.id === selected) : products;
+  const q = query.trim().toLowerCase();
+  const filtered = products.filter((p) =>
+    (!selected || p.category?.id === selected) &&
+    (!q || p.name.toLowerCase().includes(q))
+  );
+
+  if (error) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center' }}>
+        <p style={{ fontSize: 40, marginBottom: 12 }}>⚠️</p>
+        <p style={{ fontWeight: 600, color: 'var(--hint)', marginBottom: 20 }}>{tr('Не удалось загрузить каталог', 'Katalogni yuklab bo`lmadi')}</p>
+        <button className="btn primary pill" onClick={load}>
+          {tr('Повторить', 'Qayta urinish')}
+        </button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -72,10 +80,23 @@ export default function Catalog() {
     <div style={{ paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
       <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, padding: '16px 16px 0', borderBottom: '0.5px solid var(--divider)' }}>
         <h1 className="anim-fade" style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Каталог', 'Katalog')}</h1>
-        <div className="anim-fade anim-d1" style={{ display: 'flex', gap: 6, padding: '12px 0 12px', overflowX: 'auto' }}>
-          <Chip active={!selected} onClick={() => setSelected(null)}>{tr('Все', 'Barchasi')}</Chip>
+        <div className="anim-fade anim-d1" style={{ position: 'relative', padding: '10px 0 4px' }}>
+          <svg viewBox="0 0 24 24" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, stroke: 'var(--hint)', fill: 'none', strokeWidth: 2, strokeLinecap: 'round', pointerEvents: 'none' }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="search"
+            className="field"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tr('Поиск товаров...', 'Mahsulot qidirish...')}
+            style={{ paddingLeft: 36, paddingTop: 10, paddingBottom: 10 }}
+          />
+        </div>
+        <div className="anim-fade anim-d2" style={{ display: 'flex', gap: 6, padding: '8px 0 12px', overflowX: 'auto' }}>
+          <button className={`chip${!selected ? ' active' : ''}`} onClick={() => setSelected(null)}>{tr('Все', 'Barchasi')}</button>
           {categories.map((c) => (
-            <Chip key={c.id} active={selected === c.id} onClick={() => setSelected(c.id)}>{c.name}</Chip>
+            <button key={c.id} className={`chip${selected === c.id ? ' active' : ''}`} onClick={() => setSelected(c.id)}>{c.name}</button>
           ))}
         </div>
       </div>
@@ -96,35 +117,23 @@ export default function Catalog() {
   );
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} className="pressable" style={{
-      padding: '7px 16px',
-      borderRadius: 20,
-      fontSize: 13,
-      fontWeight: 600,
-      whiteSpace: 'nowrap',
-      border: 'none',
-      cursor: 'pointer',
-      background: active ? 'var(--btn)' : 'var(--sec)',
-      color: active ? 'var(--btn-text)' : 'var(--text)',
-      transition: 'background 0.2s, color 0.2s',
-    }}>{children}</button>
-  );
-}
-
 function ProductCard({ product: p, index }: { product: Product; index: number }) {
   const { tr } = useMiniI18n();
-  const delay = Math.min(index, 8);
+  const delay = Math.min(index, 5);
+  const outOfStock = p.stockQty === 0;
   return (
-    <div onClick={() => navigate(`/product/${p.id}`)} className={`pressable anim-fade anim-d${Math.min(delay, 5)}`} style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', overflow: 'hidden', cursor: 'pointer' }}>
+    <div onClick={() => navigate(`/product/${p.id}`)} className={`product-card anim-fade anim-d${delay}`} style={{ opacity: outOfStock ? 0.62 : 1 }}>
       <div style={{ aspectRatio: '1', background: 'var(--sec)', position: 'relative', overflow: 'hidden' }}>
         {p.images[0]?.url ? (
-          <img src={p.images[0].url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+          <img src={p.images[0].url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: outOfStock ? 'grayscale(0.4)' : 'none' }} loading="lazy" />
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 36, opacity: 0.25 }}>📦</span></div>
         )}
-        {p.stockQty > 0 && p.stockQty <= 3 && (
+        {outOfStock ? (
+          <span style={{ position: 'absolute', top: 8, right: 8, padding: '3px 8px', borderRadius: 8, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 10, fontWeight: 700 }}>
+            {tr('Нет', 'Yo\'q')}
+          </span>
+        ) : p.stockQty <= 3 && (
           <span style={{ position: 'absolute', top: 8, right: 8, padding: '3px 8px', borderRadius: 8, background: 'rgba(255,149,0,0.9)', color: '#fff', fontSize: 10, fontWeight: 700 }}>
             {tr('Мало', 'Kam')}
           </span>
@@ -132,7 +141,7 @@ function ProductCard({ product: p, index }: { product: Product; index: number })
       </div>
       <div style={{ padding: '10px 12px 12px' }}>
         <h3 style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.name}</h3>
-        <p style={{ fontWeight: 700, fontSize: 16, marginTop: 6, color: 'var(--text)' }}>
+        <p style={{ fontWeight: 700, fontSize: 16, marginTop: 6, color: outOfStock ? 'var(--hint)' : 'var(--text)' }}>
           {Number(p.price).toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--hint)' }}>{tr('сум', "so'm")}</span>
         </p>
       </div>
@@ -142,19 +151,49 @@ function ProductCard({ product: p, index }: { product: Product; index: number })
 
 export function BottomNav({ active }: { active: string }) {
   const { tr } = useMiniI18n();
+  const [cartCount, setCartCount] = useState(cartStore.get());
+
+  useEffect(() => {
+    setCartCount(cartStore.get());
+    return cartStore.sub(setCartCount);
+  }, []);
+
   const tabs = [
-    { id: 'catalog', path: '/', icon: '🛍️', label: tr('Каталог', 'Katalog') },
-    { id: 'cart', path: '/cart', icon: '🛒', label: tr('Корзина', 'Savat') },
-    { id: 'orders', path: '/orders', icon: '📦', label: tr('Заказы', 'Buyurtmalar') },
-    { id: 'loyalty', path: '/loyalty', icon: '⭐', label: tr('Баллы', 'Ballar') },
+    {
+      id: 'catalog', path: '/', label: tr('Каталог', 'Katalog'),
+      icon: (
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+      ),
+    },
+    {
+      id: 'cart', path: '/cart', label: tr('Корзина', 'Savat'),
+      icon: (
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      ),
+    },
+    {
+      id: 'orders', path: '/orders', label: tr('Заказы', 'Buyurtmalar'),
+      icon: (
+        <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      ),
+    },
+    {
+      id: 'loyalty', path: '/loyalty', label: tr('Баллы', 'Ballar'),
+      icon: (
+        <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      ),
+    },
   ];
 
   return (
-    <nav className="glass" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, borderTop: '0.5px solid var(--divider)', display: 'flex', justifyContent: 'space-around', padding: '5px 0 max(env(safe-area-inset-bottom, 0px), 6px)', height: 'var(--nav-h)' }}>
+    <nav className="bottom-nav glass">
       {tabs.map((t) => (
-        <button key={t.id} onClick={() => navigate(t.path)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, border: 'none', background: 'none', cursor: 'pointer', padding: '2px 16px', minWidth: 56, color: active === t.id ? 'var(--accent)' : 'var(--hint)', transition: 'color 0.15s' }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>{t.icon}</span>
-          <span style={{ fontSize: 10, fontWeight: active === t.id ? 600 : 500, letterSpacing: 0.1 }}>{t.label}</span>
+        <button key={t.id} onClick={() => navigate(t.path)} className={`nav-btn${active === t.id ? ' active' : ''}`} style={{ position: 'relative' }}>
+          {t.icon}
+          {t.id === 'cart' && cartCount > 0 && (
+            <span className="nav-badge">{cartCount > 99 ? '99+' : cartCount}</span>
+          )}
+          <span className="nav-label">{t.label}</span>
         </button>
       ))}
     </nav>

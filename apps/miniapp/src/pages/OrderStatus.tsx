@@ -1,31 +1,68 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
+import { useTelegramBackButton } from '../hooks/useTelegramBackButton';
 
 const steps = ['NEW', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED'];
+const TERMINAL = new Set(['COMPLETED', 'CANCELLED', 'REFUNDED']);
+const POLL_MS = 30_000;
 
 export default function OrderStatus({ id }: { id: string }) {
   const { tr, locale } = useMiniI18n();
+  const goBack = useCallback(() => navigate('/orders'), []);
+  useTelegramBackButton(goBack);
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   const SC = useMemo(() => ({
-    NEW: { emoji: '🆕', label: tr('Новый', 'Yangi'), color: 'var(--accent)' },
-    CONFIRMED: { emoji: '✅', label: tr('Подтвержден', 'Tasdiqlandi'), color: '#34c759' },
-    PREPARING: { emoji: '👨‍🍳', label: tr('Готовится', 'Tayyorlanmoqda'), color: '#ff9500' },
-    READY: { emoji: '📦', label: tr('Готов', 'Tayyor'), color: '#af52de' },
-    SHIPPED: { emoji: '🚚', label: tr('В пути', "Yo'lda"), color: '#5856d6' },
-    DELIVERED: { emoji: '📬', label: tr('Доставлен', 'Yetkazildi'), color: '#30b0c7' },
-    COMPLETED: { emoji: '🎉', label: tr('Завершен', 'Yakunlandi'), color: '#34c759' },
-    CANCELLED: { emoji: '❌', label: tr('Отменен', 'Bekor qilindi'), color: '#ff3b30' },
-    REFUNDED: { emoji: '↩️', label: tr('Возврат', 'Qaytarildi'), color: '#8e8e93' },
+    NEW:       { emoji: '🆕', label: tr('Новый', 'Yangi'),               color: 'var(--status-new)' },
+    CONFIRMED: { emoji: '✅', label: tr('Подтвержден', 'Tasdiqlandi'),    color: 'var(--status-confirmed)' },
+    PREPARING: { emoji: '👨‍🍳', label: tr('Готовится', 'Tayyorlanmoqda'), color: 'var(--status-preparing)' },
+    READY:     { emoji: '📦', label: tr('Готов', 'Tayyor'),               color: 'var(--status-ready)' },
+    SHIPPED:   { emoji: '🚚', label: tr('В пути', "Yo'lda"),              color: 'var(--status-shipped)' },
+    DELIVERED: { emoji: '📬', label: tr('Доставлен', 'Yetkazildi'),       color: 'var(--status-delivered)' },
+    COMPLETED: { emoji: '🎉', label: tr('Завершен', 'Yakunlandi'),        color: 'var(--status-completed)' },
+    CANCELLED: { emoji: '❌', label: tr('Отменен', 'Bekor qilindi'),      color: 'var(--status-cancelled)' },
+    REFUNDED:  { emoji: '↩️', label: tr('Возврат', 'Qaytarildi'),         color: 'var(--status-refunded)' },
   }) as const, [tr]);
 
   useEffect(() => {
-    if (id) api.getOrder(id).then(setOrder).catch(() => setError(true)).finally(() => setLoading(false));
-  }, [id]);
+    if (!id) return;
+
+    let cancelled = false;
+
+    const fetch = (isInitial = false) => {
+      if (isInitial) setLoading(true);
+      api.getOrder(id)
+        .then((o) => { if (!cancelled) setOrder(o); })
+        .catch(() => { if (cancelled || !isInitial) return; setError(true); })
+        .finally(() => { if (!cancelled && isInitial) setLoading(false); });
+    };
+
+    fetch(true);
+
+    // poll every 30s unless order is in a terminal state
+    const interval = setInterval(() => {
+      if (order && TERMINAL.has(order.status)) return;
+      fetch(false);
+    }, POLL_MS);
+
+    // refresh immediately when the tab regains focus
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !(order && TERMINAL.has(order.status))) {
+        fetch(false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [id, order?.status]);
 
   if (loading) {
     return (
@@ -38,10 +75,10 @@ export default function OrderStatus({ id }: { id: string }) {
 
   if (error) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--hint)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 12, padding: 24 }}>
         <span style={{ fontSize: 48 }}>⚠️</span>
-        <p style={{ fontWeight: 600, marginTop: 8, color: 'var(--danger)' }}>{tr('Не удалось загрузить заказ', "Buyurtmani yuklab bo'lmadi")}</p>
-        <button onClick={() => navigate('/orders')} style={{ marginTop: 12, padding: '8px 20px', borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{tr('К заказам', 'Buyurtmalarga')}</button>
+        <p className="error-banner">{tr('Не удалось загрузить заказ', "Buyurtmani yuklab bo'lmadi")}</p>
+        <button className="btn secondary pill" onClick={() => navigate('/orders')}>{tr('К заказам', 'Buyurtmalarga')}</button>
       </div>
     );
   }
@@ -63,10 +100,10 @@ export default function OrderStatus({ id }: { id: string }) {
   return (
     <div className="anim-fade" style={{ padding: '0 0 24px' }}>
       <div style={{ padding: 16 }}>
-        <button onClick={() => navigate('/orders')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, fontSize: 15, padding: 0, cursor: 'pointer' }}>← {tr('Заказы', 'Buyurtmalar')}</button>
+        <button className="btn ghost xs" onClick={() => navigate('/orders')}>← {tr('Заказы', 'Buyurtmalar')}</button>
       </div>
 
-      <div className="anim-scale" style={{ margin: '0 12px 16px', padding: '28px 20px', borderRadius: 20, textAlign: 'center', background: `linear-gradient(145deg, ${s.color}12, ${s.color}08)`, border: `1px solid ${s.color}15` }}>
+      <div className="anim-scale" style={{ margin: '0 12px 16px', padding: '28px 20px', borderRadius: 20, textAlign: 'center', background: `linear-gradient(145deg, color-mix(in srgb, ${s.color} 8%, transparent), color-mix(in srgb, ${s.color} 5%, transparent))`, border: `1px solid color-mix(in srgb, ${s.color} 15%, transparent)` }}>
         <div style={{ fontSize: 52, marginBottom: 4 }}>{s.emoji}</div>
         <h2 style={{ fontSize: 22, fontWeight: 800 }}>{tr('Заказ', 'Buyurtma')} #{order.orderNumber}</h2>
         <p style={{ color: s.color, fontWeight: 700, fontSize: 15, marginTop: 4 }}>{s.label}</p>
@@ -76,13 +113,13 @@ export default function OrderStatus({ id }: { id: string }) {
       </div>
 
       {!cancelled && (
-        <div style={{ padding: '0 20px 16px', display: 'flex', alignItems: 'center' }}>
+        <div className="progress-track">
           {steps.map((step, i) => {
             const done = i <= stepIdx;
             return (
               <React.Fragment key={step}>
-                <div style={{ width: done ? 10 : 8, height: done ? 10 : 8, borderRadius: '50%', flexShrink: 0, background: done ? 'var(--accent)' : 'rgba(0,0,0,0.08)', boxShadow: done ? '0 0 0 3px rgba(0,122,255,0.15)' : 'none', transition: 'all 0.3s' }} />
-                {i < steps.length - 1 && <div style={{ flex: 1, height: 2, background: i < stepIdx ? 'var(--accent)' : 'rgba(0,0,0,0.06)', transition: 'all 0.3s' }} />}
+                <div className={`progress-dot${done ? ' done' : ''}`} />
+                {i < steps.length - 1 && <div className={`progress-line${i < stepIdx ? ' done' : ''}`} />}
               </React.Fragment>
             );
           })}
@@ -90,7 +127,7 @@ export default function OrderStatus({ id }: { id: string }) {
       )}
 
       <div style={{ padding: '0 12px' }}>
-        <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 12 }}>
+        <div className="card" style={{ marginBottom: 12 }}>
           {order.items?.map((item: any, i: number) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < order.items.length - 1 ? '1px solid var(--divider)' : 'none' }}>
               <div>
@@ -108,15 +145,15 @@ export default function OrderStatus({ id }: { id: string }) {
         </div>
 
         {order.deliveryAddress && (
-          <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 12 }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--hint)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{tr('Доставка', 'Yetkazish')}</p>
+          <div className="card" style={{ marginBottom: 12 }}>
+            <p className="section-title">{tr('Доставка', 'Yetkazish')}</p>
             <p style={{ fontSize: 14 }}>📍 {order.deliveryAddress}</p>
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <button onClick={() => navigate('/')} className="pressable" style={{ flex: 1, padding: 14, borderRadius: 'var(--radius)', border: 'none', fontSize: 15, fontWeight: 600, cursor: 'pointer', background: 'var(--btn)', color: 'var(--btn-text)' }}>{tr('В каталог', 'Katalogga')}</button>
-          <button onClick={() => navigate('/orders')} className="pressable" style={{ flex: 1, padding: 14, borderRadius: 'var(--radius)', border: 'none', fontSize: 15, fontWeight: 600, cursor: 'pointer', background: 'var(--sec)', color: 'var(--text)' }}>{tr('Все заказы', 'Barcha buyurtmalar')}</button>
+          <button onClick={() => navigate('/')} className="btn primary" style={{ flex: 1 }}>{tr('В каталог', 'Katalogga')}</button>
+          <button onClick={() => navigate('/orders')} className="btn secondary" style={{ flex: 1 }}>{tr('Все заказы', 'Barcha buyurtmalar')}</button>
         </div>
       </div>
     </div>

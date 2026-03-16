@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { writeAuditLog } from '../../lib/audit.js';
 
 const zoneSchema = z.object({
   storeId: z.string(),
@@ -47,6 +48,7 @@ export default async function deliveryRoutes(fastify: FastifyInstance) {
       const zone = await prisma.deliveryZone.create({
         data: { tenantId: request.tenantId!, ...body },
       });
+      writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'delivery.zone.create', targetId: zone.id, details: { name: zone.name } });
       return { success: true, data: zone };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
@@ -74,6 +76,7 @@ export default async function deliveryRoutes(fastify: FastifyInstance) {
       data: body as any,
     });
     if (result.count === 0) return reply.status(404).send({ success: false, error: 'Not found' });
+    writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'delivery.zone.update', targetId: id });
     return { success: true, message: 'Zone updated' };
   });
 
@@ -84,6 +87,7 @@ export default async function deliveryRoutes(fastify: FastifyInstance) {
       data: { isActive: false },
     });
     if (result.count === 0) return reply.status(404).send({ success: false, error: 'Not found' });
+    writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'delivery.zone.delete', targetId: id });
     return { success: true, message: 'Zone deleted' };
   });
 }

@@ -155,6 +155,7 @@ export const adminApi = {
 
   getPurchaseOrders: () => request<any>('/purchase-orders'),
   createPurchaseOrder: (data: any) => request<any>('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
+  updatePurchaseOrder: (id: string, data: any) => request<any>(`/purchase-orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   receivePurchaseOrder: (id: string, data: any) => request<any>(`/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
 
   getDashboard: () => request<any>('/analytics/dashboard'),
@@ -198,6 +199,13 @@ export const adminApi = {
   getBroadcasts: (storeId?: string) => request<any>(`/broadcasts${storeId ? `?storeId=${encodeURIComponent(storeId)}` : ''}`),
   getBroadcast: (id: string) => request<any>(`/broadcasts/${id}`),
   sendBroadcast: (data: any) => request<any>('/broadcasts/send', { method: 'POST', body: JSON.stringify(data) }),
+
+  getAuditLogs: (limit?: number) => request<any>(`/audit-logs${limit ? '?limit=' + limit : ''}`),
+
+  getScheduledReports: () => request<any>('/analytics/scheduled-reports'),
+  createScheduledReport: (data: { reportType: string; periodDays: number; frequency: string }) =>
+    request<any>('/analytics/scheduled-reports', { method: 'POST', body: JSON.stringify(data) }),
+  deleteScheduledReport: (id: string) => request<any>(`/analytics/scheduled-reports/${id}`, { method: 'DELETE' }),
 };
 
 

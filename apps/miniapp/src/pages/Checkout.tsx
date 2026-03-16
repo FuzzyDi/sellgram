@@ -1,7 +1,8 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
+import { useTelegramBackButton } from '../hooks/useTelegramBackButton';
 
 type PaymentMethod = {
   id: string;
@@ -15,6 +16,8 @@ type PaymentMethod = {
 
 export default function Checkout() {
   const { tr } = useMiniI18n();
+  const goBack = useCallback(() => navigate('/cart'), []);
+  useTelegramBackButton(goBack);
   const [zones, setZones] = useState<any[]>([]);
   const [cart, setCart] = useState<any>(null);
   const [loyalty, setLoyalty] = useState<any>(null);
@@ -103,18 +106,6 @@ export default function Checkout() {
     setSubmitting(false);
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '12px 14px',
-    borderRadius: 'var(--radius-sm)',
-    border: '1.5px solid var(--divider)',
-    fontSize: 15,
-    boxSizing: 'border-box',
-    outline: 'none',
-    background: 'var(--sec)',
-    color: 'var(--text)',
-  };
-
   if (loadingData) {
     return (
       <div style={{ padding: 16 }}>
@@ -127,8 +118,8 @@ export default function Checkout() {
   if (loadError) {
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
-        <p style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 12 }}>{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
-        <button onClick={loadData} style={{ padding: '8px 20px', borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{tr('Повторить', 'Qayta urinish')}</button>
+        <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
+        <button className="btn secondary sm pill" onClick={loadData}>{tr('Повторить', 'Qayta urinish')}</button>
       </div>
     );
   }
@@ -136,8 +127,8 @@ export default function Checkout() {
   return (
     <div className="anim-fade" style={{ paddingBottom: 96 }}>
       <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, padding: 16, borderBottom: '0.5px solid var(--divider)' }}>
-        <button onClick={() => navigate('/cart')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, fontSize: 15, padding: 0, cursor: 'pointer' }}>← {tr('Корзина', 'Savat')}</button>
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, marginTop: 4 }}>{tr('Оформление', 'Rasmiylashtirish')}</h1>
+        <button onClick={() => navigate('/cart')} className="btn ghost xs" style={{ marginBottom: 4 }}>← {tr('Корзина', 'Savat')}</button>
+        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Оформление', 'Rasmiylashtirish')}</h1>
       </div>
 
       <div style={{ padding: '12px 16px' }}>
@@ -172,17 +163,17 @@ export default function Checkout() {
 
         {form.deliveryType === 'LOCAL' && (
           <Section title={tr('Адрес', 'Manzil')}>
-            <textarea value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} rows={2} style={inputStyle} placeholder={tr('Улица, дом, квартира', 'Kocha, uy, xonadon')} />
+            <textarea className="field" value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} rows={2} placeholder={tr('Улица, дом, квартира', 'Kocha, uy, xonadon')} />
           </Section>
         )}
 
         <Section title={tr('Телефон', 'Telefon')}>
-          <input type="tel" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} style={inputStyle} placeholder="+998 90 123 45 67" />
+          <input type="tel" className="field" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="+998 90 123 45 67" />
         </Section>
 
         <Section title={tr('Способ оплаты', "To'lov usuli")}>
           {paymentMethods.length === 0 ? (
-            <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius-sm)', padding: '12px 14px', color: 'var(--hint)', fontSize: 14 }}>
+            <div className="card" style={{ color: 'var(--hint)', fontSize: 14 }}>
               {tr('Способы оплаты не настроены', "To'lov usullari sozlanmagan")}
             </div>
           ) : (
@@ -209,7 +200,7 @@ export default function Checkout() {
             </div>
           )}
           {selectedPaymentMethod?.instructions && (
-            <div style={{ marginTop: 8, background: 'rgba(0,135,90,0.08)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontSize: 13 }}>
+            <div style={{ marginTop: 8, background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontSize: 13 }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>{tr('Инструкция по оплате', "To'lov bo'yicha ko'rsatma")}</div>
               <div style={{ whiteSpace: 'pre-wrap' }}>{selectedPaymentMethod.instructions}</div>
             </div>
@@ -217,11 +208,11 @@ export default function Checkout() {
         </Section>
 
         <Section title={tr('Комментарий', 'Izoh')}>
-          <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={2} style={inputStyle} placeholder={tr('Пожелания (необязательно)', 'Istaklar (ixtiyoriy)')} />
+          <textarea className="field" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={2} placeholder={tr('Пожелания (необязательно)', 'Istaklar (ixtiyoriy)')} />
         </Section>
 
         {loyalty?.config?.isEnabled && loyalty.balance > 0 && (
-          <div style={{ background: 'linear-gradient(135deg, rgba(0,135,90,0.08), rgba(0,185,107,0.06))', borderRadius: 'var(--radius)', padding: 14, marginBottom: 20 }}>
+          <div className="card" style={{ background: 'linear-gradient(135deg, rgba(0,135,90,0.08), rgba(0,185,107,0.06))', marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <p style={{ fontWeight: 600, fontSize: 14 }}>⭐ {tr('Списать баллы', 'Ballarni ishlatish')}</p>
@@ -235,7 +226,7 @@ export default function Checkout() {
           </div>
         )}
 
-        <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 14 }}>
+        <div className="card">
           <Row label={tr('Товары', 'Mahsulotlar')} value={`${subtotal.toLocaleString()} ${tr('сум', "so'm")}`} />
           {form.deliveryType === 'LOCAL' && <Row label={tr('Доставка', 'Yetkazish')} value={deliveryFee ? `${deliveryFee.toLocaleString()} ${tr('сум', "so'm")}` : tr('Бесплатно', 'Bepul')} />}
           {discount > 0 && <Row label={tr('Скидка баллами', 'Ballar chegirmasi')} value={`−${discount.toLocaleString()} ${tr('сум', "so'm")}`} color="var(--success)" />}
@@ -246,12 +237,8 @@ export default function Checkout() {
       </div>
 
       <div className="glass" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30, padding: '10px 16px max(env(safe-area-inset-bottom, 0px), 10px)', borderTop: '0.5px solid var(--divider)' }}>
-        {error && (
-          <div style={{ marginBottom: 8, padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,59,48,0.1)', color: 'var(--danger)', fontSize: 13, fontWeight: 600 }}>
-            {error}
-          </div>
-        )}
-        <button onClick={submit} disabled={submitting || paymentMethods.length === 0} className="pressable" style={{ width: '100%', padding: 16, borderRadius: 'var(--radius)', border: 'none', fontSize: 16, fontWeight: 700, cursor: 'pointer', background: submitting ? 'var(--hint)' : 'var(--success)', color: '#fff', transition: 'all 0.2s' }}>
+        {error && <div className="error-banner" style={{ marginBottom: 8 }}>{error}</div>}
+        <button onClick={submit} disabled={submitting || paymentMethods.length === 0} className="btn success full">
           {submitting ? tr('Оформляем...', 'Yuborilmoqda...') : `${tr('Подтвердить', 'Tasdiqlash')} · ${total.toLocaleString()} ${tr('сум', "so'm")}`}
         </button>
       </div>
@@ -262,7 +249,7 @@ export default function Checkout() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--hint)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{title}</p>
+      <p className="section-title">{title}</p>
       {children}
     </div>
   );

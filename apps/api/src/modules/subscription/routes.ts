@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 import {
   subscriptionInvoicePayBodySchema,
   subscriptionInvoicePayParamsSchema,
@@ -31,7 +32,10 @@ export default async function subscriptionRoutes(fastify: FastifyInstance) {
     return { success: true, data: getSubscriptionPlans() };
   });
 
-  fastify.post('/subscription/upgrade', async (request, reply) => {
+  fastify.post('/subscription/upgrade', {
+    preHandler: [permissionGuard('manageBilling')],
+    config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
     try {
       const body = subscriptionUpgradeSchema.parse(request.body);
       const data = await upgradeTenantPlan({ tenantId: request.tenantId!, plan: body.plan });
@@ -51,7 +55,7 @@ export default async function subscriptionRoutes(fastify: FastifyInstance) {
     return { success: true, data };
   });
 
-  fastify.patch('/subscription/invoices/:id/pay', async (request, reply) => {
+  fastify.patch('/subscription/invoices/:id/pay', { preHandler: [permissionGuard('manageBilling')] }, async (request, reply) => {
     try {
       const { id } = subscriptionInvoicePayParamsSchema.parse(request.params);
       const body = subscriptionInvoicePayBodySchema.parse(request.body);

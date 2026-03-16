@@ -8,16 +8,22 @@ export default function Dashboard() {
   const [topProducts, setTopProducts] = useState<any[]>([]);
   const [sub, setSub] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  function load() {
+    setLoading(true);
+    setError(false);
     Promise.all([adminApi.getDashboard(), adminApi.getTopProducts(), adminApi.getSubscription().catch(() => null)])
       .then(([s, tp, subscription]) => {
         setStats(s);
         setTopProducts(Array.isArray(tp) ? tp : tp?.items || tp?.data || []);
         setSub(subscription);
       })
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { load(); }, []);
 
   const checks = useMemo(() => {
     const usage = sub?.usage;
@@ -91,6 +97,22 @@ export default function Dashboard() {
     };
   }, [sub?.planExpiresAt]);
 
+  if (error) {
+    return (
+      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+        <header>
+          <h2 className="sg-title">{tr('Дашборд', 'Boshqaruv paneli')}</h2>
+        </header>
+        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
+          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={load}>
+            {tr('Повторить', 'Qayta urinish')}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   if (loading) {
     return (
       <section className="sg-page sg-grid" style={{ gap: 18 }}>
@@ -161,52 +183,71 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="sg-card soft">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+      {completedSteps === totalSteps ? (
+        <div className="sg-card soft" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span style={{ fontSize: 28 }}>🎉</span>
           <div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Чек-лист запуска', "Ishga tushirish ro'yxati")}</h3>
-            <p className="sg-subtitle" style={{ marginTop: 6 }}>
-              {completedSteps} / {totalSteps} {tr('шагов выполнено', 'qadam bajarildi')}
-            </p>
-          </div>
-          <div className="sg-badge" style={{ background: '#e8f7ef', color: '#006f4a', fontSize: 12 }}>
-            {Math.round((completedSteps / totalSteps) * 100)}%
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>{tr('Магазин полностью настроен', "Do'kon to'liq sozlangan")}</p>
+            <p className="sg-subtitle" style={{ marginTop: 4 }}>{tr('Все шаги выполнены. Успешных продаж!', 'Barcha qadamlar bajarildi. Muvaffaqiyatli savdo!')}</p>
           </div>
         </div>
+      ) : (
+        <div className="sg-card soft">
+          {completedSteps <= 1 && (
+            <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, background: '#e8f7ef', border: '1px solid #bbf0d8' }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#005c3a' }}>{tr('Добро пожаловать в SellGram!', "SellGram'ga xush kelibsiz!")}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#006f4a' }}>
+                {tr('Выполните несколько шагов, чтобы запустить ваш Telegram-магазин.', "Telegram do'koningizni ishga tushirish uchun bir necha qadamni bajaring.")}
+              </p>
+            </div>
+          )}
 
-        <div style={{ height: 7, borderRadius: 999, background: '#e6efe9', marginTop: 12, overflow: 'hidden' }}>
-          <div
-            style={{
-              height: '100%',
-              width: `${(completedSteps / totalSteps) * 100}%`,
-              background: 'linear-gradient(135deg,#00875a,#00a86f)',
-              transition: 'width .35s ease',
-            }}
-          />
-        </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Чек-лист запуска', "Ishga tushirish ro'yxati")}</h3>
+              <p className="sg-subtitle" style={{ marginTop: 6 }}>
+                {completedSteps} / {totalSteps} {tr('шагов выполнено', 'qadam bajarildi')}
+              </p>
+            </div>
+            <div className="sg-badge" style={{ background: '#e8f7ef', color: '#006f4a', fontSize: 12 }}>
+              {Math.round((completedSteps / totalSteps) * 100)}%
+            </div>
+          </div>
 
-        <div className="sg-grid" style={{ marginTop: 14 }}>
-          {checks.map((check, i) => (
-            <button
-              key={`${check.label}-${i}`}
-              onClick={() => check.to && (window.location.hash = check.to)}
+          <div style={{ height: 7, borderRadius: 999, background: '#e6efe9', marginTop: 12, overflow: 'hidden' }}>
+            <div
               style={{
-                border: '1px solid #e1e9e3',
-                borderRadius: 10,
-                background: check.done ? '#f0faf4' : '#fff',
-                textAlign: 'left',
-                padding: '10px 12px',
-                cursor: check.to ? 'pointer' : 'default',
+                height: '100%',
+                width: `${(completedSteps / totalSteps) * 100}%`,
+                background: 'linear-gradient(135deg,#00875a,#00a86f)',
+                transition: 'width .35s ease',
               }}
-            >
-              <div style={{ fontWeight: 700, fontSize: 14, color: check.done ? '#5f6d64' : '#18261f' }}>
-                {check.done ? tr('Готово', 'Bajarildi') : `${tr('Шаг', 'Qadam')} ${i + 1}`}: {check.label}
-              </div>
-              {!check.done && <div style={{ color: '#738279', fontSize: 12, marginTop: 2 }}>{check.desc}</div>}
-            </button>
-          ))}
+            />
+          </div>
+
+          <div className="sg-grid" style={{ marginTop: 14 }}>
+            {checks.map((check, i) => (
+              <button
+                key={`${check.label}-${i}`}
+                onClick={() => check.to && (window.location.hash = check.to)}
+                style={{
+                  border: '1px solid #e1e9e3',
+                  borderRadius: 10,
+                  background: check.done ? '#f0faf4' : '#fff',
+                  textAlign: 'left',
+                  padding: '10px 12px',
+                  cursor: check.to ? 'pointer' : 'default',
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: 14, color: check.done ? '#5f6d64' : '#18261f' }}>
+                  {check.done ? tr('Готово', 'Bajarildi') : `${tr('Шаг', 'Qadam')} ${i + 1}`}: {check.label}
+                </div>
+                {!check.done && <div style={{ color: '#738279', fontSize: 12, marginTop: 2 }}>{check.desc}</div>}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="sg-grid cols-4">
         <article className="sg-card">

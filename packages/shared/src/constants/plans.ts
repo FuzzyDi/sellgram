@@ -23,6 +23,7 @@ export const PLANS = {
       maxReportsPerMonth: 30,
       allowReportExport: false,
       maxScheduledReports: 0,
+      maxExportsPerMonth: 0,
     },
     features: [
       '1 магазин',
@@ -55,6 +56,7 @@ export const PLANS = {
       maxReportsPerMonth: 300,
       allowReportExport: true,
       maxScheduledReports: 3,
+      maxExportsPerMonth: 50,
     },
     features: [
       '3 магазина',
@@ -90,6 +92,7 @@ export const PLANS = {
       maxReportsPerMonth: -1,
       allowReportExport: true,
       maxScheduledReports: -1,
+      maxExportsPerMonth: -1,
     },
     features: [
       '10 магазинов',

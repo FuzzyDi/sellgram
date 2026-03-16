@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Tag, Users,
   CreditCard, Megaphone, BarChart2, Settings as SettingsIcon, Receipt,
-  HelpCircle, LogOut, Menu, X, type LucideIcon,
+  HelpCircle, LogOut, Menu, X, Truck, ClipboardList, type LucideIcon,
 } from 'lucide-react';
 import { adminApi, clearTokens, setTokens } from './api/store-admin-client';
 import { useAdminI18n } from './i18n';
@@ -16,6 +16,8 @@ import Login from './pages/Login';
 import Orders from './pages/Orders';
 import PaymentMethods from './pages/PaymentMethods';
 import Products from './pages/Products';
+import Procurement from './pages/Procurement';
+import AuditLog from './pages/AuditLog';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import SystemAdmin from './pages/SystemAdmin';
@@ -34,17 +36,19 @@ function useRoute() {
 }
 
 const NAV_ICONS: Record<string, LucideIcon> = {
-  '/':           LayoutDashboard,
-  '/orders':     ShoppingCart,
-  '/products':   Package,
-  '/categories': Tag,
-  '/customers':  Users,
-  '/payments':   CreditCard,
-  '/broadcasts': Megaphone,
-  '/reports':    BarChart2,
-  '/settings':   SettingsIcon,
-  '/billing':    Receipt,
-  '/help':       HelpCircle,
+  '/':             LayoutDashboard,
+  '/orders':       ShoppingCart,
+  '/products':     Package,
+  '/categories':   Tag,
+  '/customers':    Users,
+  '/payments':     CreditCard,
+  '/procurement':  Truck,
+  '/broadcasts':   Megaphone,
+  '/reports':      BarChart2,
+  '/settings':     SettingsIcon,
+  '/billing':      Receipt,
+  '/audit-log':    ClipboardList,
+  '/help':         HelpCircle,
 };
 
 function Sidebar({
@@ -57,19 +61,21 @@ function Sidebar({
   open: boolean;
   onClose: () => void;
 }) {
-  const { t, lang, setLang } = useAdminI18n();
+  const { t, tr, lang, setLang } = useAdminI18n();
 
   const links = useMemo(() => [
     { to: '/',           label: t('dashboard') },
     { to: '/orders',     label: t('orders'),     perm: 'manageOrders' },
     { to: '/products',   label: t('products'),   perm: 'manageCatalog' },
     { to: '/categories', label: t('categories'), perm: 'manageCatalog' },
-    { to: '/customers',  label: t('customers'),  perm: 'manageCustomers' },
-    { to: '/payments',   label: t('payments'),   perm: 'manageBilling' },
-    { to: '/broadcasts', label: t('broadcasts'), perm: 'manageMarketing' },
+    { to: '/customers',   label: t('customers'),   perm: 'manageCustomers' },
+    { to: '/payments',    label: t('payments'),    perm: 'manageBilling' },
+    { to: '/procurement', label: t('procurement'), perm: 'manageCatalog' },
+    { to: '/broadcasts',  label: t('broadcasts'),  perm: 'manageMarketing' },
     { to: '/reports',    label: t('reports'),    perm: 'viewReports' },
     { to: '/settings',   label: t('settings') },
     { to: '/billing',    label: t('plans'),      perm: 'manageBilling' },
+    { to: '/audit-log',  label: tr('Журнал', 'Jurnal'), perm: 'manageSettings' },
     { to: '/help',       label: t('help') },
   ], [t]);
 
@@ -225,14 +231,16 @@ function Sidebar({
 function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
   const perms = auth.user?.effectivePermissions || {};
   const routePermMap: Record<string, string> = {
-    '/orders':     'manageOrders',
-    '/products':   'manageCatalog',
-    '/categories': 'manageCatalog',
-    '/customers':  'manageCustomers',
-    '/payments':   'manageBilling',
-    '/broadcasts': 'manageMarketing',
-    '/reports':    'viewReports',
-    '/billing':    'manageBilling',
+    '/orders':       'manageOrders',
+    '/products':     'manageCatalog',
+    '/categories':   'manageCatalog',
+    '/procurement':  'manageCatalog',
+    '/customers':    'manageCustomers',
+    '/payments':     'manageBilling',
+    '/broadcasts':   'manageMarketing',
+    '/reports':      'viewReports',
+    '/billing':      'manageBilling',
+    '/audit-log':    'manageSettings',
   };
   const needPerm = routePermMap[route];
   if (needPerm && !perms[needPerm]) return <Dashboard />;
@@ -240,6 +248,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
   switch (route) {
     case '/system-admin': return <SystemAdmin />;
     case '/products':     return <Products />;
+    case '/procurement':  return <Procurement />;
     case '/categories':   return <Categories />;
     case '/orders':       return <Orders />;
     case '/customers':    return <Customers />;
@@ -248,6 +257,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
     case '/reports':      return <Reports />;
     case '/settings':     return <Settings />;
     case '/billing':      return <Billing />;
+    case '/audit-log':    return <AuditLog />;
     case '/help':         return <Help />;
     default:              return <Dashboard />;
   }

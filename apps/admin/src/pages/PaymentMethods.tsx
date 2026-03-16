@@ -20,6 +20,7 @@ export default function PaymentMethods() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [form, setForm] = useState<FormState>(emptyPaymentMethodForm(0));
   const [pendingArchive, setPendingArchive] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
@@ -38,14 +39,22 @@ export default function PaymentMethods() {
 
   async function loadMethods(targetStoreId: string) {
     if (!targetStoreId) return;
-    const list = await adminApi.getStorePaymentMethods(targetStoreId);
-    setMethods(Array.isArray(list) ? list : []);
+    try {
+      const list = await adminApi.getStorePaymentMethods(targetStoreId);
+      setMethods(Array.isArray(list) ? list : []);
+    } catch {
+      setMethods([]);
+      showNotice('error', tr('Не удалось загрузить методы оплаты', "To'lov usullarini yuklab bo'lmadi"));
+    }
   }
 
   async function bootstrap() {
     setLoading(true);
+    setLoadError(false);
     try {
       await loadStores();
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -144,6 +153,20 @@ export default function PaymentMethods() {
         <div className="sg-skeleton" style={{ height: 36, width: '30%' }} />
         <div className="sg-skeleton" style={{ height: 20, width: '55%' }} />
         <div className="sg-skeleton" style={{ height: 120 }} />
+      </section>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+        <header>
+          <h2 className="sg-title">{tr('Способы оплаты', "To'lov usullari")}</h2>
+        </header>
+        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
+          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={() => void bootstrap()}>{tr('Повторить', 'Qayta urinish')}</button>
+        </div>
       </section>
     );
   }

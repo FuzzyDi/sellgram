@@ -20,6 +20,7 @@ export default function Categories() {
   const [name, setName] = useState('');
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
 
@@ -30,10 +31,12 @@ export default function Categories() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const data = await adminApi.getCategories();
       setCategories(Array.isArray(data) ? data : data.items || []);
     } catch {
+      setLoadError(true);
       setCategories([]);
     } finally {
       setLoading(false);
@@ -131,7 +134,12 @@ export default function Categories() {
         />
       </div>
 
-      {loading ? (
+      {loadError ? (
+        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить категории', "Toifalarni yuklab bo'lmadi")}</p>
+          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={() => void load()}>{tr('Повторить', 'Qayta urinish')}</button>
+        </div>
+      ) : loading ? (
         <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
           {[1, 2, 3].map((i) => (
             <div key={i} style={{ display: 'flex', gap: 16, padding: '12px 16px', borderBottom: '1px solid #edf2ee', alignItems: 'center' }}>

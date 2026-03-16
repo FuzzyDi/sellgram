@@ -9,9 +9,11 @@ const mocks = vi.hoisted(() => ({
       updateMany: vi.fn(),
     },
   },
+  permissionGuard: vi.fn((_key: string) => async () => {}),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
+vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
 
 import categoryRoutes from './routes.js';
 

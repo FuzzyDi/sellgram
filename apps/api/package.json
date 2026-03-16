@@ -14,11 +14,10 @@
   "dependencies": {
     "@fastify/cors": "^9.0.0",
     "@fastify/multipart": "^8.2.0",
-    "sharp": "^0.33.0",
     "@fastify/rate-limit": "^9.1.0",
     "@prisma/client": "^5.14.0",
-    "@sellgram/shared": "workspace:*",
     "@sellgram/prisma": "workspace:*",
+    "@sellgram/shared": "workspace:*",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.7.0",
     "dotenv": "^16.4.0",
@@ -28,16 +27,18 @@
     "ioredis": "^5.4.0",
     "jose": "^5.4.0",
     "minio": "^8.0.0",
+    "nodemailer": "^8.0.2",
     "pino": "^9.1.0",
+    "sharp": "^0.33.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
     "@types/node": "^20.14.0",
+    "@types/nodemailer": "^7.0.11",
     "pino-pretty": "^11.0.0",
     "tsx": "^4.10.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
   }
 }
-

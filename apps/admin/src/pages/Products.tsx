@@ -60,6 +60,7 @@ export default function Products() {
   const [form, setForm] = useState<FormData>(emptyForm);
   const [catName, setCatName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
   const [search, setSearch] = useState('');
@@ -72,6 +73,7 @@ export default function Products() {
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const params = new URLSearchParams();
       params.set('page', '1');
@@ -85,6 +87,7 @@ export default function Products() {
       setProducts(data.items || []);
       setTotal(data.total || 0);
     } catch {
+      setLoadError(true);
       setProducts([]);
       setTotal(0);
     } finally {
@@ -330,7 +333,12 @@ export default function Products() {
         </button>
       </div>
 
-      {loading ? (
+      {loadError ? (
+        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить товары', "Mahsulotlarni yuklab bo'lmadi")}</p>
+          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={() => void loadProducts()}>{tr('Повторить', 'Qayta urinish')}</button>
+        </div>
+      ) : loading ? (
         <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
           {[1, 2, 3, 4].map((i) => (
             <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid #edf2ee', alignItems: 'center' }}>

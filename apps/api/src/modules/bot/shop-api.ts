@@ -45,7 +45,9 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     return { success: true, data };
   });
 
-  fastify.post('/shop/cart/items', async (request, reply) => {
+  fastify.post('/shop/cart/items', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     try {
       const body = cartAddSchema.parse(request.body);
       const result = await addCartItem({
@@ -63,7 +65,9 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.patch('/shop/cart/items/:id', async (request, reply) => {
+  fastify.patch('/shop/cart/items/:id', {
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     try {
       const { id } = itemIdParamsSchema.parse(request.params);
       const { qty } = cartUpdateQtySchema.parse(request.body);
@@ -80,7 +84,9 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.delete('/shop/cart/items/:id', async (request, reply) => {
+  fastify.delete('/shop/cart/items/:id', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     try {
       const { id } = itemIdParamsSchema.parse(request.params);
       const result = await removeCartItem({ customerId: request.customer!.id, itemId: id });

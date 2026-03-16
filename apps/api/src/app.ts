@@ -70,9 +70,15 @@ async function main() {
       (req.headers['x-request-id'] as string | undefined) ?? crypto.randomUUID(),
   });
 
-  // Propagate request ID to every response so clients can reference it in support tickets
+  // Propagate request ID to every response so clients can reference it in support tickets.
+  // Also set baseline security headers (no helmet dependency needed for these static values).
   fastify.addHook('onSend', async (request, reply) => {
     reply.header('X-Request-Id', request.id);
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('X-XSS-Protection', '0'); // tell modern browsers to use their built-in XSS filter, not the legacy header
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   });
 
   // CORS
@@ -242,6 +248,7 @@ async function main() {
   const analyticsRoutes = (await import('./modules/analytics/routes.js')).default;
   const subscriptionRoutes = (await import('./modules/subscription/routes.js')).default;
   const broadcastRoutes = (await import('./modules/broadcast/routes.js')).default;
+  const auditRoutes = (await import('./modules/audit/routes.js')).default;
   const systemAdminRoutes = (await import('./modules/system-admin/routes.js')).default;
 
   await fastify.register(
@@ -258,6 +265,7 @@ async function main() {
       await app.register(analyticsRoutes);
       await app.register(subscriptionRoutes);
       await app.register(broadcastRoutes);
+      await app.register(auditRoutes);
     },
     { prefix: '/api/store-admin' }
   );
@@ -296,6 +304,26 @@ async function main() {
   } catch (err: any) {
     fastify.log.error(`Bot manager failed: ${err.message}`);
     fastify.log.error(err.stack);
+  }
+
+  // Background job workers
+  try {
+    const { createDailyDigestWorker } = await import('./jobs/daily-digest.js');
+    const { createBroadcastWorker } = await import('./jobs/broadcast.js');
+    createDailyDigestWorker();
+    createBroadcastWorker();
+    fastify.log.info('Background workers started (daily-digest, broadcast)');
+  } catch (err: any) {
+    fastify.log.error(`Workers failed to start: ${err.message}`);
+  }
+
+  // Scheduled reports runner (every 15 min)
+  try {
+    const { startScheduledReportsRunner } = await import('./jobs/scheduled-reports.js');
+    startScheduledReportsRunner();
+    fastify.log.info('Scheduled reports runner started');
+  } catch (err: any) {
+    fastify.log.error(`Scheduled reports runner failed to start: ${err.message}`);
   }
 
   // Graceful shutdown: drain in-flight requests before exiting

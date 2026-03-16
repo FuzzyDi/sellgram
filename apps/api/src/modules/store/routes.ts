@@ -1,5 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { planGuard } from '../../plugins/plan-guard.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
+import { writeAuditLog } from '../../lib/audit.js';
 import paymentMethodRoutes from '../payments-integration/payment-methods.routes.js';
 import { createStoreSchema, storeIdParamSchema, updateStoreSchema } from './dto.js';
 import {
@@ -36,11 +38,12 @@ export default async function storeRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/stores', {
-    preHandler: [planGuard('maxStores')],
+    preHandler: [permissionGuard('manageSettings'), planGuard('maxStores')],
   }, async (request, reply) => {
     try {
       const body = createStoreSchema.parse(request.body);
       const data = await createTenantStore(request.tenantId!, body);
+      writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'store.create', targetId: data.id, details: { name: data.name } });
       return { success: true, data };
     } catch (err: unknown) {
       const mapped = mapStoreError(err);
@@ -59,11 +62,12 @@ export default async function storeRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.patch('/stores/:id', async (request, reply) => {
+  fastify.patch('/stores/:id', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
     try {
       const { id } = storeIdParamSchema.parse(request.params);
       const body = updateStoreSchema.parse(request.body);
       await updateTenantStore(request.tenantId!, id, body);
+      writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'store.update', targetId: id });
       return { success: true, message: 'Store updated' };
     } catch (err: unknown) {
       const mapped = mapStoreError(err);
@@ -71,10 +75,11 @@ export default async function storeRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.delete('/stores/:id', async (request, reply) => {
+  fastify.delete('/stores/:id', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
     try {
       const { id } = storeIdParamSchema.parse(request.params);
       await deleteTenantStore(request.tenantId!, id);
+      writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'store.delete', targetId: id });
       return { success: true, message: 'Store deleted' };
     } catch (err: unknown) {
       const mapped = mapStoreError(err);
@@ -93,10 +98,11 @@ export default async function storeRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post('/stores/:id/activate', async (request, reply) => {
+  fastify.post('/stores/:id/activate', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
     try {
       const { id } = storeIdParamSchema.parse(request.params);
       const data = await activateTenantStoreBot(request.tenantId!, id);
+      writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'store.activate', targetId: id });
       return {
         success: true,
         message: 'Bot activated and webhook configured',

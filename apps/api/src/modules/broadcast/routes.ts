@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
-import { sendPromoBroadcast } from '../../bot/bot-manager.js';
+import { createBroadcastQueue, type BroadcastJobData } from '../../jobs/broadcast.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 
 const createBroadcastSchema = z.object({
@@ -14,6 +14,8 @@ const createBroadcastSchema = z.object({
 
 export default async function broadcastRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
+
+  const broadcastQueue = createBroadcastQueue();
 
   const broadcastsQuerySchema = z.object({ storeId: z.string().optional() });
 
@@ -93,32 +95,27 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
           title: body.title,
           message: body.message,
           targetType: body.targetType,
-          status: 'DRAFT',
+          status: 'QUEUED',
           totalRecipients: recipients.length,
         },
       });
 
-      const results = await sendPromoBroadcast(body.storeId, recipients, {
-        title: body.title,
-        message: body.message,
-      });
+      const jobData: BroadcastJobData = {
+        campaignId: campaign.id,
+        storeId: body.storeId,
+        recipients: recipients.map((r) => ({
+          id: r.id,
+          telegramId: r.telegramId.toString(),
+          firstName: r.firstName,
+        })),
+        payload: { title: body.title, message: body.message },
+      };
 
-      const sentCount = results.sent;
-      const failedCount = results.failed;
-
-      await prisma.broadcastCampaign.update({
-        where: { id: campaign.id },
-        data: {
-          status: failedCount === recipients.length ? 'FAILED' : 'SENT',
-          sentCount,
-          failedCount,
-          sentAt: new Date(),
-        },
-      });
+      await broadcastQueue.add('send', jobData, { attempts: 2, backoff: { type: 'fixed', delay: 30_000 } });
 
       return {
         success: true,
-        data: { campaignId: campaign.id, total: recipients.length, sent: sentCount, failed: failedCount },
+        data: { campaignId: campaign.id, total: recipients.length, status: 'QUEUED' },
       };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });

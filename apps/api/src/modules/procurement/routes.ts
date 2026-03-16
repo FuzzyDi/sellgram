@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 
 const PO_STATUS = ['DRAFT', 'ORDERED', 'IN_TRANSIT', 'RECEIVED', 'CANCELLED'] as const;
 type POStatus = typeof PO_STATUS[number];
@@ -88,7 +89,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
 
   // Create PO
   fastify.post('/purchase-orders', {
-    preHandler: [planGuard('procurementEnabled')],
+    preHandler: [permissionGuard('manageCatalog'), planGuard('procurementEnabled')],
   }, async (request, reply) => {
     try {
       const body = createPOSchema.parse(request.body);
@@ -142,7 +143,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
   });
 
   // Update PO
-  fastify.patch('/purchase-orders/:id', async (request, reply) => {
+  fastify.patch('/purchase-orders/:id', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let body: z.infer<typeof updatePOSchema>;
     try {
@@ -190,7 +191,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
   });
 
   // Receive PO (critical business logic)
-  fastify.post('/purchase-orders/:id/receive', async (request, reply) => {
+  fastify.post('/purchase-orders/:id/receive', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let receiveBody: z.infer<typeof receivePOSchema>;
     try {

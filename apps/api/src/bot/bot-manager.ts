@@ -618,6 +618,21 @@ export async function initBotManager(fastify: FastifyInstance): Promise<void> {
   setTimeout(() => void remindExpiringSubscriptions(), 30_000);
 }
 
+async function retryTelegramSend(fn: () => Promise<unknown>, maxAttempts = 3): Promise<void> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await fn();
+      return;
+    } catch (err: any) {
+      const code: number | undefined = err?.error_code;
+      // 400 Bad Request (invalid chat id) and 403 Forbidden (bot blocked) are permanent — don't retry
+      if (code === 400 || code === 403) return;
+      if (attempt === maxAttempts) return;
+      await new Promise((r) => setTimeout(r, attempt * 1000));
+    }
+  }
+}
+
 export async function notifyOrderStatus(storeId: string, orderId: string, newStatus: OrderStatusType): Promise<void> {
   const instance = bots.get(storeId);
   if (!instance) return;
@@ -650,13 +665,17 @@ export async function notifyOrderStatus(storeId: string, orderId: string, newSta
       `\u{1F4EC} #${order.orderNumber} buyurtma yetkazildi.\n\nJami: ${Number(order.total).toLocaleString()} UZS\n\nQabulni tasdiqlang.`
     );
 
-    await instance.bot.api.sendMessage(order.customer.telegramId.toString(), deliveredText, { reply_markup: kb });
+    await retryTelegramSend(() =>
+      instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), deliveredText, { reply_markup: kb })
+    );
     return;
   }
 
   const text = textByStatus[newStatus];
   if (!text) return;
-  await instance.bot.api.sendMessage(order.customer.telegramId.toString(), text);
+  await retryTelegramSend(() =>
+    instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text)
+  );
 }
 
 export async function notifyNewOrder(storeId: string, order: any): Promise<void> {
@@ -698,9 +717,9 @@ export async function notifyNewOrder(storeId: string, order: any): Promise<void>
       .text(tLangByCode(lang, '\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044C', 'Tasdiqlash'), `adm_CONFIRMED_${order.id}`)
       .text(tLangByCode(lang, '\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C', 'Bekor qilish'), `adm_CANCELLED_${order.id}`);
 
-    try {
-      await instance.bot.api.sendMessage(admin.adminTelegramId.toString(), text, { reply_markup: kb });
-    } catch {}
+    await retryTelegramSend(() =>
+      instance.bot.api.sendMessage(admin.adminTelegramId!.toString(), text, { reply_markup: kb })
+    );
   }
 }
 

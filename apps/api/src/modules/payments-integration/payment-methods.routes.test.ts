@@ -10,11 +10,13 @@ const mocks = vi.hoisted(() => ({
     listStorePaymentMethods: vi.fn(),
     updateStorePaymentMethod: vi.fn(),
   },
+  permissionGuard: vi.fn((_key: string) => async () => {}),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({
   default: mocks.prisma,
 }));
+vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
 
 vi.mock('./payment-methods.service.js', () => ({
   archiveStorePaymentMethod: mocks.service.archiveStorePaymentMethod,

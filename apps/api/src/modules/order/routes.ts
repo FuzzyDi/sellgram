@@ -5,6 +5,7 @@ import { notifyOrderStatus } from '../../bot/bot-manager.js';
 import { applyOrderPaymentStatus } from '../../payments/service.js';
 import { updateOrderStatus } from './order.service.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { writeAuditLog } from '../../lib/audit.js';
 
 const updateStatusSchema = z.object({
   status: z.enum(['CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'REFUNDED']),
@@ -166,6 +167,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       data: { deliveryPrice, trackingNumber },
     });
     if (result.count === 0) return reply.status(404).send({ success: false, error: 'Order not found' });
+    writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'order.delivery.update', targetId: id, details: Object.fromEntries(Object.entries(deliveryBody).filter(([, v]) => v !== undefined)) as Record<string, unknown> });
     return { success: true, message: 'Delivery info updated' };
   });
 
@@ -184,6 +186,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         tenantId: request.tenantId!,
         status: body.paymentStatus,
       });
+      writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'order.payment.update', targetId: id, details: { paymentStatus: body.paymentStatus } });
       return { success: true, message: 'Payment status updated' };
     } catch (err: any) {
       if (err.message === 'ORDER_NOT_FOUND') {

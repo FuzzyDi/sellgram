@@ -29,8 +29,8 @@ export default function Loyalty() {
   if (error) {
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
-        <p style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 12 }}>{tr('Не удалось загрузить баллы', "Ballarni yuklab bo'lmadi")}</p>
-        <button onClick={load} style={{ padding: '8px 20px', borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{tr('Повторить', 'Qayta urinish')}</button>
+        <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить баллы', "Ballarni yuklab bo'lmadi")}</p>
+        <button className="btn secondary sm pill" onClick={load}>{tr('Повторить', 'Qayta urinish')}</button>
         <BottomNav active="loyalty" />
       </div>
     );

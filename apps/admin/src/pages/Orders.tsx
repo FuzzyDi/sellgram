@@ -23,6 +23,7 @@ export default function Orders() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [pendingOrders, setPendingOrders] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
 
@@ -57,6 +58,7 @@ export default function Orders() {
 
   const loadOrders = useCallback(() => {
     setLoading(true);
+    setLoadError(false);
     const params = new URLSearchParams();
     params.set('page', String(page));
     params.set('pageSize', '20');
@@ -67,6 +69,7 @@ export default function Orders() {
     adminApi
       .getOrders(params.toString())
       .then(setData)
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, [page, statusFilter, paymentFilter, search]);
 
@@ -158,7 +161,12 @@ export default function Orders() {
         </div>
       </div>
 
-      {loading ? (
+      {loadError ? (
+        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить заказы', "Buyurtmalarni yuklab bo'lmadi")}</p>
+          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={loadOrders}>{tr('Повторить', 'Qayta urinish')}</button>
+        </div>
+      ) : loading ? (
         <div className="sg-grid">
           {[1, 2, 3].map((i) => (
             <div key={i} className="sg-card" style={{ display: 'grid', gap: 10 }}>

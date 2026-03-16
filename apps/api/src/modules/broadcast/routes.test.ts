@@ -7,12 +7,12 @@ const mocks = vi.hoisted(() => ({
     store: { findFirst: vi.fn() },
     customer: { findMany: vi.fn() },
   },
-  sendPromoBroadcast: vi.fn(),
+  broadcastQueue: { add: vi.fn() },
   permissionGuard: vi.fn((_key: string) => async () => {}),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
-vi.mock('../../bot/bot-manager.js', () => ({ sendPromoBroadcast: mocks.sendPromoBroadcast }));
+vi.mock('../../jobs/broadcast.js', () => ({ createBroadcastQueue: () => mocks.broadcastQueue }));
 vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
 
 import broadcastRoutes from './routes.js';
@@ -88,8 +88,6 @@ describe('broadcast.routes', () => {
         { id: 'c-1', telegramId: 111n, firstName: 'Alice' },
       ]);
       mocks.prisma.broadcastCampaign.create.mockResolvedValue({ id: 'bc-1' });
-      mocks.prisma.broadcastCampaign.update.mockResolvedValue({});
-      mocks.sendPromoBroadcast.mockResolvedValue({ sent: 1, failed: 0 });
 
       const app = await buildApp();
       await app.inject({
@@ -112,15 +110,13 @@ describe('broadcast.routes', () => {
       await app.close();
     });
 
-    it('sends ALL broadcast and updates campaign status', async () => {
+    it('enqueues ALL broadcast job and returns QUEUED status', async () => {
       mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
       mocks.prisma.customer.findMany.mockResolvedValue([
         { id: 'c-1', telegramId: 111n, firstName: 'Alice' },
         { id: 'c-2', telegramId: 222n, firstName: 'Bob' },
       ]);
       mocks.prisma.broadcastCampaign.create.mockResolvedValue({ id: 'bc-1' });
-      mocks.prisma.broadcastCampaign.update.mockResolvedValue({});
-      mocks.sendPromoBroadcast.mockResolvedValue({ sent: 2, failed: 0 });
 
       const app = await buildApp();
       const response = await app.inject({
@@ -130,21 +126,26 @@ describe('broadcast.routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().data).toMatchObject({ total: 2, sent: 2, failed: 0 });
-      expect(mocks.prisma.broadcastCampaign.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: 'SENT' }) })
+      expect(response.json().data).toMatchObject({ campaignId: 'bc-1', total: 2, status: 'QUEUED' });
+      expect(mocks.prisma.broadcastCampaign.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'QUEUED', totalRecipients: 2 }) })
       );
+      expect(mocks.broadcastQueue.add).toHaveBeenCalledWith(
+        'send',
+        expect.objectContaining({ campaignId: 'bc-1', storeId: 'store-1' }),
+        expect.any(Object)
+      );
+      // Route does NOT update campaign status — that's the worker's job
+      expect(mocks.prisma.broadcastCampaign.update).not.toHaveBeenCalled();
       await app.close();
     });
 
-    it('marks campaign FAILED when all sends fail', async () => {
+    it('job data contains stringified telegramIds', async () => {
       mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
       mocks.prisma.customer.findMany.mockResolvedValue([
         { id: 'c-1', telegramId: 111n, firstName: 'Alice' },
       ]);
       mocks.prisma.broadcastCampaign.create.mockResolvedValue({ id: 'bc-1' });
-      mocks.prisma.broadcastCampaign.update.mockResolvedValue({});
-      mocks.sendPromoBroadcast.mockResolvedValue({ sent: 0, failed: 1 });
 
       const app = await buildApp();
       await app.inject({
@@ -153,8 +154,12 @@ describe('broadcast.routes', () => {
         payload: { storeId: 'store-1', message: 'Hello', targetType: 'ALL' },
       });
 
-      expect(mocks.prisma.broadcastCampaign.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) })
+      expect(mocks.broadcastQueue.add).toHaveBeenCalledWith(
+        'send',
+        expect.objectContaining({
+          recipients: [{ id: 'c-1', telegramId: '111', firstName: 'Alice' }],
+        }),
+        expect.any(Object)
       );
       await app.close();
     });

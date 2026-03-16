@@ -8,9 +8,11 @@ export default function Customers() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
+    setError(false);
     const params = new URLSearchParams();
     params.set('page', String(page));
     params.set('pageSize', '30');
@@ -19,10 +21,27 @@ export default function Customers() {
     adminApi
       .getCustomers(params.toString())
       .then(setData)
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [page, search]);
 
   const totalPages = useMemo(() => Math.max(1, data?.totalPages || 1), [data?.totalPages]);
+
+  if (error) {
+    return (
+      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+        <header>
+          <h2 className="sg-title">{tr('Клиенты', 'Mijozlar')}</h2>
+        </header>
+        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить клиентов', "Mijozlarni yuklab bo'lmadi")}</p>
+          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={() => { setPage(1); setError(false); setLoading(true); }}>
+            {tr('Повторить', 'Qayta urinish')}
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="sg-page sg-grid" style={{ gap: 16 }}>

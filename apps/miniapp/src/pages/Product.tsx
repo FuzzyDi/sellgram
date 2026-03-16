@@ -1,23 +1,34 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
+import { cartStore } from '../stores/cartStore';
+import { useTelegramBackButton } from '../hooks/useTelegramBackButton';
 
 export default function Product({ id }: { id: string }) {
   const { tr } = useMiniI18n();
+  const goBack = useCallback(() => navigate('/'), []);
+  useTelegramBackButton(goBack);
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [imgIdx, setImgIdx] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (id) {
-      api.getProduct(id).then(setProduct).catch(() => {}).finally(() => setLoading(false));
-    }
-  }, [id]);
+  function loadProduct() {
+    if (!id) return;
+    setLoading(true);
+    setFetchError(false);
+    api.getProduct(id)
+      .then(setProduct)
+      .catch(() => setFetchError(true))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { loadProduct(); }, [id]);
 
   const addToCart = async () => {
     if (!product || adding) return;
@@ -26,6 +37,7 @@ export default function Product({ id }: { id: string }) {
       await api.addToCart(product.id);
       setAdded(true);
       setAddError(null);
+      cartStore.inc();
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       setTimeout(() => setAdded(false), 2000);
     } catch (err: any) {
@@ -49,6 +61,18 @@ export default function Product({ id }: { id: string }) {
           <div className="skeleton" style={{ height: 24, width: '70%', marginBottom: 12 }} />
           <div className="skeleton" style={{ height: 32, width: '40%' }} />
         </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 12, padding: 24 }}>
+        <span style={{ fontSize: 40 }}>⚠️</span>
+        <p style={{ fontWeight: 600, color: 'var(--hint)', textAlign: 'center' }}>{tr('Не удалось загрузить товар', 'Mahsulotni yuklab bo\'lmadi')}</p>
+        <button className="btn primary pill" onClick={loadProduct}>
+          {tr('Повторить', 'Qayta urinish')}
+        </button>
       </div>
     );
   }
@@ -111,12 +135,13 @@ export default function Product({ id }: { id: string }) {
       </div>
 
       <div className="glass" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30, padding: '10px 16px max(env(safe-area-inset-bottom, 0px), 10px)', borderTop: '0.5px solid var(--divider)' }}>
-        {addError && (
-          <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,59,48,0.1)', color: 'var(--danger)', fontSize: 13, fontWeight: 600 }}>
-            {addError}
-          </div>
-        )}
-        <button onClick={addToCart} disabled={!inStock || adding} className="pressable" style={{ width: '100%', padding: 16, borderRadius: 'var(--radius)', border: 'none', fontSize: 16, fontWeight: 700, cursor: inStock ? 'pointer' : 'default', background: added ? 'var(--success)' : !inStock ? 'var(--sec)' : 'var(--btn)', color: added ? '#fff' : !inStock ? 'var(--hint)' : 'var(--btn-text)', transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)' }}>
+        {addError && <div className="error-banner" style={{ marginBottom: 8 }}>{addError}</div>}
+        <button
+          onClick={addToCart}
+          disabled={!inStock || adding}
+          className={`btn full${added ? ' success' : !inStock ? ' secondary' : ' primary'}`}
+          style={{ transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)', color: !inStock ? 'var(--hint)' : undefined }}
+        >
           {added ? tr('✓ В корзине', '✓ Savatda') : adding ? '...' : !inStock ? tr('Нет в наличии', 'Mavjud emas') : `${tr('В корзину', 'Savatga')} · ${Number(product.price).toLocaleString()} ${tr('сум', "so'm")}`}
         </button>
       </div>

@@ -1,11 +1,15 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { BottomNav } from './Catalog';
 import { useMiniI18n } from '../i18n';
+import { cartStore } from '../stores/cartStore';
+import { useTelegramBackButton } from '../hooks/useTelegramBackButton';
 
 export default function Cart() {
   const { tr } = useMiniI18n();
+  const goBack = useCallback(() => navigate('/'), []);
+  useTelegramBackButton(goBack);
   const [cart, setCart] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -13,7 +17,10 @@ export default function Cart() {
   const loadCart = () => {
     setLoading(true);
     setError(false);
-    api.getCart().then(setCart).catch(() => setError(true)).finally(() => setLoading(false));
+    api.getCart()
+      .then((c) => { setCart(c); cartStore.set(c?.items?.length ?? 0); })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
   };
 
   useEffect(loadCart, []);
@@ -38,8 +45,8 @@ export default function Cart() {
   if (error) {
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
-        <p style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 12 }}>{tr('Не удалось загрузить корзину', "Savatni yuklab bo'lmadi")}</p>
-        <button onClick={loadCart} style={{ padding: '8px 20px', borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{tr('Повторить', 'Qayta urinish')}</button>
+        <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить корзину', "Savatni yuklab bo'lmadi")}</p>
+        <button className="btn secondary sm pill" onClick={loadCart}>{tr('Повторить', 'Qayta urinish')}</button>
         <BottomNav active="cart" />
       </div>
     );
@@ -58,7 +65,7 @@ export default function Cart() {
           <div style={{ fontSize: 56, marginBottom: 12 }}>🛒</div>
           <p style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{tr('Корзина пуста', "Savat bo'sh")}</p>
           <p style={{ fontSize: 14, color: 'var(--hint)', marginBottom: 20 }}>{tr('Добавьте товары из каталога', "Katalogdan mahsulot qo'shing")}</p>
-          <button onClick={() => navigate('/')} className="pressable" style={{ padding: '10px 24px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--btn)', color: 'var(--btn-text)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          <button onClick={() => navigate('/')} className="btn secondary pill">
             {tr('В каталог', 'Katalogga')}
           </button>
         </div>
@@ -73,10 +80,10 @@ export default function Cart() {
                 <p style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
                 <p style={{ fontWeight: 700, fontSize: 14, marginTop: 2 }}>{item.price.toLocaleString()} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--hint)' }}>{tr('сум', "so'm")}</span></p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <button onClick={() => updateQty(item.id, item.qty - 1)} className="pressable" style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg)', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                <span style={{ fontWeight: 700, fontSize: 15, minWidth: 24, textAlign: 'center' }}>{item.qty}</span>
-                <button onClick={() => updateQty(item.id, item.qty + 1)} className="pressable" style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg)', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+              <div className="qty-row">
+                <button className="qty-btn" onClick={() => updateQty(item.id, item.qty - 1)}>−</button>
+                <span className="qty-val">{item.qty}</span>
+                <button className="qty-btn" onClick={() => updateQty(item.id, item.qty + 1)}>+</button>
               </div>
             </div>
           ))}
@@ -89,7 +96,7 @@ export default function Cart() {
             <span style={{ fontSize: 15, color: 'var(--hint)' }}>{items.length} {tr('товар(ов)', 'ta mahsulot')}</span>
             <span style={{ fontSize: 18, fontWeight: 800 }}>{cart.subtotal?.toLocaleString()} {tr('сум', "so'm")}</span>
           </div>
-          <button onClick={() => navigate('/checkout')} className="pressable" style={{ width: '100%', padding: 15, borderRadius: 'var(--radius)', border: 'none', fontSize: 16, fontWeight: 700, cursor: 'pointer', background: 'var(--btn)', color: 'var(--btn-text)' }}>
+          <button onClick={() => navigate('/checkout')} className="btn primary full">
             {tr('Оформить заказ', 'Buyurtma berish')}
           </button>
         </div>

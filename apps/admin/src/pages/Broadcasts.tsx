@@ -9,9 +9,10 @@ export default function Broadcasts() {
   const { tr, locale } = useAdminI18n();
   const [stores, setStores] = useState<any[]>([]);
   const [storeId, setStoreId] = useState('');
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [selectedCustomers, setSelectedCustomers] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
   const [targetType, setTargetType] = useState<TargetType>('ALL');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
@@ -20,6 +21,8 @@ export default function Broadcasts() {
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
 
+  const selectedCustomerIds = useMemo(() => selectedCustomers.map((c) => c.id), [selectedCustomers]);
+
   async function loadStores() {
     const list = await adminApi.getStores();
     const normalized = Array.isArray(list) ? list : [];
@@ -27,24 +30,23 @@ export default function Broadcasts() {
     if (!storeId && normalized[0]?.id) setStoreId(normalized[0].id);
   }
 
-  async function loadCustomers() {
-    const result = await adminApi.getCustomers('page=1&pageSize=500');
-    setCustomers(Array.isArray(result?.items) ? result.items : []);
-  }
-
   async function loadCampaigns(targetStoreId?: string) {
     if (!targetStoreId) {
       setCampaigns([]);
       return;
     }
-    const list = await adminApi.getBroadcasts(targetStoreId);
-    setCampaigns(Array.isArray(list) ? list : []);
+    try {
+      const list = await adminApi.getBroadcasts(targetStoreId);
+      setCampaigns(Array.isArray(list) ? list : []);
+    } catch {
+      // silent — keep stale list; auto-poll will retry
+    }
   }
 
   async function bootstrap() {
     setLoading(true);
     try {
-      await Promise.all([loadStores(), loadCustomers()]);
+      await loadStores();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0440\u0430\u0441\u0441\u044B\u043B\u043A\u0438', "Xabarnoma ma'lumotlarini yuklab bo'lmadi"));
     } finally {
@@ -58,20 +60,44 @@ export default function Broadcasts() {
 
   useEffect(() => {
     if (storeId) {
-      setSelectedCustomerIds([]);
+      setSelectedCustomers([]);
       void loadCampaigns(storeId);
     }
   }, [storeId]);
 
-  const filteredCustomers = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const base = customers.filter((c) => c?.telegramId);
-    if (!q) return base;
-    return base.filter((c) => {
-      const label = [c.firstName, c.lastName, c.telegramUser, c.phone].filter(Boolean).join(' ').toLowerCase();
-      return label.includes(q);
-    });
-  }, [customers, search]);
+  // Poll every 5 s while any campaign is still in-flight (QUEUED or SENDING)
+  useEffect(() => {
+    const hasInflight = campaigns.some((c) => c.status === 'QUEUED' || c.status === 'SENDING');
+    if (!hasInflight || !storeId) return;
+    const timer = setInterval(() => void loadCampaigns(storeId), 5000);
+    return () => clearInterval(timer);
+  }, [campaigns, storeId]);
+
+  // Debounced server-side customer search for the SELECTED recipient mode
+  useEffect(() => {
+    if (targetType !== 'SELECTED') return;
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const q = search.trim();
+        const params = `page=1&pageSize=30${q ? '&search=' + encodeURIComponent(q) : ''}`;
+        const result = await adminApi.getCustomers(params);
+        setSearchResults(Array.isArray(result?.items) ? result.items.filter((c: any) => c?.telegramId) : []);
+      } catch {
+        // keep stale results on error
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, targetType]);
+
+  // Merge: selected customers not in results shown first, then search results
+  const displayList = useMemo(() => {
+    const resultIds = new Set(searchResults.map((c) => c.id));
+    const selectedNotInResults = selectedCustomers.filter((c) => !resultIds.has(c.id));
+    return [...selectedNotInResults, ...searchResults];
+  }, [searchResults, selectedCustomers]);
 
   const canSend =
     !!storeId &&
@@ -79,14 +105,18 @@ export default function Broadcasts() {
     (targetType === 'ALL' || selectedCustomerIds.length > 0);
 
   const statusLabel: Record<string, string> = {
-    DRAFT: tr('\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a', 'Qoralama'),
-    SENT: tr('\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0430', 'Yuborildi'),
-    FAILED: tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xato'),
+    DRAFT:   tr('Черновик', 'Qoralama'),
+    QUEUED:  tr('В очереди', 'Navbatda'),
+    SENDING: tr('Отправляется', 'Yuborilmoqda'),
+    SENT:    tr('Отправлена', 'Yuborildi'),
+    FAILED:  tr('Ошибка', 'Xato'),
   };
 
   function campaignBadgeStyle(status: string): React.CSSProperties {
-    if (status === 'SENT')   return { background: '#d1fae5', color: '#065f46' };
-    if (status === 'FAILED') return { background: '#fee2e2', color: '#991b1b' };
+    if (status === 'SENT')    return { background: '#d1fae5', color: '#065f46' };
+    if (status === 'FAILED')  return { background: '#fee2e2', color: '#991b1b' };
+    if (status === 'QUEUED')  return { background: '#dbeafe', color: '#1e40af' };
+    if (status === 'SENDING') return { background: '#fef9c3', color: '#854d0e' };
     return { background: '#f3f4f6', color: '#4b5563' };
   }
 
@@ -109,7 +139,7 @@ export default function Broadcasts() {
       setTitle('');
       setMessage('');
       setSearch('');
-      setSelectedCustomerIds([]);
+      setSelectedCustomers([]);
       await loadCampaigns(storeId);
       showNotice('success', tr('Рассылка отправлена', 'Xabarnoma yuborildi'));
     } catch (err: any) {
@@ -119,9 +149,9 @@ export default function Broadcasts() {
     }
   }
 
-  function toggleCustomer(customerId: string) {
-    setSelectedCustomerIds((prev) =>
-      prev.includes(customerId) ? prev.filter((id) => id !== customerId) : [...prev, customerId]
+  function toggleCustomer(customer: any) {
+    setSelectedCustomers((prev) =>
+      prev.some((c) => c.id === customer.id) ? prev.filter((c) => c.id !== customer.id) : [...prev, customer]
     );
   }
 
@@ -231,12 +261,13 @@ export default function Broadcasts() {
                 style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }}
               />
               <div style={{ maxHeight: 240, overflow: 'auto' }}>
-                {filteredCustomers.map((customer) => (
+                {searchLoading && <p className="sg-subtitle">{tr('Поиск...', 'Qidirilmoqda...')}</p>}
+                {!searchLoading && displayList.map((customer) => (
                   <label key={customer.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 6 }}>
                     <input
                       type="checkbox"
                       checked={selectedCustomerIds.includes(customer.id)}
-                      onChange={() => toggleCustomer(customer.id)}
+                      onChange={() => toggleCustomer(customer)}
                     />
                     <span>
                       {[customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.telegramUser || customer.id}
@@ -244,7 +275,7 @@ export default function Broadcasts() {
                     </span>
                   </label>
                 ))}
-                {filteredCustomers.length === 0 && <p className="sg-subtitle">{tr('Список клиентов пуст', "Mijozlar ro'yxati bo'sh")}</p>}
+                {!searchLoading && displayList.length === 0 && <p className="sg-subtitle">{tr('Клиенты не найдены', "Mijozlar topilmadi")}</p>}
               </div>
             </div>
           )}

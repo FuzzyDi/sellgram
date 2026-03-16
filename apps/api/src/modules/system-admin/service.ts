@@ -15,7 +15,7 @@ function resolveReportExportLimit(plan: PlanCode) {
   const planCfg = PLANS[plan] || PLANS.FREE;
   const allowExport = Boolean(planCfg.limits.allowReportExport);
   const fallback = plan === 'BUSINESS' ? -1 : plan === 'PRO' ? 50 : 0;
-  const maxExportsPerMonth = Number((planCfg.limits as any).maxExportsPerMonth ?? fallback);
+  const maxExportsPerMonth = Number(planCfg.limits.maxExportsPerMonth ?? fallback);
   return {
     allowExport,
     maxExportsPerMonth,

@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { writeAuditLog } from '../../lib/audit.js';
 
 const loyaltyConfigSchema = z.object({
   isEnabled: z.boolean().optional(),
@@ -47,6 +48,7 @@ export default async function loyaltyRoutes(fastify: FastifyInstance) {
       create: { tenantId: request.tenantId!, ...data },
     });
 
+    writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'loyalty.config.update' });
     return { success: true, data: config };
   });
 }

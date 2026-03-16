@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 
 const categorySchema = z.object({
   name: z.string().min(1),
@@ -25,7 +26,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
     return { success: true, data: categories };
   });
 
-  fastify.post('/categories', async (request, reply) => {
+  fastify.post('/categories', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     try {
       const body = categorySchema.parse(request.body);
       const slug = body.slug || slugify(body.name);
@@ -38,7 +39,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.patch('/categories/:id', async (request, reply) => {
+  fastify.patch('/categories/:id', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let body: z.infer<ReturnType<typeof categorySchema.partial>>;
     try {
@@ -54,7 +55,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Category updated' };
   });
 
-  fastify.delete('/categories/:id', async (request, reply) => {
+  fastify.delete('/categories/:id', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await prisma.category.updateMany({
       where: { id, tenantId: request.tenantId! },

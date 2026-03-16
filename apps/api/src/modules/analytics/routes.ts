@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { getRedis } from '../../lib/redis.js';
 import { PLANS, type PlanCode, type ReportsLevel } from '@sellgram/shared';
+import { calcNextRunAt } from '../../jobs/scheduled-reports.js';
 
 const REPORTS_LEVEL_WEIGHT: Record<ReportsLevel, number> = {
   BASIC: 1,
@@ -49,6 +50,12 @@ const exportQuerySchema = z.object({
   type: z.enum(['top-products', 'revenue', 'categories', 'customers']).default('top-products'),
   days: z.coerce.number().int().min(1).max(365).default(30),
 });
+const createScheduledReportSchema = z.object({
+  reportType: z.enum(['top-products', 'revenue', 'categories', 'customers']),
+  periodDays: z.number().int().min(1).max(365),
+  frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
+});
+const scheduledReportIdSchema = z.object({ id: z.string().min(1) });
 
 function getReportAccess(reportLimits: ReportLimits) {
   return {
@@ -136,7 +143,7 @@ async function getTenantReportLimits(tenantId: string): Promise<ReportLimits> {
     allowReportExport: plan.limits.allowReportExport,
     maxReportsPerMonth: plan.limits.maxReportsPerMonth,
     maxScheduledReports: plan.limits.maxScheduledReports,
-    maxExportsPerMonth: Number((plan.limits as any).maxExportsPerMonth ?? fallbackExports),
+    maxExportsPerMonth: Number(plan.limits.maxExportsPerMonth ?? fallbackExports),
   };
 }
 
@@ -591,5 +598,62 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       .header('Content-Disposition', `attachment; filename="sellgram-${reportType}-${stamp}.csv"`)
       .header('X-Report-Exports-Left', String(exportsLeft))
       .send(csv);
+  });
+
+  // ── Scheduled reports CRUD ───────────────────────────────────────────────
+
+  fastify.get('/analytics/scheduled-reports', async (request) => {
+    const tenantId = request.tenantId!;
+    const data = await prisma.scheduledReport.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, reportType: true, periodDays: true, frequency: true, lastSentAt: true, nextRunAt: true, createdAt: true },
+    });
+    return { success: true, data };
+  });
+
+  fastify.post('/analytics/scheduled-reports', async (request, reply) => {
+    const tenantId = request.tenantId!;
+    let body: z.infer<typeof createScheduledReportSchema>;
+    try {
+      body = createScheduledReportSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    const reportLimits = await getTenantReportLimits(tenantId);
+    if (reportLimits.maxScheduledReports === 0) {
+      return reply.status(402).send({ success: false, error: 'Scheduled reports are not available on your current plan.' });
+    }
+
+    if (reportLimits.maxScheduledReports > 0) {
+      const existing = await prisma.scheduledReport.count({ where: { tenantId, isActive: true } });
+      if (existing >= reportLimits.maxScheduledReports) {
+        return reply.status(402).send({ success: false, error: `Plan limit reached (${reportLimits.maxScheduledReports} scheduled reports).` });
+      }
+    }
+
+    const nextRunAt = calcNextRunAt(body.frequency);
+    const data = await prisma.scheduledReport.create({
+      data: { tenantId, reportType: body.reportType, periodDays: body.periodDays, frequency: body.frequency, nextRunAt },
+      select: { id: true, reportType: true, periodDays: true, frequency: true, lastSentAt: true, nextRunAt: true, createdAt: true },
+    });
+    return { success: true, data };
+  });
+
+  fastify.delete('/analytics/scheduled-reports/:id', async (request, reply) => {
+    const tenantId = request.tenantId!;
+    let id: string;
+    try {
+      ({ id } = scheduledReportIdSchema.parse(request.params));
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: 'Invalid id' });
+    }
+
+    const report = await prisma.scheduledReport.findFirst({ where: { id, tenantId } });
+    if (!report) return reply.status(404).send({ success: false, error: 'Not found' });
+
+    await prisma.scheduledReport.update({ where: { id }, data: { isActive: false } });
+    return { success: true, message: 'Deleted' };
   });
 }

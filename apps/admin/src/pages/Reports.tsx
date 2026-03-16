@@ -27,6 +27,217 @@ type ReportsMeta = {
   };
 };
 
+type ScheduledFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
+type ScheduledReportDraft = {
+  reportType: string;
+  periodDays: number;
+  frequency: ScheduledFrequency;
+};
+
+function ScheduledReportsSection({
+  limits,
+  tr,
+}: {
+  limits: ReportsMeta['reportLimits'];
+  tr: (ru: string, uz: string) => string;
+}) {
+  const maxAllowed = limits?.maxScheduledReports ?? 0;
+  const [schedules, setSchedules] = useState<(ScheduledReportDraft & { id: string; nextRunAt?: string; lastSentAt?: string | null })[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState<ScheduledReportDraft>({
+    reportType: 'top-products',
+    periodDays: 30,
+    frequency: 'WEEKLY',
+  });
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    if (maxAllowed === 0) return;
+    adminApi.getScheduledReports()
+      .then((data: any[]) => setSchedules(Array.isArray(data) ? data : []))
+      .catch(() => setLoadError(true));
+  }, [maxAllowed]);
+
+  const canAdd = maxAllowed < 0 || schedules.length < maxAllowed;
+
+  async function addSchedule() {
+    if (!canAdd || saving) return;
+    setSaving(true);
+    try {
+      const created = await adminApi.createScheduledReport(draft);
+      setSchedules((prev) => [...prev, created]);
+      setShowForm(false);
+    } catch (err: any) {
+      alert(err?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeSchedule(id: string) {
+    try {
+      await adminApi.deleteScheduledReport(id);
+      setSchedules((prev) => prev.filter((s) => s.id !== id));
+    } catch (err: any) {
+      alert(err?.message || tr('Ошибка', 'Xatolik'));
+    }
+  }
+
+  const frequencyLabel: Record<ScheduledFrequency, string> = {
+    DAILY:   tr('Каждый день', 'Har kuni'),
+    WEEKLY:  tr('Каждую неделю', 'Har hafta'),
+    MONTHLY: tr('Каждый месяц', 'Har oy'),
+  };
+
+  const reportTypeLabel: Record<string, string> = {
+    'top-products': tr('Топ товаров', 'Top mahsulotlar'),
+    'revenue':      tr('Выручка', 'Tushum'),
+    'categories':   tr('Категории', 'Toifalar'),
+    'customers':    tr('Клиенты', 'Mijozlar'),
+  };
+
+  if (maxAllowed === 0) {
+    return (
+      <section className="sg-card">
+        <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800 }}>
+          {tr('Авто-рассылка отчётов', 'Hisobotlarni avtomatik yuborish')}
+        </h3>
+        <div style={{ padding: '20px 16px', background: 'var(--sg-panel-2)', border: '1px solid var(--sg-border)', borderRadius: 12, textAlign: 'center' }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>
+            {tr('Доступно на PRO и BUSINESS', 'PRO va BUSINESS tariflarida mavjud')}
+          </p>
+          <p className="sg-subtitle" style={{ marginTop: 4 }}>
+            {tr(
+              'Автоматически отправляйте CSV-отчёты по расписанию на email',
+              'CSV hisobotlarni jadval bo`yicha email ga avtomatik yuboring'
+            )}
+          </p>
+          <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => (window.location.hash = '/billing')}>
+            {tr('Перейти к тарифам', "Tariflarga o'tish")}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="sg-card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+            {tr('Авто-рассылка отчётов', 'Hisobotlarni avtomatik yuborish')}
+          </h3>
+          <p className="sg-subtitle" style={{ marginTop: 2 }}>
+            {tr('Отчёты по расписанию на email', 'Email ga jadval bo`yicha hisobotlar')}
+            {maxAllowed > 0 && (
+              <span style={{ marginLeft: 8, fontWeight: 600 }}>
+                ({schedules.length}/{maxAllowed})
+              </span>
+            )}
+          </p>
+        </div>
+        <button
+          className="sg-btn primary"
+          onClick={() => setShowForm(true)}
+          disabled={!canAdd || showForm}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          + {tr('Добавить', "Qo'shish")}
+        </button>
+      </div>
+
+      {showForm && (
+        <div style={{ border: '1px solid var(--sg-border)', borderRadius: 12, padding: 14, marginBottom: 12, background: 'var(--sg-panel-2)' }}>
+          <div className="sg-grid cols-3" style={{ gap: 10, marginBottom: 12 }}>
+            <div>
+              <label className="sg-kpi-label" style={{ display: 'block', marginBottom: 4 }}>
+                {tr('Тип отчёта', 'Hisobot turi')}
+              </label>
+              <select
+                value={draft.reportType}
+                onChange={(e) => setDraft((d) => ({ ...d, reportType: e.target.value }))}
+                style={{ width: '100%', border: '1px solid var(--sg-border)', borderRadius: 8, padding: '8px 10px' }}
+              >
+                {Object.entries(reportTypeLabel).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="sg-kpi-label" style={{ display: 'block', marginBottom: 4 }}>
+                {tr('Период (дней)', 'Davr (kun)')}
+              </label>
+              <select
+                value={draft.periodDays}
+                onChange={(e) => setDraft((d) => ({ ...d, periodDays: Number(e.target.value) }))}
+                style={{ width: '100%', border: '1px solid var(--sg-border)', borderRadius: 8, padding: '8px 10px' }}
+              >
+                {[7, 14, 30, 60, 90].map((d) => (
+                  <option key={d} value={d}>{d} {tr('дней', 'kun')}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="sg-kpi-label" style={{ display: 'block', marginBottom: 4 }}>
+                {tr('Частота', 'Chastota')}
+              </label>
+              <select
+                value={draft.frequency}
+                onChange={(e) => setDraft((d) => ({ ...d, frequency: e.target.value as ScheduledFrequency }))}
+                style={{ width: '100%', border: '1px solid var(--sg-border)', borderRadius: 8, padding: '8px 10px' }}
+              >
+                {(Object.keys(frequencyLabel) as ScheduledFrequency[]).map((key) => (
+                  <option key={key} value={key}>{frequencyLabel[key]}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="sg-btn ghost" onClick={() => setShowForm(false)}>{tr('Отмена', 'Bekor')}</button>
+            <button className="sg-btn primary" onClick={() => void addSchedule()} disabled={saving}>
+              {saving ? tr('Сохранение...', 'Saqlanmoqda...') : tr('Сохранить', 'Saqlash')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {schedules.length === 0 && !showForm ? (
+        <p className="sg-subtitle">{tr('Нет запланированных отчётов', 'Rejalashtirilgan hisobotlar yo`q')}</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {loadError && (
+            <p className="sg-subtitle" style={{ color: '#b91c1c' }}>{tr('Не удалось загрузить расписания', 'Jadvallarni yuklab bo`lmadi')}</p>
+          )}
+          {schedules.map((s) => (
+            <div key={s.id} className="sg-card soft" style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>{reportTypeLabel[s.reportType] || s.reportType}</span>
+                <span className="sg-subtitle" style={{ marginLeft: 10 }}>
+                  {frequencyLabel[s.frequency]} · {s.periodDays} {tr('дней', 'kun')}
+                </span>
+                {s.nextRunAt && (
+                  <span className="sg-subtitle" style={{ marginLeft: 10, fontSize: 11 }}>
+                    {tr('Следующая', 'Keyingisi')}: {new Date(s.nextRunAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+              <button
+                className="sg-btn ghost"
+                style={{ fontSize: 12, padding: '4px 10px', color: '#b91c1c' }}
+                onClick={() => void removeSchedule(s.id)}
+              >
+                {tr('Удалить', "O'chirish")}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function Reports() {
   const { tr } = useAdminI18n();
   const [period, setPeriod] = useState(30);
@@ -90,6 +301,8 @@ export default function Reports() {
         }
 
         await Promise.all(calls);
+      } catch (err: any) {
+        if (!cancelled) showNotice('error', err?.message || tr('Не удалось загрузить отчеты', 'Hisobotlarni yuklab bo`lmadi'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -182,6 +395,15 @@ export default function Reports() {
           <div className="sg-kpi-label">{tr('Экспорт в месяц', 'Oyiga eksport')}</div>
           <div className="sg-kpi-value">{exportLeftLabel}</div>
           <div className="sg-subtitle">{tr('Использовано', 'Ishlatilgan')}: {usage?.exportsThisMonth ?? 0}</div>
+        </article>
+        <article className="sg-card">
+          <div className="sg-kpi-label">{tr('Авто-рассылок', "Avtomatik hisobotlar")}</div>
+          <div className="sg-kpi-value">
+            {limits?.maxScheduledReports === -1
+              ? tr('Без лимита', 'Cheksiz')
+              : (limits?.maxScheduledReports ?? 0)}
+          </div>
+          <div className="sg-subtitle">{tr('Плановых отчётов', 'Rejalashtirilgan')}</div>
         </article>
       </div>
 
@@ -336,6 +558,8 @@ export default function Reports() {
               </table>
             )}
           </section>
+
+          <ScheduledReportsSection limits={limits} tr={tr} />
         </>
       )}
     </section>

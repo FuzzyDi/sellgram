@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 import {
   registerSchema,
   loginSchema,
@@ -12,6 +13,7 @@ import {
 } from './schema.js';
 import * as authService from './service.js';
 import { AuthServiceError } from './service.js';
+import { writeAuditLog } from '../../lib/audit.js';
 import prisma from '../../lib/prisma.js';
 
 function mapAuthError(err: unknown) {
@@ -151,7 +153,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/auth/team', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, permissionGuard('manageUsers')],
   }, async (request, reply) => {
     try {
       const body = teamUserCreateSchema.parse(request.body);
@@ -160,6 +162,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         tenantId: request.user!.tenantId,
         ...body,
       });
+      writeAuditLog({ tenantId: request.user!.tenantId, actorId: request.user?.userId, action: 'team.user.create', targetId: data.id, details: { email: data.email, role: data.role } });
       return { success: true, data };
     } catch (err: unknown) {
       const mapped = mapAuthError(err);
@@ -168,7 +171,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   });
 
   fastify.patch('/auth/team/:id', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, permissionGuard('manageUsers')],
   }, async (request, reply) => {
     try {
       const body = teamUserUpdateSchema.parse(request.body);
@@ -179,6 +182,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         targetUserId: params.id,
         ...body,
       });
+      writeAuditLog({ tenantId: request.user!.tenantId, actorId: request.user?.userId, action: 'team.user.update', targetId: params.id });
       return { success: true, data };
     } catch (err: unknown) {
       const mapped = mapAuthError(err);
@@ -187,7 +191,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/auth/team/:id/reset-password', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, permissionGuard('manageUsers')],
   }, async (request, reply) => {
     try {
       const body = resetTeamPasswordSchema.parse(request.body);
@@ -198,6 +202,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         targetUserId: params.id,
         newPassword: body.newPassword,
       });
+      writeAuditLog({ tenantId: request.user!.tenantId, actorId: request.user?.userId, action: 'team.user.reset-password', targetId: params.id });
       return { success: true, data };
     } catch (err: unknown) {
       const mapped = mapAuthError(err);

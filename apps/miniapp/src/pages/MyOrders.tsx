@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { BottomNav } from './Catalog';
@@ -11,15 +11,15 @@ export default function MyOrders() {
   const [error, setError] = useState(false);
 
   const SC = useMemo(() => ({
-    NEW: { emoji: '🆕', label: tr('Новый', 'Yangi'), color: 'var(--accent)' },
-    CONFIRMED: { emoji: '✅', label: tr('Подтвержден', 'Tasdiqlandi'), color: 'var(--success)' },
-    PREPARING: { emoji: '👨‍🍳', label: tr('Готовится', 'Tayyorlanmoqda'), color: 'var(--warning)' },
-    READY: { emoji: '📦', label: tr('Готов', 'Tayyor'), color: '#af52de' },
-    SHIPPED: { emoji: '🚚', label: tr('В пути', "Yo'lda"), color: '#5856d6' },
-    DELIVERED: { emoji: '📬', label: tr('Доставлен', 'Yetkazildi'), color: '#30b0c7' },
-    COMPLETED: { emoji: '🎉', label: tr('Завершен', 'Yakunlandi'), color: 'var(--success)' },
-    CANCELLED: { emoji: '❌', label: tr('Отменен', 'Bekor qilindi'), color: 'var(--danger)' },
-    REFUNDED: { emoji: '↩️', label: tr('Возврат', 'Qaytarildi'), color: 'var(--hint)' },
+    NEW:       { emoji: '🆕', label: tr('Новый', 'Yangi'),               color: 'var(--status-new)' },
+    CONFIRMED: { emoji: '✅', label: tr('Подтвержден', 'Tasdiqlandi'),    color: 'var(--status-confirmed)' },
+    PREPARING: { emoji: '👨‍🍳', label: tr('Готовится', 'Tayyorlanmoqda'), color: 'var(--status-preparing)' },
+    READY:     { emoji: '📦', label: tr('Готов', 'Tayyor'),               color: 'var(--status-ready)' },
+    SHIPPED:   { emoji: '🚚', label: tr('В пути', "Yo'lda"),              color: 'var(--status-shipped)' },
+    DELIVERED: { emoji: '📬', label: tr('Доставлен', 'Yetkazildi'),       color: 'var(--status-delivered)' },
+    COMPLETED: { emoji: '🎉', label: tr('Завершен', 'Yakunlandi'),        color: 'var(--status-completed)' },
+    CANCELLED: { emoji: '❌', label: tr('Отменен', 'Bekor qilindi'),      color: 'var(--status-cancelled)' },
+    REFUNDED:  { emoji: '↩️', label: tr('Возврат', 'Qaytarildi'),         color: 'var(--status-refunded)' },
   }) as const, [tr]);
 
   function load() {
@@ -42,8 +42,8 @@ export default function MyOrders() {
   if (error) {
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
-        <p style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 12 }}>{tr('Не удалось загрузить заказы', "Buyurtmalarni yuklab bo'lmadi")}</p>
-        <button onClick={load} style={{ padding: '8px 20px', borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{tr('Повторить', 'Qayta urinish')}</button>
+        <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить заказы', "Buyurtmalarni yuklab bo'lmadi")}</p>
+        <button className="btn secondary sm pill" onClick={load}>{tr('Повторить', 'Qayta urinish')}</button>
         <BottomNav active="orders" />
       </div>
     );
@@ -69,7 +69,7 @@ export default function MyOrders() {
               <div key={o.id} onClick={() => navigate(`/order/${o.id}`)} className={`pressable anim-fade anim-d${Math.min(i, 5)}`} style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 8, cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: 700 }}>#{o.orderNumber}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: s.color, background: `color-mix(in srgb, ${s.color} 12%, transparent)`, padding: '3px 10px', borderRadius: 8 }}>{s.emoji} {s.label}</span>
+                  <span className="badge" style={{ color: s.color, background: `color-mix(in srgb, ${s.color} 12%, transparent)` }}>{s.emoji} {s.label}</span>
                 </div>
                 <p style={{ color: 'var(--hint)', fontSize: 13, marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {o.items?.map((it: any) => `${it.name} x${it.qty}`).join(', ')}

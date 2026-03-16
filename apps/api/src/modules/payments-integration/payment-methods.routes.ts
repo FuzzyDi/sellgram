@@ -1,5 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import prisma from '../../lib/prisma.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
+import { writeAuditLog } from '../../lib/audit.js';
 import {
   createPaymentMethodSchema,
   paymentMethodParamsSchema,
@@ -46,7 +48,7 @@ export default async function paymentMethodRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post('/stores/:id/payment-methods', async (request, reply) => {
+  fastify.post('/stores/:id/payment-methods', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
     try {
       const { id } = paymentMethodStoreParamsSchema.parse(request.params);
       const body = createPaymentMethodSchema.parse(request.body);
@@ -58,6 +60,7 @@ export default async function paymentMethodRoutes(fastify: FastifyInstance) {
         storeId: id,
         data: body,
       });
+      writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'payment.method.create', targetId: data.id, details: { storeId: id, type: (body as any).type } });
       return { success: true, data };
     } catch (err: unknown) {
       const mapped = mapPaymentMethodError(err);
@@ -65,7 +68,7 @@ export default async function paymentMethodRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.patch('/stores/:id/payment-methods/:methodId', async (request, reply) => {
+  fastify.patch('/stores/:id/payment-methods/:methodId', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
     try {
       const { id, methodId } = paymentMethodParamsSchema.parse(request.params);
       const body = updatePaymentMethodSchema.parse(request.body);
@@ -76,6 +79,7 @@ export default async function paymentMethodRoutes(fastify: FastifyInstance) {
         methodId,
         data: body,
       });
+      writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'payment.method.update', targetId: methodId, details: { storeId: id } });
       return { success: true, data };
     } catch (err: unknown) {
       const mapped = mapPaymentMethodError(err);
@@ -83,7 +87,7 @@ export default async function paymentMethodRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.delete('/stores/:id/payment-methods/:methodId', async (request, reply) => {
+  fastify.delete('/stores/:id/payment-methods/:methodId', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
     try {
       const { id, methodId } = paymentMethodParamsSchema.parse(request.params);
 
@@ -92,6 +96,7 @@ export default async function paymentMethodRoutes(fastify: FastifyInstance) {
         storeId: id,
         methodId,
       });
+      writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'payment.method.delete', targetId: methodId, details: { storeId: id } });
       return { success: true, message: 'Payment method archived' };
     } catch (err: unknown) {
       const mapped = mapPaymentMethodError(err);

@@ -85,6 +85,12 @@ enum POStatus {
   CANCELLED
 }
 
+enum ScheduledFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
 // ============================================================
 // TENANT & AUTH
 // ============================================================
@@ -98,18 +104,20 @@ model Tenant {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  users          User[]
-  stores         Store[]
-  products       Product[]
-  categories     Category[]
-  customers      Customer[]
-  orders         Order[]
-  deliveryZones  DeliveryZone[]
-  loyaltyConfig  LoyaltyConfig?
-  purchaseOrders PurchaseOrder[]
-  invoices       Invoice[]
-  paymentMethods StorePaymentMethod[]
-  broadcasts     BroadcastCampaign[]
+  users             User[]
+  stores            Store[]
+  products          Product[]
+  categories        Category[]
+  customers         Customer[]
+  orders            Order[]
+  deliveryZones     DeliveryZone[]
+  loyaltyConfig     LoyaltyConfig?
+  purchaseOrders    PurchaseOrder[]
+  invoices          Invoice[]
+  paymentMethods    StorePaymentMethod[]
+  broadcasts        BroadcastCampaign[]
+  scheduledReports  ScheduledReport[]
+  auditLogs         TenantAuditLog[]
 
   @@map("tenants")
 }
@@ -512,6 +520,8 @@ enum InvoiceStatus {
 
 enum BroadcastStatus {
   DRAFT
+  QUEUED
+  SENDING
   SENT
   FAILED
 }
@@ -625,6 +635,20 @@ model SystemAdmin {
 
 
 
+model TenantAuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actorId   String?
+  action    String
+  targetId  String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("tenant_audit_logs")
+}
+
 enum SystemAuditAction {
   TENANT_PLAN_UPDATED
   INVOICE_CONFIRMED
@@ -654,4 +678,22 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+model ScheduledReport {
+  id         String             @id @default(cuid())
+  tenantId   String
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportType String             // top-products | revenue | categories | customers
+  periodDays Int
+  frequency  ScheduledFrequency
+  isActive   Boolean            @default(true)
+  lastSentAt DateTime?
+  nextRunAt  DateTime
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([tenantId])
+  @@index([nextRunAt, isActive])
+  @@map("scheduled_reports")
 }
