@@ -26,6 +26,8 @@ const listOrdersQuerySchema = z.object({
   storeId: z.string().optional(),
   paymentStatus: z.enum(['PENDING', 'PAID', 'REFUNDED']).optional(),
   search: z.string().max(200).optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
 });
 
 const updateDeliverySchema = z.object({
@@ -43,13 +45,22 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
-    const { page: pageNum, pageSize: pageSizeNum, status, storeId, paymentStatus, search } = query;
+    const { page: pageNum, pageSize: pageSizeNum, status, storeId, paymentStatus, search, dateFrom, dateTo } = query;
     const skip = (pageNum - 1) * pageSizeNum;
 
     const where: any = { tenantId: request.tenantId! };
     if (status) where.status = status;
     if (storeId) where.storeId = storeId;
     if (paymentStatus) where.paymentStatus = paymentStatus;
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
 
     if (search?.trim()) {
       const q = search.trim();

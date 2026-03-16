@@ -21,6 +21,8 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -65,13 +67,15 @@ export default function Orders() {
     if (statusFilter) params.set('status', statusFilter);
     if (paymentFilter) params.set('paymentStatus', paymentFilter);
     if (search.trim()) params.set('search', search.trim());
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
 
     adminApi
       .getOrders(params.toString())
       .then(setData)
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
-  }, [page, statusFilter, paymentFilter, search]);
+  }, [page, statusFilter, paymentFilter, search, dateFrom, dateTo]);
 
   useEffect(() => {
     loadOrders();
@@ -134,31 +138,52 @@ export default function Orders() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <select
             value={paymentFilter}
-            onChange={(e) => {
-              setPage(1);
-              setPaymentFilter(e.target.value);
-            }}
-            className="border rounded-lg px-3 py-2 text-sm"
+            onChange={(e) => { setPage(1); setPaymentFilter(e.target.value); }}
+            style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13 }}
           >
-            <option value="">{tr('Любая оплата', "To'lov holati: barchasi")}</option>
+            <option value="">{tr('Любая оплата', "To'lov: barchasi")}</option>
             <option value="PENDING">{paymentLabels.PENDING}</option>
             <option value="PAID">{paymentLabels.PAID}</option>
             <option value="REFUNDED">{paymentLabels.REFUNDED}</option>
           </select>
           <input
-            value={search}
-            onChange={(e) => {
-              setPage(1);
-              setSearch(e.target.value);
-            }}
-            placeholder={tr('Поиск: № заказа, клиент, телефон', 'Qidiruv: buyurtma №, mijoz, telefon')}
-            className="border rounded-lg px-3 py-2 text-sm"
-            style={{ minWidth: 280, flex: 1 }}
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setPage(1); setDateFrom(e.target.value); }}
+            style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13 }}
+            title={tr('Дата с', 'Dan sana')}
           />
+          <span style={{ fontSize: 12, color: '#9ca3af' }}>—</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setPage(1); setDateTo(e.target.value); }}
+            style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13 }}
+            title={tr('Дата по', 'Gacha sana')}
+          />
+          <input
+            value={search}
+            onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+            placeholder={tr('Поиск: № заказа, клиент, телефон', 'Qidiruv: buyurtma №, mijoz, telefon')}
+            style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13, minWidth: 240, flex: 1 }}
+          />
+          {(statusFilter || paymentFilter || search || dateFrom || dateTo) && (
+            <button
+              onClick={() => { setStatusFilter(''); setPaymentFilter(''); setSearch(''); setDateFrom(''); setDateTo(''); setPage(1); }}
+              style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 12px', fontSize: 12, background: 'transparent', cursor: 'pointer', color: '#6b7280', whiteSpace: 'nowrap' }}
+            >
+              {tr('Сбросить', 'Tozalash')}
+            </button>
+          )}
         </div>
+        {data && !loading && (
+          <p style={{ margin: 0, fontSize: 12, color: '#748278' }}>
+            {tr('Найдено', 'Topildi')}: <strong>{data.total}</strong>
+          </p>
+        )}
       </div>
 
       {loadError ? (
