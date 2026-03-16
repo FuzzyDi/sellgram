@@ -892,7 +892,7 @@ export default function SystemAdmin() {
             const isArmed = planConfirm?.tenantId === tenant.id;
             return (
               <div key={tenant.id} className="sg-card soft" style={{ padding: 14, cursor: 'pointer' }}
-                onClick={e => { if ((e.target as HTMLElement).closest('button,input,select')) return; setSelectedTenant(tenant); }}>
+                onClick={(e: React.MouseEvent) => { if ((e.target as HTMLElement).closest('button,input,select')) return; setSelectedTenant(tenant); }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <div>
                     <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{tenant.name}</p>
@@ -921,8 +921,8 @@ export default function SystemAdmin() {
                 <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   <input type="date" value={tenantPlanExpires[tenant.id] || ''}
                     onChange={e => setTenantPlanExpires(prev => ({ ...prev, [tenant.id]: e.target.value }))}
-                    className="border rounded-lg px-3 py-2 text-sm" style={{ fontSize: 12 }} onClick={e => e.stopPropagation()} />
-                  <Button onClick={(e: React.MouseEvent) => { e.stopPropagation(); setTenantPlanExpires(prev => ({ ...prev, [tenant.id]: '' })); }}
+                    className="border rounded-lg px-3 py-2 text-sm" style={{ fontSize: 12 }} onClick={(e: React.MouseEvent) => e.stopPropagation()} />
+                  <Button onClick={() => setTenantPlanExpires(prev => ({ ...prev, [tenant.id]: '' }))}
                     className="sg-btn ghost" style={{ fontSize: 11 }}>{tr('Без срока', 'Muddatsiz')}</Button>
                 </div>
 
@@ -930,7 +930,7 @@ export default function SystemAdmin() {
                   {(['FREE', 'PRO', 'BUSINESS'] as const).map(plan => {
                     const armed = isArmed && planConfirm?.plan === plan;
                     return (
-                      <button key={plan} onClick={e => { e.stopPropagation(); requestPlanChange(tenant.id, plan); }}
+                      <button key={plan} onClick={(e: React.MouseEvent) => { e.stopPropagation(); requestPlanChange(tenant.id, plan); }}
                         style={{
                           border: `1.5px solid ${armed ? planColors[plan] : '#e5e7eb'}`,
                           borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700,
