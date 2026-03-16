@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { verifySystemToken, type SystemJwtPayload } from '../../lib/system-jwt.js';
 import {
   systemAdminActivityQuerySchema,
+  systemAdminCreateInvoiceSchema,
   systemAdminIdParamSchema,
   systemAdminInvoiceListQuerySchema,
   systemAdminLoginSchema,
@@ -14,10 +15,15 @@ import {
   systemAdminUserListQuerySchema,
 } from './dto.js';
 import {
+  blockSystemTenant,
   confirmSystemInvoice,
+  createSystemInvoice,
   getSystemDashboard,
   getSystemHealth,
+  getSystemRevenueTrend,
   getSystemSubscriptionReminderSettings,
+  getSystemTenantDetail,
+  impersonateTenantOwner,
   listPendingSystemInvoices,
   listSystemActivity,
   listSystemReportsUsage,
@@ -28,6 +34,7 @@ import {
   loginSystemAdmin,
   rejectSystemInvoice,
   resetSystemUserPassword,
+  unblockSystemTenant,
   updateSystemSubscriptionReminderSettings,
   updateSystemTenantPlan,
 } from './service.js';
@@ -216,6 +223,67 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       if (err.message === 'INVOICE_NOT_FOUND') {
         return reply.status(404).send({ success: false, error: 'Invoice not found' });
       }
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  fastify.post('/invoices', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const body = systemAdminCreateInvoiceSchema.parse(request.body);
+      const data = await createSystemInvoice({ ...body, changedBy: request.systemAdmin?.email || 'system' });
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  fastify.get('/revenue-trend', { preHandler: [authenticateSystem] }, async () => {
+    const data = await getSystemRevenueTrend();
+    return { success: true, data };
+  });
+
+  fastify.get('/tenants/:id', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { id } = systemAdminIdParamSchema.parse(request.params);
+      const data = await getSystemTenantDetail(id);
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  fastify.patch('/tenants/:id/block', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { id } = systemAdminIdParamSchema.parse(request.params);
+      const data = await blockSystemTenant({ id, changedBy: request.systemAdmin?.email || 'system' });
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  fastify.patch('/tenants/:id/unblock', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { id } = systemAdminIdParamSchema.parse(request.params);
+      const data = await unblockSystemTenant({ id, changedBy: request.systemAdmin?.email || 'system' });
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  fastify.post('/tenants/:id/impersonate', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { id } = systemAdminIdParamSchema.parse(request.params);
+      const data = await impersonateTenantOwner(id);
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      if (err.message === 'OWNER_NOT_FOUND') return reply.status(404).send({ success: false, error: 'No active owner found for this tenant' });
       return reply.status(400).send({ success: false, error: err.message });
     }
   });

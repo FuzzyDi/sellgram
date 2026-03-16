@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import prisma from '../../lib/prisma.js';
 import { signSystemToken } from '../../lib/system-jwt.js';
+import { signAccessToken, signRefreshToken } from '../../lib/jwt.js';
 import { getConfig } from '../../config/index.js';
 import { getRedis } from '../../lib/redis.js';
 import { PLANS, type PlanCode, type ReportsLevel } from '@sellgram/shared';
@@ -187,16 +188,32 @@ export async function getSystemDashboard() {
 }
 
 export async function getSystemHealth() {
-  const startedAt = Date.now();
+  const dbStart = Date.now();
   let dbOk = true;
+  try { await prisma.$queryRawUnsafe('SELECT 1'); } catch { dbOk = false; }
+  const dbLatencyMs = Date.now() - dbStart;
 
+  let redisOk = false;
+  let redisLatencyMs: number | null = null;
+  const queues: Record<string, { waiting: number; active: number; failed: number }> = {};
   try {
-    await prisma.$queryRawUnsafe('SELECT 1');
-  } catch {
-    dbOk = false;
-  }
+    const redis = getRedis();
+    const redisStart = Date.now();
+    await redis.ping();
+    redisOk = true;
+    redisLatencyMs = Date.now() - redisStart;
 
-  const dbLatencyMs = Date.now() - startedAt;
+    for (const qName of ['broadcast', 'daily-digest']) {
+      try {
+        const [waiting, active, failed] = await Promise.all([
+          redis.llen(`bull:${qName}:wait`),
+          redis.llen(`bull:${qName}:active`),
+          redis.zcard(`bull:${qName}:failed`),
+        ]);
+        queues[qName] = { waiting, active, failed };
+      } catch { /* queue may not exist yet */ }
+    }
+  } catch { /* Redis not available */ }
 
   const [tenants, activeStores, pendingInvoices] = await Promise.all([
     prisma.tenant.count(),
@@ -210,20 +227,15 @@ export async function getSystemHealth() {
     status: dbOk ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     db: { ok: dbOk, latencyMs: dbLatencyMs },
+    redis: { ok: redisOk, latencyMs: redisLatencyMs },
+    queues,
     runtime: {
       uptimeSec: Math.round(process.uptime()),
       memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
       node: process.version,
     },
-    counters: {
-      tenants,
-      activeStores,
-      pendingInvoices,
-    },
-    subscriptionReminders: {
-      enabled: reminder.enabled,
-      days: reminder.days,
-    },
+    counters: { tenants, activeStores, pendingInvoices },
+    subscriptionReminders: { enabled: reminder.enabled, days: reminder.days },
   };
 }
 
@@ -639,15 +651,10 @@ export async function resetSystemUserPassword(input: {
   changedBy: string;
 }) {
   const user = await prisma.user.findUnique({ where: { id: input.id } });
-  if (!user) {
-    throw new Error('USER_NOT_FOUND');
-  }
+  if (!user) throw new Error('USER_NOT_FOUND');
 
   const passwordHash = await bcrypt.hash(input.newPassword, 12);
-  await prisma.user.update({
-    where: { id: input.id },
-    data: { passwordHash },
-  });
+  await prisma.user.update({ where: { id: input.id }, data: { passwordHash } });
 
   await prisma.systemAuditLog.create({
     data: {
@@ -655,14 +662,135 @@ export async function resetSystemUserPassword(input: {
       actorEmail: input.changedBy,
       targetType: 'tenant',
       targetId: user.tenantId,
-      details: {
-        event: 'USER_PASSWORD_RESET',
-        userId: user.id,
-        userEmail: user.email,
-        changedBy: input.changedBy,
-      } as any,
+      details: { event: 'USER_PASSWORD_RESET', userId: user.id, userEmail: user.email, changedBy: input.changedBy } as any,
     },
   });
 
   return { ok: true };
+}
+
+export async function getSystemRevenueTrend() {
+  const now = new Date();
+  const months: { year: number; month: number; label: string }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    months.push({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, label: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}` });
+  }
+  const sixMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+  const invoices = await prisma.invoice.findMany({
+    where: { status: 'PAID', confirmedAt: { gte: sixMonthsAgo } },
+    select: { amount: true, confirmedAt: true },
+  });
+  return months.map(({ year, month, label }) => {
+    const revenue = invoices
+      .filter(inv => {
+        const d = inv.confirmedAt;
+        return d != null && d.getUTCFullYear() === year && d.getUTCMonth() + 1 === month;
+      })
+      .reduce((sum, inv) => sum + Number(inv.amount), 0);
+    return { label, revenue };
+  });
+}
+
+export async function getSystemTenantDetail(id: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id },
+    include: {
+      stores: { select: { id: true, name: true, isActive: true } },
+      users: { select: { id: true, name: true, email: true, role: true, isActive: true } },
+      _count: { select: { orders: true, products: true, customers: true } },
+    },
+  });
+  if (!tenant) throw new Error('TENANT_NOT_FOUND');
+
+  const now = new Date();
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const [monthlyOrders, totalRevenue, monthlyRevenue, invoicesCount] = await Promise.all([
+    prisma.order.count({ where: { tenantId: id, createdAt: { gte: startOfMonth } } }),
+    prisma.order.aggregate({ where: { tenantId: id, paymentStatus: 'PAID' }, _sum: { total: true } }),
+    prisma.order.aggregate({ where: { tenantId: id, paymentStatus: 'PAID', createdAt: { gte: startOfMonth } }, _sum: { total: true } }),
+    prisma.invoice.count({ where: { tenantId: id } }),
+  ]);
+
+  return {
+    ...tenant,
+    stats: {
+      ordersTotal: tenant._count.orders,
+      ordersMonth: monthlyOrders,
+      productsTotal: tenant._count.products,
+      customersTotal: tenant._count.customers,
+      revenueTotal: Number(totalRevenue._sum.total || 0),
+      revenueMonth: Number(monthlyRevenue._sum.total || 0),
+      invoicesTotal: invoicesCount,
+    },
+  };
+}
+
+export async function blockSystemTenant(input: { id: string; changedBy: string }) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: input.id } });
+  if (!tenant) throw new Error('TENANT_NOT_FOUND');
+  await prisma.store.updateMany({ where: { tenantId: input.id }, data: { isActive: false } });
+  await prisma.user.updateMany({ where: { tenantId: input.id }, data: { isActive: false } });
+  await logSystemAction({
+    action: 'TENANT_PLAN_UPDATED', actorEmail: input.changedBy,
+    targetType: 'tenant', targetId: input.id,
+    details: { event: 'TENANT_BLOCKED', tenantName: tenant.name, changedBy: input.changedBy } as any,
+  });
+  return { ok: true };
+}
+
+export async function unblockSystemTenant(input: { id: string; changedBy: string }) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: input.id } });
+  if (!tenant) throw new Error('TENANT_NOT_FOUND');
+  await prisma.store.updateMany({ where: { tenantId: input.id }, data: { isActive: true } });
+  await prisma.user.updateMany({ where: { tenantId: input.id, role: { in: ['OWNER', 'MANAGER'] } }, data: { isActive: true } });
+  await logSystemAction({
+    action: 'TENANT_PLAN_UPDATED', actorEmail: input.changedBy,
+    targetType: 'tenant', targetId: input.id,
+    details: { event: 'TENANT_UNBLOCKED', tenantName: tenant.name, changedBy: input.changedBy } as any,
+  });
+  return { ok: true };
+}
+
+export async function createSystemInvoice(input: {
+  tenantId: string;
+  plan: 'FREE' | 'PRO' | 'BUSINESS';
+  amount: number;
+  paymentRef?: string;
+  autoConfirm: boolean;
+  changedBy: string;
+}) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId } });
+  if (!tenant) throw new Error('TENANT_NOT_FOUND');
+
+  const invoice = await prisma.invoice.create({
+    data: {
+      tenantId: input.tenantId,
+      plan: input.plan,
+      amount: input.amount,
+      status: 'PENDING',
+      paymentRef: input.paymentRef || null,
+    },
+  });
+
+  if (input.autoConfirm) {
+    await confirmSystemInvoice({ id: invoice.id, confirmedBy: input.changedBy });
+  }
+
+  return invoice;
+}
+
+export async function impersonateTenantOwner(tenantId: string) {
+  const owner = await prisma.user.findFirst({
+    where: { tenantId, role: 'OWNER', isActive: true },
+  });
+  if (!owner) throw new Error('OWNER_NOT_FOUND');
+
+  const payload = { userId: owner.id, tenantId: owner.tenantId, role: owner.role };
+  const [accessToken, refreshToken] = await Promise.all([
+    signAccessToken(payload),
+    signRefreshToken(payload),
+  ]);
+
+  return { accessToken, refreshToken, user: { id: owner.id, email: owner.email, name: owner.name } };
 }

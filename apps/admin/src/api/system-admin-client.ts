@@ -76,4 +76,11 @@ export const systemApi = {
       method: 'PATCH',
       body: JSON.stringify({ plan, planExpiresAt }),
     }),
+  blockTenant: (id: string) => systemRequest<any>(`/tenants/${id}/block`, { method: 'PATCH' }),
+  unblockTenant: (id: string) => systemRequest<any>(`/tenants/${id}/unblock`, { method: 'PATCH' }),
+  tenantDetail: (id: string) => systemRequest<any>(`/tenants/${id}`),
+  impersonate: (id: string) => systemRequest<any>(`/tenants/${id}/impersonate`, { method: 'POST' }),
+  revenueTrend: () => systemRequest<any[]>('/revenue-trend'),
+  createInvoice: (payload: { tenantId: string; plan: string; amount: number; paymentRef?: string; autoConfirm: boolean }) =>
+    systemRequest<any>('/invoices', { method: 'POST', body: JSON.stringify(payload) }),
 };

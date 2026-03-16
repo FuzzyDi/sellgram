@@ -64,3 +64,11 @@ export const systemAdminUserListQuerySchema = z.object({
 export const systemAdminResetUserPasswordSchema = z.object({
   newPassword: z.string().min(6),
 });
+
+export const systemAdminCreateInvoiceSchema = z.object({
+  tenantId: z.string().min(1),
+  plan: z.enum(['FREE', 'PRO', 'BUSINESS']),
+  amount: z.number().int().min(1),
+  paymentRef: z.string().trim().optional(),
+  autoConfirm: z.boolean().default(false),
+});
