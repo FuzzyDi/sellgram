@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Tag, Users,
   CreditCard, Megaphone, BarChart2, Settings as SettingsIcon, Receipt,
-  HelpCircle, LogOut, Menu, X, Truck, ClipboardList, type LucideIcon,
+  HelpCircle, LogOut, Menu, X, Truck, ClipboardList, Building2, type LucideIcon,
 } from 'lucide-react';
 import { adminApi, clearTokens, setTokens } from './api/store-admin-client';
 import { useAdminI18n } from './i18n';
@@ -17,6 +17,7 @@ import Orders from './pages/Orders';
 import PaymentMethods from './pages/PaymentMethods';
 import Products from './pages/Products';
 import Procurement from './pages/Procurement';
+import Suppliers from './pages/Suppliers';
 import AuditLog from './pages/AuditLog';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
@@ -43,6 +44,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   '/customers':    Users,
   '/payments':     CreditCard,
   '/procurement':  Truck,
+  '/suppliers':    Building2,
   '/broadcasts':   Megaphone,
   '/reports':      BarChart2,
   '/settings':     SettingsIcon,
@@ -71,6 +73,7 @@ function Sidebar({
     { to: '/customers',   label: t('customers'),   perm: 'manageCustomers' },
     { to: '/payments',    label: t('payments'),    perm: 'manageBilling' },
     { to: '/procurement', label: t('procurement'), perm: 'manageCatalog' },
+    { to: '/suppliers',   label: t('suppliers'),   perm: 'manageCatalog' },
     { to: '/broadcasts',  label: t('broadcasts'),  perm: 'manageMarketing' },
     { to: '/reports',    label: t('reports'),    perm: 'viewReports' },
     { to: '/settings',   label: t('settings') },
@@ -235,6 +238,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
     '/products':     'manageCatalog',
     '/categories':   'manageCatalog',
     '/procurement':  'manageCatalog',
+    '/suppliers':    'manageCatalog',
     '/customers':    'manageCustomers',
     '/payments':     'manageBilling',
     '/broadcasts':   'manageMarketing',
@@ -249,6 +253,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
     case '/system-admin': return <SystemAdmin />;
     case '/products':     return <Products />;
     case '/procurement':  return <Procurement />;
+    case '/suppliers':    return <Suppliers />;
     case '/categories':   return <Categories />;
     case '/orders':       return <Orders />;
     case '/customers':    return <Customers />;

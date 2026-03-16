@@ -153,6 +153,12 @@ export const adminApi = {
   getLoyaltyConfig: () => request<any>('/loyalty/config'),
   updateLoyaltyConfig: (data: any) => request<any>('/loyalty/config', { method: 'PATCH', body: JSON.stringify(data) }),
 
+  getSuppliers: () => request<any>('/suppliers'),
+  getSupplier: (id: string) => request<any>(`/suppliers/${id}`),
+  createSupplier: (data: any) => request<any>('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
+  updateSupplier: (id: string, data: any) => request<any>(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  archiveSupplier: (id: string) => request<any>(`/suppliers/${id}`, { method: 'DELETE' }),
+
   getPurchaseOrders: () => request<any>('/purchase-orders'),
   createPurchaseOrder: (data: any) => request<any>('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
   updatePurchaseOrder: (id: string, data: any) => request<any>(`/purchase-orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

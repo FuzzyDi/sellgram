@@ -245,6 +245,7 @@ async function main() {
   const deliveryRoutes = (await import('./modules/delivery/routes.js')).default;
   const loyaltyRoutes = (await import('./modules/loyalty/routes.js')).default;
   const procurementRoutes = (await import('./modules/procurement/routes.js')).default;
+  const supplierRoutes = (await import('./modules/supplier/routes.js')).default;
   const analyticsRoutes = (await import('./modules/analytics/routes.js')).default;
   const subscriptionRoutes = (await import('./modules/subscription/routes.js')).default;
   const broadcastRoutes = (await import('./modules/broadcast/routes.js')).default;
@@ -262,6 +263,7 @@ async function main() {
       await app.register(deliveryRoutes);
       await app.register(loyaltyRoutes);
       await app.register(procurementRoutes);
+      await app.register(supplierRoutes);
       await app.register(analyticsRoutes);
       await app.register(subscriptionRoutes);
       await app.register(broadcastRoutes);

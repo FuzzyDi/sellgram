@@ -38,6 +38,7 @@ const receivePOSchema = z.object({
 
 const createPOSchema = z.object({
   supplierName: z.string().min(1),
+  supplierId: z.string().optional(),
   currency: z.string().default('USD'),
   fxRate: z.number().positive().optional(),
   shippingCost: z.number().min(0).default(0),
@@ -116,6 +117,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
         data: {
           tenantId: request.tenantId!,
           poNumber,
+          supplierId: body.supplierId ?? null,
           supplierName: body.supplierName,
           currency: body.currency,
           fxRate: body.fxRate,

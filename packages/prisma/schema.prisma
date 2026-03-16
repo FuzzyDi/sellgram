@@ -113,6 +113,7 @@ model Tenant {
   deliveryZones     DeliveryZone[]
   loyaltyConfig     LoyaltyConfig?
   purchaseOrders    PurchaseOrder[]
+  suppliers         Supplier[]
   invoices          Invoice[]
   paymentMethods    StorePaymentMethod[]
   broadcasts        BroadcastCampaign[]
@@ -466,10 +467,32 @@ model LoyaltyTransaction {
 // PROCUREMENT
 // ============================================================
 
+model Supplier {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  contactName String?
+  phone       String?
+  email       String?
+  address     String?
+  note        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([tenantId])
+  @@map("suppliers")
+}
+
 model PurchaseOrder {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplierId   String?
+  supplier     Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   poNumber     Int
   supplierName String
   status       POStatus @default(DRAFT)

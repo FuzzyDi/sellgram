@@ -25,6 +25,8 @@ export default function Procurement() {
   const { tr, locale } = useAdminI18n();
   const [pos, setPos] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [supplierId, setSupplierId] = useState('');
   const [loading, setLoading] = useState(true);
   const [planBlocked, setPlanBlocked] = useState(false);
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
@@ -52,12 +54,14 @@ export default function Procurement() {
   async function load() {
     setLoading(true);
     try {
-      const [poList, productList] = await Promise.all([
+      const [poList, productList, supplierList] = await Promise.all([
         adminApi.getPurchaseOrders(),
         adminApi.getProducts('pageSize=500'),
+        adminApi.getSuppliers().catch(() => []),
       ]);
       setPos(Array.isArray(poList?.items ?? poList) ? (poList?.items ?? poList) : []);
       setProducts(Array.isArray(productList?.items ?? productList) ? (productList?.items ?? productList) : []);
+      setSuppliers(Array.isArray(supplierList) ? supplierList : []);
     } catch (err: any) {
       if (err?.message?.includes('402') || err?.message?.toLowerCase().includes('plan')) {
         setPlanBlocked(true);
@@ -80,7 +84,7 @@ export default function Procurement() {
   };
 
   function resetCreateForm() {
-    setSupplier(''); setCurrency('USD'); setFxRate('');
+    setSupplier(''); setSupplierId(''); setCurrency('USD'); setFxRate('');
     setShippingCost('0'); setCustomsCost('0'); setNote('');
     setItems([{ productId: '', qty: 1, unitCost: 0 }]);
     setShowCreate(false);
@@ -104,14 +108,18 @@ export default function Procurement() {
   );
 
   async function submitCreate() {
-    if (!supplier.trim() || items.some((i) => !i.productId || !i.qty || !i.unitCost)) {
+    if ((!supplierId && !supplier.trim()) || items.some((i) => !i.productId || !i.qty || !i.unitCost)) {
       showNotice('error', tr('Заполните все обязательные поля', 'Barcha maydonlarni to\'ldiring'));
       return;
     }
     setSaving(true);
     try {
+      const resolvedName = supplierId
+        ? (suppliers.find((s: any) => s.id === supplierId)?.name ?? supplier.trim())
+        : supplier.trim();
       await adminApi.createPurchaseOrder({
-        supplierName: supplier.trim(),
+        supplierId: supplierId || undefined,
+        supplierName: resolvedName,
         currency,
         fxRate: fxRate ? Number(fxRate) : undefined,
         shippingCost: Number(shippingCost || 0),
@@ -234,9 +242,24 @@ export default function Procurement() {
           <div className="sg-grid cols-2" style={{ gap: 10 }}>
             <div>
               <label className="sg-kpi-label" style={{ display: 'block', marginBottom: 4 }}>{tr('Поставщик *', 'Yetkazib beruvchi *')}</label>
-              <input value={supplier} onChange={(e) => setSupplier(e.target.value)} className="w-full"
-                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 11px' }}
-                placeholder={tr('Название компании', 'Kompaniya nomi')} />
+              {suppliers.length > 0 ? (
+                <>
+                  <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
+                    style={{ width: '100%', border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 11px', marginBottom: supplierId ? 0 : 6 }}>
+                    <option value="">{tr('— выберите контрагента —', '— kontragentni tanlang —')}</option>
+                    {suppliers.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  {!supplierId && (
+                    <input value={supplier} onChange={(e) => setSupplier(e.target.value)} className="w-full"
+                      style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 11px' }}
+                      placeholder={tr('Или введите название вручную', 'Yoki nomni qo\'lda kiriting')} />
+                  )}
+                </>
+              ) : (
+                <input value={supplier} onChange={(e) => setSupplier(e.target.value)} className="w-full"
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 11px' }}
+                  placeholder={tr('Название компании', 'Kompaniya nomi')} />
+              )}
             </div>
             <div>
               <label className="sg-kpi-label" style={{ display: 'block', marginBottom: 4 }}>{tr('Валюта', 'Valyuta')}</label>
