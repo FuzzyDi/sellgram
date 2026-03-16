@@ -114,7 +114,24 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       },
     });
     if (!order) return reply.status(404).send({ success: false, error: 'Order not found' });
-    return { success: true, data: order };
+
+    // Resolve changedBy userId → user name
+    const actorIds = [...new Set(order.statusHistory.map((h) => h.changedBy).filter((id): id is string => !!id))];
+    const actors = actorIds.length
+      ? await prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true, email: true } })
+      : [];
+    const actorMap = Object.fromEntries(actors.map((a) => [a.id, a]));
+
+    return {
+      success: true,
+      data: {
+        ...order,
+        statusHistory: order.statusHistory.map((h) => ({
+          ...h,
+          actor: h.changedBy ? (actorMap[h.changedBy] ?? null) : null,
+        })),
+      },
+    };
   });
 
   fastify.patch(

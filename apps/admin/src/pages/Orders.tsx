@@ -27,6 +27,8 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [pendingOrders, setPendingOrders] = useState<Set<string>>(new Set());
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [orderDetails, setOrderDetails] = useState<Record<string, any>>({});
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
 
   function showNotice(tone: 'success' | 'error', message: string) {
@@ -80,6 +82,17 @@ export default function Orders() {
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  const toggleOrder = useCallback(async (orderId: string) => {
+    if (expandedOrder === orderId) { setExpandedOrder(null); return; }
+    setExpandedOrder(orderId);
+    if (!orderDetails[orderId]) {
+      try {
+        const detail = await adminApi.getOrder(orderId);
+        setOrderDetails((prev) => ({ ...prev, [orderId]: detail }));
+      } catch {}
+    }
+  }, [expandedOrder, orderDetails]);
 
   const handleStatusChange = useCallback(
     async (orderId: string, newStatus: string) => {
@@ -275,7 +288,52 @@ export default function Orders() {
                 </div>
               </div>
 
-              <div style={{ marginTop: 8, fontSize: 12, color: '#839188' }}>{new Date(order.createdAt).toLocaleString(locale)}</div>
+              <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 12, color: '#839188' }}>{new Date(order.createdAt).toLocaleString(locale)}</span>
+                <button
+                  onClick={() => toggleOrder(order.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#748278', padding: '2px 6px' }}
+                >
+                  {expandedOrder === order.id ? '▲' : '▼'} {tr('История', 'Tarix')}
+                </button>
+              </div>
+
+              {expandedOrder === order.id && (
+                <div style={{ marginTop: 10, borderTop: '1px solid #edf2ee', paddingTop: 10 }}>
+                  {!orderDetails[order.id] ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {[1,2].map((i) => <div key={i} className="sg-skeleton" style={{ height: 12, width: i === 1 ? '60%' : '40%' }} />)}
+                    </div>
+                  ) : orderDetails[order.id]?.statusHistory?.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>{tr('История изменений пуста', 'O\'zgarishlar tarixi bo\'sh')}</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {(orderDetails[order.id]?.statusHistory || []).map((h: any, idx: number) => (
+                        <div key={h.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: idx === 0 ? '#00875a' : '#d1d5db', marginTop: 4, flexShrink: 0 }} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                              {h.fromStatus && (
+                                <>
+                                  <span className="sg-badge" style={{ background: '#f3f4f6', color: '#4b5563', fontSize: 11 }}>{statusLabels[h.fromStatus] || h.fromStatus}</span>
+                                  <span style={{ color: '#9ca3af' }}>→</span>
+                                </>
+                              )}
+                              <span className="sg-badge" style={{ background: `${statusColors[h.toStatus] || '#4b5563'}1a`, color: statusColors[h.toStatus] || '#4b5563', fontSize: 11 }}>{statusLabels[h.toStatus] || h.toStatus}</span>
+                            </div>
+                            <div style={{ marginTop: 2, color: '#9ca3af' }}>
+                              {h.actor ? (h.actor.name || h.actor.email) : tr('Система', 'Tizim')}
+                              {' · '}
+                              {new Date(h.createdAt).toLocaleString(locale)}
+                            </div>
+                            {h.note && <div style={{ marginTop: 2, color: '#5f6d64', fontStyle: 'italic' }}>{h.note}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </article>
           ))}
 
