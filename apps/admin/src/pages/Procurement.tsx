@@ -297,6 +297,11 @@ export default function Procurement() {
                 + {tr('Добавить товар', 'Mahsulot qo\'shish')}
               </button>
             </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'center', paddingRight: items.length > 1 ? 28 : 0 }}>
+              <span style={{ flex: 3, fontSize: 11, fontWeight: 600, color: '#748278', paddingLeft: 10 }}>{tr('Товар', 'Mahsulot')}</span>
+              <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: '#748278', paddingLeft: 8 }}>{tr('Количество', 'Miqdor')}</span>
+              <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: '#748278', paddingLeft: 8 }}>{tr('Цена покупная', 'Sotib olish narxi')}</span>
+            </div>
             {items.map((item, idx) => (
               <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                 <select value={item.productId} onChange={(e) => updateItem(idx, 'productId', e.target.value)}
@@ -306,12 +311,10 @@ export default function Procurement() {
                 </select>
                 <input type="number" value={item.qty} min={1}
                   onChange={(e) => updateItem(idx, 'qty', Number(e.target.value))}
-                  style={{ flex: 1, border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 8px', fontSize: 13 }}
-                  placeholder={tr('Кол-во', 'Soni')} />
+                  style={{ flex: 1, border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 8px', fontSize: 13 }} />
                 <input type="number" value={item.unitCost} min={0}
                   onChange={(e) => updateItem(idx, 'unitCost', Number(e.target.value))}
-                  style={{ flex: 1, border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 8px', fontSize: 13 }}
-                  placeholder={tr('Цена', 'Narx')} />
+                  style={{ flex: 1, border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 8px', fontSize: 13 }} />
                 {items.length > 1 && (
                   <button onClick={() => removeItem(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c', fontSize: 18, lineHeight: 1, padding: '0 4px' }}>×</button>
                 )}
