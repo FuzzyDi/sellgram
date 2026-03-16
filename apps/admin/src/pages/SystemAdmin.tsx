@@ -922,7 +922,7 @@ export default function SystemAdmin() {
                   <input type="date" value={tenantPlanExpires[tenant.id] || ''}
                     onChange={e => setTenantPlanExpires(prev => ({ ...prev, [tenant.id]: e.target.value }))}
                     className="border rounded-lg px-3 py-2 text-sm" style={{ fontSize: 12 }} onClick={e => e.stopPropagation()} />
-                  <Button onClick={e => { e.stopPropagation(); setTenantPlanExpires(prev => ({ ...prev, [tenant.id]: '' })); }}
+                  <Button onClick={(e: React.MouseEvent) => { e.stopPropagation(); setTenantPlanExpires(prev => ({ ...prev, [tenant.id]: '' })); }}
                     className="sg-btn ghost" style={{ fontSize: 11 }}>{tr('Без срока', 'Muddatsiz')}</Button>
                 </div>
 
