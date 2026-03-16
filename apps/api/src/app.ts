@@ -344,6 +344,61 @@ async function main() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
+  // Idempotent schema bootstrap (ensures suppliers table & supplierId column always exist)
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "suppliers" (
+        "id" TEXT NOT NULL,
+        "tenantId" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "contactName" TEXT,
+        "phone" TEXT,
+        "email" TEXT,
+        "address" TEXT,
+        "note" TEXT,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "suppliers_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename='suppliers' AND indexname='suppliers_tenantId_idx') THEN
+          CREATE INDEX "suppliers_tenantId_idx" ON "suppliers"("tenantId");
+        END IF;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name='suppliers_tenantId_fkey'
+        ) THEN
+          ALTER TABLE "suppliers" ADD CONSTRAINT "suppliers_tenantId_fkey"
+            FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "purchase_orders" ADD COLUMN IF NOT EXISTS "supplierId" TEXT;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name='purchase_orders_supplierId_fkey'
+        ) THEN
+          ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_supplierId_fkey"
+            FOREIGN KEY ("supplierId") REFERENCES "suppliers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+        END IF;
+      END $$;
+    `);
+    fastify.log.info('Schema bootstrap: suppliers table verified');
+  } catch (err: any) {
+    fastify.log.error(`Schema bootstrap failed: ${err.message}`);
+  }
+
   // Start
   try {
     await fastify.listen({ port: config.API_PORT, host: '0.0.0.0' });
