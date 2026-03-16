@@ -347,6 +347,7 @@ model Order {
 
   items        OrderItem[]
   statusHistory OrderStatusLog[]
+  review       OrderReview?
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
@@ -390,6 +391,21 @@ model OrderStatusLog {
 
   @@index([orderId])
   @@map("order_status_logs")
+}
+
+model OrderReview {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId String
+  tenantId   String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@map("order_reviews")
 }
 
 model PaymentWebhookEvent {

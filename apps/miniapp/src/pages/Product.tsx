@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
@@ -16,12 +16,14 @@ export default function Product({ id }: { id: string }) {
   const [added, setAdded] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [imgIdx, setImgIdx] = useState(0);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   function loadProduct() {
     if (!id) return;
     setLoading(true);
     setFetchError(false);
+    setSelectedVariantId(null);
     api.getProduct(id)
       .then(setProduct)
       .catch(() => setFetchError(true))
@@ -32,9 +34,10 @@ export default function Product({ id }: { id: string }) {
 
   const addToCart = async () => {
     if (!product || adding) return;
+    if (hasVariants && !selectedVariantId) return; // must pick a variant
     setAdding(true);
     try {
-      await api.addToCart(product.id);
+      await api.addToCart(product.id, selectedVariantId ?? undefined);
       setAdded(true);
       setAddError(null);
       cartStore.inc();
@@ -90,7 +93,22 @@ export default function Product({ id }: { id: string }) {
   }
 
   const images = product.images || [];
-  const inStock = product.stockQty > 0;
+  const variants: any[] = (product.variants || []).filter((v: any) => v.isActive);
+  const hasVariants = variants.length > 0;
+  const selectedVariant = hasVariants ? variants.find((v: any) => v.id === selectedVariantId) ?? null : null;
+
+  const displayPrice = selectedVariant?.price != null ? Number(selectedVariant.price) : Number(product.price);
+  const stockQty = selectedVariant ? selectedVariant.stockQty : product.stockQty;
+  const inStock = stockQty > 0;
+
+  const btnDisabled = !inStock || adding || (hasVariants && !selectedVariantId);
+  const btnLabel = (() => {
+    if (added) return tr('✓ В корзине', '✓ Savatda');
+    if (adding) return '...';
+    if (!inStock) return tr('Нет в наличии', 'Mavjud emas');
+    if (hasVariants && !selectedVariantId) return tr('Выберите вариант', 'Variantni tanlang');
+    return `${tr('В корзину', 'Savatga')} · ${displayPrice.toLocaleString()} ${tr('сум', "so'm")}`;
+  })();
 
   return (
     <div className="anim-fade" style={{ paddingBottom: 88 }}>
@@ -123,26 +141,79 @@ export default function Product({ id }: { id: string }) {
         {product.category && <span className="anim-fade anim-d1" style={{ display: 'inline-block', fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-light)', padding: '3px 10px', borderRadius: 8 }}>{product.category.name}</span>}
         <h1 className="anim-fade anim-d2" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2, marginTop: 10 }}>{product.name}</h1>
         <p className="anim-fade anim-d3" style={{ fontSize: 28, fontWeight: 800, marginTop: 12, letterSpacing: -0.5 }}>
-          {Number(product.price).toLocaleString()} <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--hint)' }}>{tr('сум', "so'm")}</span>
+          {displayPrice.toLocaleString()} <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--hint)' }}>{tr('сум', "so'm")}</span>
         </p>
         {product.description && <p className="anim-fade anim-d4" style={{ color: 'var(--hint)', marginTop: 16, lineHeight: 1.55, fontSize: 15 }}>{product.description}</p>}
-        <div className="anim-fade anim-d5" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 14, padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--sec)' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: inStock ? (product.stockQty > 5 ? 'var(--success)' : 'var(--warning)') : 'var(--danger)' }} />
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--hint)' }}>
-            {!inStock ? tr('Нет в наличии', 'Mavjud emas') : product.stockQty > 5 ? tr('В наличии', 'Mavjud') : tr(`Осталось ${product.stockQty} шт`, `${product.stockQty} ta qoldi`)}
-          </span>
-        </div>
+
+        {/* Variant selector */}
+        {hasVariants && (
+          <div className="anim-fade anim-d4" style={{ marginTop: 16 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--hint)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {tr('Вариант', 'Variant')}
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {variants.map((v: any) => {
+                const outOfStock = v.stockQty === 0;
+                const selected = selectedVariantId === v.id;
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => setSelectedVariantId(selected ? null : v.id)}
+                    disabled={outOfStock}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: selected ? '2px solid var(--btn)' : '1.5px solid var(--divider)',
+                      background: selected ? 'var(--btn)' : outOfStock ? 'var(--sec)' : 'var(--bg)',
+                      color: selected ? 'var(--btn-text)' : outOfStock ? 'var(--hint)' : 'var(--text)',
+                      fontSize: 13, fontWeight: selected ? 700 : 500,
+                      cursor: outOfStock ? 'default' : 'pointer',
+                      opacity: outOfStock ? 0.5 : 1,
+                      transition: 'all 0.15s',
+                      position: 'relative',
+                    }}
+                  >
+                    {v.name}
+                    {v.price != null && Number(v.price) !== Number(product.price) && (
+                      <span style={{ fontSize: 11, marginLeft: 4, opacity: 0.75 }}>
+                        {Number(v.price).toLocaleString()}
+                      </span>
+                    )}
+                    {outOfStock && (
+                      <span style={{ position: 'absolute', top: -4, right: -4, width: 8, height: 8, borderRadius: '50%', background: 'var(--danger)', border: '1.5px solid var(--bg)' }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedVariant && selectedVariant.stockQty <= 3 && selectedVariant.stockQty > 0 && (
+              <p style={{ fontSize: 12, color: 'var(--warning)', marginTop: 6 }}>
+                {tr(`Осталось ${selectedVariant.stockQty} шт`, `${selectedVariant.stockQty} ta qoldi`)}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Stock indicator (only shown when no variants or variant selected) */}
+        {(!hasVariants || selectedVariant) && (
+          <div className="anim-fade anim-d5" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 14, padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--sec)' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: inStock ? (stockQty > 5 ? 'var(--success)' : 'var(--warning)') : 'var(--danger)' }} />
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--hint)' }}>
+              {!inStock ? tr('Нет в наличии', 'Mavjud emas') : stockQty > 5 ? tr('В наличии', 'Mavjud') : tr(`Осталось ${stockQty} шт`, `${stockQty} ta qoldi`)}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="glass" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30, padding: '10px 16px max(env(safe-area-inset-bottom, 0px), 10px)', borderTop: '0.5px solid var(--divider)' }}>
         {addError && <div className="error-banner" style={{ marginBottom: 8 }}>{addError}</div>}
         <button
           onClick={addToCart}
-          disabled={!inStock || adding}
+          disabled={btnDisabled}
           className={`btn full${added ? ' success' : !inStock ? ' secondary' : ' primary'}`}
           style={{ transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)', color: !inStock ? 'var(--hint)' : undefined }}
         >
-          {added ? tr('✓ В корзине', '✓ Savatda') : adding ? '...' : !inStock ? tr('Нет в наличии', 'Mavjud emas') : `${tr('В корзину', 'Savatga')} · ${Number(product.price).toLocaleString()} ${tr('сум', "so'm")}`}
+          {btnLabel}
         </button>
       </div>
     </div>

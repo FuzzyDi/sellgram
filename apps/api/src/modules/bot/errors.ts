@@ -6,6 +6,8 @@ export const SHOP_READ_ERROR_STATUS: Record<string, number> = {
 export const ORDER_ACTION_ERROR_STATUS: Record<string, number> = {
   ORDER_NOT_FOUND: 404,
   ORDER_CANNOT_CANCEL: 409,
+  ORDER_CANNOT_REVIEW: 409,
+  REVIEW_ALREADY_SUBMITTED: 409,
 };
 
 export const CART_ERROR_STATUS: Record<string, number> = {

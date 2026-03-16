@@ -1,7 +1,7 @@
 import prisma from '../../lib/prisma.js';
 
 export class ShopApiError extends Error {
-  code: 'PRODUCT_NOT_FOUND' | 'ORDER_NOT_FOUND' | 'ORDER_CANNOT_CANCEL';
+  code: 'PRODUCT_NOT_FOUND' | 'ORDER_NOT_FOUND' | 'ORDER_CANNOT_CANCEL' | 'ORDER_CANNOT_REVIEW' | 'REVIEW_ALREADY_SUBMITTED';
 
   constructor(code: ShopApiError['code']) {
     super(code);
@@ -136,6 +136,7 @@ export async function getCustomerOrderById(customerId: string, orderId: string) 
       statusHistory: { orderBy: { createdAt: 'desc' } },
       deliveryZone: true,
       store: { select: { name: true } },
+      review: { select: { rating: true, comment: true, createdAt: true } },
     },
   });
 
@@ -161,6 +162,24 @@ export async function cancelCustomerOrder(customerId: string, orderId: string) {
   ]);
 
   return { orderId: order.id, status: 'CANCELLED' };
+}
+
+const REVIEWABLE_STATUSES = new Set(['DELIVERED', 'COMPLETED']);
+
+export async function submitOrderReview(customerId: string, orderId: string, rating: number, comment?: string) {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, customerId },
+    select: { id: true, tenantId: true, status: true, review: { select: { id: true } } },
+  });
+  if (!order) throw new ShopApiError('ORDER_NOT_FOUND');
+  if (!REVIEWABLE_STATUSES.has(order.status)) throw new ShopApiError('ORDER_CANNOT_REVIEW');
+  if (order.review) throw new ShopApiError('REVIEW_ALREADY_SUBMITTED');
+
+  await prisma.orderReview.create({
+    data: { orderId: order.id, customerId, tenantId: order.tenantId, rating, comment },
+  });
+
+  return { orderId: order.id, rating };
 }
 
 export async function getCustomerLoyalty(customerId: string, tenantId: string) {

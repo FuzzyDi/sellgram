@@ -24,6 +24,11 @@ export const itemIdParamsSchema = z.object({
   id: z.string().min(1),
 });
 
+export const reviewOrderSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().max(1000).optional(),
+});
+
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 export type CartAddInput = z.infer<typeof cartAddSchema>;
 export type CartUpdateQtyInput = z.infer<typeof cartUpdateQtySchema>;

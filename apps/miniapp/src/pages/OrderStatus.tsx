@@ -4,6 +4,25 @@ import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
 import { useTelegramBackButton } from '../hooks/useTelegramBackButton';
 
+function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          onClick={() => onChange(star)}
+          onMouseEnter={() => setHover(star)}
+          onMouseLeave={() => setHover(0)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 32, padding: 2, lineHeight: 1, color: star <= (hover || value) ? '#f5a623' : 'var(--divider)', transition: 'color 0.15s' }}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const steps = ['NEW', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED'];
 const TERMINAL = new Set(['COMPLETED', 'CANCELLED', 'REFUNDED']);
 const POLL_MS = 30_000;
@@ -17,6 +36,10 @@ export default function OrderStatus({ id }: { id: string }) {
   const [error, setError] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewDone, setReviewDone] = useState(false);
 
   const SC = useMemo(() => ({
     NEW:       { emoji: '🆕', label: tr('Новый', 'Yangi'),               color: 'var(--status-new)' },
@@ -157,6 +180,52 @@ export default function OrderStatus({ id }: { id: string }) {
           <button onClick={() => navigate('/')} className="btn primary" style={{ flex: 1 }}>{tr('В каталог', 'Katalogga')}</button>
           <button onClick={() => navigate('/orders')} className="btn secondary" style={{ flex: 1 }}>{tr('Все заказы', 'Barcha buyurtmalar')}</button>
         </div>
+
+        {(order.status === 'DELIVERED' || order.status === 'COMPLETED') && !order.review && !reviewDone && (
+          <div style={{ marginTop: 12, background: 'var(--sec)', borderRadius: 'var(--radius)', padding: '16px 14px' }}>
+            <p style={{ fontWeight: 700, fontSize: 15, textAlign: 'center', marginBottom: 12 }}>
+              {tr('Оцените заказ', 'Buyurtmani baholang')}
+            </p>
+            <StarRating value={reviewRating} onChange={(v) => { setReviewRating(v); window.Telegram?.WebApp?.HapticFeedback?.selectionChanged?.(); }} />
+            {reviewRating > 0 && (
+              <>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder={tr('Комментарий (необязательно)', 'Izoh (ixtiyoriy)')}
+                  rows={3}
+                  maxLength={1000}
+                  style={{ width: '100%', marginTop: 12, padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1.5px solid var(--divider)', background: 'var(--bg)', color: 'var(--text)', fontSize: 14, resize: 'none', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' }}
+                />
+                <button
+                  disabled={submittingReview}
+                  onClick={async () => {
+                    setSubmittingReview(true);
+                    try {
+                      await api.reviewOrder(id, reviewRating, reviewComment || undefined);
+                      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+                      setReviewDone(true);
+                    } catch {
+                      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+                    }
+                    setSubmittingReview(false);
+                  }}
+                  className="btn primary full"
+                  style={{ marginTop: 10 }}
+                >
+                  {submittingReview ? '...' : tr('Отправить отзыв', 'Fikr yuborish')}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {(order.status === 'DELIVERED' || order.status === 'COMPLETED') && (order.review || reviewDone) && (
+          <div style={{ marginTop: 12, background: 'var(--sec)', borderRadius: 'var(--radius)', padding: '14px', textAlign: 'center' }}>
+            <p style={{ fontSize: 20, marginBottom: 4 }}>{'★'.repeat(order.review?.rating ?? reviewRating)}</p>
+            <p style={{ fontSize: 13, color: 'var(--hint)' }}>{tr('Спасибо за отзыв!', 'Fikringiz uchun rahmat!')}</p>
+          </div>
+        )}
 
         {(order.status === 'NEW' || order.status === 'CONFIRMED') && !cancelled && (
           <div style={{ marginTop: 10 }}>

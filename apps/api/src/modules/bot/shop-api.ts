@@ -4,6 +4,7 @@ import {
   cartUpdateQtySchema,
   checkoutSchema,
   itemIdParamsSchema,
+  reviewOrderSchema,
 } from './dto.js';
 import {
   getCustomerCart,
@@ -15,6 +16,7 @@ import {
   getCustomerLoyalty,
   getCustomerOrderById,
   cancelCustomerOrder,
+  submitOrderReview,
 } from './shop.service.js';
 import { createShopCheckoutOrder } from './checkout.service.js';
 import { addCartItem, removeCartItem, updateCartItemQty } from './cart.service.js';
@@ -151,6 +153,19 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     try {
       const { id } = itemIdParamsSchema.parse(request.params);
       const data = await cancelCustomerOrder(request.customer!.id, id);
+      return { success: true, data };
+    } catch (err: unknown) {
+      return sendCodedError(reply, err, ORDER_ACTION_ERROR_STATUS);
+    }
+  });
+
+  fastify.post('/shop/orders/:id/review', {
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    try {
+      const { id } = itemIdParamsSchema.parse(request.params);
+      const body = reviewOrderSchema.parse(request.body);
+      const data = await submitOrderReview(request.customer!.id, id, body.rating, body.comment);
       return { success: true, data };
     } catch (err: unknown) {
       return sendCodedError(reply, err, ORDER_ACTION_ERROR_STATUS);
