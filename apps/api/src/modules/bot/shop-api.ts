@@ -14,12 +14,13 @@ import {
   listCustomerOrders,
   getCustomerLoyalty,
   getCustomerOrderById,
+  cancelCustomerOrder,
 } from './shop.service.js';
 import { createShopCheckoutOrder } from './checkout.service.js';
 import { addCartItem, removeCartItem, updateCartItemQty } from './cart.service.js';
 import { telegramShopAuth } from './shop-auth.js';
 import { sendCodedError } from './http-errors.js';
-import { CART_ERROR_STATUS, SHOP_READ_ERROR_STATUS } from './errors.js';
+import { CART_ERROR_STATUS, ORDER_ACTION_ERROR_STATUS, SHOP_READ_ERROR_STATUS } from './errors.js';
 
 
 export default async function shopApiRoutes(fastify: FastifyInstance) {
@@ -141,6 +142,18 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
       return { success: true, data };
     } catch (err: unknown) {
       return sendCodedError(reply, err, SHOP_READ_ERROR_STATUS);
+    }
+  });
+
+  fastify.post('/shop/orders/:id/cancel', {
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    try {
+      const { id } = itemIdParamsSchema.parse(request.params);
+      const data = await cancelCustomerOrder(request.customer!.id, id);
+      return { success: true, data };
+    } catch (err: unknown) {
+      return sendCodedError(reply, err, ORDER_ACTION_ERROR_STATUS);
     }
   });
 

@@ -121,6 +121,26 @@ function ProductCard({ product: p, index }: { product: Product; index: number })
   const { tr } = useMiniI18n();
   const delay = Math.min(index, 5);
   const outOfStock = p.stockQty === 0;
+  const [adding, setAdding] = React.useState(false);
+  const [added, setAdded] = React.useState(false);
+
+  const handleAdd = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (outOfStock || adding) return;
+    setAdding(true);
+    try {
+      const { api } = await import('../api/client');
+      await api.addToCart(p.id);
+      cartStore.inc();
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1500);
+    } catch {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+    }
+    setAdding(false);
+  };
+
   return (
     <div onClick={() => navigate(`/product/${p.id}`)} className={`product-card anim-fade anim-d${delay}`} style={{ opacity: outOfStock ? 0.62 : 1 }}>
       <div style={{ aspectRatio: '1', background: 'var(--sec)', position: 'relative', overflow: 'hidden' }}>
@@ -141,9 +161,30 @@ function ProductCard({ product: p, index }: { product: Product; index: number })
       </div>
       <div style={{ padding: '10px 12px 12px' }}>
         <h3 style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.name}</h3>
-        <p style={{ fontWeight: 700, fontSize: 16, marginTop: 6, color: outOfStock ? 'var(--hint)' : 'var(--text)' }}>
-          {Number(p.price).toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--hint)' }}>{tr('сум', "so'm")}</span>
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 6 }}>
+          <p style={{ fontWeight: 700, fontSize: 15, color: outOfStock ? 'var(--hint)' : 'var(--text)', margin: 0 }}>
+            {Number(p.price).toLocaleString()} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--hint)' }}>{tr('сум', "so'm")}</span>
+          </p>
+          {!outOfStock && (
+            <button
+              onClick={handleAdd}
+              disabled={adding}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
+                background: added ? 'var(--success)' : 'var(--btn)',
+                color: 'var(--btn-text)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: added ? 14 : 20, fontWeight: 700,
+                transition: 'background 0.2s, transform 0.1s',
+                transform: adding ? 'scale(0.9)' : 'scale(1)',
+                lineHeight: 1,
+              }}
+              aria-label={tr('В корзину', 'Savatga')}
+            >
+              {added ? '✓' : adding ? '·' : '+'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

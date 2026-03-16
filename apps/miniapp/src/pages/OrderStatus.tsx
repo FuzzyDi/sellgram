@@ -15,6 +15,8 @@ export default function OrderStatus({ id }: { id: string }) {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
 
   const SC = useMemo(() => ({
     NEW:       { emoji: '🆕', label: tr('Новый', 'Yangi'),               color: 'var(--status-new)' },
@@ -155,6 +157,46 @@ export default function OrderStatus({ id }: { id: string }) {
           <button onClick={() => navigate('/')} className="btn primary" style={{ flex: 1 }}>{tr('В каталог', 'Katalogga')}</button>
           <button onClick={() => navigate('/orders')} className="btn secondary" style={{ flex: 1 }}>{tr('Все заказы', 'Barcha buyurtmalar')}</button>
         </div>
+
+        {(order.status === 'NEW' || order.status === 'CONFIRMED') && !cancelled && (
+          <div style={{ marginTop: 10 }}>
+            {cancelConfirm ? (
+              <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, textAlign: 'center', margin: 0 }}>
+                  {tr('Отменить заказ?', 'Buyurtmani bekor qilasizmi?')}
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setCancelConfirm(false)} className="btn secondary" style={{ flex: 1 }}>
+                    {tr('Назад', 'Orqaga')}
+                  </button>
+                  <button
+                    disabled={cancelling}
+                    onClick={async () => {
+                      setCancelling(true);
+                      try {
+                        await api.cancelOrder(id);
+                        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
+                        setOrder((o: any) => o ? { ...o, status: 'CANCELLED' } : o);
+                        setCancelConfirm(false);
+                      } catch {
+                        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+                      }
+                      setCancelling(false);
+                    }}
+                    className="btn danger"
+                    style={{ flex: 1 }}
+                  >
+                    {cancelling ? '...' : tr('Да, отменить', 'Ha, bekor')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setCancelConfirm(true)} className="btn ghost" style={{ width: '100%', color: 'var(--danger)' }}>
+                {tr('Отменить заказ', 'Buyurtmani bekor qilish')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

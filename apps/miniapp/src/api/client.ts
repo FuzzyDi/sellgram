@@ -112,6 +112,7 @@ export const api = {
     }),
   getOrders: () => request<any>('/shop/orders'),
   getOrder: (id: string) => request<any>(`/shop/orders/${id}`),
+  cancelOrder: (id: string) => request<any>(`/shop/orders/${id}/cancel`, { method: 'POST' }),
   getLoyalty: () => request<any>('/shop/loyalty'),
 };
 

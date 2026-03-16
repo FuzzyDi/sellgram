@@ -50,7 +50,20 @@ export default function Loyalty() {
         <p style={{ fontSize: 14, opacity: 0.85, fontWeight: 500 }}>{tr('Ваш баланс', 'Balansingiz')}</p>
         <p style={{ fontSize: 48, fontWeight: 800, marginTop: 4, letterSpacing: -1 }}>{data?.balance || 0}</p>
         <p style={{ fontSize: 14, opacity: 0.75, marginTop: 2 }}>{tr('баллов', 'ball')}</p>
-        {data?.config?.isEnabled && data?.config?.pointValue && <p style={{ fontSize: 12, opacity: 0.6, marginTop: 10 }}>1 {tr('балл', 'ball')} = {data.config.pointValue} {tr('сум', "so'm")} • {tr('используйте при оформлении', 'buyurtmada ishlating')}</p>}
+        {data?.config?.isEnabled && (
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {data.config.pointValue && (
+              <p style={{ fontSize: 12, opacity: 0.75 }}>
+                💸 1 {tr('балл', 'ball')} = {data.config.pointValue} {tr('сум', "so'm")} · {tr('используйте при оформлении', 'buyurtmada ishlating')}
+              </p>
+            )}
+            {data.config.pointsPerUnit && data.config.unitAmount && (
+              <p style={{ fontSize: 12, opacity: 0.75 }}>
+                ⭐ {data.config.pointsPerUnit} {tr('балл за каждые', 'ball har')} {Number(data.config.unitAmount).toLocaleString(locale)} {tr('сум', "so'm")}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {txns.length > 0 && (

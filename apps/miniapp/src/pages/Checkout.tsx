@@ -233,6 +233,18 @@ export default function Checkout() {
           <div style={{ borderTop: '1px solid var(--divider)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 18 }}>
             <span>{tr('Итого', 'Jami')}</span><span>{total.toLocaleString()} {tr('сум', "so'm")}</span>
           </div>
+          {loyalty?.config?.isEnabled && loyalty.config.pointsPerUnit && loyalty.config.unitAmount && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--divider)', fontSize: 12, color: 'var(--hint)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>⭐</span>
+              <span>
+                {tr('Начислим', 'Hisoblaymiz')}{' '}
+                <strong style={{ color: 'var(--success)' }}>
+                  +{Math.floor((total / loyalty.config.unitAmount) * loyalty.config.pointsPerUnit)}
+                </strong>{' '}
+                {tr('баллов за этот заказ', 'ball ushbu buyurtma uchun')}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import prisma from '../../lib/prisma.js';
 
 export class ShopApiError extends Error {
-  code: 'PRODUCT_NOT_FOUND' | 'ORDER_NOT_FOUND';
+  code: 'PRODUCT_NOT_FOUND' | 'ORDER_NOT_FOUND' | 'ORDER_CANNOT_CANCEL';
 
   constructor(code: ShopApiError['code']) {
     super(code);
@@ -143,6 +143,26 @@ export async function getCustomerOrderById(customerId: string, orderId: string) 
   return order;
 }
 
+const CANCELLABLE_STATUSES = new Set(['NEW', 'CONFIRMED']);
+
+export async function cancelCustomerOrder(customerId: string, orderId: string) {
+  const order = await prisma.order.findFirst({ where: { id: orderId, customerId }, select: { id: true, status: true } });
+  if (!order) throw new ShopApiError('ORDER_NOT_FOUND');
+  if (!CANCELLABLE_STATUSES.has(order.status)) throw new ShopApiError('ORDER_CANNOT_CANCEL');
+
+  await prisma.$transaction([
+    prisma.order.update({
+      where: { id: order.id },
+      data: { status: 'CANCELLED', updatedAt: new Date() },
+    }),
+    prisma.orderStatusLog.create({
+      data: { orderId: order.id, toStatus: 'CANCELLED', fromStatus: order.status as any, note: 'Cancelled by customer' },
+    }),
+  ]);
+
+  return { orderId: order.id, status: 'CANCELLED' };
+}
+
 export async function getCustomerLoyalty(customerId: string, tenantId: string) {
   const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { loyaltyPoints: true } });
   const config = await prisma.loyaltyConfig.findUnique({ where: { tenantId } });
@@ -155,7 +175,7 @@ export async function getCustomerLoyalty(customerId: string, tenantId: string) {
 
   return {
     balance: customer?.loyaltyPoints ?? 0,
-    config: config ? { pointValue: config.pointValue, unitAmount: config.unitAmount, isEnabled: config.isEnabled } : null,
+    config: config ? { pointValue: config.pointValue, unitAmount: config.unitAmount, pointsPerUnit: config.pointsPerUnit, isEnabled: config.isEnabled } : null,
     transactions,
   };
 }

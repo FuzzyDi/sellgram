@@ -3,6 +3,11 @@ export const SHOP_READ_ERROR_STATUS: Record<string, number> = {
   ORDER_NOT_FOUND: 404,
 };
 
+export const ORDER_ACTION_ERROR_STATUS: Record<string, number> = {
+  ORDER_NOT_FOUND: 404,
+  ORDER_CANNOT_CANCEL: 409,
+};
+
 export const CART_ERROR_STATUS: Record<string, number> = {
   INVALID_INPUT: 400,
   INVALID_QTY: 400,

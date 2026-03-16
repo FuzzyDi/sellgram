@@ -763,6 +763,7 @@ export async function createSystemInvoice(input: {
   const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId } });
   if (!tenant) throw new Error('TENANT_NOT_FOUND');
 
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
   const invoice = await prisma.invoice.create({
     data: {
       tenantId: input.tenantId,
@@ -770,6 +771,7 @@ export async function createSystemInvoice(input: {
       amount: input.amount,
       status: 'PENDING',
       paymentRef: input.paymentRef || null,
+      expiresAt,
     },
   });
 
