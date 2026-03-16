@@ -94,6 +94,8 @@ export const adminApi = {
   createProduct: (data: any) => request<any>('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (id: string, data: any) => request<any>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteProduct: (id: string) => request<any>(`/products/${id}`, { method: 'DELETE' }),
+  adjustStock: (id: string, qty: number, variantId?: string) =>
+    request<any>(`/products/${id}/stock`, { method: 'PATCH', body: JSON.stringify({ qty, variantId }) }),
 
   getCategories: () => request<any>('/categories'),
   createCategory: (data: any) => request<any>('/categories', { method: 'POST', body: JSON.stringify(data) }),
