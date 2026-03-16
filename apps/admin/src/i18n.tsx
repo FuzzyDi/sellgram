@@ -195,8 +195,7 @@ export function AdminI18nProvider({ children }: { children: React.ReactNode }) {
       },
       tr: (ru: string, uz: string) => {
         if (lang === 'uz') return uz;
-        const fixed = fixBrokenCyrillic(ru);
-        return looksLikeBrokenCyrillic(fixed) ? uz : fixed;
+        return fixBrokenCyrillic(ru);
       },
     }),
     [lang]

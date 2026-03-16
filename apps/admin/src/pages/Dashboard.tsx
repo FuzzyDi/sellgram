@@ -13,7 +13,7 @@ export default function Dashboard() {
   function load() {
     setLoading(true);
     setError(false);
-    Promise.all([adminApi.getDashboard(), adminApi.getTopProducts(), adminApi.getSubscription().catch(() => null)])
+    Promise.all([adminApi.getDashboard(), adminApi.getTopProducts().catch(() => []), adminApi.getSubscription().catch(() => null)])
       .then(([s, tp, subscription]) => {
         setStats(s);
         setTopProducts(Array.isArray(tp) ? tp : tp?.items || tp?.data || []);
