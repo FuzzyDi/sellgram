@@ -367,16 +367,16 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       prisma.customer.count({ where: { tenantId } }),
       // COUNT(DISTINCT) avoids loading all rows into memory
       prisma.$queryRaw<[{ count: bigint }]>`
-        SELECT COUNT(DISTINCT customer_id)::bigint AS count FROM orders WHERE tenant_id = ${tenantId}
+        SELECT COUNT(DISTINCT "customerId")::bigint AS count FROM orders WHERE "tenantId" = ${tenantId}
       `,
       prisma.product.count({ where: { tenantId } }),
       prisma.customer.count({ where: { tenantId, createdAt: { gte: weekAgo } } }),
       prisma.order.count({ where: { tenantId, status: 'NEW' } }),
       prisma.$queryRaw<[{ count: bigint }]>`
-        SELECT COUNT(DISTINCT oi.product_id)::bigint AS count
+        SELECT COUNT(DISTINCT oi."productId")::bigint AS count
         FROM order_items oi
-        JOIN orders o ON o.id = oi.order_id
-        WHERE o.tenant_id = ${tenantId} AND o.status IN ('COMPLETED', 'DELIVERED')
+        JOIN orders o ON o.id = oi."orderId"
+        WHERE o."tenantId" = ${tenantId} AND o.status IN ('COMPLETED', 'DELIVERED')
       `,
       prisma.customer.count({ where: { tenantId, ordersCount: { gt: 1 } } }),
     ]);
