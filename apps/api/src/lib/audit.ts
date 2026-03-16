@@ -17,9 +17,7 @@ export function writeAuditLog(opts: {
       targetId: rest.targetId,
       details: details as Prisma.InputJsonValue | undefined,
     };
-    prisma.tenantAuditLog.create({ data }).catch((err) => {
-      console.error('[audit] write failed:', err?.message ?? err);
-    });
+    prisma.tenantAuditLog.create({ data }).catch(() => {});
   } catch {
     // audit log failures must never affect the main request flow
   }
