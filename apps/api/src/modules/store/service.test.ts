@@ -46,6 +46,7 @@ vi.mock('../../lib/prisma.js', () => ({
 vi.mock('grammy', () => ({
   Bot: vi.fn().mockImplementation(() => ({
     init: mocks.botInit,
+    botInfo: { username: 'test_bot' },
     api: {
       setChatMenuButton: mocks.setChatMenuButton,
       setWebhook: mocks.setWebhook,

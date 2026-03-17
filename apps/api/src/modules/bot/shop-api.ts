@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import prisma from '../../lib/prisma.js';
 import {
   cartAddSchema,
   cartUpdateQtySchema,
@@ -189,6 +190,64 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
   fastify.get('/shop/loyalty', async (request) => {
     const data = await getCustomerLoyalty(request.customer!.id, request.customer!.tenantId);
     return { success: true, data };
+  });
+
+  // ── Wishlist ──────────────────────────────────────────────
+  fastify.get('/shop/wishlist', async (request) => {
+    const items = await prisma.wishlistItem.findMany({
+      where: { customerId: request.customer!.id },
+      include: {
+        product: {
+          select: {
+            id: true, name: true, price: true, isActive: true,
+            images: { orderBy: { sortOrder: 'asc' }, take: 1 },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return { success: true, data: items.filter((i) => i.product.isActive) };
+  });
+
+  fastify.post('/shop/wishlist/:productId', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const { productId } = (request.params as any);
+    await prisma.wishlistItem.upsert({
+      where: { customerId_productId: { customerId: request.customer!.id, productId } },
+      create: { customerId: request.customer!.id, productId, tenantId: request.customer!.tenantId },
+      update: {},
+    });
+    return { success: true };
+  });
+
+  fastify.delete('/shop/wishlist/:productId', async (request, reply) => {
+    const { productId } = (request.params as any);
+    await prisma.wishlistItem.deleteMany({
+      where: { customerId: request.customer!.id, productId },
+    });
+    return { success: true };
+  });
+
+  // ── Promo codes ───────────────────────────────────────────
+  fastify.post('/shop/promo/validate', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const { code, orderTotal } = (request.body as any) ?? {};
+    if (!code) return reply.status(400).send({ success: false, error: 'code required' });
+    const promo = await prisma.promoCode.findUnique({
+      where: { tenantId_code: { tenantId: request.customer!.tenantId, code: String(code).trim().toUpperCase() } },
+    });
+    if (!promo || !promo.isActive) return reply.status(404).send({ success: false, error: 'PROMO_NOT_FOUND' });
+    if (promo.expiresAt && promo.expiresAt < new Date()) return reply.status(400).send({ success: false, error: 'PROMO_EXPIRED' });
+    if (promo.maxUses != null && promo.usedCount >= promo.maxUses) return reply.status(400).send({ success: false, error: 'PROMO_EXHAUSTED' });
+    if (promo.minOrderAmount != null && orderTotal != null && Number(orderTotal) < Number(promo.minOrderAmount)) {
+      return reply.status(400).send({ success: false, error: 'PROMO_MIN_ORDER', minOrder: Number(promo.minOrderAmount) });
+    }
+    const discount = promo.type === 'PERCENT'
+      ? Math.round(Number(orderTotal ?? 0) * Number(promo.value) / 100)
+      : Number(promo.value);
+    return { success: true, data: { id: promo.id, type: promo.type, value: Number(promo.value), discount } };
   });
 }
 

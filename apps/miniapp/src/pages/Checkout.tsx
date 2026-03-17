@@ -33,6 +33,10 @@ export default function Checkout() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoApplied, setPromoApplied] = useState<{ id: string; type: string; value: number; discount: number } | null>(null);
+  const [promoError, setPromoError] = useState('');
+  const [promoChecking, setPromoChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -74,11 +78,30 @@ export default function Checkout() {
         ? 0
         : Number(zone.price)
       : 0;
-  const discount =
+  const loyaltyDiscount =
     usePoints && loyalty?.config
       ? Math.min(form.loyaltyPointsToUse * loyalty.config.pointValue, subtotal * 0.3)
       : 0;
+  const promoDiscount = promoApplied?.discount ?? 0;
+  const discount = loyaltyDiscount + promoDiscount;
   const total = subtotal + deliveryFee - discount;
+
+  const applyPromo = async () => {
+    if (!promoCode.trim()) return;
+    setPromoChecking(true); setPromoError('');
+    try {
+      const data = await api.validatePromo(promoCode.trim().toUpperCase(), subtotal);
+      setPromoApplied(data);
+    } catch (e: any) {
+      const code = e.message || '';
+      if (code.includes('NOT_FOUND')) setPromoError(tr('Промокод не найден', 'Promokod topilmadi'));
+      else if (code.includes('EXPIRED')) setPromoError(tr('Промокод истёк', 'Promokod muddati o\'tgan'));
+      else if (code.includes('EXHAUSTED')) setPromoError(tr('Промокод исчерпан', 'Promokod tugagan'));
+      else if (code.includes('MIN_ORDER')) setPromoError(tr('Сумма заказа слишком мала', 'Buyurtma summasi yetarli emas'));
+      else setPromoError(tr('Недействительный код', 'Noto\'g\'ri kod'));
+      setPromoApplied(null);
+    } finally { setPromoChecking(false); }
+  };
 
   const submit = async () => {
     if (form.deliveryType === 'LOCAL' && !form.deliveryAddress) {
@@ -96,6 +119,7 @@ export default function Checkout() {
       const order = await api.checkout({
         ...form,
         loyaltyPointsToUse: usePoints ? form.loyaltyPointsToUse : 0,
+        promoCodeId: promoApplied?.id,
       });
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       navigate(`/order/${order.id}`);
@@ -226,10 +250,44 @@ export default function Checkout() {
           </div>
         )}
 
+        <div className="card" style={{ marginBottom: 20 }}>
+          <p className="section-title" style={{ marginTop: 0 }}>{tr('Промокод', 'Promokod')}</p>
+          {promoApplied ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'rgba(0,135,90,0.1)', borderRadius: 'var(--radius-sm)' }}>
+              <div>
+                <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--success)' }}>✓ {promoCode.toUpperCase()}</span>
+                <span style={{ fontSize: 13, color: 'var(--hint)', marginLeft: 8 }}>−{promoApplied.discount.toLocaleString()} {tr('сум', "so'm")}</span>
+              </div>
+              <button onClick={() => { setPromoApplied(null); setPromoCode(''); }} style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer', fontSize: 18 }}>×</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="field"
+                value={promoCode}
+                onChange={(e) => { setPromoCode(e.target.value); setPromoError(''); }}
+                onKeyDown={(e) => e.key === 'Enter' && applyPromo()}
+                placeholder={tr('Введите код', 'Kodni kiriting')}
+                style={{ flex: 1, textTransform: 'uppercase' }}
+              />
+              <button
+                onClick={applyPromo}
+                disabled={promoChecking || !promoCode.trim()}
+                className="btn primary"
+                style={{ padding: '0 16px', flexShrink: 0 }}
+              >
+                {promoChecking ? '...' : tr('Применить', 'Qo\'llash')}
+              </button>
+            </div>
+          )}
+          {promoError && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#f43f5e' }}>{promoError}</p>}
+        </div>
+
         <div className="card">
           <Row label={tr('Товары', 'Mahsulotlar')} value={`${subtotal.toLocaleString()} ${tr('сум', "so'm")}`} />
           {form.deliveryType === 'LOCAL' && <Row label={tr('Доставка', 'Yetkazish')} value={deliveryFee ? `${deliveryFee.toLocaleString()} ${tr('сум', "so'm")}` : tr('Бесплатно', 'Bepul')} />}
-          {discount > 0 && <Row label={tr('Скидка баллами', 'Ballar chegirmasi')} value={`−${discount.toLocaleString()} ${tr('сум', "so'm")}`} color="var(--success)" />}
+          {loyaltyDiscount > 0 && <Row label={tr('Скидка баллами', 'Ballar chegirmasi')} value={`−${loyaltyDiscount.toLocaleString()} ${tr('сум', "so'm")}`} color="var(--success)" />}
+          {promoDiscount > 0 && <Row label={tr('Промокод', 'Promokod')} value={`−${promoDiscount.toLocaleString()} ${tr('сум', "so'm")}`} color="var(--success)" />}
           <div style={{ borderTop: '1px solid var(--divider)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 18 }}>
             <span>{tr('Итого', 'Jami')}</span><span>{total.toLocaleString()} {tr('сум', "so'm")}</span>
           </div>

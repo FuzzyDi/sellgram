@@ -170,7 +170,7 @@ export async function registerBot(
       const productId = startParam.slice('product_'.length);
       const product = await prisma.product.findFirst({
         where: { id: productId, tenantId, isActive: true },
-        select: { name: true, price: true },
+        select: { name: true, price: true, description: true, images: { orderBy: { sortOrder: 'asc' }, take: 1 } },
       });
       if (product) {
         const productUrl = `${resolvedMiniAppUrl}#/product/${productId}`;
@@ -178,10 +178,15 @@ export async function registerBot(
           tCtx(ctx, '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0442\u043E\u0432\u0430\u0440', 'Mahsulotni ochish'),
           productUrl
         );
-        await ctx.reply(
-          `${product.name} \u2014 ${Number(product.price).toLocaleString()} ${tCtx(ctx, '\u0441\u0443\u043C', "so'm")}`,
-          { reply_markup: kb }
-        );
+        const caption = `*${product.name}*\n\u{1F4B0} ${Number(product.price).toLocaleString()} ${tCtx(ctx, '\u0441\u0443\u043C', "so'm")}${product.description ? `\n\n${product.description}` : ''}`;
+        const imageUrl = product.images[0]?.url ?? null;
+        if (imageUrl) {
+          await ctx.replyWithPhoto(imageUrl, { caption, parse_mode: 'Markdown', reply_markup: kb }).catch(async () => {
+            await ctx.reply(caption, { parse_mode: 'Markdown', reply_markup: kb });
+          });
+        } else {
+          await ctx.reply(caption, { parse_mode: 'Markdown', reply_markup: kb });
+        }
         if (ctx.from) {
           await prisma.customer.upsert({
             where: { tenantId_telegramId: { tenantId, telegramId: BigInt(ctx.from.id) } },
@@ -337,6 +342,58 @@ export async function registerBot(
 
   bot.hears(['\u041F\u043E\u043C\u043E\u0449\u044C', 'Yordam'], async (ctx) => {
     await ctx.reply('/help');
+  });
+
+  // ── Inline search ─────────────────────────────────────────
+  bot.inlineQuery(/.*/, async (ctx) => {
+    const q = ctx.inlineQuery.query.trim();
+    const products = await prisma.product.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+        ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
+      },
+      include: { images: { orderBy: { sortOrder: 'asc' }, take: 1 } },
+      take: 10,
+      orderBy: q ? undefined : { sortOrder: 'asc' },
+    });
+
+    const results = products.map((p) => {
+      const price = `${Number(p.price).toLocaleString()} ${tCtx(ctx, 'сум', "so'm")}`;
+      const productUrl = resolvedMiniAppUrl ? `${resolvedMiniAppUrl}#/product/${p.id}` : null;
+      const shareUrl = `https://t.me/${ctx.me.username}?start=product_${p.id}`;
+      const kb = productUrl
+        ? new InlineKeyboard().webApp(tCtx(ctx, 'Открыть товар', 'Mahsulotni ochish'), productUrl)
+        : new InlineKeyboard().url(tCtx(ctx, 'Открыть', 'Ochish'), shareUrl);
+
+      const imageUrl = p.images[0]?.url;
+      if (imageUrl) {
+        return {
+          type: 'photo' as const,
+          id: p.id,
+          photo_url: imageUrl,
+          thumbnail_url: imageUrl,
+          title: p.name,
+          description: price,
+          caption: `*${p.name}*\n${price}`,
+          parse_mode: 'Markdown' as const,
+          reply_markup: kb,
+        };
+      }
+      return {
+        type: 'article' as const,
+        id: p.id,
+        title: p.name,
+        description: price,
+        input_message_content: {
+          message_text: `*${p.name}*\n${price}`,
+          parse_mode: 'Markdown' as const,
+        },
+        reply_markup: kb,
+      };
+    });
+
+    await ctx.answerInlineQuery(results as any[], { cache_time: 10 });
   });
 
   bot.command('help', async (ctx) => {

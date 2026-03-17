@@ -8,6 +8,7 @@ export const checkoutSchema = z.object({
   note: z.string().optional(),
   contactPhone: z.string().optional(),
   paymentMethodId: z.string().optional(),
+  promoCodeId: z.string().optional(),
 });
 
 export const cartAddSchema = z.object({

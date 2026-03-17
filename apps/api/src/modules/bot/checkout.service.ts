@@ -136,7 +136,30 @@ export async function createShopCheckoutOrder(input: {
       }
     }
 
-    const total = subtotal + deliveryPrice - loyaltyDiscount;
+    // Promo code discount
+    let promoDiscount = 0;
+    let appliedPromoCodeId: string | null = null;
+    if (body.promoCodeId) {
+      const promo = await tx.promoCode.findFirst({
+        where: { id: body.promoCodeId, tenantId, isActive: true },
+      });
+      if (promo) {
+        const now = new Date();
+        const expired = promo.expiresAt && promo.expiresAt < now;
+        const exhausted = promo.maxUses !== null && promo.usedCount >= promo.maxUses;
+        const belowMin = promo.minOrderAmount !== null && subtotal < Number(promo.minOrderAmount);
+        if (!expired && !exhausted && !belowMin) {
+          if (promo.type === 'PERCENT') {
+            promoDiscount = Math.floor((subtotal * Number(promo.value)) / 100);
+          } else {
+            promoDiscount = Math.min(Number(promo.value), subtotal);
+          }
+          appliedPromoCodeId = promo.id;
+        }
+      }
+    }
+
+    const total = subtotal + deliveryPrice - loyaltyDiscount - promoDiscount;
 
     const preparedPayment = prepareOrderPayment({
       method: {
@@ -168,6 +191,8 @@ export async function createShopCheckoutOrder(input: {
         subtotal,
         loyaltyDiscount,
         loyaltyPointsUsed,
+        promoDiscount,
+        promoCodeId: appliedPromoCodeId,
         total,
         note: body.note,
         paymentMethod: preparedPayment.paymentMethod as any,
@@ -183,6 +208,13 @@ export async function createShopCheckoutOrder(input: {
 
     if (body.contactPhone) {
       await tx.customer.update({ where: { id: customerId }, data: { phone: body.contactPhone } });
+    }
+
+    if (appliedPromoCodeId) {
+      await tx.promoCode.update({
+        where: { id: appliedPromoCodeId },
+        data: { usedCount: { increment: 1 } },
+      });
     }
 
     await tx.orderStatusLog.create({

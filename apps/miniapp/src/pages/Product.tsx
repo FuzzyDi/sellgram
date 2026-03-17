@@ -17,6 +17,8 @@ export default function Product({ id }: { id: string }) {
   const [addError, setAddError] = useState<string | null>(null);
   const [imgIdx, setImgIdx] = useState(0);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [qty, setQty] = useState(1);
+  const [wishlisted, setWishlisted] = useState(false);
   const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -51,11 +53,27 @@ export default function Product({ id }: { id: string }) {
     setLoading(true);
     setFetchError(false);
     setSelectedVariantId(null);
-    api.getProduct(id)
-      .then(setProduct)
-      .catch(() => setFetchError(true))
+    Promise.all([
+      api.getProduct(id),
+      api.getWishlist().catch(() => ({ items: [] })),
+    ]).then(([p, wl]) => {
+      setProduct(p);
+      const list: any[] = Array.isArray(wl) ? wl : (wl?.items ?? []);
+      setWishlisted(list.some((w: any) => w.productId === id || w.product?.id === id));
+    }).catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }
+
+  const toggleWishlist = async () => {
+    if (!product) return;
+    const next = !wishlisted;
+    setWishlisted(next);
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+    try {
+      if (next) await api.addToWishlist(product.id);
+      else await api.removeFromWishlist(product.id);
+    } catch { setWishlisted(!next); }
+  };
 
   useEffect(() => { loadProduct(); }, [id]);
 
@@ -64,7 +82,7 @@ export default function Product({ id }: { id: string }) {
     if (hasVariants && !selectedVariantId) return; // must pick a variant
     setAdding(true);
     try {
-      await api.addToCart(product.id, selectedVariantId ?? undefined);
+      await api.addToCart(product.id, selectedVariantId ?? undefined, qty);
       setAdded(true);
       setAddError(null);
       cartStore.inc();
@@ -142,6 +160,9 @@ export default function Product({ id }: { id: string }) {
       <button onClick={() => navigate('/')} className="pressable" style={{ position: 'absolute', top: 12, left: 12, zIndex: 20, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', width: 36, height: 36, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
       <button onClick={shareProduct} className="pressable" style={{ position: 'absolute', top: 12, left: 56, zIndex: 20, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {copied ? '✓' : '↗'}
+      </button>
+      <button onClick={toggleWishlist} className="pressable" style={{ position: 'absolute', top: 12, left: 100, zIndex: 20, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)', color: wishlisted ? '#f43f5e' : '#fff', border: 'none', borderRadius: 'var(--radius-sm)', width: 36, height: 36, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {wishlisted ? '♥' : '♡'}
       </button>
 
       {images.length > 0 ? (
@@ -237,6 +258,19 @@ export default function Product({ id }: { id: string }) {
 
       <div className="glass" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30, padding: '10px 16px max(env(safe-area-inset-bottom, 0px), 10px)', borderTop: '0.5px solid var(--divider)' }}>
         {addError && <div className="error-banner" style={{ marginBottom: 8 }}>{addError}</div>}
+        {inStock && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 10 }}>
+            <button
+              onClick={() => setQty((q) => Math.max(1, q - 1))}
+              style={{ width: 36, height: 36, borderRadius: '50%', border: '1.5px solid var(--divider)', background: 'var(--sec)', color: 'var(--text)', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >−</button>
+            <span style={{ fontSize: 18, fontWeight: 700, minWidth: 28, textAlign: 'center' }}>{qty}</span>
+            <button
+              onClick={() => setQty((q) => Math.min(stockQty, q + 1))}
+              style={{ width: 36, height: 36, borderRadius: '50%', border: '1.5px solid var(--divider)', background: 'var(--sec)', color: 'var(--text)', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >+</button>
+          </div>
+        )}
         <button
           onClick={addToCart}
           disabled={btnDisabled}

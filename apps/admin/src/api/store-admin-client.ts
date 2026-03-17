@@ -125,6 +125,11 @@ export const adminApi = {
   updateOrderStatus: (id: string, data: any) => request<any>(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify(data) }),
   getReviews: (params?: string) => request<any>(`/reviews${params ? '?' + params : ''}`),
 
+  getPromoCodes: () => request<any>('/promo-codes'),
+  createPromoCode: (data: any) => request<any>('/promo-codes', { method: 'POST', body: JSON.stringify(data) }),
+  updatePromoCode: (id: string, data: any) => request<any>(`/promo-codes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deletePromoCode: (id: string) => request<any>(`/promo-codes/${id}`, { method: 'DELETE' }),
+
   getCustomers: (params?: string) => request<any>(`/customers${params ? '?' + params : ''}`),
   getCustomer: (id: string) => request<any>(`/customers/${id}`),
 

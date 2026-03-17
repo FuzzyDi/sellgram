@@ -376,4 +376,56 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       },
     };
   });
+
+  // ── Promo Codes (admin CRUD) ──────────────────────────────
+  fastify.get('/promo-codes', async (request) => {
+    const items = await prisma.promoCode.findMany({
+      where: { tenantId: request.user!.tenantId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return { success: true, data: items };
+  });
+
+  fastify.post('/promo-codes', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
+    const b = request.body as any;
+    if (!b?.code || !b?.value) return reply.status(400).send({ success: false, error: 'code and value required' });
+    try {
+      const item = await prisma.promoCode.create({
+        data: {
+          tenantId: request.user!.tenantId,
+          code: String(b.code).trim().toUpperCase(),
+          type: b.type === 'FIXED' ? 'FIXED' : 'PERCENT',
+          value: Number(b.value),
+          minOrderAmount: b.minOrder ? Number(b.minOrder) : null,
+          maxUses: b.maxUses ? Number(b.maxUses) : null,
+          expiresAt: b.expiresAt ? new Date(b.expiresAt) : null,
+          isActive: b.isActive !== false,
+        },
+      });
+      return { success: true, data: item };
+    } catch (e: any) {
+      if (e.code === 'P2002') return reply.status(409).send({ success: false, error: 'Code already exists' });
+      throw e;
+    }
+  });
+
+  fastify.patch('/promo-codes/:id', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
+    const { id } = request.params as any;
+    const b = request.body as any;
+    const item = await prisma.promoCode.updateMany({
+      where: { id, tenantId: request.user!.tenantId },
+      data: {
+        ...(b.isActive !== undefined && { isActive: Boolean(b.isActive) }),
+        ...(b.maxUses !== undefined && { maxUses: b.maxUses ? Number(b.maxUses) : null }),
+        ...(b.expiresAt !== undefined && { expiresAt: b.expiresAt ? new Date(b.expiresAt) : null }),
+      },
+    });
+    return { success: true, data: item };
+  });
+
+  fastify.delete('/promo-codes/:id', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
+    const { id } = request.params as any;
+    await prisma.promoCode.deleteMany({ where: { id, tenantId: request.user!.tenantId } });
+    return { success: true };
+  });
 }

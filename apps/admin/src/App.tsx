@@ -22,6 +22,7 @@ import Suppliers from './pages/Suppliers';
 import AuditLog from './pages/AuditLog';
 import Reports from './pages/Reports';
 import Reviews from './pages/Reviews';
+import PromoCodes from './pages/PromoCodes';
 import Settings from './pages/Settings';
 import SystemAdmin from './pages/SystemAdmin';
 
@@ -50,6 +51,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   '/suppliers':    Building2,
   '/broadcasts':   Megaphone,
   '/reviews':      Star,
+  '/promo-codes':  Tag,
   '/reports':      BarChart2,
   '/settings':     SettingsIcon,
   '/billing':      Receipt,
@@ -81,6 +83,7 @@ function Sidebar({
     { to: '/suppliers',   label: t('suppliers'),   perm: 'manageCatalog' },
     { to: '/broadcasts',  label: t('broadcasts'),  perm: 'manageMarketing' },
     { to: '/reviews',     label: t('reviews'),     perm: 'manageOrders' },
+    { to: '/promo-codes', label: tr('Промокоды', 'Promokodlar'), perm: 'manageSettings' },
     { to: '/reports',    label: t('reports'),    perm: 'viewReports' },
     { to: '/settings',   label: t('settings') },
     { to: '/billing',    label: t('plans'),      perm: 'manageBilling' },
@@ -250,6 +253,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
     '/payments':     'manageBilling',
     '/broadcasts':   'manageMarketing',
     '/reviews':      'manageOrders',
+    '/promo-codes':  'manageSettings',
     '/reports':      'viewReports',
     '/billing':      'manageBilling',
     '/audit-log':    'manageSettings',
@@ -269,6 +273,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
     case '/payments':     return <PaymentMethods />;
     case '/broadcasts':   return <Broadcasts />;
     case '/reviews':      return <Reviews />;
+    case '/promo-codes':  return <PromoCodes />;
     case '/reports':      return <Reports />;
     case '/settings':     return <Settings />;
     case '/billing':      return <Billing />;
