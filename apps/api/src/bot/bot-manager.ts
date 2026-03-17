@@ -479,6 +479,43 @@ async function completeDeliveredOrder(orderId: string, storeId: string): Promise
   }
 }
 
+// In-memory set to avoid double-reminding within one server lifetime.
+// On restart a customer may receive a second reminder — acceptable for this use case.
+const remindedPaymentOrderIds = new Set<string>();
+
+async function remindPendingPayments(): Promise<void> {
+  // Find orders that are >1h old, still NEW, still PENDING, and require online payment.
+  // CASH_ON_DELIVERY is excluded — customer pays on delivery, no action needed.
+  const cutoff = new Date(Date.now() - 60 * 60 * 1000);
+  const orders = await prisma.order.findMany({
+    where: {
+      status: 'NEW',
+      paymentStatus: 'PENDING',
+      paymentMethod: { not: 'CASH_ON_DELIVERY' },
+      createdAt: { lt: cutoff },
+    },
+    include: { customer: { select: { telegramId: true, languageCode: true } } },
+    take: 100,
+  });
+
+  for (const order of orders) {
+    if (remindedPaymentOrderIds.has(order.id)) continue;
+    const instance = bots.get(order.storeId);
+    if (!instance || !order.customer?.telegramId) continue;
+
+    remindedPaymentOrderIds.add(order.id);
+    const lang = order.customer.languageCode;
+    const text = tLangByCode(
+      lang,
+      `⏰ Заказ #${order.orderNumber} ожидает оплаты.\nИтого: ${Number(order.total).toLocaleString()} UZS\n\nОткройте приложение, чтобы завершить оплату.`,
+      `⏰ #${order.orderNumber} buyurtma to'lovni kutmoqda.\nJami: ${Number(order.total).toLocaleString()} UZS\n\nTo'lovni yakunlash uchun ilovani oching.`
+    );
+    await retryTelegramSend(() =>
+      instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text)
+    ).catch(() => {});
+  }
+}
+
 async function autoCompleteDelivered(): Promise<void> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const delivered = await prisma.order.findMany({
@@ -626,6 +663,9 @@ export async function initBotManager(fastify: FastifyInstance): Promise<void> {
 
   setInterval(() => void autoCompleteDelivered(), 30 * 60 * 1000);
   setTimeout(() => void autoCompleteDelivered(), 10_000);
+
+  setInterval(() => void remindPendingPayments(), 30 * 60 * 1000);
+  setTimeout(() => void remindPendingPayments(), 15_000);
 
   setInterval(() => void remindExpiringSubscriptions(), 60 * 60 * 1000);
   setTimeout(() => void remindExpiringSubscriptions(), 30_000);
