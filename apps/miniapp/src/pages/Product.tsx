@@ -134,7 +134,7 @@ export default function Product({ id }: { id: string }) {
   return (
     <div className="anim-fade" style={{ paddingBottom: 88 }}>
       <button onClick={() => navigate('/')} className="pressable" style={{ position: 'absolute', top: 12, left: 12, zIndex: 20, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', width: 36, height: 36, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
-      <button onClick={shareProduct} className="pressable" style={{ position: 'absolute', top: 12, right: 12, zIndex: 20, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <button onClick={shareProduct} className="pressable" style={{ position: 'absolute', top: 12, left: 56, zIndex: 20, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {copied ? '✓' : '↗'}
       </button>
 
