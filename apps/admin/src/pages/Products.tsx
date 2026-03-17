@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { adminApi } from '../api/store-admin-client';
+import { adminApi, toImageUrl } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
 type NoticeTone = 'success' | 'error' | 'info';
@@ -371,7 +371,7 @@ export default function Products() {
                   <td>
                     <div style={{ width: 42, height: 42, borderRadius: 8, background: '#eef3f0', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                       {product.images?.[0]?.url ? (
-                        <img src={product.images[0].url} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={toImageUrl(product.images[0].url)} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
                         <span style={{ color: '#708077' }}>-</span>
                       )}
@@ -533,7 +533,7 @@ export default function Products() {
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {editImages.map((image) => (
                       <div key={image.id} style={{ width: 88, height: 88, borderRadius: 10, overflow: 'hidden', position: 'relative', border: '1px solid #dce4de' }}>
-                        <img src={image.url} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={toImageUrl(image.url)} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         <button type="button" onClick={() => void removeImage(image.id)} style={{ position: 'absolute', right: 4, top: 4, background: '#d93535', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer' }}>
                           x
                         </button>

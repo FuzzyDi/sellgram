@@ -1,5 +1,16 @@
 const ADMIN_API_BASE = '/api/store-admin';
 
+// Images are served via api.sellgram.uz to bypass app.sellgram.uz Cloudflare cache
+const UPLOADS_BASE = window.location.hostname === 'app.sellgram.uz'
+  ? 'https://api.sellgram.uz'
+  : '';
+
+export function toImageUrl(path?: string | null): string | undefined {
+  if (!path) return undefined;
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${UPLOADS_BASE}${normalized}`;
+}
+
 function getToken(): string | null {
   return localStorage.getItem('accessToken');
 }
