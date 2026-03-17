@@ -130,7 +130,7 @@ services:
       - sh
       - -c
       - |
-        pnpm -w exec prisma db push --accept-data-loss --skip-generate --schema packages/prisma/schema.prisma
+        pnpm -w exec prisma migrate deploy --schema packages/prisma/schema.prisma
         if [ "${PRISMA_SEED}" = "true" ]; then
           cd /app/packages/prisma && pnpm exec tsx seed.ts
         fi

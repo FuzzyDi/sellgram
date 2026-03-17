@@ -39,6 +39,10 @@ step "Build: $SERVICES"
 $COMPOSE build $SERVICES
 log "Build complete"
 
+step "Apply DB migrations"
+$COMPOSE run --rm prisma-init
+log "Migrations applied"
+
 step "Recreate containers"
 $COMPOSE up -d --force-recreate $SERVICES
 log "Containers started"
