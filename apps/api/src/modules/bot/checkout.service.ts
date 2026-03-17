@@ -56,6 +56,7 @@ export async function createShopCheckoutOrder(input: {
   }
 
   let deliveryPrice = 0;
+  let validatedDeliveryZoneId: string | null = null;
   if (body.deliveryType === 'LOCAL' && body.deliveryZoneId) {
     const zone = await prisma.deliveryZone.findFirst({
       where: {
@@ -69,6 +70,7 @@ export async function createShopCheckoutOrder(input: {
       throw new Error('Delivery zone not found');
     }
 
+    validatedDeliveryZoneId = zone.id;
     deliveryPrice = zone.freeFrom && subtotal >= Number(zone.freeFrom) ? 0 : Number(zone.price);
   }
 
@@ -144,7 +146,7 @@ export async function createShopCheckoutOrder(input: {
         orderNumber,
         customerId,
         deliveryType: body.deliveryType,
-        deliveryZoneId: body.deliveryZoneId,
+        deliveryZoneId: validatedDeliveryZoneId,
         deliveryAddress: body.deliveryAddress,
         deliveryPrice,
         subtotal,
@@ -196,4 +198,3 @@ export async function createShopCheckoutOrder(input: {
 
   return order;
 }
-
