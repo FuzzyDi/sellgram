@@ -101,6 +101,77 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     };
   });
 
+  const exportQuerySchema = z.object({
+    status: z.enum(['NEW', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'REFUNDED']).optional(),
+    paymentStatus: z.enum(['PENDING', 'PAID', 'REFUNDED']).optional(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    storeId: z.string().optional(),
+  });
+
+  fastify.get('/orders/export', async (request, reply) => {
+    let query: z.infer<typeof exportQuerySchema>;
+    try {
+      query = exportQuerySchema.parse(request.query);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    const where: any = { tenantId: request.tenantId! };
+    if (query.status) where.status = query.status;
+    if (query.storeId) where.storeId = query.storeId;
+    if (query.paymentStatus) where.paymentStatus = query.paymentStatus;
+    if (query.dateFrom || query.dateTo) {
+      where.createdAt = {};
+      if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);
+      if (query.dateTo) {
+        const end = new Date(query.dateTo);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: {
+        customer: { select: { firstName: true, lastName: true, telegramUser: true, phone: true } },
+        store: { select: { name: true } },
+        items: true,
+        deliveryZone: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
+    });
+
+    const escape = (v: any) => {
+      const s = String(v ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const header = ['#', 'Дата', 'Клиент', 'Telegram', 'Телефон', 'Магазин', 'Статус', 'Оплата', 'Сумма', 'Доставка', 'Зона доставки', 'Товары'].join(',');
+    const rows = orders.map((o) => [
+      o.orderNumber,
+      new Date(o.createdAt).toISOString().slice(0, 19).replace('T', ' '),
+      escape(`${o.customer?.firstName ?? ''} ${o.customer?.lastName ?? ''}`.trim()),
+      escape(o.customer?.telegramUser ?? ''),
+      escape(o.customer?.phone ?? ''),
+      escape(o.store?.name ?? ''),
+      o.status,
+      o.paymentStatus,
+      o.total,
+      o.deliveryPrice ?? 0,
+      escape(o.deliveryZone?.name ?? ''),
+      escape(o.items.map((i: any) => `${i.name} x${i.qty}`).join('; ')),
+    ].join(','));
+
+    const csv = '\uFEFF' + [header, ...rows].join('\r\n');
+    const date = new Date().toISOString().slice(0, 10);
+
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', `attachment; filename="orders-${date}.csv"`);
+    return reply.send(csv);
+  });
+
   fastify.get('/orders/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     const order = await prisma.order.findFirst({

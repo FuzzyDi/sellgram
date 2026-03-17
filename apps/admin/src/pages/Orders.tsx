@@ -30,6 +30,7 @@ export default function Orders() {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [orderDetails, setOrderDetails] = useState<Record<string, any>>({});
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   function showNotice(tone: 'success' | 'error', message: string) {
     setNotice({ tone, message });
@@ -183,7 +184,7 @@ export default function Orders() {
             placeholder={tr('Поиск: № заказа, клиент, телефон', 'Qidiruv: buyurtma №, mijoz, telefon')}
             style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13, minWidth: 240, flex: 1 }}
           />
-          {(statusFilter || paymentFilter || search || dateFrom || dateTo) && (
+            {(statusFilter || paymentFilter || search || dateFrom || dateTo) && (
             <button
               onClick={() => { setStatusFilter(''); setPaymentFilter(''); setSearch(''); setDateFrom(''); setDateTo(''); setPage(1); }}
               style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 12px', fontSize: 12, background: 'transparent', cursor: 'pointer', color: '#6b7280', whiteSpace: 'nowrap' }}
@@ -191,6 +192,27 @@ export default function Orders() {
               {tr('Сбросить', 'Tozalash')}
             </button>
           )}
+          <button
+            disabled={exporting}
+            onClick={async () => {
+              setExporting(true);
+              try {
+                const p = new URLSearchParams();
+                if (statusFilter) p.set('status', statusFilter);
+                if (paymentFilter) p.set('paymentStatus', paymentFilter);
+                if (dateFrom) p.set('dateFrom', dateFrom);
+                if (dateTo) p.set('dateTo', dateTo);
+                await adminApi.downloadOrdersCsv(p.toString() || undefined);
+              } catch {
+                showNotice('error', tr('Ошибка экспорта', 'Eksport xatoligi'));
+              } finally {
+                setExporting(false);
+              }
+            }}
+            style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 12px', fontSize: 12, background: 'transparent', cursor: 'pointer', color: '#374151', whiteSpace: 'nowrap' }}
+          >
+            {exporting ? '...' : tr('↓ CSV', '↓ CSV')}
+          </button>
         </div>
         {data && !loading && (
           <p style={{ margin: 0, fontSize: 12, color: '#748278' }}>

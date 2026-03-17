@@ -104,6 +104,24 @@ export const adminApi = {
 
   getOrders: (params?: string) => request<any>(`/orders${params ? '?' + params : ''}`),
   getOrder: (id: string) => request<any>(`/orders/${id}`),
+  downloadOrdersCsv: async (params?: string) => {
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch(
+      `${ADMIN_API_BASE}/orders/export${params ? '?' + params : ''}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const filename = parseFilenameFromDisposition(res.headers.get('content-disposition'), `orders-${new Date().toISOString().slice(0, 10)}.csv`);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
   updateOrderStatus: (id: string, data: any) => request<any>(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify(data) }),
   getReviews: (params?: string) => request<any>(`/reviews${params ? '?' + params : ''}`),
 
