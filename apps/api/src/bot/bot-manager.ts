@@ -453,7 +453,7 @@ async function completeDeliveredOrder(orderId: string, storeId: string): Promise
   // Concurrent calls (timer + customer button) both arrive here, but only one gets count=1.
   const transitioned = await prisma.order.updateMany({
     where: { id: orderId, status: 'DELIVERED' },
-    data: { status: 'COMPLETED' },
+    data: { status: 'COMPLETED', paymentStatus: 'PAID' },
   });
   if (transitioned.count === 0) return; // already processed
 
