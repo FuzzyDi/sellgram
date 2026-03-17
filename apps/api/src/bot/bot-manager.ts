@@ -119,7 +119,7 @@ function buildAdminOrderKeyboard(orderId: string, currentStatus: OrderStatusType
   return kb;
 }
 
-async function registerBot(
+export async function registerBot(
   storeId: string,
   tenantId: string,
   encryptedToken: string,
@@ -747,6 +747,10 @@ export async function sendPromoBroadcast(
   }
 
   return { sent, failed };
+}
+
+export function isBotRegistered(storeId: string): boolean {
+  return bots.has(storeId);
 }
 
 export function getBotWebhookHandler(storeId: string) {
