@@ -36,6 +36,7 @@ export default function OrderStatus({ id }: { id: string }) {
   const [error, setError] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -173,6 +174,38 @@ export default function OrderStatus({ id }: { id: string }) {
           <div className="card" style={{ marginBottom: 12 }}>
             <p className="section-title">{tr('Доставка', 'Yetkazish')}</p>
             <p style={{ fontSize: 14 }}>📍 {order.deliveryAddress}</p>
+          </div>
+        )}
+
+        {order.statusHistory?.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <button
+              onClick={() => setShowHistory((v) => !v)}
+              style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', color: 'var(--hint)', fontSize: 13, fontWeight: 600 }}
+            >
+              <span>{tr('История статусов', 'Holat tarixi')}</span>
+              <span style={{ transition: 'transform 0.2s', display: 'inline-block', transform: showHistory ? 'rotate(180deg)' : 'none' }}>▾</span>
+            </button>
+            {showHistory && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {order.statusHistory.map((h: any, idx: number) => {
+                  const hKey = String(h.toStatus) as keyof typeof SC;
+                  const hS = SC[hKey] || SC.NEW;
+                  return (
+                    <div key={h.id || idx} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', borderBottom: idx < order.statusHistory.length - 1 ? '1px solid var(--divider)' : 'none' }}>
+                      <div style={{ marginTop: 4, flexShrink: 0, width: 8, height: 8, borderRadius: '50%', background: idx === 0 ? hS.color : 'var(--divider)' }} />
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: hS.color }}>{hS.emoji} {hS.label}</span>
+                        {h.note && <p style={{ fontSize: 12, color: 'var(--hint)', marginTop: 2 }}>{h.note}</p>}
+                        <p style={{ fontSize: 11, color: 'var(--hint)', marginTop: 2 }}>
+                          {new Date(h.createdAt).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

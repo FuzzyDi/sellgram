@@ -17,7 +17,24 @@ export default function Product({ id }: { id: string }) {
   const [addError, setAddError] = useState<string | null>(null);
   const [imgIdx, setImgIdx] = useState(0);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const shareProduct = async () => {
+    if (!product) return;
+    const url = window.location.href;
+    const text = `${product.name} — ${Number(product.price).toLocaleString()} ${tr('сум', "so'm")}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: product.name, text, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch {}
+  };
 
   function loadProduct() {
     if (!id) return;
@@ -113,6 +130,9 @@ export default function Product({ id }: { id: string }) {
   return (
     <div className="anim-fade" style={{ paddingBottom: 88 }}>
       <button onClick={() => navigate('/')} className="pressable" style={{ position: 'absolute', top: 12, left: 12, zIndex: 20, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', width: 36, height: 36, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+      <button onClick={shareProduct} className="pressable" style={{ position: 'absolute', top: 12, right: 12, zIndex: 20, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {copied ? '✓' : '↗'}
+      </button>
 
       {images.length > 0 ? (
         <div style={{ position: 'relative' }}>

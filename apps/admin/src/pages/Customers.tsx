@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -6,9 +6,20 @@ export default function Customers() {
   const { tr } = useAdminI18n();
   const [data, setData] = useState<any>(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearch = (value: string) => {
+    setSearch(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(value);
+      setPage(1);
+    }, 300);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -16,14 +27,14 @@ export default function Customers() {
     const params = new URLSearchParams();
     params.set('page', String(page));
     params.set('pageSize', '30');
-    if (search.trim()) params.set('search', search.trim());
+    if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
 
     adminApi
       .getCustomers(params.toString())
       .then(setData)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [page, search]);
+  }, [page, debouncedSearch]);
 
   const totalPages = useMemo(() => Math.max(1, data?.totalPages || 1), [data?.totalPages]);
 
@@ -53,13 +64,9 @@ export default function Customers() {
       <div className="sg-card" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           value={search}
-          onChange={(e) => {
-            setPage(1);
-            setSearch(e.target.value);
-          }}
+          onChange={(e) => handleSearch(e.target.value)}
           placeholder={tr('Поиск: имя, @username, телефон', 'Qidiruv: ism, @username, telefon')}
-          className="border rounded-lg px-3 py-2 text-sm"
-          style={{ minWidth: 280, flex: 1 }}
+          style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13, minWidth: 280, flex: 1 }}
         />
       </div>
 
