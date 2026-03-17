@@ -24,16 +24,20 @@ export default function Product({ id }: { id: string }) {
     if (!product) return;
     const url = window.location.href;
     const text = `${product.name} — ${Number(product.price).toLocaleString()} ${tr('сум', "so'm")}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: product.name, text, url });
-      } else {
+    const tg = window.Telegram?.WebApp;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(shareUrl);
+    } else if (navigator.share) {
+      await navigator.share({ title: product.name, text, url }).catch(() => {});
+    } else {
+      try {
         await navigator.clipboard.writeText(url);
         setCopied(true);
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+        tg?.HapticFeedback?.notificationOccurred('success');
         setTimeout(() => setCopied(false), 2000);
-      }
-    } catch {}
+      } catch {}
+    }
   };
 
   function loadProduct() {
