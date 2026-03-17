@@ -133,7 +133,7 @@ export default function PromoCodes() {
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
                   {item.type === 'PERCENT' ? `${item.value}%` : `${Number(item.value).toLocaleString()} UZS`}
                 </span>
-                {item.minOrder && <span style={{ fontSize: 12, color: '#6b7280' }}>{tr('от', 'dan')} {Number(item.minOrder).toLocaleString()}</span>}
+                {item.minOrderAmount && <span style={{ fontSize: 12, color: '#6b7280' }}>{tr('от', 'dan')} {Number(item.minOrderAmount).toLocaleString()}</span>}
                 <span style={{ fontSize: 12, color: '#6b7280' }}>{item.usedCount}{item.maxUses ? `/${item.maxUses}` : ''} {tr('исп.', 'ish.')}</span>
                 {item.expiresAt && <span style={{ fontSize: 12, color: expired ? '#b91c1c' : '#6b7280' }}>{tr('до', 'gacha')} {new Date(item.expiresAt).toLocaleDateString()}</span>}
                 {(expired || exhausted) && <span style={{ fontSize: 11, fontWeight: 600, color: '#b91c1c', background: '#fef2f2', padding: '2px 8px', borderRadius: 6 }}>{expired ? tr('Истёк', 'Muddati o\'tgan') : tr('Исчерпан', 'Tugagan')}</span>}

@@ -87,6 +87,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
           store: { select: { id: true, name: true } },
           items: true,
           deliveryZone: { select: { id: true, name: true } },
+          promoCode: { select: { id: true, code: true, type: true, value: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip,

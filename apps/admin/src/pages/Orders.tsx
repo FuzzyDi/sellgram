@@ -270,7 +270,19 @@ export default function Orders() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, gap: 10, flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 19, fontWeight: 800, color: '#00875a' }}>{Number(order.total).toLocaleString()} UZS</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 19, fontWeight: 800, color: '#00875a' }}>{Number(order.total).toLocaleString()} UZS</div>
+                  {order.promoCode && (
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, background: '#f0f9ff', color: '#0369a1', padding: '2px 8px', borderRadius: 6 }}>
+                      🏷 {order.promoCode.code}
+                    </span>
+                  )}
+                  {Number(order.loyaltyDiscount) > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 600, background: '#f0fdf4', color: '#15803d', padding: '2px 8px', borderRadius: 6 }}>
+                      ⭐ −{Number(order.loyaltyDiscount).toLocaleString()}
+                    </span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {order.status === 'NEW' && (
                     <>

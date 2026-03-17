@@ -26,6 +26,7 @@ function makeTx(overrides: Record<string, any> = {}) {
     loyaltyConfig: { findUnique: vi.fn() },
     orderStatusLog: { create: vi.fn().mockResolvedValue({}) },
     loyaltyTransaction: { create: vi.fn().mockResolvedValue({}) },
+    promoCode: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn().mockResolvedValue({}) },
     cartItem: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
     ...overrides,
   };
@@ -231,5 +232,47 @@ describe('checkout.service', () => {
 
     expect(callOrder[0]).toBe('lock');
     expect(callOrder[1]).toBe('findFirst');
+  });
+
+  it('applies PERCENT promo code discount and increments usedCount', async () => {
+    mocks.prisma.cartItem.findMany.mockResolvedValue([{ productId: 'p-1', variantId: null, qty: 1 }]);
+    mocks.prisma.product.findMany.mockResolvedValue([{
+      id: 'p-1', name: 'Item', price: 100000, stockQty: 10, variants: [],
+    }]);
+    mocks.prisma.storePaymentMethod.findFirst.mockResolvedValue({
+      id: 'pm-1', provider: 'CASH', code: 'cash', title: 'Cash',
+      description: null, instructions: null, meta: null,
+    });
+    mocks.prepareOrderPayment.mockReturnValue({
+      paymentMethod: 'CASH', paymentStatus: 'PENDING', paymentMeta: {},
+    });
+
+    const tx = makeTx({
+      order: {
+        findFirst: vi.fn().mockResolvedValue({ orderNumber: 1 }),
+        create: vi.fn().mockResolvedValue({ id: 'o-promo', items: [], customer: {} }),
+      },
+    });
+    tx.product.findMany.mockResolvedValue([{ id: 'p-1', name: 'Item', stockQty: 10, variants: [] }]);
+    tx.promoCode.findFirst.mockResolvedValue({
+      id: 'promo-1', type: 'PERCENT', value: 10, isActive: true,
+      expiresAt: null, maxUses: null, usedCount: 5, minOrderAmount: null,
+    });
+
+    mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+    await createShopCheckoutOrder({
+      customerId: 'c-1', tenantId: 't-1', storeId: 's-1',
+      body: { deliveryType: 'PICKUP', loyaltyPointsToUse: 0, promoCodeId: 'promo-1' },
+    });
+
+    const createCall = tx.order.create.mock.calls[0][0];
+    expect(createCall.data.promoDiscount).toBe(10000); // 10% of 100000
+    expect(createCall.data.promoCodeId).toBe('promo-1');
+    expect(createCall.data.total).toBe(90000); // 100000 - 10000
+    expect(tx.promoCode.update).toHaveBeenCalledWith({
+      where: { id: 'promo-1' },
+      data: { usedCount: { increment: 1 } },
+    });
   });
 });
