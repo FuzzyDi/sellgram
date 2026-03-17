@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     category: { findMany: vi.fn() },
-    product: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() },
+    product: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), count: vi.fn() },
     cartItem: { findMany: vi.fn() },
     productVariant: { findUnique: vi.fn() },
     deliveryZone: { findMany: vi.fn() },
@@ -34,13 +34,53 @@ describe('shop.service', () => {
     vi.clearAllMocks();
   });
 
-  it('returns catalog payload', async () => {
-    mocks.prisma.category.findMany.mockResolvedValue([{ id: 'c-1' }]);
-    mocks.prisma.product.findMany.mockResolvedValue([{ id: 'p-1' }]);
+  describe('getShopCatalog', () => {
+    beforeEach(() => {
+      mocks.prisma.category.findMany.mockResolvedValue([{ id: 'c-1' }]);
+      mocks.prisma.product.findMany.mockResolvedValue([{ id: 'p-1' }]);
+      mocks.prisma.product.count.mockResolvedValue(1);
+    });
 
-    const result = await getShopCatalog('tenant-1');
+    it('returns catalog with pagination metadata', async () => {
+      const result = await getShopCatalog('tenant-1', { page: 1, pageSize: 20 });
+      expect(result.categories).toEqual([{ id: 'c-1' }]);
+      expect(result.products).toEqual([{ id: 'p-1' }]);
+      expect(result.total).toBe(1);
+      expect(result.page).toBe(1);
+      expect(result.totalPages).toBe(1);
+    });
 
-    expect(result).toEqual({ categories: [{ id: 'c-1' }], products: [{ id: 'p-1' }] });
+    it('applies search query filter', async () => {
+      await getShopCatalog('tenant-1', { q: 'shoes', page: 1, pageSize: 20 });
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ name: { contains: 'shoes', mode: 'insensitive' } }),
+        })
+      );
+    });
+
+    it('applies categoryId filter', async () => {
+      await getShopCatalog('tenant-1', { categoryId: 'c-1', page: 1, pageSize: 20 });
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ categoryId: 'c-1' }),
+        })
+      );
+    });
+
+    it('applies pagination skip/take', async () => {
+      mocks.prisma.product.count.mockResolvedValue(40);
+      await getShopCatalog('tenant-1', { page: 2, pageSize: 10 });
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 10, take: 10 })
+      );
+    });
+
+    it('includes out-of-stock products (no stockQty filter)', async () => {
+      await getShopCatalog('tenant-1', { page: 1, pageSize: 20 });
+      const call = mocks.prisma.product.findMany.mock.calls[0][0];
+      expect(call.where).not.toHaveProperty('stockQty');
+    });
   });
 
   it('throws PRODUCT_NOT_FOUND when product is missing', async () => {

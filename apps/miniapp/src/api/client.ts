@@ -88,7 +88,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  getCatalog: async () => normalizeCatalog(await request<any>('/shop/catalog')),
+  getCatalog: async (params?: { q?: string; categoryId?: string; page?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.q) qs.set('q', params.q);
+    if (params?.categoryId) qs.set('categoryId', params.categoryId);
+    if (params?.page) qs.set('page', String(params.page));
+    const search = qs.toString();
+    return normalizeCatalog(await request<any>(`/shop/catalog${search ? '?' + search : ''}`));
+  },
   getProduct: async (id: string) => normalizeProduct(await request<any>(`/shop/products/${id}`)),
   getCart: async () => normalizeCart(await request<any>('/shop/cart')),
   addToCart: (productId: string, variantId?: string, qty = 1) =>

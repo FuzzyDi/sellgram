@@ -4,18 +4,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     order: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
+    orderReview: { findMany: vi.fn(), count: vi.fn(), aggregate: vi.fn(), groupBy: vi.fn() },
   },
   updateOrderStatus: vi.fn(),
   applyOrderPaymentStatus: vi.fn(),
   notifyOrderStatus: vi.fn().mockResolvedValue(undefined),
+  notifyPaymentPaid: vi.fn().mockResolvedValue(undefined),
   permissionGuard: vi.fn((_key: string) => async () => {}),
+  writeAuditLog: vi.fn(),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('./order.service.js', () => ({ updateOrderStatus: mocks.updateOrderStatus }));
 vi.mock('../../payments/service.js', () => ({ applyOrderPaymentStatus: mocks.applyOrderPaymentStatus }));
-vi.mock('../../bot/bot-manager.js', () => ({ notifyOrderStatus: mocks.notifyOrderStatus }));
+vi.mock('../../bot/bot-manager.js', () => ({ notifyOrderStatus: mocks.notifyOrderStatus, notifyPaymentPaid: mocks.notifyPaymentPaid }));
 vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
+vi.mock('../../lib/audit.js', () => ({ writeAuditLog: mocks.writeAuditLog }));
 
 import orderRoutes from './routes.js';
 
@@ -228,7 +232,7 @@ describe('order.routes', () => {
     });
 
     it('updates payment status on success', async () => {
-      mocks.applyOrderPaymentStatus.mockResolvedValue({ paymentStatus: 'PAID' });
+      mocks.applyOrderPaymentStatus.mockResolvedValue({ paymentStatus: 'PAID', storeId: 'store-1', id: 'o-1' });
       const app = await buildApp();
       const response = await app.inject({
         method: 'PATCH',
@@ -240,6 +244,85 @@ describe('order.routes', () => {
         expect.anything(),
         expect.objectContaining({ orderId: 'o-1', tenantId: 'tenant-1', status: 'PAID' })
       );
+      await app.close();
+    });
+
+    it('fires notifyPaymentPaid when status becomes PAID', async () => {
+      mocks.applyOrderPaymentStatus.mockResolvedValue({ paymentStatus: 'PAID', storeId: 'store-1', id: 'o-1' });
+      const app = await buildApp();
+      await app.inject({ method: 'PATCH', url: '/orders/o-1/payment', payload: { paymentStatus: 'PAID' } });
+      // fire-and-forget — give microtasks a chance to run
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mocks.notifyPaymentPaid).toHaveBeenCalledWith('store-1', 'o-1');
+      await app.close();
+    });
+
+    it('does NOT fire notifyPaymentPaid for non-PAID status', async () => {
+      mocks.applyOrderPaymentStatus.mockResolvedValue({ paymentStatus: 'REFUNDED', storeId: 'store-1', id: 'o-1' });
+      const app = await buildApp();
+      await app.inject({ method: 'PATCH', url: '/orders/o-1/payment', payload: { paymentStatus: 'REFUNDED' } });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mocks.notifyPaymentPaid).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  // ─── GET /reviews — query validation & response ───────────────────────────
+
+  describe('GET /reviews', () => {
+    function stubReviews(items: any[] = [], total = 0) {
+      mocks.prisma.orderReview.findMany.mockResolvedValue(items);
+      mocks.prisma.orderReview.count.mockResolvedValue(total);
+      mocks.prisma.orderReview.aggregate.mockResolvedValue({ _avg: { rating: null } });
+      mocks.prisma.orderReview.groupBy.mockResolvedValue([]);
+    }
+
+    it('returns 400 for rating outside 1-5', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/reviews?rating=6' });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.orderReview.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 for pageSize exceeding 100', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/reviews?pageSize=999' });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('returns paginated reviews with stats', async () => {
+      stubReviews([{ id: 'r-1', rating: 5, comment: 'Great' }], 1);
+      mocks.prisma.orderReview.aggregate.mockResolvedValue({ _avg: { rating: 5 } });
+      mocks.prisma.orderReview.groupBy.mockResolvedValue([{ rating: 5, _count: { rating: 1 } }]);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/reviews?page=1&pageSize=10' });
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.items).toHaveLength(1);
+      expect(body.data.total).toBe(1);
+      expect(body.data.stats.avg).toBe(5);
+      expect(body.data.stats.distribution[5]).toBe(1);
+      await app.close();
+    });
+
+    it('filters by rating when provided', async () => {
+      stubReviews([], 0);
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/reviews?rating=3' });
+      expect(mocks.prisma.orderReview.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ rating: 3 }) })
+      );
+      await app.close();
+    });
+
+    it('returns avg null when no reviews exist', async () => {
+      stubReviews([], 0);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/reviews' });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.stats.avg).toBeNull();
       await app.close();
     });
   });

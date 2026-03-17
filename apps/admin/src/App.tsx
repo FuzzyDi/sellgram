@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Tag, Users,
   CreditCard, Megaphone, BarChart2, Settings as SettingsIcon, Receipt,
-  HelpCircle, LogOut, Menu, X, Truck, ClipboardList, Building2, Boxes, type LucideIcon,
+  HelpCircle, LogOut, Menu, X, Truck, ClipboardList, Building2, Boxes, Star, type LucideIcon,
 } from 'lucide-react';
 import { adminApi, clearTokens, setTokens } from './api/store-admin-client';
 import { useAdminI18n } from './i18n';
@@ -21,6 +21,7 @@ import Stock from './pages/Stock';
 import Suppliers from './pages/Suppliers';
 import AuditLog from './pages/AuditLog';
 import Reports from './pages/Reports';
+import Reviews from './pages/Reviews';
 import Settings from './pages/Settings';
 import SystemAdmin from './pages/SystemAdmin';
 
@@ -48,6 +49,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   '/stock':        Boxes,
   '/suppliers':    Building2,
   '/broadcasts':   Megaphone,
+  '/reviews':      Star,
   '/reports':      BarChart2,
   '/settings':     SettingsIcon,
   '/billing':      Receipt,
@@ -78,6 +80,7 @@ function Sidebar({
     { to: '/stock',       label: t('stock'),       perm: 'manageCatalog' },
     { to: '/suppliers',   label: t('suppliers'),   perm: 'manageCatalog' },
     { to: '/broadcasts',  label: t('broadcasts'),  perm: 'manageMarketing' },
+    { to: '/reviews',     label: t('reviews'),     perm: 'manageOrders' },
     { to: '/reports',    label: t('reports'),    perm: 'viewReports' },
     { to: '/settings',   label: t('settings') },
     { to: '/billing',    label: t('plans'),      perm: 'manageBilling' },
@@ -246,6 +249,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
     '/customers':    'manageCustomers',
     '/payments':     'manageBilling',
     '/broadcasts':   'manageMarketing',
+    '/reviews':      'manageOrders',
     '/reports':      'viewReports',
     '/billing':      'manageBilling',
     '/audit-log':    'manageSettings',
@@ -264,6 +268,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
     case '/customers':    return <Customers />;
     case '/payments':     return <PaymentMethods />;
     case '/broadcasts':   return <Broadcasts />;
+    case '/reviews':      return <Reviews />;
     case '/reports':      return <Reports />;
     case '/settings':     return <Settings />;
     case '/billing':      return <Billing />;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
@@ -25,56 +25,45 @@ export default function Catalog() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function load() {
-    setLoading(true);
-    setError(false);
-    api.getCatalog()
-      .then((d) => {
-        setCategories(d.categories || []);
-        setProducts(d.products || []);
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }
-
+  // Debounce search input 350ms
   useEffect(() => {
-    load();
-  }, []);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedQuery(query), 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
 
-  const q = query.trim().toLowerCase();
-  const filtered = products.filter((p) =>
-    (!selected || p.category?.id === selected) &&
-    (!q || p.name.toLowerCase().includes(q))
-  );
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [debouncedQuery, selected]);
 
-  if (error) {
-    return (
-      <div style={{ padding: 32, textAlign: 'center' }}>
-        <p style={{ fontSize: 40, marginBottom: 12 }}>⚠️</p>
-        <p style={{ fontWeight: 600, color: 'var(--hint)', marginBottom: 20 }}>{tr('Не удалось загрузить каталог', 'Katalogni yuklab bo`lmadi')}</p>
-        <button className="btn primary pill" onClick={load}>
-          {tr('Повторить', 'Qayta urinish')}
-        </button>
-      </div>
-    );
-  }
+  // Load products from server
+  useEffect(() => {
+    let cancelled = false;
+    const isFirstPage = page === 1;
+    if (isFirstPage) setLoading(true); else setLoadingMore(true);
+    setError(false);
 
-  if (loading) {
-    return (
-      <div style={{ padding: 16 }}>
-        <div className="skeleton" style={{ height: 28, width: 120, marginBottom: 16 }} />
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-          {[80, 60, 70].map((w, i) => <div key={i} className="skeleton" style={{ height: 34, width: w, borderRadius: 17 }} />)}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 220, borderRadius: 'var(--radius)' }} />)}
-        </div>
-      </div>
-    );
-  }
+    api.getCatalog({ q: debouncedQuery || undefined, categoryId: selected || undefined, page })
+      .then((d) => {
+        if (cancelled) return;
+        if (d.categories) setCategories(d.categories);
+        setTotalPages(d.totalPages ?? 1);
+        setProducts((prev) => isFirstPage ? (d.products || []) : [...prev, ...(d.products || [])]);
+      })
+      .catch(() => { if (!cancelled) setError(true); })
+      .finally(() => { if (!cancelled) { setLoading(false); setLoadingMore(false); } });
+
+    return () => { cancelled = true; };
+  }, [debouncedQuery, selected, page]);
+
+  const filtered = products;
 
   return (
     <div style={{ paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
@@ -101,17 +90,52 @@ export default function Catalog() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '10px 12px' }}>
-        {filtered.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
-      </div>
-
-      {filtered.length === 0 && (
-        <div className="anim-scale" style={{ textAlign: 'center', padding: '64px 16px' }}>
-          <p style={{ fontSize: 44, marginBottom: 8 }}>🔎</p>
-          <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--hint)' }}>{tr('Товары не найдены', 'Mahsulotlar topilmadi')}</p>
+      {error && (
+        <div style={{ padding: 32, textAlign: 'center' }}>
+          <p style={{ fontSize: 40, marginBottom: 12 }}>⚠️</p>
+          <p style={{ fontWeight: 600, color: 'var(--hint)', marginBottom: 20 }}>{tr('Не удалось загрузить каталог', 'Katalogni yuklab bo`lmadi')}</p>
+          <button className="btn primary pill" onClick={() => setPage((p) => p)}>
+            {tr('Повторить', 'Qayta urinish')}
+          </button>
         </div>
       )}
 
+      {!error && loading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '10px 12px' }}>
+          {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 220, borderRadius: 'var(--radius)' }} />)}
+        </div>
+      ) : !error && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '10px 12px' }}>
+            {filtered.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
+          </div>
+
+          {!loading && filtered.length === 0 && (
+            <div className="anim-scale" style={{ textAlign: 'center', padding: '64px 16px' }}>
+              <p style={{ fontSize: 44, marginBottom: 8 }}>🔎</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--hint)' }}>{tr('Товары не найдены', 'Mahsulotlar topilmadi')}</p>
+            </div>
+          )}
+
+          {page < totalPages && (
+            <div style={{ textAlign: 'center', padding: '8px 16px 4px' }}>
+              {loadingMore ? (
+                <div className="skeleton" style={{ height: 44, borderRadius: 22, width: '60%', margin: '0 auto' }} />
+              ) : (
+                <button
+                  className="btn ghost pill"
+                  onClick={() => setPage((p) => p + 1)}
+                  style={{ width: '60%' }}
+                >
+                  {tr('Загрузить ещё', 'Ko\'proq yuklash')}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      <div style={{ paddingBottom: 16 }} />
       <BottomNav active="catalog" />
     </div>
   );

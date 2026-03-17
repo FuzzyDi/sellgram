@@ -62,8 +62,7 @@ export async function createTenantStore(tenantId: string, input: CreateStoreInpu
   const miniAppBase = (cfg.MINIAPP_URL || '').trim();
   if (miniAppBase && !store.miniAppUrl) {
     const miniAppUrl = `${miniAppBase.replace(/\/+$/, '')}/?storeId=${store.id}`;
-    await prisma.store.update({ where: { id: store.id }, data: { miniAppUrl } });
-    (store as any).miniAppUrl = miniAppUrl;
+    return prisma.store.update({ where: { id: store.id }, data: { miniAppUrl } });
   }
 
   return store;
@@ -143,10 +142,11 @@ export async function activateTenantStoreBot(tenantId: string, id: string) {
     drop_pending_updates: false,
   });
 
-  // Register bot in memory so webhooks work without API restart
+  // Register bot in memory so webhooks work without API restart.
+  // Pass the already-initialised bot instance to avoid a second bot.init() call.
   if (!isBotRegistered(store.id)) {
     try {
-      await registerBot(store.id, tenantId, store.botToken, store.welcomeMessage ?? '', store.miniAppUrl);
+      await registerBot(store.id, tenantId, store.botToken, store.welcomeMessage ?? '', miniAppUrl, bot);
     } catch (err: any) {
       // Webhook is set, but in-memory registration failed — will work after restart
       console.error(`Auto-register bot in memory failed for store ${store.id}: ${err.message}`);

@@ -97,6 +97,22 @@ export async function createShopCheckoutOrder(input: {
     // racing on orderNumber and loyalty balance. Released automatically when
     // the transaction ends.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}))`;
+
+    // Re-validate stock inside the lock so two concurrent checkouts cannot
+    // both pass the pre-transaction check and oversell the same item.
+    const freshProducts = await tx.product.findMany({
+      where: { id: { in: orderItems.map((i) => i.productId) } },
+      include: { variants: true },
+    });
+    const freshMap = new Map<string, any>(freshProducts.map((p: any) => [p.id, p]));
+    for (const item of orderItems) {
+      const fp: any = freshMap.get(item.productId);
+      if (!fp) throw new Error(`Product not found: ${item.name}`);
+      const fv = item.variantId ? fp.variants.find((v: any) => v.id === item.variantId && v.isActive) : null;
+      const stock = fv ? fv.stockQty : fp.stockQty;
+      if (stock < item.qty) throw new Error(`Not enough stock for ${item.name}`);
+    }
+
     const lastOrder = await tx.order.findFirst({ where: { tenantId }, orderBy: { orderNumber: 'desc' } });
     const orderNumber = (lastOrder?.orderNumber ?? 0) + 1;
 

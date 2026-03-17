@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
-import { notifyOrderStatus } from '../../bot/bot-manager.js';
+import { notifyOrderStatus, notifyPaymentPaid } from '../../bot/bot-manager.js';
 import { applyOrderPaymentStatus } from '../../payments/service.js';
 import { updateOrderStatus } from './order.service.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
@@ -209,11 +209,14 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      await applyOrderPaymentStatus(prisma, {
+      const updatedOrder = await applyOrderPaymentStatus(prisma, {
         orderId: id,
         tenantId: request.tenantId!,
         status: body.paymentStatus,
       });
+      if (body.paymentStatus === 'PAID') {
+        notifyPaymentPaid(updatedOrder.storeId, updatedOrder.id).catch(() => {});
+      }
       writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'order.payment.update', targetId: id, details: { paymentStatus: body.paymentStatus } });
       return { success: true, message: 'Payment status updated' };
     } catch (err: any) {
@@ -226,5 +229,80 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       }
       return reply.status(400).send({ success: false, error: err.message });
     }
+  });
+
+  const listReviewsQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    rating: z.coerce.number().int().min(1).max(5).optional(),
+    storeId: z.string().optional(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+  });
+
+  fastify.get('/reviews', async (request, reply) => {
+    let query: z.infer<typeof listReviewsQuerySchema>;
+    try {
+      query = listReviewsQuerySchema.parse(request.query);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    const { page: pageNum, pageSize: pageSizeNum, rating, storeId, dateFrom, dateTo } = query;
+    const skip = (pageNum - 1) * pageSizeNum;
+
+    const where: any = { tenantId: request.tenantId! };
+    if (rating) where.rating = rating;
+    if (storeId) where.order = { storeId };
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
+
+    const [items, total, aggregate, distribution] = await Promise.all([
+      prisma.orderReview.findMany({
+        where,
+        include: {
+          order: {
+            select: {
+              id: true,
+              orderNumber: true,
+              storeId: true,
+              store: { select: { name: true } },
+              customer: { select: { id: true, firstName: true, lastName: true, telegramUser: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSizeNum,
+      }),
+      prisma.orderReview.count({ where }),
+      prisma.orderReview.aggregate({ where, _avg: { rating: true } }),
+      prisma.orderReview.groupBy({ by: ['rating'], where, _count: { rating: true } }),
+    ]);
+
+    const dist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const row of distribution) dist[row.rating] = row._count.rating;
+
+    return {
+      success: true,
+      data: {
+        items,
+        total,
+        page: pageNum,
+        pageSize: pageSizeNum,
+        totalPages: Math.ceil(total / pageSizeNum),
+        stats: {
+          avg: aggregate._avg.rating ? Math.round(aggregate._avg.rating * 10) / 10 : null,
+          distribution: dist,
+        },
+      },
+    };
   });
 }

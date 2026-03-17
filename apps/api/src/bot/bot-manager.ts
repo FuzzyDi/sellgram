@@ -124,14 +124,22 @@ export async function registerBot(
   tenantId: string,
   encryptedToken: string,
   welcomeMessage: string,
-  miniAppUrl?: string | null
+  miniAppUrl?: string | null,
+  prebuiltBot?: Bot
 ): Promise<void> {
-  const token = decrypt(encryptedToken);
-  const bot = new Bot(token);
-  await bot.init();
+  let bot: Bot;
+  if (prebuiltBot) {
+    bot = prebuiltBot;
+  } else {
+    const token = decrypt(encryptedToken);
+    bot = new Bot(token);
+    await bot.init();
+  }
   const resolvedMiniAppUrl = buildStoreMiniAppUrl(miniAppUrl, storeId);
 
-  if (resolvedMiniAppUrl) {
+  // Skip setChatMenuButton when a prebuiltBot is supplied — the caller has
+  // already set the menu button with the correct URL.
+  if (!prebuiltBot && resolvedMiniAppUrl) {
     try {
       await bot.api.setChatMenuButton({
         menu_button: {
@@ -172,6 +180,7 @@ export async function registerBot(
           telegramUser: ctx.from.username,
           firstName: ctx.from.first_name,
           lastName: ctx.from.last_name,
+          languageCode: ctx.from.language_code,
         },
         create: {
           tenantId,
@@ -179,6 +188,7 @@ export async function registerBot(
           telegramUser: ctx.from.username,
           firstName: ctx.from.first_name,
           lastName: ctx.from.last_name,
+          languageCode: ctx.from.language_code,
         },
       });
     }
@@ -432,6 +442,9 @@ export async function registerBot(
     console.error(`[Bot:${storeId}]`, err.error);
   });
 
+  if (bots.has(storeId)) {
+    console.warn(`[BotManager] Re-registering bot for store ${storeId} — replacing existing instance`);
+  }
   bots.set(storeId, { bot, storeId, tenantId });
 }
 
@@ -457,7 +470,7 @@ async function completeDeliveredOrder(orderId: string, storeId: string): Promise
   if (customer?.telegramId && bot) {
     try {
       const completionText = tLangByCode(
-        undefined,
+        customer.languageCode,
         `\u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D. \u0411\u0430\u043B\u043B\u044B \u043D\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u044B.`,
         `#${order.orderNumber} buyurtma yakunlandi. Ballar qo'shildi.`
       );
@@ -643,7 +656,7 @@ export async function notifyOrderStatus(storeId: string, orderId: string, newSta
   });
   if (!order?.customer?.telegramId) return;
 
-  const lang = undefined;
+  const lang = order.customer.languageCode;
   const textByStatus: Partial<Record<OrderStatusType, string>> = {
     CONFIRMED: tLangByCode(lang, `\u2705 \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D.`, `\u2705 #${order.orderNumber} buyurtma tasdiqlandi.`),
     PREPARING: tLangByCode(lang, `\u{1F468}\u200D\u{1F373} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0433\u043E\u0442\u043E\u0432\u0438\u0442\u0441\u044F.`, `\u{1F468}\u200D\u{1F373} #${order.orderNumber} buyurtma tayyorlanmoqda.`),
@@ -673,6 +686,28 @@ export async function notifyOrderStatus(storeId: string, orderId: string, newSta
 
   const text = textByStatus[newStatus];
   if (!text) return;
+  await retryTelegramSend(() =>
+    instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text)
+  );
+}
+
+export async function notifyPaymentPaid(storeId: string, orderId: string): Promise<void> {
+  const instance = bots.get(storeId);
+  if (!instance) return;
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { customer: true },
+  });
+  if (!order?.customer?.telegramId) return;
+
+  const lang = order.customer.languageCode;
+  const text = tLangByCode(
+    lang,
+    `\u{1F4B3} \u041E\u043F\u043B\u0430\u0442\u0430 \u043F\u043E \u0437\u0430\u043A\u0430\u0437\u0443 #${order.orderNumber} \u043F\u0440\u0438\u043D\u044F\u0442\u0430. \u0416\u0434\u0438\u0442\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u044F.`,
+    `\u{1F4B3} #${order.orderNumber} buyurtma to'lovi qabul qilindi. Tasdiqlanishini kuting.`
+  );
+
   await retryTelegramSend(() =>
     instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text)
   );

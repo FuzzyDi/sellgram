@@ -5,6 +5,7 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library.js
 import prisma from '../../lib/prisma.js';
 import { applyOrderPaymentStatus } from '../../payments/service.js';
 import { normalizeProviderWebhook, verifyProviderWebhookAuth } from '../../payments/webhooks.js';
+import { notifyPaymentPaid } from '../../bot/bot-manager.js';
 
 const webhookSchema = z.object({
   orderId: z.string().optional(),
@@ -129,6 +130,10 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
           providerPayload: normalized.payload ?? body.payload ?? null,
         },
       });
+
+      if (targetStatus === 'PAID') {
+        notifyPaymentPaid(updated.storeId, updated.id).catch(() => {});
+      }
 
       return {
         success: true,

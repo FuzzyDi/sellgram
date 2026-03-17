@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import {
   cartAddSchema,
   cartUpdateQtySchema,
@@ -28,8 +29,21 @@ import { CART_ERROR_STATUS, ORDER_ACTION_ERROR_STATUS, SHOP_READ_ERROR_STATUS } 
 export default async function shopApiRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', telegramShopAuth);
 
-  fastify.get('/shop/catalog', async (request) => {
-    const data = await getShopCatalog(request.customer!.tenantId);
+  const catalogQuerySchema = z.object({
+    q: z.string().max(200).optional(),
+    categoryId: z.string().optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(50).default(20),
+  });
+
+  fastify.get('/shop/catalog', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
+    let query: z.infer<typeof catalogQuerySchema>;
+    try {
+      query = catalogQuerySchema.parse(request.query);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const data = await getShopCatalog(request.customer!.tenantId, query);
     return { success: true, data };
   });
 

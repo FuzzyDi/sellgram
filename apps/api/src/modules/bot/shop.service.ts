@@ -9,23 +9,38 @@ export class ShopApiError extends Error {
   }
 }
 
-export async function getShopCatalog(tenantId: string) {
+export async function getShopCatalog(
+  tenantId: string,
+  opts: { q?: string; categoryId?: string; page: number; pageSize: number } = { page: 1, pageSize: 20 }
+) {
+  const { q, categoryId, page, pageSize } = opts;
+
+  // Categories are always returned in full — there are few of them
   const categories = await prisma.category.findMany({
     where: { tenantId, isActive: true },
     orderBy: { sortOrder: 'asc' },
     include: { _count: { select: { products: { where: { isActive: true } } } } },
   });
 
-  const products = await prisma.product.findMany({
-    where: { tenantId, isActive: true, stockQty: { gt: 0 } },
-    include: {
-      images: { orderBy: { sortOrder: 'asc' }, take: 1 },
-      category: { select: { id: true, name: true } },
-    },
-    orderBy: { sortOrder: 'asc' },
-  });
+  const where: any = { tenantId, isActive: true };
+  if (categoryId) where.categoryId = categoryId;
+  if (q?.trim()) where.name = { contains: q.trim(), mode: 'insensitive' };
 
-  return { categories, products };
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      include: {
+        images: { orderBy: { sortOrder: 'asc' }, take: 1 },
+        category: { select: { id: true, name: true } },
+      },
+      orderBy: { sortOrder: 'asc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.count({ where }),
+  ]);
+
+  return { categories, products, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
 }
 
 export async function getShopProduct(tenantId: string, id: string) {

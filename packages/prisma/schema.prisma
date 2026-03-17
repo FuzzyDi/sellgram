@@ -264,6 +264,7 @@ model Customer {
   telegramUser  String?
   firstName     String?
   lastName      String?
+  languageCode  String?
   phone         String?
   loyaltyPoints Int      @default(0)
   totalSpent    Decimal  @default(0) @db.Decimal(12, 2)

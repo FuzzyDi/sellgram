@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 function makeTx(overrides: Record<string, any> = {}) {
   return {
     $executeRaw: vi.fn().mockResolvedValue(1),
+    product: { findMany: vi.fn().mockResolvedValue([]) },
     order: { findFirst: vi.fn(), create: vi.fn() },
     customer: { findUnique: vi.fn(), update: vi.fn().mockResolvedValue({}) },
     loyaltyConfig: { findUnique: vi.fn() },
@@ -124,6 +125,7 @@ describe('checkout.service', () => {
         create: vi.fn().mockResolvedValue({ id: 'o-1', items: [], customer: { id: 'c-1' } }),
       },
     });
+    tx.product.findMany.mockResolvedValue([{ id: 'p-1', name: 'Demo', stockQty: 10, variants: [] }]);
 
     mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
 
@@ -163,6 +165,7 @@ describe('checkout.service', () => {
         create: vi.fn().mockResolvedValue({ id: 'o-3', items: [], customer: {} }),
       },
     });
+    tx.product.findMany.mockResolvedValue([{ id: 'p-1', name: 'Item', stockQty: 10, variants: [] }]);
     // Tx sees fresh balance of 50 (after a concurrent checkout consumed points)
     tx.loyaltyConfig.findUnique.mockResolvedValue({
       isEnabled: true, maxDiscountPct: 20, pointValue: 1, minPointsToRedeem: 1,
@@ -213,6 +216,7 @@ describe('checkout.service', () => {
         create: vi.fn().mockResolvedValue({ id: 'o-2', items: [], customer: {} }),
       },
     });
+    tx.product.findMany.mockResolvedValue([{ id: 'p-1', name: 'Item', stockQty: 10, variants: [] }]);
     (tx.$executeRaw as any).mockImplementation(async () => {
       callOrder.push('lock');
       return 1;

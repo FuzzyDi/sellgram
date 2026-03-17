@@ -105,6 +105,7 @@ export const adminApi = {
   getOrders: (params?: string) => request<any>(`/orders${params ? '?' + params : ''}`),
   getOrder: (id: string) => request<any>(`/orders/${id}`),
   updateOrderStatus: (id: string, data: any) => request<any>(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getReviews: (params?: string) => request<any>(`/reviews${params ? '?' + params : ''}`),
 
   getCustomers: (params?: string) => request<any>(`/customers${params ? '?' + params : ''}`),
   getCustomer: (id: string) => request<any>(`/customers/${id}`),

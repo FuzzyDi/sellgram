@@ -67,6 +67,7 @@ describe('store.service', () => {
   });
 
   it('creates store with encrypted bot token and default payment method', async () => {
+    mocks.getConfig.mockReturnValue({ MINIAPP_URL: '' });
     mocks.encrypt.mockReturnValue('enc-token');
     mocks.prisma.store.create.mockResolvedValue({ id: 's-1' });
 

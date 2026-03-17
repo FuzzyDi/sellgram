@@ -67,6 +67,8 @@ export default function Dashboard() {
 
   const ordersToday = stats?.orders?.today ?? stats?.ordersToday ?? 0;
   const revenueMonth = stats?.revenue?.month ?? stats?.revenueMonth ?? 0;
+  const reviewAvg: number | null = stats?.reviews?.avg ?? null;
+  const reviewCount: number = stats?.reviews?.count ?? 0;
   const totalCustomers = Math.max(
     stats?.customers?.total ?? 0,
     stats?.customers?.fromOrders ?? 0,
@@ -249,7 +251,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="sg-grid cols-4">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
         <article className="sg-card">
           <div className="sg-kpi-label">{tr('Заказы сегодня', 'Bugungi buyurtmalar')}</div>
           <div className="sg-kpi-value">{ordersToday}</div>
@@ -265,6 +267,22 @@ export default function Dashboard() {
         <article className="sg-card">
           <div className="sg-kpi-label">{tr('Товары', 'Mahsulotlar')}</div>
           <div className="sg-kpi-value">{totalProducts}</div>
+        </article>
+        <article className="sg-card" style={{ cursor: reviewCount > 0 ? 'pointer' : 'default' }} onClick={() => reviewCount > 0 && (window.location.hash = '/reviews')}>
+          <div className="sg-kpi-label">{tr('Рейтинг', 'Reyting')}</div>
+          {reviewAvg !== null ? (
+            <>
+              <div className="sg-kpi-value" style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                {reviewAvg}
+                <span style={{ fontSize: 18, color: '#f59e0b' }}>★</span>
+              </div>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                {reviewCount} {tr('отзывов', 'sharh')}
+              </div>
+            </>
+          ) : (
+            <div className="sg-kpi-value" style={{ color: '#d1d5db' }}>—</div>
+          )}
         </article>
       </div>
 
