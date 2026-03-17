@@ -1,5 +1,31 @@
--- Fix: ensure promo_codes and wishlist_items tables exist and orders has promo columns.
--- These statements are idempotent (IF NOT EXISTS / DO-EXCEPTION) so safe to re-run.
+-- Fix: ensure all tables/columns from migrations 20260317-20260318 that were
+-- marked applied but never executed are present. All statements are idempotent.
+
+-- From 20260317100000_add_customer_language_code
+ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "languageCode" TEXT;
+
+-- From 20260317000000_add_order_reviews
+CREATE TABLE IF NOT EXISTS "order_reviews" (
+    "id" TEXT NOT NULL,
+    "orderId" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "tenantId" TEXT NOT NULL,
+    "rating" INTEGER NOT NULL,
+    "comment" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "order_reviews_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "order_reviews_orderId_key" ON "order_reviews"("orderId");
+CREATE INDEX IF NOT EXISTS "order_reviews_tenantId_idx" ON "order_reviews"("tenantId");
+CREATE INDEX IF NOT EXISTS "order_reviews_customerId_idx" ON "order_reviews"("customerId");
+DO $$ BEGIN
+  BEGIN
+    ALTER TABLE "order_reviews" ADD CONSTRAINT "order_reviews_orderId_fkey"
+      FOREIGN KEY ("orderId") REFERENCES "orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
+
+-- From 20260318000000_add_wishlist_promocodes
 
 CREATE TABLE IF NOT EXISTS "wishlist_items" (
     "id" TEXT NOT NULL,
