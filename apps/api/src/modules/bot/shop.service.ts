@@ -11,16 +11,19 @@ export class ShopApiError extends Error {
 
 export async function getShopCatalog(
   tenantId: string,
+  storeId: string,
   opts: { q?: string; categoryId?: string; page: number; pageSize: number } = { page: 1, pageSize: 20 }
 ) {
   const { q, categoryId, page, pageSize } = opts;
 
-  // Categories are always returned in full — there are few of them
-  const categories = await prisma.category.findMany({
-    where: { tenantId, isActive: true },
-    orderBy: { sortOrder: 'asc' },
-    include: { _count: { select: { products: { where: { isActive: true } } } } },
-  });
+  const [categories, store] = await Promise.all([
+    prisma.category.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      include: { _count: { select: { products: { where: { isActive: true } } } } },
+    }),
+    prisma.store.findUnique({ where: { id: storeId }, select: { botUsername: true } }),
+  ]);
 
   const where: any = { tenantId, isActive: true };
   if (categoryId) where.categoryId = categoryId;
@@ -40,7 +43,7 @@ export async function getShopCatalog(
     prisma.product.count({ where }),
   ]);
 
-  return { categories, products, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  return { categories, products, total, page, pageSize, totalPages: Math.ceil(total / pageSize), botUsername: store?.botUsername ?? null };
 }
 
 export async function getShopProduct(tenantId: string, id: string) {

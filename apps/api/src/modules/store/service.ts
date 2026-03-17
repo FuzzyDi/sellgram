@@ -119,6 +119,10 @@ export async function activateTenantStoreBot(tenantId: string, id: string) {
   const bot = new Bot(token);
   await bot.init();
 
+  // Persist bot username so miniapp can share product deep links
+  const botUsername = bot.botInfo.username;
+  await prisma.store.update({ where: { id: store.id }, data: { botUsername } });
+
   let miniAppUrl: string | null = null;
   if (store.miniAppUrl) {
     const u = new URL(store.miniAppUrl);

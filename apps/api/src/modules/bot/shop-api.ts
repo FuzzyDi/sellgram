@@ -43,7 +43,7 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
-    const data = await getShopCatalog(request.customer!.tenantId, query);
+    const data = await getShopCatalog(request.customer!.tenantId, request.storeId!, query);
     return { success: true, data };
   });
 

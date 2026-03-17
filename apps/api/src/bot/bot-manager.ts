@@ -163,6 +163,36 @@ export async function registerBot(
   } catch {}
 
   bot.command('start', async (ctx) => {
+    const startParam = ctx.match?.trim() ?? '';
+
+    // Deep link: /start product_{productId}
+    if (startParam.startsWith('product_') && resolvedMiniAppUrl) {
+      const productId = startParam.slice('product_'.length);
+      const product = await prisma.product.findFirst({
+        where: { id: productId, tenantId, isActive: true },
+        select: { name: true, price: true },
+      });
+      if (product) {
+        const productUrl = `${resolvedMiniAppUrl}#/product/${productId}`;
+        const kb = new InlineKeyboard().webApp(
+          tCtx(ctx, '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0442\u043E\u0432\u0430\u0440', 'Mahsulotni ochish'),
+          productUrl
+        );
+        await ctx.reply(
+          `${product.name} \u2014 ${Number(product.price).toLocaleString()} ${tCtx(ctx, '\u0441\u0443\u043C', "so'm")}`,
+          { reply_markup: kb }
+        );
+        if (ctx.from) {
+          await prisma.customer.upsert({
+            where: { tenantId_telegramId: { tenantId, telegramId: BigInt(ctx.from.id) } },
+            update: { telegramUser: ctx.from.username, firstName: ctx.from.first_name, lastName: ctx.from.last_name, languageCode: ctx.from.language_code },
+            create: { tenantId, telegramId: BigInt(ctx.from.id), telegramUser: ctx.from.username, firstName: ctx.from.first_name, lastName: ctx.from.last_name, languageCode: ctx.from.language_code },
+          });
+        }
+        return;
+      }
+    }
+
     const inline = new InlineKeyboard();
     if (resolvedMiniAppUrl) inline.webApp(tCtx(ctx, '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0430\u0433\u0430\u0437\u0438\u043D', "Do'konni ochish"), resolvedMiniAppUrl);
 

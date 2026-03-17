@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from '../App';
-import { api } from '../api/client';
+import { api, getBotUsername } from '../api/client';
 import { useMiniI18n } from '../i18n';
 import { cartStore } from '../stores/cartStore';
 import { useTelegramBackButton } from '../hooks/useTelegramBackButton';
@@ -22,13 +22,16 @@ export default function Product({ id }: { id: string }) {
 
   const shareProduct = async () => {
     if (!product) return;
+    const tg = window.Telegram?.WebApp;
+    const botUsername = getBotUsername();
+    if (botUsername && tg?.openTelegramLink) {
+      tg.openTelegramLink(`https://t.me/${botUsername}?start=product_${product.id}`);
+      return;
+    }
+    // Fallback: share current URL
     const url = window.location.href;
     const text = `${product.name} — ${Number(product.price).toLocaleString()} ${tr('сум', "so'm")}`;
-    const tg = window.Telegram?.WebApp;
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(shareUrl);
-    } else if (navigator.share) {
+    if (navigator.share) {
       await navigator.share({ title: product.name, text, url }).catch(() => {});
     } else {
       try {
