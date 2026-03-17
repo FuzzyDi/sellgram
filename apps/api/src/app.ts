@@ -287,6 +287,14 @@ async function main() {
       const resolved = resolveBucketAndObjectPath(rawPath);
       const stream = await getS3().getObject(resolved.bucket, resolved.objectPath);
 
+      const ext = rawPath.split('.').pop()?.toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        png: 'image/png', gif: 'image/gif', svg: 'image/svg+xml',
+      };
+      const contentType = (ext && mimeTypes[ext]) || 'application/octet-stream';
+
+      reply.header('Content-Type', contentType);
       reply.header('Cache-Control', 'public, max-age=86400');
       return reply.send(stream);
     } catch {
