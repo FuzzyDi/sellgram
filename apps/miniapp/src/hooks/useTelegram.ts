@@ -46,6 +46,7 @@ interface TelegramWebApp {
     selectionChanged: () => void;
   };
   ready: () => void;
+  openTelegramLink: (url: string) => void;
 }
 
 declare global {
