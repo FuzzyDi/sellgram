@@ -9,6 +9,7 @@ export default function MyOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [storeFilter, setStoreFilter] = useState<string | null>(null);
 
   const SC = useMemo(() => ({
     NEW:       { emoji: '🆕', label: tr('Новый', 'Yangi'),               color: 'var(--status-new)' },
@@ -21,6 +22,20 @@ export default function MyOrders() {
     CANCELLED: { emoji: '❌', label: tr('Отменен', 'Bekor qilindi'),      color: 'var(--status-cancelled)' },
     REFUNDED:  { emoji: '↩️', label: tr('Возврат', 'Qaytarildi'),         color: 'var(--status-refunded)' },
   }) as const, [tr]);
+
+  const stores = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const o of orders) {
+      const name = o.store?.name;
+      if (name && !seen.has(name)) seen.set(name, name);
+    }
+    return [...seen.keys()];
+  }, [orders]);
+
+  const visibleOrders = useMemo(
+    () => storeFilter ? orders.filter((o) => o.store?.name === storeFilter) : orders,
+    [orders, storeFilter]
+  );
 
   function load() {
     setLoading(true);
@@ -51,8 +66,29 @@ export default function MyOrders() {
 
   return (
     <div className="anim-fade" style={{ paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
-      <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, padding: 16, borderBottom: '0.5px solid var(--divider)' }}>
+      <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, padding: '12px 16px', borderBottom: '0.5px solid var(--divider)' }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Заказы', 'Buyurtmalar')}</h1>
+        {stores.length > 1 && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, overflowX: 'auto', paddingBottom: 2 }}>
+            <button
+              className={`badge pill pressable${storeFilter === null ? ' active' : ''}`}
+              style={{ flexShrink: 0, padding: '4px 12px', cursor: 'pointer', fontWeight: storeFilter === null ? 700 : 400, background: storeFilter === null ? 'var(--accent)' : 'var(--sec)', color: storeFilter === null ? '#fff' : 'var(--fg)', border: 'none' }}
+              onClick={() => setStoreFilter(null)}
+            >
+              {tr('Все', 'Barchasi')}
+            </button>
+            {stores.map((name) => (
+              <button
+                key={name}
+                className="badge pill pressable"
+                style={{ flexShrink: 0, padding: '4px 12px', cursor: 'pointer', fontWeight: storeFilter === name ? 700 : 400, background: storeFilter === name ? 'var(--accent)' : 'var(--sec)', color: storeFilter === name ? '#fff' : 'var(--fg)', border: 'none' }}
+                onClick={() => setStoreFilter(storeFilter === name ? null : name)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {orders.length === 0 ? (
         <div className="anim-scale" style={{ textAlign: 'center', padding: '72px 16px' }}>
@@ -62,7 +98,7 @@ export default function MyOrders() {
         </div>
       ) : (
         <div style={{ padding: '8px 12px' }}>
-          {orders.map((o: any, i: number) => {
+          {visibleOrders.map((o: any, i: number) => {
             const statusKey = String(o.status) as keyof typeof SC;
             const s = SC[statusKey] || SC.NEW;
             return (
@@ -71,7 +107,10 @@ export default function MyOrders() {
                   <span style={{ fontWeight: 700 }}>#{o.orderNumber}</span>
                   <span className="badge" style={{ color: s.color, background: `color-mix(in srgb, ${s.color} 12%, transparent)` }}>{s.emoji} {s.label}</span>
                 </div>
-                <p style={{ color: 'var(--hint)', fontSize: 13, marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {o.store?.name && stores.length > 1 && (
+                  <div style={{ fontSize: 11, color: 'var(--hint)', marginTop: 4 }}>🏪 {o.store.name}</div>
+                )}
+                <p style={{ color: 'var(--hint)', fontSize: 13, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {o.items?.map((it: any) => `${it.name} x${it.qty}`).join(', ')}
                 </p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
