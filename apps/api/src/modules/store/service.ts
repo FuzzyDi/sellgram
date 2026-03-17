@@ -3,6 +3,7 @@ import prisma from '../../lib/prisma.js';
 import { getConfig } from '../../config/index.js';
 import { decrypt, encrypt } from '../../lib/encrypt.js';
 import type { CreateStoreInput, UpdateStoreInput } from './dto.js';
+import { registerBot, isBotRegistered } from '../../bot/bot-manager.js';
 
 export class StoreServiceError extends Error {
   code:
@@ -36,8 +37,9 @@ export async function listTenantStores(tenantId: string) {
 
 export async function createTenantStore(tenantId: string, input: CreateStoreInput) {
   const encryptedToken = encrypt(input.botToken);
+  const cfg = getConfig();
 
-  return prisma.store.create({
+  const store = await prisma.store.create({
     data: {
       tenantId,
       name: input.name,
@@ -55,6 +57,16 @@ export async function createTenantStore(tenantId: string, input: CreateStoreInpu
       },
     },
   });
+
+  // Auto-fill miniAppUrl from MINIAPP_URL config
+  const miniAppBase = (cfg.MINIAPP_URL || '').trim();
+  if (miniAppBase && !store.miniAppUrl) {
+    const miniAppUrl = `${miniAppBase.replace(/\/+$/, '')}/?storeId=${store.id}`;
+    await prisma.store.update({ where: { id: store.id }, data: { miniAppUrl } });
+    (store as any).miniAppUrl = miniAppUrl;
+  }
+
+  return store;
 }
 
 export async function getTenantStore(tenantId: string, id: string) {
@@ -91,6 +103,7 @@ export async function activateTenantStoreBot(tenantId: string, id: string) {
       id: true,
       botToken: true,
       miniAppUrl: true,
+      welcomeMessage: true,
       webhookSecret: true,
       isActive: true,
     },
@@ -129,6 +142,16 @@ export async function activateTenantStoreBot(tenantId: string, id: string) {
     secret_token: store.webhookSecret,
     drop_pending_updates: false,
   });
+
+  // Register bot in memory so webhooks work without API restart
+  if (!isBotRegistered(store.id)) {
+    try {
+      await registerBot(store.id, tenantId, store.botToken, store.welcomeMessage ?? '', store.miniAppUrl);
+    } catch (err: any) {
+      // Webhook is set, but in-memory registration failed — will work after restart
+      console.error(`Auto-register bot in memory failed for store ${store.id}: ${err.message}`);
+    }
+  }
 
   return { storeId: store.id, webhookUrl, miniAppUrl };
 }
