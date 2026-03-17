@@ -24,18 +24,21 @@ export default function Product({ id }: { id: string }) {
     if (!product) return;
     const tg = window.Telegram?.WebApp;
     const botUsername = getBotUsername();
-    if (botUsername && tg?.openTelegramLink) {
-      tg.openTelegramLink(`https://t.me/${botUsername}?start=product_${product.id}`);
+    const text = `${product.name} — ${Number(product.price).toLocaleString()} ${tr('сум', "so'm")}`;
+    const deepLink = botUsername
+      ? `https://t.me/${botUsername}?start=product_${product.id}`
+      : window.location.href;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(
+        `https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${encodeURIComponent(text)}`
+      );
       return;
     }
-    // Fallback: share current URL
-    const url = window.location.href;
-    const text = `${product.name} — ${Number(product.price).toLocaleString()} ${tr('сум', "so'm")}`;
     if (navigator.share) {
-      await navigator.share({ title: product.name, text, url }).catch(() => {});
+      await navigator.share({ title: product.name, text, url: deepLink }).catch(() => {});
     } else {
       try {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(deepLink);
         setCopied(true);
         tg?.HapticFeedback?.notificationOccurred('success');
         setTimeout(() => setCopied(false), 2000);
