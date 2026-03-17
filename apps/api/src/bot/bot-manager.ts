@@ -1,4 +1,4 @@
-import { Bot, webhookCallback, InlineKeyboard, Keyboard } from 'grammy';
+import { Bot, webhookCallback, InlineKeyboard } from 'grammy';
 import type { FastifyInstance } from 'fastify';
 import type { OrderStatusType } from '@sellgram/shared';
 import prisma from '../lib/prisma.js';
@@ -166,12 +166,9 @@ export async function registerBot(
     const inline = new InlineKeyboard();
     if (resolvedMiniAppUrl) inline.webApp(tCtx(ctx, '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0430\u0433\u0430\u0437\u0438\u043D', "Do'konni ochish"), resolvedMiniAppUrl);
 
-    const keyboard = new Keyboard();
-    if (resolvedMiniAppUrl) keyboard.webApp(tCtx(ctx, '\u041C\u0430\u0433\u0430\u0437\u0438\u043D', "Do'kon"), resolvedMiniAppUrl).row();
-    keyboard.text(tCtx(ctx, '\u041F\u043E\u043C\u043E\u0449\u044C', 'Yordam'));
-
-    await ctx.reply(welcomeMessage || tCtx(ctx, '\u0414\u043E\u0431\u0440\u043E \u043F\u043E\u0436\u0430\u043B\u043E\u0432\u0430\u0442\u044C \u0432 SellGram!', "SellGram'ga xush kelibsiz!"), { reply_markup: inline });
-    await ctx.reply(tCtx(ctx, '\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435:', 'Amalni tanlang:'), { reply_markup: keyboard.resized().persistent() });
+    await ctx.reply(welcomeMessage || tCtx(ctx, '\u0414\u043E\u0431\u0440\u043E \u043F\u043E\u0436\u0430\u043B\u043E\u0432\u0430\u0442\u044C \u0432 SellGram!', "SellGram'ga xush kelibsiz!"), {
+      reply_markup: resolvedMiniAppUrl ? inline : { remove_keyboard: true },
+    });
 
     if (ctx.from) {
       await prisma.customer.upsert({
