@@ -340,6 +340,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const fourteenDaysAgo = new Date(today.getTime() - 13 * 24 * 60 * 60 * 1000);
 
     const [
       totalOrders,
@@ -357,6 +358,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       soldProductsResult,
       repeatCustomers,
       reviewStats,
+      recentOrders,
     ] = await Promise.all([
       prisma.order.count({ where: { tenantId } }),
       prisma.order.count({ where: { tenantId, createdAt: { gte: today } } }),
@@ -381,11 +383,27 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       `,
       prisma.customer.count({ where: { tenantId, ordersCount: { gt: 1 } } }),
       prisma.orderReview.aggregate({ where: { tenantId }, _avg: { rating: true }, _count: { rating: true } }),
+      prisma.order.findMany({
+        where: { tenantId, status: { in: ['COMPLETED', 'DELIVERED'] }, createdAt: { gte: fourteenDaysAgo } },
+        select: { createdAt: true, total: true },
+      }),
     ]);
 
     const customersFromOrdersCount = Number(customersFromOrdersResult[0]?.count ?? 0);
     const soldProductsCount = Number(soldProductsResult[0]?.count ?? 0);
     const productsTotal = Math.max(totalProducts, soldProductsCount);
+
+    // Build 14-day revenue series with zero-fill for missing days
+    const revenueMap: Record<string, number> = {};
+    for (const o of recentOrders) {
+      const d = o.createdAt.toISOString().slice(0, 10);
+      revenueMap[d] = (revenueMap[d] ?? 0) + Number(o.total);
+    }
+    const revenueByDay: { date: string; revenue: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      revenueByDay.push({ date: d, revenue: revenueMap[d] ?? 0 });
+    }
 
     return {
       success: true,
@@ -408,6 +426,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           avg: reviewStats._avg.rating ? Math.round(reviewStats._avg.rating * 10) / 10 : null,
           count: reviewStats._count.rating,
         },
+        revenueByDay,
       },
       reportLimits,
       reportAccess: getReportAccess(reportLimits),
