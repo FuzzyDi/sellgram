@@ -24,6 +24,7 @@ import Reports from './pages/Reports';
 import Reviews from './pages/Reviews';
 import PromoCodes from './pages/PromoCodes';
 import Banners from './pages/Banners';
+import OnboardingWizard, { isOnboardingDone, markOnboardingDone } from './pages/OnboardingWizard';
 import Settings from './pages/Settings';
 import SystemAdmin from './pages/SystemAdmin';
 
@@ -293,13 +294,23 @@ export default function App() {
   const [auth, setAuth] = useState<AuthState | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const { route, navigate } = useRoute();
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (!token) { setLoading(false); return; }
     adminApi.me()
-      .then((user: any) => setAuth({ user, tenant: user.tenant }))
+      .then((user: any) => {
+        setAuth({ user, tenant: user.tenant });
+        // Show onboarding only for OWNER role and if not dismissed
+        if (!isOnboardingDone() && ['OWNER'].includes(user.role)) {
+          adminApi.getStores().then((stores: any) => {
+            const list = Array.isArray(stores) ? stores : stores?.items || [];
+            if (list.length === 0) setShowOnboarding(true);
+          }).catch(() => {});
+        }
+      })
       .catch(() => clearTokens())
       .finally(() => setLoading(false));
   }, []);
@@ -317,6 +328,10 @@ export default function App() {
     const result = await adminApi.register(data);
     setTokens(result.accessToken, result.refreshToken);
     setAuth({ user: result.user, tenant: result.tenant });
+    // New registrations always get onboarding
+    markOnboardingDone(); // clear any stale flag first
+    localStorage.removeItem('sg_onboarding_done');
+    setShowOnboarding(true);
   };
 
   const logout = () => { clearTokens(); setAuth(null); };
@@ -346,6 +361,7 @@ export default function App() {
 
   if (route === '/system-admin') return <SystemAdmin />;
   if (!auth) return <Login onLogin={handleLogin} onRegister={handleRegister} />;
+  if (showOnboarding) return <OnboardingWizard onFinish={() => setShowOnboarding(false)} />;
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex' }}>
