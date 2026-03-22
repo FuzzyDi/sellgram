@@ -189,6 +189,52 @@ export const adminApi = {
   deleteProductImage: (productId: string, imageId: string) =>
     request<any>(`/products/${productId}/images/${imageId}`, { method: 'DELETE' }),
 
+  getImportTemplate: () => {
+    const token = localStorage.getItem('accessToken');
+    const a = document.createElement('a');
+    a.href = `/api/store-admin/products/import/template`;
+    a.setAttribute('Authorization', token || '');
+    // use fetch to trigger download with auth
+    return fetch('/api/store-admin/products/import/template', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then(async (res) => {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = 'products_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  },
+  importProductsPreview: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch('/api/store-admin/products/import?preview=true', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Preview failed');
+    return data.data;
+  },
+  importProductsApply: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch('/api/store-admin/products/import?preview=false', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Import failed');
+    return data.data;
+  },
+
   getBanners: () => request<any>('/banners'),
   uploadBanner: async (file: File, meta: { title?: string; linkUrl?: string; sortOrder?: number }) => {
     const formData = new FormData();

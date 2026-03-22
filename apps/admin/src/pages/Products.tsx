@@ -2,6 +2,214 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { adminApi, toImageUrl } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
+function ImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const { tr } = useAdminI18n();
+  const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<any>(null);
+  const [result, setResult] = useState<any>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (f: File) => {
+    setFile(f);
+    setError('');
+    setLoading(true);
+    try {
+      const data = await adminApi.importProductsPreview(f);
+      setPreview(data);
+      setStep('preview');
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError('');
+    try {
+      const data = await adminApi.importProductsApply(file);
+      setResult(data);
+      setStep('done');
+      onImported();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validRows = preview?.rows?.filter((r: any) => r.errors.length === 0) ?? [];
+  const invalidRows = preview?.rows?.filter((r: any) => r.errors.length > 0) ?? [];
+
+  return (
+    <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+      <div className="sg-card" style={{ width: '100%', maxWidth: 780, maxHeight: '90vh', overflowY: 'auto', display: 'grid', gap: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Импорт товаров', 'Mahsulotlarni import qilish')}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#748278' }}>×</button>
+        </div>
+
+        {error && (
+          <div style={{ background: '#fff2f2', color: '#b52d2d', border: '1px solid #ffd6d6', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+
+        {step === 'upload' && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ background: '#f0faf4', borderRadius: 12, padding: '14px 16px', border: '1px solid #bbf0d8' }}>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{tr('Формат файла', 'Fayl formati')}</p>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: '#3d6b52' }}>
+                {tr('Поддерживаются .xlsx, .xls, .csv. Обязательные колонки:', 'Qo\'llab-quvvatlanadi .xlsx, .xls, .csv. Majburiy ustunlar:')}
+                {' '}<strong>name, price</strong>.
+                {' '}{tr('Опциональные:', 'Ixtiyoriy:')} sku, description, category, stockQty, costPrice, unit, isActive
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                className="sg-btn ghost"
+                onClick={() => adminApi.getImportTemplate().catch(() => {})}
+                style={{ fontSize: 13 }}
+              >
+                ↓ {tr('Скачать шаблон CSV', 'CSV shablonni yuklab olish')}
+              </button>
+            </div>
+
+            <label style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              border: '2px dashed #ced9d2', borderRadius: 14, padding: '32px 16px', cursor: 'pointer',
+              background: '#fafcfb', gap: 8,
+            }}>
+              <span style={{ fontSize: 36 }}>📂</span>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>{loading ? tr('Загрузка...', 'Yuklanmoqda...') : tr('Выбрать файл', 'Fayl tanlash')}</span>
+              <span style={{ fontSize: 12, color: '#748278' }}>.xlsx, .xls, .csv — до 5 МБ</span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                style={{ display: 'none' }}
+                disabled={loading}
+                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+              />
+            </label>
+          </div>
+        )}
+
+        {step === 'preview' && preview && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div className="sg-card" style={{ flex: 1, minWidth: 100, textAlign: 'center', padding: '10px 8px' }}>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{preview.summary.total}</div>
+                <div style={{ fontSize: 12, color: '#748278' }}>{tr('Строк', 'Qator')}</div>
+              </div>
+              <div className="sg-card" style={{ flex: 1, minWidth: 100, textAlign: 'center', padding: '10px 8px', borderColor: '#bbf0d8', background: '#f0faf4' }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#065f46' }}>{preview.summary.valid}</div>
+                <div style={{ fontSize: 12, color: '#3d6b52' }}>{tr('Готово к импорту', 'Import uchun tayyor')}</div>
+              </div>
+              {preview.summary.errors > 0 && (
+                <div className="sg-card" style={{ flex: 1, minWidth: 100, textAlign: 'center', padding: '10px 8px', borderColor: '#fecaca', background: '#fff2f2' }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#be123c' }}>{preview.summary.errors}</div>
+                  <div style={{ fontSize: 12, color: '#be123c' }}>{tr('Ошибок', 'Xatolar')}</div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ maxHeight: 320, overflowY: 'auto', borderRadius: 10, border: '1px solid #e1e9e3' }}>
+              <table className="sg-table" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>{tr('Название', 'Nomi')}</th>
+                    <th>{tr('Цена', 'Narx')}</th>
+                    <th>SKU</th>
+                    <th>{tr('Категория', 'Toifa')}</th>
+                    <th>{tr('Остаток', 'Qoldiq')}</th>
+                    <th>{tr('Действие', 'Amal')}</th>
+                    <th>{tr('Статус', 'Holat')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.rows.map((row: any) => (
+                    <tr key={row.row} style={row.errors.length > 0 ? { background: '#fff5f5' } : undefined}>
+                      <td style={{ color: '#748278' }}>{row.row}</td>
+                      <td style={{ fontWeight: 600 }}>{row.name || '—'}</td>
+                      <td>{row.price !== null ? `${Number(row.price).toLocaleString()} UZS` : '—'}</td>
+                      <td>{row.sku || '—'}</td>
+                      <td>{row.category || '—'}</td>
+                      <td>{row.stockQty}</td>
+                      <td>
+                        <span className="sg-badge" style={row.action === 'update'
+                          ? { background: '#dbeafe', color: '#1d4ed8' }
+                          : { background: '#d1fae5', color: '#065f46' }}>
+                          {row.action === 'update' ? tr('Обновить', 'Yangilash') : tr('Создать', 'Yaratish')}
+                        </span>
+                      </td>
+                      <td>
+                        {row.errors.length > 0 ? (
+                          <span title={row.errors.join(', ')} style={{ color: '#be123c', cursor: 'help' }}>
+                            ⚠ {row.errors[0]}{row.errors.length > 1 ? ` +${row.errors.length - 1}` : ''}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#065f46' }}>✓</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              {validRows.length > 0 && (
+                <button className="sg-btn primary" disabled={loading} onClick={handleApply}>
+                  {loading ? tr('Импорт...', 'Import...') : tr(`Импортировать ${validRows.length} товар(ов)`, `${validRows.length} ta mahsulot import qilish`)}
+                </button>
+              )}
+              <button className="sg-btn ghost" onClick={() => { setStep('upload'); setPreview(null); setFile(null); if (fileRef.current) fileRef.current.value = ''; }}>
+                {tr('Другой файл', 'Boshqa fayl')}
+              </button>
+              <button className="sg-btn ghost" onClick={onClose}>{tr('Отмена', 'Bekor qilish')}</button>
+            </div>
+          </div>
+        )}
+
+        {step === 'done' && result && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div className="sg-card" style={{ flex: 1, textAlign: 'center', padding: '14px 8px', borderColor: '#bbf0d8', background: '#f0faf4' }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: '#065f46' }}>{result.summary.created}</div>
+                <div style={{ fontSize: 13, color: '#3d6b52' }}>{tr('Создано', 'Yaratildi')}</div>
+              </div>
+              <div className="sg-card" style={{ flex: 1, textAlign: 'center', padding: '14px 8px', borderColor: '#bfdbfe', background: '#eff6ff' }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: '#1d4ed8' }}>{result.summary.updated}</div>
+                <div style={{ fontSize: 13, color: '#1d4ed8' }}>{tr('Обновлено', 'Yangilandi')}</div>
+              </div>
+              {result.summary.skipped > 0 && (
+                <div className="sg-card" style={{ flex: 1, textAlign: 'center', padding: '14px 8px' }}>
+                  <div style={{ fontSize: 28, fontWeight: 800 }}>{result.summary.skipped}</div>
+                  <div style={{ fontSize: 13, color: '#748278' }}>{tr('Пропущено', 'O\'tkazib yuborildi')}</div>
+                </div>
+              )}
+            </div>
+            {result.summary.applyErrors?.length > 0 && (
+              <div style={{ background: '#fff2f2', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#b52d2d' }}>
+                {result.summary.applyErrors.map((e: any) => <div key={e.row}>Строка {e.row}: {e.error}</div>)}
+              </div>
+            )}
+            <button className="sg-btn primary" onClick={onClose}>{tr('Готово', 'Tayyor')}</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type NoticeTone = 'success' | 'error' | 'info';
 
 interface Product {
@@ -69,6 +277,7 @@ export default function Products() {
   const [editImages, setEditImages] = useState<{ id: string; url: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -332,9 +541,14 @@ export default function Products() {
           <h2 className="sg-title">{tr('Товары', 'Mahsulotlar')}</h2>
           <p className="sg-subtitle">{tr('Каталог магазина и остатки', "Do'kon katalogi va ombor qoldiqlari")}</p>
         </div>
-        <button className="sg-btn primary" type="button" onClick={openCreate}>
-          + {tr('Добавить', "Qo'shish")}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="sg-btn ghost" type="button" onClick={() => setShowImport(true)}>
+            ↑ {tr('Импорт', 'Import')}
+          </button>
+          <button className="sg-btn primary" type="button" onClick={openCreate}>
+            + {tr('Добавить', "Qo'shish")}
+          </button>
+        </div>
       </header>
 
       <div className="sg-card" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -524,6 +738,13 @@ export default function Products() {
             </div>
           )}
         </div>
+      )}
+
+      {showImport && (
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          onImported={() => { setShowImport(false); void loadProducts(); }}
+        />
       )}
 
       {showForm && (
