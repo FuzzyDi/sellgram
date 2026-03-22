@@ -67,3 +67,9 @@ export function buildProductImageObjectPath(tenantId: string, productId: string,
   const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '');
   return `products/${safeTenantId}/${safeProductId}/${safeFileName}`;
 }
+
+export function buildBannerObjectPath(tenantId: string, fileName: string): string {
+  const safeTenantId = tenantId.replace(/[^a-zA-Z0-9_-]/g, '');
+  const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '');
+  return `banners/${safeTenantId}/${safeFileName}`;
+}

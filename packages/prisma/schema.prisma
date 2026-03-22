@@ -120,6 +120,7 @@ model Tenant {
   broadcasts        BroadcastCampaign[]
   scheduledReports  ScheduledReport[]
   auditLogs         TenantAuditLog[]
+  banners           Banner[]
 
   @@map("tenants")
 }
@@ -459,6 +460,22 @@ model PaymentWebhookEvent {
   @@unique([orderId, eventId])
   @@index([orderId])
   @@map("payment_webhook_events")
+}
+
+model Banner {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title     String?
+  imageUrl  String
+  linkUrl   String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("banners")
 }
 
 // ============================================================

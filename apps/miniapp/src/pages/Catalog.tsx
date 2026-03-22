@@ -19,10 +19,18 @@ interface Category {
   _count: { products: number };
 }
 
+interface Banner {
+  id: string;
+  title?: string;
+  imageUrl: string;
+  linkUrl?: string;
+}
+
 export default function Catalog() {
   const { tr } = useMiniI18n();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -54,6 +62,7 @@ export default function Catalog() {
       .then((d) => {
         if (cancelled) return;
         if (d.categories) setCategories(d.categories);
+        if (d.banners && isFirstPage) setBanners(d.banners);
         setTotalPages(d.totalPages ?? 1);
         setProducts((prev) => isFirstPage ? (d.products || []) : [...prev, ...(d.products || [])]);
       })
@@ -82,6 +91,41 @@ export default function Catalog() {
             style={{ paddingLeft: 36, paddingTop: 10, paddingBottom: 10 }}
           />
         </div>
+        {banners.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, padding: '8px 0 4px', overflowX: 'auto', scrollSnapType: 'x mandatory' }}>
+            {banners.map((b) => (
+              <div
+                key={b.id}
+                onClick={() => b.linkUrl && window.open(b.linkUrl, '_blank')}
+                style={{
+                  flexShrink: 0,
+                  width: banners.length === 1 ? '100%' : 'calc(100% - 24px)',
+                  scrollSnapAlign: 'start',
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  cursor: b.linkUrl ? 'pointer' : 'default',
+                  position: 'relative',
+                }}
+              >
+                <img
+                  src={b.imageUrl}
+                  alt={b.title || 'banner'}
+                  style={{ width: '100%', aspectRatio: '16/6', objectFit: 'cover', display: 'block' }}
+                />
+                {b.title && (
+                  <div style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0,
+                    background: 'linear-gradient(transparent, rgba(0,0,0,0.5))',
+                    color: '#fff', fontSize: 13, fontWeight: 600,
+                    padding: '16px 12px 8px',
+                  }}>
+                    {b.title}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         <div className="anim-fade anim-d2" style={{ display: 'flex', gap: 6, padding: '8px 0 12px', overflowX: 'auto' }}>
           <button className={`chip${!selected ? ' active' : ''}`} onClick={() => setSelected(null)}>{tr('Все', 'Barchasi')}</button>
           {categories.map((c) => (

@@ -141,6 +141,27 @@ export default async function productRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // Bulk update products (activate / deactivate)
+  const bulkProductSchema = z.object({
+    ids: z.array(z.string().cuid()).min(1).max(200),
+    action: z.enum(['activate', 'deactivate']),
+  });
+
+  fastify.patch('/products/bulk', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    let body: z.infer<typeof bulkProductSchema>;
+    try {
+      body = bulkProductSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const isActive = body.action === 'activate';
+    const result = await prisma.product.updateMany({
+      where: { id: { in: body.ids }, tenantId: request.tenantId! },
+      data: { isActive },
+    });
+    return { success: true, updated: result.count };
+  });
+
   // Update product
   fastify.patch('/products/:id', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };

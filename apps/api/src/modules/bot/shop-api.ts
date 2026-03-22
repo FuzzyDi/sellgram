@@ -44,8 +44,15 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
-    const data = await getShopCatalog(request.customer!.tenantId, request.storeId!, query);
-    return { success: true, data };
+    const [data, banners] = await Promise.all([
+      getShopCatalog(request.customer!.tenantId, request.storeId!, query),
+      prisma.banner.findMany({
+        where: { tenantId: request.customer!.tenantId, isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, title: true, imageUrl: true, linkUrl: true },
+      }),
+    ]);
+    return { success: true, data: { ...data, banners } };
   });
 
   fastify.get('/shop/products/:id', async (request, reply) => {

@@ -69,6 +69,10 @@ export default function Products() {
   const [editImages, setEditImages] = useState<{ id: string; url: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulking, setBulking] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadProducts = useCallback(async () => {
@@ -76,8 +80,8 @@ export default function Products() {
     setLoadError(false);
     try {
       const params = new URLSearchParams();
-      params.set('page', '1');
-      params.set('pageSize', '200');
+      params.set('page', String(page));
+      params.set('pageSize', '20');
       if (search.trim()) params.set('search', search.trim());
       if (selectedCategory) params.set('categoryId', selectedCategory);
       if (activeFilter === 'active') params.set('active', 'true');
@@ -86,6 +90,8 @@ export default function Products() {
       const data = await adminApi.getProducts(params.toString());
       setProducts(data.items || []);
       setTotal(data.total || 0);
+      setTotalPages(data.totalPages || 1);
+      setSelected(new Set());
     } catch {
       setLoadError(true);
       setProducts([]);
@@ -93,7 +99,7 @@ export default function Products() {
     } finally {
       setLoading(false);
     }
-  }, [search, selectedCategory, activeFilter]);
+  }, [search, selectedCategory, activeFilter, page]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -199,6 +205,41 @@ export default function Products() {
     [loadProducts, tr]
   );
 
+  const handleBulkAction = useCallback(
+    async (action: 'activate' | 'deactivate') => {
+      const ids = Array.from(selected);
+      if (ids.length === 0) return;
+      setBulking(true);
+      try {
+        await adminApi.bulkUpdateProducts({ ids, action });
+        showNotice('success', tr(`Обновлено: ${ids.length}`, `Yangilandi: ${ids.length}`));
+        await loadProducts();
+      } catch (err: any) {
+        showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+      } finally {
+        setBulking(false);
+      }
+    },
+    [selected, loadProducts, tr]
+  );
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === products.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(products.map((p) => p.id)));
+    }
+  };
+
   const createCategory = useCallback(async () => {
     const nextName = catName.trim();
     if (!nextName) return;
@@ -299,7 +340,7 @@ export default function Products() {
       <div className="sg-card" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setPage(1); setSearch(e.target.value); }}
           placeholder={tr('Поиск по названию, описанию, SKU...', "Nomi, tavsifi, SKU bo'yicha qidirish...")}
           className="w-full"
           style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px', minWidth: 240, flex: 1 }}
@@ -307,8 +348,8 @@ export default function Products() {
 
         <select
           value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm"
+          onChange={(e) => { setPage(1); setSelectedCategory(e.target.value); }}
+          style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13 }}
         >
           <option value="">{tr('Все категории', 'Barcha toifalar')}</option>
           {categories.map((category) => (
@@ -320,18 +361,46 @@ export default function Products() {
 
         <select
           value={activeFilter}
-          onChange={(e) => setActiveFilter(e.target.value as 'all' | 'active' | 'hidden')}
-          className="border rounded-lg px-3 py-2 text-sm"
+          onChange={(e) => { setPage(1); setActiveFilter(e.target.value as 'all' | 'active' | 'hidden'); }}
+          style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13 }}
         >
           <option value="all">{tr('Любой статус', 'Har qanday holat')}</option>
           <option value="active">{tr('Только активные', 'Faqat faol')}</option>
           <option value="hidden">{tr('Только скрытые', 'Faqat yashirin')}</option>
         </select>
 
-        <button className="sg-btn ghost" type="button" onClick={() => void loadProducts()}>
-          {tr('Применить', "Qo'llash")}
-        </button>
+        {total > 0 && <span style={{ fontSize: 12, color: '#748278' }}>{tr('Всего', 'Jami')}: <strong>{total}</strong></span>}
       </div>
+
+      {selected.size > 0 && (
+        <div className="sg-card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>
+            {tr(`Выбрано: ${selected.size}`, `Tanlandi: ${selected.size}`)}
+          </span>
+          <button
+            className="sg-btn ghost"
+            disabled={bulking}
+            onClick={() => handleBulkAction('activate')}
+            style={{ fontSize: 13, padding: '5px 12px' }}
+          >
+            {tr('Активировать', 'Faollashtirish')}
+          </button>
+          <button
+            className="sg-btn ghost"
+            disabled={bulking}
+            onClick={() => handleBulkAction('deactivate')}
+            style={{ fontSize: 13, padding: '5px 12px', color: '#6b7280' }}
+          >
+            {tr('Скрыть', 'Yashirish')}
+          </button>
+          <button
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#9ca3af' }}
+            onClick={() => setSelected(new Set())}
+          >
+            {tr('Отмена', 'Bekor')}
+          </button>
+        </div>
+      )}
 
       {loadError ? (
         <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
@@ -356,6 +425,13 @@ export default function Products() {
           <table className="sg-table">
             <thead>
               <tr>
+                <th style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    checked={products.length > 0 && selected.size === products.length}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th>{tr('Фото', 'Rasm')}</th>
                 <th>{tr('Товар', 'Mahsulot')}</th>
                 <th>{tr('Категория', 'Toifa')}</th>
@@ -367,7 +443,10 @@ export default function Products() {
             </thead>
             <tbody>
               {products.map((product) => (
-                <tr key={product.id}>
+                <tr key={product.id} style={selected.has(product.id) ? { background: '#fffbeb' } : undefined}>
+                  <td>
+                    <input type="checkbox" checked={selected.has(product.id)} onChange={() => toggleSelect(product.id)} />
+                  </td>
                   <td>
                     <div style={{ width: 42, height: 42, borderRadius: 8, background: '#eef3f0', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                       {product.images?.[0]?.url ? (
@@ -422,16 +501,26 @@ export default function Products() {
               ))}
               {products.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', color: '#6b7a71' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', color: '#6b7a71' }}>
                     {tr('Товаров нет', "Mahsulotlar yo'q")}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-          {total > 0 && (
-            <div style={{ padding: '12px 14px', borderTop: '1px solid #edf2ee', color: '#5f6d64', fontSize: 13 }}>
-              {tr('Всего', 'Jami')}: {total}
+          {totalPages > 1 && (
+            <div style={{ padding: '12px 14px', borderTop: '1px solid #edf2ee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: '#748278' }}>
+                {tr('Страница', 'Sahifa')} {page} / {totalPages}
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="sg-btn ghost" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  {tr('Назад', 'Orqaga')}
+                </button>
+                <button className="sg-btn ghost" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                  {tr('Далее', 'Keyingi')}
+                </button>
+              </div>
             </div>
           )}
         </div>

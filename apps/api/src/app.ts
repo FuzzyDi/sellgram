@@ -251,6 +251,7 @@ async function main() {
   const broadcastRoutes = (await import('./modules/broadcast/routes.js')).default;
   const auditRoutes = (await import('./modules/audit/routes.js')).default;
   const systemAdminRoutes = (await import('./modules/system-admin/routes.js')).default;
+  const bannerRoutes = (await import('./modules/banner/routes.js')).default;
 
   await fastify.register(
     async (app) => {
@@ -268,6 +269,7 @@ async function main() {
       await app.register(subscriptionRoutes);
       await app.register(broadcastRoutes);
       await app.register(auditRoutes);
+      await app.register(bannerRoutes);
     },
     { prefix: '/api/store-admin' }
   );

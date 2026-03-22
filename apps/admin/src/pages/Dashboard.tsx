@@ -44,6 +44,7 @@ export default function Dashboard() {
   const { tr } = useAdminI18n();
   const [stats, setStats] = useState<any>(null);
   const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [sub, setSub] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -51,11 +52,17 @@ export default function Dashboard() {
   function load() {
     setLoading(true);
     setError(false);
-    Promise.all([adminApi.getDashboard(), adminApi.getTopProducts().catch(() => []), adminApi.getSubscription().catch(() => null)])
-      .then(([s, tp, subscription]) => {
+    Promise.all([
+      adminApi.getDashboard(),
+      adminApi.getTopProducts().catch(() => []),
+      adminApi.getSubscription().catch(() => null),
+      adminApi.getOrders('page=1&pageSize=5&status=NEW').catch(() => null),
+    ])
+      .then(([s, tp, subscription, newOrders]) => {
         setStats(s);
         setTopProducts(Array.isArray(tp) ? tp : tp?.items || tp?.data || []);
         setSub(subscription);
+        setRecentOrders(newOrders?.items || []);
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -104,7 +111,11 @@ export default function Dashboard() {
   const totalSteps = checks.length;
 
   const ordersToday = stats?.orders?.today ?? stats?.ordersToday ?? 0;
+  const ordersPending = stats?.orders?.pending ?? 0;
+  const revenueToday = stats?.revenue?.today ?? 0;
   const revenueMonth = stats?.revenue?.month ?? stats?.revenueMonth ?? 0;
+  const avgCheck = stats?.revenue?.avgCheck ?? 0;
+  const newCustomersWeek = stats?.customers?.newThisWeek ?? 0;
   const reviewAvg: number | null = stats?.reviews?.avg ?? null;
   const reviewCount: number = stats?.reviews?.count ?? 0;
   const totalCustomers = Math.max(
@@ -289,18 +300,34 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12 }}>
         <article className="sg-card">
           <div className="sg-kpi-label">{tr('Заказы сегодня', 'Bugungi buyurtmalar')}</div>
           <div className="sg-kpi-value">{ordersToday}</div>
+        </article>
+        <article
+          className="sg-card"
+          style={{ cursor: ordersPending > 0 ? 'pointer' : 'default', borderColor: ordersPending > 0 ? '#fde68a' : undefined, background: ordersPending > 0 ? '#fffbeb' : undefined }}
+          onClick={() => ordersPending > 0 && (window.location.hash = '/orders?status=NEW')}
+        >
+          <div className="sg-kpi-label">{tr('Ожидают обработки', 'Kutilmoqda')}</div>
+          <div className="sg-kpi-value" style={{ color: ordersPending > 0 ? '#b45309' : undefined }}>{ordersPending}</div>
+        </article>
+        <article className="sg-card">
+          <div className="sg-kpi-label">{tr('Выручка сегодня', 'Bugungi tushum')}</div>
+          <div className="sg-kpi-value">{Number(revenueToday || 0).toLocaleString()} UZS</div>
         </article>
         <article className="sg-card">
           <div className="sg-kpi-label">{tr('Выручка (месяц)', 'Tushum (oy)')}</div>
           <div className="sg-kpi-value">{Number(revenueMonth || 0).toLocaleString()} UZS</div>
         </article>
         <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Клиенты', 'Mijozlar')}</div>
-          <div className="sg-kpi-value">{totalCustomers}</div>
+          <div className="sg-kpi-label">{tr('Средний чек', "O'rtacha chek")}</div>
+          <div className="sg-kpi-value">{Number(avgCheck || 0).toLocaleString()} UZS</div>
+        </article>
+        <article className="sg-card">
+          <div className="sg-kpi-label">{tr('Клиентов (неделя)', 'Mijozlar (hafta)')}</div>
+          <div className="sg-kpi-value">{newCustomersWeek}</div>
         </article>
         <article className="sg-card">
           <div className="sg-kpi-label">{tr('Товары', 'Mahsulotlar')}</div>
@@ -323,6 +350,43 @@ export default function Dashboard() {
           )}
         </article>
       </div>
+
+      {recentOrders.length > 0 && (
+        <section className="sg-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Новые заказы', 'Yangi buyurtmalar')}</h3>
+            <button
+              className="sg-btn ghost"
+              style={{ fontSize: 13, padding: '4px 12px' }}
+              onClick={() => (window.location.hash = '/orders')}
+            >
+              {tr('Все заказы →', 'Barcha buyurtmalar →')}
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {recentOrders.map((order: any) => (
+              <div
+                key={order.id}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 10, background: '#f9fbfa', border: '1px solid #edf2ee', cursor: 'pointer' }}
+                onClick={() => (window.location.hash = '/orders')}
+              >
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    {tr('Заказ', 'Buyurtma')} #{order.orderNumber}
+                    {order.customer?.firstName ? ` · ${order.customer.firstName}` : ''}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#748278', marginTop: 2 }}>
+                    {order.items?.map((i: any) => `${i.name} x${i.qty}`).join(', ')}
+                  </div>
+                </div>
+                <div style={{ fontWeight: 800, color: '#00875a', fontSize: 15, whiteSpace: 'nowrap' }}>
+                  {Number(order.total).toLocaleString()} UZS
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {stats?.revenueByDay?.some((d: any) => d.revenue > 0) && (
         <section className="sg-card">

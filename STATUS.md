@@ -1,68 +1,95 @@
-# SellGram - Status
+# SellGram — Work Status
 
-**Domain**: sellgram.uz
-**Date**: 2026-03-11
+> Этот файл — главная точка входа для разработки.
+> Обновляй при каждом переключении контекста (дом/работа).
+> Коммить после каждой сессии: `git add STATUS.md && git commit -m "chore: update status"`
 
-## Domains
-| Domain | Purpose | Ports |
-|---|---|---|
-| sellgram.uz | Landing | 80/443 |
-| app.sellgram.uz | Admin panel | 80/443 |
-| miniapp.sellgram.uz | Telegram Mini App | 80/443 |
-| api.sellgram.uz | API backend | 80/443 |
-| admin.sellgram.uz | Redirect to `app.sellgram.uz` | 80/443 |
+**Последнее обновление:** 2026-03-23
 
-## Stack
-- API: Fastify + Prisma + Grammy + PostgreSQL + Redis + MinIO
-- Admin: React + Vite
-- Mini App: React + Vite + Telegram WebApp SDK
-- Deploy: Docker Compose + Nginx
+---
 
-## Implemented
-- Telegram bot + Mini App flow
-- Admin panel for catalog, orders, customers, delivery, loyalty
-- Multi-tenant registration and tenant isolation
-- Manual billing flow
-- Product image uploads via MinIO/S3
-- Production rate limiting
-- Production bootstrap for MinIO bucket and Prisma schema
-- Runtime-configured billing details, landing contacts, and analytics hooks
-- Production health monitor script with optional Telegram alerts
-- Landing CTA event map documented for GA4/Yandex Metrika
-- Landing demo section uses real screenshot assets
-- Production env template reorganized into launch-ready blocks
-- Pre-launch runbook added for final production smoke test
-- Windows Server PowerShell deploy/start path added for Docker-based production
-- Windows-native backup, restore, health monitor, and Task Scheduler setup added
+## Где сейчас находимся
 
-## Production Run
-```bash
-cd /opt/sellgram/deploy/production
-docker compose --env-file .env.prod up -d --build
-```
+**Текущая задача:** Release 1 (MVP) — P0 backlog
+**Следующий шаг:** Feature 7.2 — Баннеры (CRUD в админке + витрина в miniapp)
 
-## Health
-```bash
-curl http://localhost:8080/health
-docker compose -f deploy/production/docker-compose.prod.yml --env-file deploy/production/.env.prod ps
-```
+---
 
-## Backups
-```bash
-cd /opt/sellgram/deploy/production
-./backup-db.sh
-./restore-db.sh ./backups/postgres_YYYYMMDD_HHMMSS.sql.gz
-```
+## Release 1 — MVP: P0 Backlog
 
-## Monitoring
-```bash
-cd /opt/sellgram/deploy/production
-./monitor-health.sh
-```
+Порядок работы зафиксирован. Берём задачи сверху вниз.
 
-## Bot Webhook
-```powershell
-$BOT_TOKEN = "TOKEN"
-$STORE_ID = "ID"
-Invoke-RestMethod "https://api.telegram.org/bot$BOT_TOKEN/setWebhook?url=https://api.sellgram.uz/webhook/$STORE_ID"
-```
+### ✅ Готово
+
+| Feature | Описание |
+|---------|----------|
+| 2.1 | CRUD категорий и товаров |
+| 2.2 | Варианты и модификаторы |
+| 3.1 | Витрина miniapp |
+| 3.2 | Корзина |
+| 3.3 | Checkout |
+| 4.1 | Жизненный цикл заказа |
+| 4.2 | Уведомления (админу + клиенту) |
+| 5.1a | Оплата Uzum Bank (webhook, idempotency) |
+| 7.1 | Промокоды (fixed/percent, лимиты, срок) |
+
+### 🔲 P0 — к релизу
+
+| # | Feature | Описание | Статус |
+|---|---------|----------|--------|
+| 1 | **6.1** | Dashboard в админке (today stats, recent orders, pending) | ✅ готово |
+| 2 | **6.2** | Пагинация в Orders / Customers / Products | ✅ готово |
+| 3 | **6.3** | Bulk actions в каталоге (вкл/выкл) | ✅ готово |
+| 4 | **7.2** | Баннеры на витрине (CRUD в админке + отображение в miniapp) | ⬜ не начато |
+| 5 | **2.3** | Импорт товаров из Excel/CSV | ⬜ не начато |
+| 6 | **1.1** | Onboarding wizard (мастер первого запуска) | ⬜ не начато |
+
+### 🔲 P1 — после MVP
+
+| # | Feature | Описание |
+|---|---------|----------|
+| 7 | **7.3** | Рассылки (broadcast, сегменты) |
+| 8 | **8.1–8.2** | Кабинет покупателя + история заказов |
+| 9 | **9.1** | Управление остатками в UI |
+| 10 | **12.1** | Базовая аналитика (продажи по дням, средний чек) |
+| 11 | **10.1** | Public API для интеграторов |
+| 12 | **13.1** | Роли: owner / admin / operator / marketer |
+
+---
+
+## Инфраструктура (не блокирует релиз, но нужно)
+
+- [ ] Cloudflare Page Rule: bypass cache для `/uploads/*` на `app.sellgram.uz`
+- [ ] SMTP в `.env.prod` для scheduled reports
+- [ ] `monitor-health.sh` + Telegram alerts
+
+---
+
+## Стек и окружение
+
+| | |
+|-|-|
+| **Прод** | `ssh rashid@192.168.80.29`, `/opt/sellgram` |
+| **Деплой** | `bash deploy/production/update.sh` |
+| **Миграции** | Только новые файлы — не редактировать применённые. См. `packages/prisma/MIGRATIONS.md` |
+| **Изображения** | Admin грузит через `api.sellgram.uz` (обход CF кеша) |
+
+---
+
+## Как продолжить с нового места
+
+1. `git pull`
+2. Открыть `STATUS.md` — найти **"Следующий шаг"**
+3. Работать по порядку таблицы P0
+4. После сессии обновить `STATUS.md` и закоммитить
+
+---
+
+## Domain & Domains
+
+| Domain | Назначение |
+|--------|------------|
+| `sellgram.uz` | Landing |
+| `app.sellgram.uz` | Admin panel |
+| `miniapp.sellgram.uz` | Telegram Mini App |
+| `api.sellgram.uz` | API backend |

@@ -105,6 +105,8 @@ export const adminApi = {
   createProduct: (data: any) => request<any>('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (id: string, data: any) => request<any>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteProduct: (id: string) => request<any>(`/products/${id}`, { method: 'DELETE' }),
+  bulkUpdateProducts: (data: { ids: string[]; action: 'activate' | 'deactivate' }) =>
+    request<any>('/products/bulk', { method: 'PATCH', body: JSON.stringify(data) }),
   adjustStock: (id: string, qty: number, variantId?: string) =>
     request<any>(`/products/${id}/stock`, { method: 'PATCH', body: JSON.stringify({ qty, variantId }) }),
 
@@ -186,6 +188,27 @@ export const adminApi = {
   },
   deleteProductImage: (productId: string, imageId: string) =>
     request<any>(`/products/${productId}/images/${imageId}`, { method: 'DELETE' }),
+
+  getBanners: () => request<any>('/banners'),
+  uploadBanner: async (file: File, meta: { title?: string; linkUrl?: string; sortOrder?: number }) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (meta.title) formData.append('title', meta.title);
+    if (meta.linkUrl) formData.append('linkUrl', meta.linkUrl);
+    if (meta.sortOrder !== undefined) formData.append('sortOrder', String(meta.sortOrder));
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch('/api/store-admin/banners', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Upload failed');
+    return data.data;
+  },
+  updateBanner: (id: string, data: { title?: string; linkUrl?: string; sortOrder?: number; isActive?: boolean }) =>
+    request<any>(`/banners/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteBanner: (id: string) => request<any>(`/banners/${id}`, { method: 'DELETE' }),
 
   getLoyaltyConfig: () => request<any>('/loyalty/config'),
   updateLoyaltyConfig: (data: any) => request<any>('/loyalty/config', { method: 'PATCH', body: JSON.stringify(data) }),

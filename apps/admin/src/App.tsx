@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Tag, Users,
   CreditCard, Megaphone, BarChart2, Settings as SettingsIcon, Receipt,
-  HelpCircle, LogOut, Menu, X, Truck, ClipboardList, Building2, Boxes, Star, type LucideIcon,
+  HelpCircle, LogOut, Menu, X, Truck, ClipboardList, Building2, Boxes, Star, Image, type LucideIcon,
 } from 'lucide-react';
 import { adminApi, clearTokens, setTokens } from './api/store-admin-client';
 import { useAdminI18n } from './i18n';
@@ -23,6 +23,7 @@ import AuditLog from './pages/AuditLog';
 import Reports from './pages/Reports';
 import Reviews from './pages/Reviews';
 import PromoCodes from './pages/PromoCodes';
+import Banners from './pages/Banners';
 import Settings from './pages/Settings';
 import SystemAdmin from './pages/SystemAdmin';
 
@@ -52,6 +53,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   '/broadcasts':   Megaphone,
   '/reviews':      Star,
   '/promo-codes':  Tag,
+  '/banners':      Image,
   '/reports':      BarChart2,
   '/settings':     SettingsIcon,
   '/billing':      Receipt,
@@ -84,6 +86,7 @@ function Sidebar({
     { to: '/broadcasts',  label: t('broadcasts'),  perm: 'manageMarketing' },
     { to: '/reviews',     label: t('reviews'),     perm: 'manageOrders' },
     { to: '/promo-codes', label: tr('Промокоды', 'Promokodlar'), perm: 'manageSettings' },
+    { to: '/banners',     label: tr('Баннеры', 'Bannerlar'),     perm: 'manageSettings' },
     { to: '/reports',    label: t('reports'),    perm: 'viewReports' },
     { to: '/settings',   label: t('settings') },
     { to: '/billing',    label: t('plans'),      perm: 'manageBilling' },
@@ -254,6 +257,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
     '/broadcasts':   'manageMarketing',
     '/reviews':      'manageOrders',
     '/promo-codes':  'manageSettings',
+    '/banners':      'manageSettings',
     '/reports':      'viewReports',
     '/billing':      'manageBilling',
     '/audit-log':    'manageSettings',
@@ -274,6 +278,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
     case '/broadcasts':   return <Broadcasts />;
     case '/reviews':      return <Reviews />;
     case '/promo-codes':  return <PromoCodes />;
+    case '/banners':      return <Banners />;
     case '/reports':      return <Reports />;
     case '/settings':     return <Settings />;
     case '/billing':      return <Billing />;
