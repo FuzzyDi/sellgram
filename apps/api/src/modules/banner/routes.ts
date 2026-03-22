@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import crypto from 'node:crypto';
 import prisma from '../../lib/prisma.js';
-import { permissionGuard } from '../../plugins/auth.js';
+import { permissionGuard } from '../../plugins/permission-guard.js';
 import { uploadFile, ensureBucket, buildBannerObjectPath, resolveBucketAndObjectPath, getS3 } from '../../lib/s3.js';
 
 const createBannerSchema = z.object({
@@ -70,7 +70,7 @@ export default async function bannerRoutes(fastify: FastifyInstance) {
       }
 
       const fileName = buildBannerObjectPath(request.tenantId!, `${crypto.randomUUID()}.webp`);
-      const url = await uploadFile(buffer, fileName, 'image/webp');
+      const url = await uploadFile(fileName, buffer, 'image/webp');
 
       const banner = await prisma.banner.create({
         data: {
