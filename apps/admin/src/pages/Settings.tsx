@@ -6,7 +6,7 @@ type NoticeTone = 'success' | 'error' | 'info';
 
 export default function Settings() {
   const { tr, locale } = useAdminI18n();
-  const [tab, setTab] = useState<'stores' | 'zones' | 'loyalty' | 'account' | 'api'>('stores');
+  const [tab, setTab] = useState<'stores' | 'zones' | 'loyalty' | 'account' | 'api' | 'webhooks'>('stores');
   const [stores, setStores] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
   const [loyalty, setLoyalty] = useState<any>(null);
@@ -51,6 +51,12 @@ export default function Settings() {
   const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
   const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
 
+  const ALL_EVENTS = ['order.created', 'order.status_changed', 'order.paid'];
+  const [webhooks, setWebhooks] = useState<any[]>([]);
+  const [webhookForm, setWebhookForm] = useState({ url: '', events: ['order.created', 'order.status_changed', 'order.paid'] as string[] });
+  const [newWebhookSecret, setNewWebhookSecret] = useState<string | null>(null);
+  const [pendingDeleteWebhook, setPendingDeleteWebhook] = useState<string | null>(null);
+
   const [teamForm, setTeamForm] = useState({
     email: '',
     name: '',
@@ -71,13 +77,14 @@ export default function Settings() {
   async function load() {
     setLoading(true);
     try {
-      const [storeList, zoneList, loyaltyConfig, meData, teamData, keyList] = await Promise.all([
+      const [storeList, zoneList, loyaltyConfig, meData, teamData, keyList, hookList] = await Promise.all([
         adminApi.getStores(),
         adminApi.getDeliveryZones(),
         adminApi.getLoyaltyConfig(),
         adminApi.me(),
         adminApi.getTeamUsers().catch(() => []),
         adminApi.getApiKeys().catch(() => []),
+        adminApi.getWebhooks().catch(() => []),
       ]);
       setStores(Array.isArray(storeList) ? storeList : []);
       setZones(Array.isArray(zoneList) ? zoneList : []);
@@ -89,6 +96,7 @@ export default function Settings() {
       });
       setTeam(Array.isArray(teamData) ? teamData : []);
       setApiKeys(Array.isArray(keyList) ? keyList : []);
+      setWebhooks(Array.isArray(hookList) ? hookList : []);
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043a', 'Sozlamalarni yuklashda xato'));
     } finally {
@@ -229,6 +237,41 @@ export default function Settings() {
       await adminApi.revokeApiKey(id);
       await load();
       showNotice('success', tr('Ключ отозван', 'Kalit bekor qilindi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    }
+  }
+
+  async function createWebhook() {
+    if (!webhookForm.url.trim() || webhookForm.events.length === 0 || saving) return;
+    setSaving(true);
+    try {
+      const data = await adminApi.createWebhook({ url: webhookForm.url.trim(), events: webhookForm.events });
+      setNewWebhookSecret(data.secret);
+      setWebhookForm({ url: '', events: ['order.created', 'order.status_changed', 'order.paid'] });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleWebhook(hook: any) {
+    try {
+      await adminApi.updateWebhook(hook.id, { isActive: !hook.isActive });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    }
+  }
+
+  async function deleteWebhook(id: string) {
+    setPendingDeleteWebhook(null);
+    try {
+      await adminApi.deleteWebhook(id);
+      await load();
+      showNotice('success', tr('Вебхук удалён', 'Webhook o\'chirildi'));
     } catch (err: any) {
       showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
     }
@@ -504,6 +547,9 @@ export default function Settings() {
         </button>
         <button className={`sg-pill ${tab === 'api' ? 'active' : ''}`} type="button" onClick={() => setTab('api')}>
           {tr('API', 'API')}
+        </button>
+        <button className={`sg-pill ${tab === 'webhooks' ? 'active' : ''}`} type="button" onClick={() => setTab('webhooks' as any)}>
+          {tr('Webhooks', 'Webhooks')}
         </button>
       </div>
 
@@ -893,6 +939,94 @@ export default function Settings() {
               <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>
                 {tr('Эндпоинты: GET /v1/products, GET /v1/products/:id, GET /v1/orders, GET /v1/orders/:id, PATCH /v1/orders/:id/status', 'Endpointlar: GET /v1/products, GET /v1/products/:id, GET /v1/orders, GET /v1/orders/:id, PATCH /v1/orders/:id/status')}
               </p>
+            </div>
+          </article>
+        </section>
+      )}
+
+      {(tab as string) === 'webhooks' && (
+        <section className="sg-grid" style={{ gap: 10 }}>
+          <article className="sg-card">
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Webhooks', 'Webhooks')}</h3>
+            <p className="sg-subtitle">{tr('Получайте события заказов на ваш URL в реальном времени.', 'Buyurtma voqealarini real vaqtda URL manzilingizga oling.')}</p>
+
+            {newWebhookSecret && (
+              <div className="sg-card" style={{ marginTop: 10, background: '#f0fdf4', border: '1px solid #86efac' }}>
+                <p style={{ margin: 0, fontWeight: 700, color: '#065f46' }}>{tr('Секрет для верификации подписи (сохраните):', 'Imzo tekshirish siri (saqlang):')}</p>
+                <p style={{ margin: '8px 0 0', fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{newWebhookSecret}</p>
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b' }}>{tr('Заголовок: X-Sellgram-Signature: sha256=HMAC_SHA256(body, secret)', 'Sarlavha: X-Sellgram-Signature: sha256=HMAC_SHA256(body, secret)')}</p>
+                <button className="sg-btn ghost" type="button" style={{ marginTop: 8, fontSize: 12 }} onClick={() => setNewWebhookSecret(null)}>{tr('Закрыть', 'Yopish')}</button>
+              </div>
+            )}
+
+            <div className="sg-card soft" style={{ marginTop: 10 }}>
+              <input
+                value={webhookForm.url}
+                onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })}
+                placeholder="https://your-server.com/webhook"
+                style={{ width: '100%', border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                {ALL_EVENTS.map((ev) => (
+                  <label key={ev} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={webhookForm.events.includes(ev)}
+                      onChange={(e) => setWebhookForm({
+                        ...webhookForm,
+                        events: e.target.checked
+                          ? [...webhookForm.events, ev]
+                          : webhookForm.events.filter((x) => x !== ev),
+                      })}
+                    />
+                    {ev}
+                  </label>
+                ))}
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <button
+                  className="sg-btn primary"
+                  type="button"
+                  disabled={saving || !webhookForm.url.trim() || webhookForm.events.length === 0}
+                  onClick={() => void createWebhook()}
+                >
+                  {saving ? '...' : tr('Добавить вебхук', 'Webhook qo\'shish')}
+                </button>
+              </div>
+            </div>
+
+            <div className="sg-grid" style={{ gap: 8, marginTop: 10 }}>
+              {webhooks.map((hook) => (
+                <div key={hook.id} className="sg-card soft" style={{ padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, wordBreak: 'break-all' }}>{hook.url}</div>
+                      <div style={{ fontSize: 12, color: '#6b7a71', marginTop: 4 }}>
+                        {(hook.events as string[]).join(', ')}
+                        {' · '}
+                        {hook.isActive ? tr('активен', 'faol') : tr('отключён', "o'chirilgan")}
+                      </div>
+                    </div>
+                    {pendingDeleteWebhook === hook.id ? (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                        <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>{tr('Удалить?', "O'chirish?")}</span>
+                        <button className="sg-btn danger" type="button" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => void deleteWebhook(hook.id)}>{tr('Да', 'Ha')}</button>
+                        <button className="sg-btn ghost" type="button" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => setPendingDeleteWebhook(null)}>{tr('Отмена', 'Bekor')}</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button className="sg-btn ghost" type="button" style={{ padding: '5px 12px', fontSize: 13 }} onClick={() => void toggleWebhook(hook)}>
+                          {hook.isActive ? tr('Откл.', "O'ch.") : tr('Вкл.', 'Yoq.')}
+                        </button>
+                        <button className="sg-btn danger" type="button" style={{ padding: '5px 12px', fontSize: 13 }} onClick={() => setPendingDeleteWebhook(hook.id)}>
+                          {tr('Удалить', "O'chirish")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {webhooks.length === 0 && <p className="sg-subtitle">{tr('Вебхуков нет', 'Webhooklar yo\'q')}</p>}
             </div>
           </article>
         </section>

@@ -6,6 +6,7 @@ import { applyOrderPaymentStatus } from '../../payments/service.js';
 import { updateOrderStatus } from './order.service.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 import { writeAuditLog } from '../../lib/audit.js';
+import { dispatchWebhook } from '../../lib/webhook-dispatcher.js';
 
 const updateStatusSchema = z.object({
   status: z.enum(['CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'REFUNDED']),
@@ -231,6 +232,11 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         });
 
         notifyOrderStatus(result.storeId, id, body.status).catch(() => {});
+        dispatchWebhook(request.tenantId!, 'order.status_changed', {
+          orderId: id,
+          status: body.status,
+          storeId: result.storeId,
+        }).catch(() => {});
         return { success: true, message: `Order status updated to ${body.status}` };
       } catch (err: any) {
         if (err.message === 'ORDER_NOT_FOUND') {
@@ -288,6 +294,10 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       });
       if (body.paymentStatus === 'PAID') {
         notifyPaymentPaid(updatedOrder.storeId, updatedOrder.id).catch(() => {});
+        dispatchWebhook(request.tenantId!, 'order.paid', {
+          orderId: id,
+          storeId: updatedOrder.storeId,
+        }).catch(() => {});
       }
       writeAuditLog({ tenantId: request.tenantId!, actorId: request.user?.userId, action: 'order.payment.update', targetId: id, details: { paymentStatus: body.paymentStatus } });
       return { success: true, message: 'Payment status updated' };

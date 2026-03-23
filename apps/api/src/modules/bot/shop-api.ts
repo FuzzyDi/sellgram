@@ -25,6 +25,7 @@ import { addCartItem, removeCartItem, updateCartItemQty } from './cart.service.j
 import { telegramShopAuth } from './shop-auth.js';
 import { sendCodedError } from './http-errors.js';
 import { CART_ERROR_STATUS, ORDER_ACTION_ERROR_STATUS, SHOP_READ_ERROR_STATUS } from './errors.js';
+import { dispatchWebhook } from '../../lib/webhook-dispatcher.js';
 
 
 export default async function shopApiRoutes(fastify: FastifyInstance) {
@@ -147,6 +148,14 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
         const { notifyNewOrder } = await import('../../bot/bot-manager.js');
         notifyNewOrder(request.storeId!, { ...order, contactPhone: body.contactPhone }).catch(() => {});
       } catch {}
+
+      dispatchWebhook(request.customer!.tenantId, 'order.created', {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        total: order.total,
+        storeId: request.storeId,
+      }).catch(() => {});
 
       return { success: true, data: order };
     } catch (err: unknown) {

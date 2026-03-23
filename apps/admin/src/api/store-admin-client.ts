@@ -327,6 +327,13 @@ export const adminApi = {
   createApiKey: (data: { name: string; expiresAt?: string }) =>
     request<any>('/api-keys', { method: 'POST', body: JSON.stringify(data) }),
   revokeApiKey: (id: string) => request<any>(`/api-keys/${id}`, { method: 'DELETE' }),
+
+  getWebhooks: () => request<any>('/webhooks'),
+  createWebhook: (data: { url: string; events: string[] }) =>
+    request<any>('/webhooks', { method: 'POST', body: JSON.stringify(data) }),
+  updateWebhook: (id: string, data: { url?: string; events?: string[]; isActive?: boolean }) =>
+    request<any>(`/webhooks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteWebhook: (id: string) => request<any>(`/webhooks/${id}`, { method: 'DELETE' }),
 };
 
 

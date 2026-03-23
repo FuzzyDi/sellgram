@@ -123,6 +123,7 @@ model Tenant {
   auditLogs         TenantAuditLog[]
   banners           Banner[]
   apiKeys           ApiKey[]
+  webhooks          Webhook[]
 
   @@map("tenants")
 }
@@ -163,6 +164,20 @@ model ApiKey {
 
   @@index([tenantId])
   @@map("api_keys")
+}
+
+model Webhook {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url       String
+  events    Json     // string[] e.g. ["order.created","order.status_changed"]
+  secret    String   // whsec_xxx for HMAC-SHA256 signing
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("webhooks")
 }
 
 // ============================================================
