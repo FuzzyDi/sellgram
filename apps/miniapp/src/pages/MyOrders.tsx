@@ -50,7 +50,7 @@ export default function MyOrders() {
     if (!items.length) return;
     try {
       await Promise.all(items.map((it: any) => api.addToCart(it.productId, it.variantId ?? undefined, it.qty)));
-      cartStore.inc(items.reduce((s: number, it: any) => s + (it.qty || 1), 0));
+      for (let i = 0; i < items.length; i++) cartStore.inc();
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       navigate('/cart');
     } catch {
