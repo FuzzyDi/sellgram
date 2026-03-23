@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
-type SegmentFilter = 'all' | 'buyers' | 'new' | 'inactive';
+type SegmentFilter = 'all' | 'buyers' | 'new' | 'inactive' | 'selected';
 type NoticeTone = 'success' | 'error' | 'info';
 
 export default function Broadcasts() {
