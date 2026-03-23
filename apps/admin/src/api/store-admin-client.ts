@@ -310,6 +310,8 @@ export const adminApi = {
 
   getBroadcasts: (storeId?: string) => request<any>(`/broadcasts${storeId ? `?storeId=${encodeURIComponent(storeId)}` : ''}`),
   getBroadcast: (id: string) => request<any>(`/broadcasts/${id}`),
+  getBroadcastAudience: (storeId: string, segment?: string) =>
+    request<any>(`/broadcasts/audience?storeId=${encodeURIComponent(storeId)}${segment ? `&segment=${encodeURIComponent(segment)}` : ''}`),
   sendBroadcast: (data: any) => request<any>('/broadcasts/send', { method: 'POST', body: JSON.stringify(data) }),
 
   getAuditLogs: (limit?: number) => request<any>(`/audit-logs${limit ? '?limit=' + limit : ''}`),

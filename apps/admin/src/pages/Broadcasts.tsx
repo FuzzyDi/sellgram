@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
-type TargetType = 'ALL' | 'SELECTED';
+type SegmentFilter = 'all' | 'buyers' | 'new' | 'inactive';
 type NoticeTone = 'success' | 'error' | 'info';
 
 export default function Broadcasts() {
@@ -13,7 +13,9 @@ export default function Broadcasts() {
   const [selectedCustomers, setSelectedCustomers] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [targetType, setTargetType] = useState<TargetType>('ALL');
+  const [segment, setSegment] = useState<SegmentFilter>('all');
+  const [audienceCount, setAudienceCount] = useState<number | null>(null);
+  const [audienceLoading, setAudienceLoading] = useState(false);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
@@ -31,32 +33,21 @@ export default function Broadcasts() {
   }
 
   async function loadCampaigns(targetStoreId?: string) {
-    if (!targetStoreId) {
-      setCampaigns([]);
-      return;
-    }
+    if (!targetStoreId) { setCampaigns([]); return; }
     try {
       const list = await adminApi.getBroadcasts(targetStoreId);
       setCampaigns(Array.isArray(list) ? list : []);
-    } catch {
-      // silent — keep stale list; auto-poll will retry
-    }
+    } catch { /* keep stale */ }
   }
 
   async function bootstrap() {
     setLoading(true);
-    try {
-      await loadStores();
-    } catch (err: any) {
-      showNotice('error', err?.message || tr('\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0440\u0430\u0441\u0441\u044B\u043B\u043A\u0438', "Xabarnoma ma'lumotlarini yuklab bo'lmadi"));
-    } finally {
-      setLoading(false);
-    }
+    try { await loadStores(); }
+    catch (err: any) { showNotice('error', err?.message || tr('Не удалось загрузить рассылки', "Xabarnoma ma'lumotlarini yuklab bo'lmadi")); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    void bootstrap();
-  }, []);
+  useEffect(() => { void bootstrap(); }, []);
 
   useEffect(() => {
     if (storeId) {
@@ -65,7 +56,7 @@ export default function Broadcasts() {
     }
   }, [storeId]);
 
-  // Poll every 5 s while any campaign is still in-flight (QUEUED or SENDING)
+  // Poll every 5 s while any campaign is in-flight
   useEffect(() => {
     const hasInflight = campaigns.some((c) => c.status === 'QUEUED' || c.status === 'SENDING');
     if (!hasInflight || !storeId) return;
@@ -73,9 +64,20 @@ export default function Broadcasts() {
     return () => clearInterval(timer);
   }, [campaigns, storeId]);
 
-  // Debounced server-side customer search for the SELECTED recipient mode
+  // Fetch audience count when store or segment changes (non-SELECTED modes)
   useEffect(() => {
-    if (targetType !== 'SELECTED') return;
+    if (!storeId || segment === 'selected') { setAudienceCount(null); return; }
+    setAudienceLoading(true);
+    const apiSegment = segment === 'all' ? undefined : segment;
+    adminApi.getBroadcastAudience(storeId, apiSegment)
+      .then((res: any) => setAudienceCount(res?.count ?? res?.data?.count ?? null))
+      .catch(() => setAudienceCount(null))
+      .finally(() => setAudienceLoading(false));
+  }, [storeId, segment]);
+
+  // Debounced customer search for SELECTED mode
+  useEffect(() => {
+    if (segment !== 'selected') return;
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       try {
@@ -83,16 +85,12 @@ export default function Broadcasts() {
         const params = `page=1&pageSize=30${q ? '&search=' + encodeURIComponent(q) : ''}`;
         const result = await adminApi.getCustomers(params);
         setSearchResults(Array.isArray(result?.items) ? result.items.filter((c: any) => c?.telegramId) : []);
-      } catch {
-        // keep stale results on error
-      } finally {
-        setSearchLoading(false);
-      }
+      } catch { /* keep stale */ }
+      finally { setSearchLoading(false); }
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, targetType]);
+  }, [search, segment]);
 
-  // Merge: selected customers not in results shown first, then search results
   const displayList = useMemo(() => {
     const resultIds = new Set(searchResults.map((c) => c.id));
     const selectedNotInResults = selectedCustomers.filter((c) => !resultIds.has(c.id));
@@ -102,14 +100,22 @@ export default function Broadcasts() {
   const canSend =
     !!storeId &&
     message.trim().length > 0 &&
-    (targetType === 'ALL' || selectedCustomerIds.length > 0);
+    (segment !== 'selected' || selectedCustomerIds.length > 0);
+
+  const segmentOptions: { value: SegmentFilter; label: string; labelUz: string }[] = [
+    { value: 'all',      label: 'Всем клиентам',   labelUz: 'Barcha mijozlarga' },
+    { value: 'buyers',   label: 'Покупатели',       labelUz: 'Xaridorlar' },
+    { value: 'new',      label: 'Новые (7 дней)',   labelUz: 'Yangi (7 kun)' },
+    { value: 'inactive', label: 'Без заказов',      labelUz: 'Buyurtmasizlar' },
+    { value: 'selected', label: 'Выбранным',        labelUz: 'Tanlanganlarga' },
+  ];
 
   const statusLabel: Record<string, string> = {
-    DRAFT:   tr('Черновик', 'Qoralama'),
-    QUEUED:  tr('В очереди', 'Navbatda'),
+    DRAFT:   tr('Черновик',     'Qoralama'),
+    QUEUED:  tr('В очереди',    'Navbatda'),
     SENDING: tr('Отправляется', 'Yuborilmoqda'),
-    SENT:    tr('Отправлена', 'Yuborildi'),
-    FAILED:  tr('Ошибка', 'Xato'),
+    SENT:    tr('Отправлена',   'Yuborildi'),
+    FAILED:  tr('Ошибка',       'Xato'),
   };
 
   function campaignBadgeStyle(status: string): React.CSSProperties {
@@ -129,12 +135,14 @@ export default function Broadcasts() {
     if (!canSend) return;
     setSending(true);
     try {
+      const apiSegment = segment !== 'all' && segment !== 'selected' ? segment : undefined;
       await adminApi.sendBroadcast({
         storeId,
         title: title.trim() || undefined,
         message: message.trim(),
-        targetType,
-        customerIds: targetType === 'SELECTED' ? selectedCustomerIds : undefined,
+        targetType: segment === 'selected' ? 'SELECTED' : 'ALL',
+        segmentFilter: apiSegment,
+        customerIds: segment === 'selected' ? selectedCustomerIds : undefined,
       });
       setTitle('');
       setMessage('');
@@ -143,7 +151,7 @@ export default function Broadcasts() {
       await loadCampaigns(storeId);
       showNotice('success', tr('Рассылка отправлена', 'Xabarnoma yuborildi'));
     } catch (err: any) {
-      showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
     } finally {
       setSending(false);
     }
@@ -158,23 +166,14 @@ export default function Broadcasts() {
   const noticeNode = notice ? (
     <div
       style={{
-        position: 'fixed',
-        top: 18,
-        right: 18,
-        zIndex: 70,
-        minWidth: 280,
-        maxWidth: 440,
-        borderRadius: 12,
-        padding: '12px 14px',
-        fontSize: 14,
-        fontWeight: 700,
-        boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
+        position: 'fixed', top: 18, right: 18, zIndex: 70,
+        minWidth: 280, maxWidth: 440, borderRadius: 12, padding: '12px 14px',
+        fontSize: 14, fontWeight: 700, boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
         color: notice.tone === 'error' ? '#991b1b' : notice.tone === 'success' ? '#065f46' : '#1e3a8a',
         background: notice.tone === 'error' ? '#fee2e2' : notice.tone === 'success' ? '#d1fae5' : '#dbeafe',
         border: `1px solid ${notice.tone === 'error' ? '#fecaca' : notice.tone === 'success' ? '#a7f3d0' : '#bfdbfe'}`,
       }}
-      role="status"
-      aria-live="polite"
+      role="status" aria-live="polite"
     >
       {notice.message}
     </div>
@@ -212,15 +211,14 @@ export default function Broadcasts() {
       </header>
 
       <div className="sg-grid cols-2">
+        {/* ── Left: compose ── */}
         <article className="sg-card sg-grid" style={{ gap: 10 }}>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Новая рассылка', 'Yangi xabarnoma')}</h3>
 
           <label style={{ fontSize: 12, color: '#5f6d64' }}>{tr('Магазин', "Do'kon")}</label>
           <select value={storeId} onChange={(e) => setStoreId(e.target.value)} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}>
             {stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
+              <option key={store.id} value={store.id}>{store.name}</option>
             ))}
           </select>
 
@@ -228,7 +226,7 @@ export default function Broadcasts() {
           <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: 12, color: '#5f6d64' }}>{tr('\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435', 'Xabar')}</label>
+            <label style={{ fontSize: 12, color: '#5f6d64' }}>{tr('Сообщение', 'Xabar')}</label>
             <span style={{ fontSize: 11, color: message.length > 3800 ? '#b91c1c' : '#9ca3af' }}>{message.length} / 4096</span>
           </div>
           <textarea
@@ -240,26 +238,51 @@ export default function Broadcasts() {
             style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }}
           />
 
-          <div>
-            <div className="sg-pill-row">
-              <button type="button" onClick={() => setTargetType('ALL')} className={`sg-pill ${targetType === 'ALL' ? 'active' : ''}`}>
-                {tr('Всем клиентам', 'Barcha mijozlarga')}
+          {/* Segment selector */}
+          <label style={{ fontSize: 12, color: '#5f6d64' }}>{tr('Аудитория', 'Auditoriya')}</label>
+          <div className="sg-pill-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            {segmentOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => { setSegment(opt.value); setSearch(''); setSelectedCustomers([]); }}
+                className={`sg-pill${segment === opt.value ? ' active' : ''}`}
+              >
+                {tr(opt.label, opt.labelUz)}
               </button>
-              <button type="button" onClick={() => setTargetType('SELECTED')} className={`sg-pill ${targetType === 'SELECTED' ? 'active' : ''}`}>
-                {tr('Выбранным', 'Tanlanganlarga')}
-              </button>
-            </div>
+            ))}
           </div>
 
-          {targetType === 'SELECTED' && (
+          {/* Audience count preview */}
+          {segment !== 'selected' && (
+            <div style={{ fontSize: 13, color: '#5f6d64', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {audienceLoading ? (
+                <span>{tr('Считаем...', 'Hisoblanmoqda...')}</span>
+              ) : audienceCount !== null ? (
+                <span>
+                  {tr('Получателей:', 'Qabul qiluvchilar:')} <strong>{audienceCount}</strong>
+                </span>
+              ) : null}
+            </div>
+          )}
+
+          {/* SELECTED mode: customer search */}
+          {segment === 'selected' && (
             <div style={{ border: '1px solid #d6e0da', borderRadius: 12, padding: 12 }}>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={tr('Поиск клиента', 'Mijoz qidirish')}
-                className="w-full"
-                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }}
-              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={tr('Поиск клиента', 'Mijoz qidirish')}
+                  className="w-full"
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 10px' }}
+                />
+                {selectedCustomerIds.length > 0 && (
+                  <span style={{ marginLeft: 8, whiteSpace: 'nowrap', fontSize: 12, color: '#065f46', fontWeight: 700 }}>
+                    {selectedCustomerIds.length} {tr('выбрано', 'tanlandi')}
+                  </span>
+                )}
+              </div>
               <div style={{ maxHeight: 240, overflow: 'auto' }}>
                 {searchLoading && <p className="sg-subtitle">{tr('Поиск...', 'Qidirilmoqda...')}</p>}
                 {!searchLoading && displayList.map((customer) => (
@@ -285,22 +308,28 @@ export default function Broadcasts() {
           </button>
         </article>
 
+        {/* ── Right: history ── */}
         <article className="sg-card sg-grid" style={{ gap: 10 }}>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Последние рассылки', "So'nggi xabarnomalar")}</h3>
 
           {(campaigns || []).map((campaign) => (
             <div key={campaign.id} className="sg-card soft" style={{ padding: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{campaign.title || tr('\u0411\u0435\u0437 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043a\u0430', 'Sarlavhasiz')}</p>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{campaign.title || tr('Без заголовка', 'Sarlavhasiz')}</p>
                 <span className="sg-badge" style={campaignBadgeStyle(campaign.status)}>{statusLabel[campaign.status] || campaign.status}</span>
               </div>
-              <p style={{ margin: '8px 0 0', color: '#5f6d64', fontSize: 13, lineHeight: 1.5 }}>{campaign.message}</p>
-              <div style={{ marginTop: 8, display: 'flex', gap: 14, fontSize: 12, color: '#748278', flexWrap: 'wrap' }}>
+              <p style={{ margin: '6px 0 0', color: '#5f6d64', fontSize: 13, lineHeight: 1.5, wordBreak: 'break-word' }}>
+                {campaign.message.length > 120 ? campaign.message.slice(0, 120) + '…' : campaign.message}
+              </p>
+              <div style={{ marginTop: 8, display: 'flex', gap: 10, fontSize: 12, color: '#748278', flexWrap: 'wrap' }}>
                 <span>{new Date(campaign.createdAt).toLocaleString(locale)}</span>
-                <span>{tr('\u041f\u043e\u043b\u0443\u0447\u0430\u0442\u0435\u043b\u0435\u0439', 'Qabul qiluvchilar')}: <strong>{campaign.totalRecipients}</strong></span>
-                <span style={{ color: campaign.failedCount > 0 ? '#b91c1c' : undefined }}>
-                  {tr('\u041e\u0448\u0438\u0431\u043a\u0438', 'Xatolar')}: {campaign.failedCount}
-                </span>
+                <span>{tr('Получателей', 'Qabul qiluvchilar')}: <strong>{campaign.totalRecipients}</strong></span>
+                {campaign.status === 'SENT' || campaign.status === 'SENDING' ? (
+                  <span style={{ color: '#065f46' }}>{tr('Доставлено', 'Yetkazildi')}: <strong>{campaign.sentCount ?? 0}</strong></span>
+                ) : null}
+                {campaign.failedCount > 0 && (
+                  <span style={{ color: '#b91c1c' }}>{tr('Ошибок', 'Xatolar')}: {campaign.failedCount}</span>
+                )}
               </div>
             </div>
           ))}

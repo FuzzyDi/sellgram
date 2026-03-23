@@ -4,11 +4,22 @@ import prisma from '../../lib/prisma.js';
 import { createBroadcastQueue, type BroadcastJobData } from '../../jobs/broadcast.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 
+const SEGMENT_FILTERS = ['buyers', 'new', 'inactive'] as const;
+type SegmentFilter = typeof SEGMENT_FILTERS[number];
+
+function buildSegmentWhere(segment: SegmentFilter) {
+  if (segment === 'buyers') return { ordersCount: { gt: 0 } };
+  if (segment === 'new') return { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } };
+  if (segment === 'inactive') return { ordersCount: 0 };
+  return {};
+}
+
 const createBroadcastSchema = z.object({
   storeId: z.string(),
   title: z.string().max(120).optional(),
   message: z.string().min(1).max(4096),
   targetType: z.enum(['ALL', 'SELECTED']),
+  segmentFilter: z.enum(SEGMENT_FILTERS).optional(),
   customerIds: z.array(z.string()).optional(),
 });
 
@@ -18,6 +29,26 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
   const broadcastQueue = createBroadcastQueue();
 
   const broadcastsQuerySchema = z.object({ storeId: z.string().optional() });
+
+  const audienceQuerySchema = z.object({
+    storeId: z.string(),
+    segment: z.enum(SEGMENT_FILTERS).optional(),
+  });
+
+  fastify.get('/broadcasts/audience', async (request) => {
+    const { storeId, segment } = audienceQuerySchema.parse(request.query);
+    const store = await prisma.store.findFirst({
+      where: { id: storeId, tenantId: request.tenantId!, isActive: true },
+      select: { id: true },
+    });
+    if (!store) return { success: true, data: { count: 0 } };
+
+    const where: any = { tenantId: request.tenantId! };
+    if (segment) Object.assign(where, buildSegmentWhere(segment));
+
+    const count = await prisma.customer.count({ where });
+    return { success: true, data: { count } };
+  });
 
   fastify.get('/broadcasts', async (request) => {
     const { storeId } = broadcastsQuerySchema.parse(request.query);
@@ -64,7 +95,7 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
       });
       if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
 
-      let recipientWhere: { tenantId: string; id?: { in: string[] } };
+      let recipientWhere: any;
       if (body.targetType === 'SELECTED') {
         const targetCustomerIds = [...new Set(body.customerIds || [])];
         if (!targetCustomerIds.length) {
@@ -73,6 +104,7 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
         recipientWhere = { tenantId: request.tenantId!, id: { in: targetCustomerIds } };
       } else {
         recipientWhere = { tenantId: request.tenantId! };
+        if (body.segmentFilter) Object.assign(recipientWhere, buildSegmentWhere(body.segmentFilter));
       }
 
       const recipients = await prisma.customer.findMany({
