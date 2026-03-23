@@ -131,6 +131,9 @@ export const api = {
       body: JSON.stringify({ rating, comment }),
     }),
   getLoyalty: () => request<any>('/shop/loyalty'),
+  getProfile: () => request<any>('/shop/profile'),
+  updateProfile: (data: { phone?: string }) =>
+    request<any>('/shop/profile', { method: 'PATCH', body: JSON.stringify(data) }),
   getWishlist: () => request<any>('/shop/wishlist'),
   addToWishlist: (productId: string) => request<any>(`/shop/wishlist/${productId}`, { method: 'POST' }),
   removeFromWishlist: (productId: string) => request<any>(`/shop/wishlist/${productId}`, { method: 'DELETE' }),

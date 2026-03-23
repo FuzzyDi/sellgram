@@ -199,6 +199,35 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     return { success: true, data };
   });
 
+  // ── Customer profile ───────────────────────────────────────
+  fastify.get('/shop/profile', async (request, reply) => {
+    const customer = await prisma.customer.findUnique({
+      where: { id: request.customer!.id },
+      select: {
+        id: true, firstName: true, lastName: true, telegramUser: true,
+        phone: true, loyaltyPoints: true, ordersCount: true, totalSpent: true, createdAt: true,
+      },
+    });
+    if (!customer) return reply.status(404).send({ success: false, error: 'Customer not found' });
+    return { success: true, data: customer };
+  });
+
+  fastify.patch('/shop/profile', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const body = (request.body as any) ?? {};
+    const phone = body.phone ? String(body.phone).trim() : undefined;
+    if (phone !== undefined && !/^\+?[\d\s\-()]{7,20}$/.test(phone)) {
+      return reply.status(400).send({ success: false, error: 'Invalid phone format' });
+    }
+    const updated = await prisma.customer.update({
+      where: { id: request.customer!.id },
+      data: { ...(phone !== undefined ? { phone } : {}) },
+      select: { id: true, phone: true },
+    });
+    return { success: true, data: updated };
+  });
+
   // ── Wishlist ──────────────────────────────────────────────
   fastify.get('/shop/wishlist', async (request) => {
     const items = await prisma.wishlistItem.findMany({

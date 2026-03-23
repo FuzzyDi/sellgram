@@ -9,6 +9,7 @@ import OrderStatus from './pages/OrderStatus';
 import MyOrders from './pages/MyOrders';
 import Loyalty from './pages/Loyalty';
 import Wishlist from './pages/Wishlist';
+import Profile from './pages/Profile';
 import { Lang, MiniI18nProvider, useMiniI18n } from './i18n';
 
 function resolveDefaultLang(code?: string): Lang {
@@ -116,7 +117,7 @@ function AppShell() {
 
   const normalizedRoute = route.split('?')[0] || '/';
   const [path, id] = normalizedRoute.split('/').filter(Boolean);
-  const isKnownRoute = ['product', 'cart', 'checkout', 'order', 'orders', 'loyalty', 'wishlist'].includes(path || '');
+  const isKnownRoute = ['product', 'cart', 'checkout', 'order', 'orders', 'loyalty', 'wishlist', 'profile'].includes(path || '');
 
   return (
     <>
@@ -128,6 +129,7 @@ function AppShell() {
       {path === 'orders' && <MyOrders />}
       {path === 'loyalty' && <Loyalty />}
       {path === 'wishlist' && <Wishlist />}
+      {path === 'profile' && <Profile />}
       {(!path || !isKnownRoute) && <Catalog />}
     </>
   );

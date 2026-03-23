@@ -3,6 +3,7 @@ import { navigate } from '../App';
 import { api } from '../api/client';
 import { BottomNav } from './Catalog';
 import { useMiniI18n } from '../i18n';
+import { cartStore } from '../stores/cartStore';
 
 export default function MyOrders() {
   const { tr, locale } = useMiniI18n();
@@ -43,6 +44,20 @@ export default function MyOrders() {
     api.getOrders().then(setOrders).catch(() => setError(true)).finally(() => setLoading(false));
   }
 
+  async function repeatOrder(e: React.MouseEvent, order: any) {
+    e.stopPropagation();
+    const items: any[] = order.items ?? [];
+    if (!items.length) return;
+    try {
+      await Promise.all(items.map((it: any) => api.addToCart(it.productId, it.variantId ?? undefined, it.qty)));
+      cartStore.inc(items.reduce((s: number, it: any) => s + (it.qty || 1), 0));
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+      navigate('/cart');
+    } catch {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+    }
+  }
+
   useEffect(() => { load(); }, []);
 
   if (loading) {
@@ -67,7 +82,15 @@ export default function MyOrders() {
   return (
     <div className="anim-fade" style={{ paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
       <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, padding: '12px 16px', borderBottom: '0.5px solid var(--divider)' }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Заказы', 'Buyurtmalar')}</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Заказы', 'Buyurtmalar')}</h1>
+          <button onClick={() => navigate('/profile')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }} aria-label={tr('Профиль', 'Profil')}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--hint)' }}>
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </button>
+        </div>
         {stores.length > 1 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 8, overflowX: 'auto', paddingBottom: 2 }}>
             <button
@@ -113,9 +136,20 @@ export default function MyOrders() {
                 <p style={{ color: 'var(--hint)', fontSize: 13, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {o.items?.map((it: any) => `${it.name} x${it.qty}`).join(', ')}
                 </p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontWeight: 700 }}>{Number(o.total).toLocaleString()} {tr('сум', "so'm")}</span>
-                  <span style={{ color: 'var(--hint)', fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString(locale)}</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ color: 'var(--hint)', fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString(locale)}</span>
+                    {(o.status === 'COMPLETED' || o.status === 'DELIVERED') && (
+                      <button
+                        onClick={(e) => repeatOrder(e, o)}
+                        className="btn secondary sm pill"
+                        style={{ fontSize: 11, padding: '3px 10px' }}
+                      >
+                        {tr('Повторить', 'Qayta')}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
