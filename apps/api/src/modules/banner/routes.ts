@@ -15,6 +15,8 @@ const createBannerSchema = z.object({
 const updateBannerSchema = createBannerSchema.partial();
 
 export default async function bannerRoutes(fastify: FastifyInstance) {
+  fastify.addHook('preHandler', fastify.authenticate);
+
   // List banners
   fastify.get('/banners', async (request) => {
     const banners = await prisma.banner.findMany({
