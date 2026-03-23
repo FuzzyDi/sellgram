@@ -42,13 +42,13 @@ export const teamUserCreateSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   name: z.string().min(1).max(120),
-  role: z.enum(['MANAGER', 'OPERATOR']).default('OPERATOR'),
+  role: z.enum(['MANAGER', 'OPERATOR', 'MARKETER']).default('OPERATOR'),
   permissions: userPermissionsSchema.optional(),
 });
 
 export const teamUserUpdateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
-  role: z.enum(['MANAGER', 'OPERATOR']).optional(),
+  role: z.enum(['MANAGER', 'OPERATOR', 'MARKETER']).optional(),
   isActive: z.boolean().optional(),
   permissions: userPermissionsSchema.optional(),
 });

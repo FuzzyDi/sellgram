@@ -322,6 +322,11 @@ export const adminApi = {
   createScheduledReport: (data: { reportType: string; periodDays: number; frequency: string }) =>
     request<any>('/analytics/scheduled-reports', { method: 'POST', body: JSON.stringify(data) }),
   deleteScheduledReport: (id: string) => request<any>(`/analytics/scheduled-reports/${id}`, { method: 'DELETE' }),
+
+  getApiKeys: () => request<any>('/api-keys'),
+  createApiKey: (data: { name: string; expiresAt?: string }) =>
+    request<any>('/api-keys', { method: 'POST', body: JSON.stringify(data) }),
+  revokeApiKey: (id: string) => request<any>(`/api-keys/${id}`, { method: 'DELETE' }),
 };
 
 

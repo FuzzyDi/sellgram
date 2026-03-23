@@ -6,7 +6,7 @@ type NoticeTone = 'success' | 'error' | 'info';
 
 export default function Settings() {
   const { tr, locale } = useAdminI18n();
-  const [tab, setTab] = useState<'stores' | 'zones' | 'loyalty' | 'account'>('stores');
+  const [tab, setTab] = useState<'stores' | 'zones' | 'loyalty' | 'account' | 'api'>('stores');
   const [stores, setStores] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
   const [loyalty, setLoyalty] = useState<any>(null);
@@ -46,11 +46,16 @@ export default function Settings() {
   const [team, setTeam] = useState<any[]>([]);
   const [profileForm, setProfileForm] = useState({ name: '', email: '' });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [apiKeyForm, setApiKeyForm] = useState({ name: '', expiresAt: '' });
+  const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+
   const [teamForm, setTeamForm] = useState({
     email: '',
     name: '',
     password: '',
-    role: 'OPERATOR' as 'MANAGER' | 'OPERATOR',
+    role: 'OPERATOR' as 'MANAGER' | 'OPERATOR' | 'MARKETER',
     permissions: {
       manageCatalog: true,
       manageOrders: true,
@@ -66,12 +71,13 @@ export default function Settings() {
   async function load() {
     setLoading(true);
     try {
-      const [storeList, zoneList, loyaltyConfig, meData, teamData] = await Promise.all([
+      const [storeList, zoneList, loyaltyConfig, meData, teamData, keyList] = await Promise.all([
         adminApi.getStores(),
         adminApi.getDeliveryZones(),
         adminApi.getLoyaltyConfig(),
         adminApi.me(),
         adminApi.getTeamUsers().catch(() => []),
+        adminApi.getApiKeys().catch(() => []),
       ]);
       setStores(Array.isArray(storeList) ? storeList : []);
       setZones(Array.isArray(zoneList) ? zoneList : []);
@@ -82,6 +88,7 @@ export default function Settings() {
         email: meData?.email || '',
       });
       setTeam(Array.isArray(teamData) ? teamData : []);
+      setApiKeys(Array.isArray(keyList) ? keyList : []);
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043a', 'Sozlamalarni yuklashda xato'));
     } finally {
@@ -145,7 +152,7 @@ export default function Settings() {
         password: teamForm.password,
         role: teamForm.role,
       };
-      if (teamForm.role === 'OPERATOR') payload.permissions = teamForm.permissions;
+      if (teamForm.role === 'OPERATOR' || teamForm.role === 'MARKETER') payload.permissions = teamForm.permissions;
       await adminApi.createTeamUser(payload);
       setTeamForm((s) => ({ ...s, email: '', name: '', password: '' }));
       showNotice('success', tr('\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d', "Foydalanuvchi qo'shildi"));
@@ -196,6 +203,34 @@ export default function Settings() {
       showNotice('error', err?.message || tr('\u041E\u0448\u0438\u0431\u043A\u0430', 'Xatolik'));
     } finally {
       setTelegramLinkLoading(false);
+    }
+  }
+
+  async function createApiKey() {
+    if (!apiKeyForm.name.trim() || saving) return;
+    setSaving(true);
+    try {
+      const payload: any = { name: apiKeyForm.name.trim() };
+      if (apiKeyForm.expiresAt) payload.expiresAt = new Date(apiKeyForm.expiresAt).toISOString();
+      const data = await adminApi.createApiKey(payload);
+      setNewKeySecret(data.key);
+      setApiKeyForm({ name: '', expiresAt: '' });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function revokeApiKey(id: string) {
+    setPendingDeleteKey(null);
+    try {
+      await adminApi.revokeApiKey(id);
+      await load();
+      showNotice('success', tr('Ключ отозван', 'Kalit bekor qilindi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
     }
   }
 
@@ -467,6 +502,9 @@ export default function Settings() {
         <button className={`sg-pill ${tab === 'account' ? 'active' : ''}`} type="button" onClick={() => setTab('account')}>
           {tr('\u0410\u043a\u043a\u0430\u0443\u043d\u0442', 'Akkaunt')}
         </button>
+        <button className={`sg-pill ${tab === 'api' ? 'active' : ''}`} type="button" onClick={() => setTab('api')}>
+          {tr('API', 'API')}
+        </button>
       </div>
 
       {tab === 'stores' && (
@@ -707,13 +745,14 @@ export default function Settings() {
                   <input value={teamForm.email} onChange={(e) => setTeamForm({ ...teamForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
                   <input value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('\u0418\u043c\u044f', 'Ism')} />
                   <input type="password" value={teamForm.password} onChange={(e) => setTeamForm({ ...teamForm, password: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('\u041f\u0430\u0440\u043e\u043b\u044c', 'Parol')} />
-                  <select value={teamForm.role} onChange={(e) => setTeamForm({ ...teamForm, role: e.target.value as 'MANAGER' | 'OPERATOR' })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}>
+                  <select value={teamForm.role} onChange={(e) => setTeamForm({ ...teamForm, role: e.target.value as 'MANAGER' | 'OPERATOR' | 'MARKETER' })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}>
                     <option value="OPERATOR">Operator</option>
+                    <option value="MARKETER">Marketer</option>
                     <option value="MANAGER">Manager</option>
                   </select>
                 </div>
 
-                {teamForm.role === 'OPERATOR' && (
+                {(teamForm.role === 'OPERATOR' || teamForm.role === 'MARKETER') && (
                   <div className="sg-grid cols-4" style={{ marginTop: 10, gap: 8 }}>
                     {Object.keys(teamForm.permissions).map((key) => (
                       <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
@@ -772,6 +811,93 @@ export default function Settings() {
           )}
         </section>
       )}
+      {tab === 'api' && (
+        <section className="sg-grid" style={{ gap: 10 }}>
+          <article className="sg-card">
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Public API — ключи доступа', 'Public API — kirish kalitlari')}</h3>
+            <p className="sg-subtitle">{tr('Создайте API-ключ для интеграций. Ключ показывается только один раз.', 'Integratsiyalar uchun API kalit yarating. Kalit faqat bir marta ko\'rsatiladi.')}</p>
+
+            {newKeySecret && (
+              <div className="sg-card" style={{ marginTop: 10, background: '#f0fdf4', border: '1px solid #86efac' }}>
+                <p style={{ margin: 0, fontWeight: 700, color: '#065f46' }}>{tr('Ваш новый ключ (сохраните сейчас):', 'Yangi kalitingiz (hozir saqlang):')}</p>
+                <p style={{ margin: '8px 0 0', fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all', color: '#1a2e1e' }}>{newKeySecret}</p>
+                <button className="sg-btn ghost" type="button" style={{ marginTop: 8, fontSize: 12 }} onClick={() => setNewKeySecret(null)}>
+                  {tr('Закрыть', 'Yopish')}
+                </button>
+              </div>
+            )}
+
+            <div className="sg-card soft" style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <input
+                  value={apiKeyForm.name}
+                  onChange={(e) => setApiKeyForm({ ...apiKeyForm, name: e.target.value })}
+                  placeholder={tr('Название ключа', 'Kalit nomi')}
+                  style={{ flex: 1, minWidth: 180, border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
+                />
+                <input
+                  type="date"
+                  value={apiKeyForm.expiresAt}
+                  onChange={(e) => setApiKeyForm({ ...apiKeyForm, expiresAt: e.target.value })}
+                  title={tr('Срок действия (необязательно)', 'Amal qilish muddati (ixtiyoriy)')}
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: 160 }}
+                />
+                <button
+                  className="sg-btn primary"
+                  type="button"
+                  disabled={saving || !apiKeyForm.name.trim()}
+                  onClick={() => void createApiKey()}
+                >
+                  {saving ? '...' : tr('Создать ключ', 'Kalit yaratish')}
+                </button>
+              </div>
+            </div>
+
+            <div className="sg-grid" style={{ gap: 8, marginTop: 10 }}>
+              {apiKeys.map((key) => (
+                <div key={key.id} className="sg-card soft" style={{ padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{key.name}</div>
+                      <div style={{ fontSize: 12, color: '#6b7a71', marginTop: 2 }}>
+                        <span style={{ fontFamily: 'monospace' }}>{key.prefix}...</span>
+                        {' · '}
+                        {key.isActive ? tr('активен', 'faol') : tr('отозван', 'bekor qilingan')}
+                        {key.expiresAt && ` · ${tr('до', 'muddati')} ${new Date(key.expiresAt).toLocaleDateString(locale)}`}
+                        {key.lastUsedAt && ` · ${tr('посл. исп.', 'oxirgi foy.')} ${new Date(key.lastUsedAt).toLocaleDateString(locale)}`}
+                      </div>
+                    </div>
+                    {pendingDeleteKey === key.id ? (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>{tr('Отозвать ключ?', 'Kalitni bekor qilish?')}</span>
+                        <button className="sg-btn danger" type="button" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => void revokeApiKey(key.id)}>{tr('Да', 'Ha')}</button>
+                        <button className="sg-btn ghost" type="button" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => setPendingDeleteKey(null)}>{tr('Отмена', 'Bekor')}</button>
+                      </div>
+                    ) : (
+                      <button className="sg-btn danger" type="button" style={{ padding: '5px 14px', fontSize: 13 }} onClick={() => setPendingDeleteKey(key.id)}>
+                        {tr('Отозвать', 'Bekor qilish')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {apiKeys.length === 0 && <p className="sg-subtitle">{tr('Нет API-ключей', 'API kalitlar yo\'q')}</p>}
+            </div>
+
+            <div style={{ marginTop: 16, padding: '12px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 13 }}>{tr('Использование', 'Foydalanish')}</p>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b', fontFamily: 'monospace' }}>
+                GET https://api.sellgram.uz/api/v1/products<br />
+                Authorization: Bearer {'<'}your_key{'>'}
+              </p>
+              <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>
+                {tr('Эндпоинты: GET /v1/products, GET /v1/products/:id, GET /v1/orders, GET /v1/orders/:id, PATCH /v1/orders/:id/status', 'Endpointlar: GET /v1/products, GET /v1/products/:id, GET /v1/orders, GET /v1/orders/:id, PATCH /v1/orders/:id/status')}
+              </p>
+            </div>
+          </article>
+        </section>
+      )}
+
       {showStoreForm && (
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
           <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>

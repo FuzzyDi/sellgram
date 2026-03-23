@@ -253,6 +253,8 @@ async function main() {
   const systemAdminRoutes = (await import('./modules/system-admin/routes.js')).default;
   const bannerRoutes = (await import('./modules/banner/routes.js')).default;
   const importRoutes = (await import('./modules/import/routes.js')).default;
+  const apiKeyAdminRoutes = (await import('./modules/api-keys/routes.js')).default;
+  const publicApiRoutes = (await import('./modules/public-api/routes.js')).default;
 
   await fastify.register(
     async (app) => {
@@ -272,6 +274,7 @@ async function main() {
       await app.register(auditRoutes);
       await app.register(bannerRoutes);
       await app.register(importRoutes);
+      await app.register(apiKeyAdminRoutes);
     },
     { prefix: '/api/store-admin' }
   );
@@ -282,6 +285,9 @@ async function main() {
   await fastify.register(shopApiRoutes, { prefix: '/api' });
   await fastify.register(paymentRoutes, { prefix: '/api' });
   await fastify.register(systemAdminRoutes, { prefix: '/api/system-admin' });
+
+  // Public API (/api/v1/*) — authenticated via API key
+  await fastify.register(publicApiRoutes, { prefix: '/api' });
 
   // Image proxy (MinIO -> public)
   fastify.get('/uploads/*', { config: { rateLimit: false } }, async (request, reply) => {

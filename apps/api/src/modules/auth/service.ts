@@ -41,9 +41,27 @@ const OPERATOR_DEFAULT_PERMISSIONS: TeamPermissions = {
   viewReports: true,
 };
 
+const MARKETER_DEFAULT_PERMISSIONS: TeamPermissions = {
+  manageCatalog: false,
+  manageOrders: false,
+  manageCustomers: true,
+  manageMarketing: true,
+  manageSettings: false,
+  manageBilling: false,
+  manageUsers: false,
+  viewReports: true,
+};
+
 function normalizeOperatorPermissions(input?: Partial<TeamPermissions> | null): TeamPermissions {
   return {
     ...OPERATOR_DEFAULT_PERMISSIONS,
+    ...(input || {}),
+  };
+}
+
+function normalizeMarketerPermissions(input?: Partial<TeamPermissions> | null): TeamPermissions {
+  return {
+    ...MARKETER_DEFAULT_PERMISSIONS,
     ...(input || {}),
   };
 }
@@ -70,6 +88,7 @@ function getEffectivePermissions(user: { role: string; permissions?: Prisma.Json
   const raw = (user.permissions && typeof user.permissions === 'object' && !Array.isArray(user.permissions)
     ? (user.permissions as Record<string, unknown>)
     : {}) as Partial<TeamPermissions>;
+  if (user.role === 'MARKETER') return normalizeMarketerPermissions(raw);
   return normalizeOperatorPermissions(raw);
 }
 
@@ -89,14 +108,15 @@ function mapPublicUser(user: {
   updatedAt?: Date;
 }) {
   const effectivePermissions = getEffectivePermissions(user);
+  const rawPerms = (user.permissions && typeof user.permissions === 'object' && !Array.isArray(user.permissions)
+    ? (user.permissions as Record<string, unknown>)
+    : {}) as Partial<TeamPermissions>;
   const customPermissions =
     user.role === 'OPERATOR'
-      ? normalizeOperatorPermissions(
-          (user.permissions && typeof user.permissions === 'object' && !Array.isArray(user.permissions)
-            ? (user.permissions as Record<string, unknown>)
-            : {}) as Partial<TeamPermissions>
-        )
-      : null;
+      ? normalizeOperatorPermissions(rawPerms)
+      : user.role === 'MARKETER'
+        ? normalizeMarketerPermissions(rawPerms)
+        : null;
 
   return {
     id: user.id,
@@ -293,7 +313,7 @@ export async function createTeamUser(input: {
   email: string;
   password: string;
   name: string;
-  role: 'MANAGER' | 'OPERATOR';
+  role: 'MANAGER' | 'OPERATOR' | 'MARKETER';
   permissions?: Partial<TeamPermissions>;
 }) {
   const actor = await prisma.user.findUnique({
@@ -311,8 +331,13 @@ export async function createTeamUser(input: {
   if (exists) throw new AuthServiceError('EMAIL_ALREADY_REGISTERED');
 
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
-  const rawPermissions = normalizeOperatorPermissions(input.permissions);
-  const permissions = input.role === 'OPERATOR' ? clampPermissionsToActor(rawPermissions, actor) : null;
+  const basePerms = input.role === 'MARKETER'
+    ? normalizeMarketerPermissions(input.permissions)
+    : normalizeOperatorPermissions(input.permissions);
+  const rawPermissions = basePerms;
+  const permissions = (input.role === 'OPERATOR' || input.role === 'MARKETER')
+    ? clampPermissionsToActor(rawPermissions, actor)
+    : null;
   const created = await prisma.user.create({
     data: {
       tenantId: input.tenantId,
@@ -332,7 +357,7 @@ export async function updateTeamUser(input: {
   tenantId: string;
   targetUserId: string;
   name?: string;
-  role?: 'MANAGER' | 'OPERATOR';
+  role?: 'MANAGER' | 'OPERATOR' | 'MARKETER';
   isActive?: boolean;
   permissions?: Partial<TeamPermissions>;
 }) {
@@ -355,11 +380,14 @@ export async function updateTeamUser(input: {
     throw new Error('FORBIDDEN');
   }
 
-  const nextRole = input.role || (target.role as 'MANAGER' | 'OPERATOR');
-  const rawPermissions = normalizeOperatorPermissions(
-    input.permissions || (target.permissions as Partial<TeamPermissions> | null) || undefined
-  );
-  const permissions = nextRole === 'OPERATOR' ? clampPermissionsToActor(rawPermissions, actor) : null;
+  const nextRole = input.role || (target.role as 'MANAGER' | 'OPERATOR' | 'MARKETER');
+  const mergedPerms = input.permissions || (target.permissions as Partial<TeamPermissions> | null) || undefined;
+  const basePerms = nextRole === 'MARKETER'
+    ? normalizeMarketerPermissions(mergedPerms)
+    : normalizeOperatorPermissions(mergedPerms);
+  const permissions = (nextRole === 'OPERATOR' || nextRole === 'MARKETER')
+    ? clampPermissionsToActor(basePerms, actor)
+    : null;
 
   const updated = await prisma.user.update({
     where: { id: target.id },
