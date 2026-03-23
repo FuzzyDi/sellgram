@@ -240,6 +240,44 @@ export async function createShopCheckoutOrder(input: {
       });
     }
 
+    // Reserve stock immediately on order creation to prevent overselling
+    for (const item of orderItems) {
+      if (item.variantId) {
+        const updated = await tx.productVariant.update({
+          where: { id: item.variantId },
+          data: { stockQty: { decrement: item.qty } },
+          select: { stockQty: true },
+        });
+        await tx.stockMovement.create({
+          data: {
+            tenantId,
+            productId: item.productId,
+            variantId: item.variantId,
+            delta: -item.qty,
+            qtyBefore: updated.stockQty + item.qty,
+            qtyAfter: updated.stockQty,
+            note: `Order #${orderNumber} placed`,
+          },
+        });
+      } else {
+        const updated = await tx.product.update({
+          where: { id: item.productId },
+          data: { stockQty: { decrement: item.qty } },
+          select: { stockQty: true },
+        });
+        await tx.stockMovement.create({
+          data: {
+            tenantId,
+            productId: item.productId,
+            delta: -item.qty,
+            qtyBefore: updated.stockQty + item.qty,
+            qtyAfter: updated.stockQty,
+            note: `Order #${orderNumber} placed`,
+          },
+        });
+      }
+    }
+
     await tx.cartItem.deleteMany({ where: { customerId, storeId } });
     return newOrder;
   });

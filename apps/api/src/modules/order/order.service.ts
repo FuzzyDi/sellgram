@@ -23,66 +23,44 @@ export async function updateOrderStatus(input: {
       throw new Error(`BAD_TRANSITION:${order.status}:${input.status}`);
     }
 
-    if (input.status === 'CONFIRMED') {
-      const itemsWithVariant = order.items.filter((i: any) => i.variantId);
-      const itemsWithoutVariant = order.items.filter((i: any) => !i.variantId);
-
-      const [variantRows, productRows] = await Promise.all([
-        itemsWithVariant.length > 0
-          ? tx.productVariant.findMany({
-              where: {
-                id: { in: itemsWithVariant.map((i: any) => i.variantId) },
-                product: { tenantId: input.tenantId },
-              },
-            })
-          : Promise.resolve([] as any[]),
-        itemsWithoutVariant.length > 0
-          ? tx.product.findMany({
-              where: {
-                id: { in: itemsWithoutVariant.map((i: any) => i.productId) },
-                tenantId: input.tenantId,
-              },
-            })
-          : Promise.resolve([] as any[]),
-      ]);
-
-      const variantMap = new Map<string, any>(variantRows.map((v: any) => [v.id, v]));
-      const productMap = new Map<string, any>(productRows.map((p: any) => [p.id, p]));
-
+    // Stock was already decremented at checkout (NEW). On cancel from any
+    // pre-fulfillment status, restore it and log the movement.
+    if (input.status === 'CANCELLED' && ['NEW', 'CONFIRMED', 'PREPARING', 'READY'].includes(order.status)) {
       for (const item of order.items) {
         if (item.variantId) {
-          const variant = variantMap.get(item.variantId);
-          if (!variant || variant.stockQty < item.qty) {
-            throw new Error(`INSUFFICIENT_STOCK:${item.name}`);
-          }
-          await tx.productVariant.update({
-            where: { id: item.variantId },
-            data: { stockQty: { decrement: item.qty } },
-          });
-        } else {
-          const product = productMap.get(item.productId);
-          if (!product || product.stockQty < item.qty) {
-            throw new Error(`INSUFFICIENT_STOCK:${item.name}`);
-          }
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { stockQty: { decrement: item.qty } },
-          });
-        }
-      }
-    }
-
-    if (input.status === 'CANCELLED' && ['CONFIRMED', 'PREPARING', 'READY'].includes(order.status)) {
-      for (const item of order.items) {
-        if (item.variantId) {
-          await tx.productVariant.update({
+          const updated = await tx.productVariant.update({
             where: { id: item.variantId },
             data: { stockQty: { increment: item.qty } },
+            select: { stockQty: true },
+          });
+          await tx.stockMovement.create({
+            data: {
+              tenantId: input.tenantId,
+              productId: item.productId,
+              variantId: item.variantId,
+              delta: item.qty,
+              qtyBefore: updated.stockQty - item.qty,
+              qtyAfter: updated.stockQty,
+              note: `Order #${order.orderNumber} cancelled`,
+              userId: input.actorUserId,
+            },
           });
         } else {
-          await tx.product.update({
+          const updated = await tx.product.update({
             where: { id: item.productId },
             data: { stockQty: { increment: item.qty } },
+            select: { stockQty: true },
+          });
+          await tx.stockMovement.create({
+            data: {
+              tenantId: input.tenantId,
+              productId: item.productId,
+              delta: item.qty,
+              qtyBefore: updated.stockQty - item.qty,
+              qtyAfter: updated.stockQty,
+              note: `Order #${order.orderNumber} cancelled`,
+              userId: input.actorUserId,
+            },
           });
         }
       }
