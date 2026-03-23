@@ -238,10 +238,42 @@ function ScheduledReportsSection({
   );
 }
 
+function RevenueChart({ data }: { data: { date: string; revenue: number; count: number }[] }) {
+  if (!data || data.length < 2) return null;
+  const W = 600, H = 120, PAD = { top: 8, right: 4, bottom: 28, left: 0 };
+  const maxVal = Math.max(...data.map((d) => d.revenue), 1);
+  const xStep = (W - PAD.left - PAD.right) / Math.max(data.length - 1, 1);
+  const toY = (v: number) => PAD.top + (1 - v / maxVal) * (H - PAD.top - PAD.bottom);
+  const pts = data.map((d, i) => [PAD.left + i * xStep, toY(d.revenue)] as [number, number]);
+  const area = `M${pts[0][0]},${H - PAD.bottom} L${pts.map(([x, y]) => `${x},${y}`).join(' L')} L${pts[pts.length - 1][0]},${H - PAD.bottom} Z`;
+  const line = `M${pts.map(([x, y]) => `${x},${y}`).join(' L')}`;
+  const labelEvery = Math.max(1, Math.round(data.length / 6));
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="rep-rev-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#00875a" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#00875a" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#rep-rev-grad)" />
+      <path d={line} fill="none" stroke="#00875a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {pts.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={data[i].revenue > 0 ? 3 : 0} fill="#00875a" />
+      ))}
+      {data.map((d, i) => {
+        if (i % labelEvery !== 0 && i !== data.length - 1) return null;
+        return <text key={i} x={pts[i][0]} y={H - 6} textAnchor="middle" fontSize="9" fill="#9ca3af">{d.date.slice(5)}</text>;
+      })}
+    </svg>
+  );
+}
+
 export default function Reports() {
   const { tr } = useAdminI18n();
   const [period, setPeriod] = useState(30);
   const [meta, setMeta] = useState<ReportsMeta | null>(null);
+  const [summary, setSummary] = useState<any>(null);
   const [topProducts, setTopProducts] = useState<any[]>([]);
   const [revenue, setRevenue] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -267,6 +299,12 @@ export default function Reports() {
 
         const access = nextMeta?.reportAccess || {};
         const calls: Promise<void>[] = [];
+
+        calls.push(
+          adminApi.getAnalyticsSummary(period).then((data) => {
+            if (!cancelled) setSummary(data ?? null);
+          }).catch(() => {})
+        );
 
         calls.push(
           adminApi.getTopProducts(period).then((data) => {
@@ -377,6 +415,24 @@ export default function Reports() {
           </select>
         </div>
       </header>
+
+      {/* Period KPI summary */}
+      {summary && (
+        <div className="sg-grid cols-4" style={{ gap: 10 }}>
+          {[
+            { label: tr('Заказов за период', 'Davrda buyurtmalar'), value: summary.ordersCount, sub: `${tr('завершено', 'yakunlandi')}: ${summary.completedCount}` },
+            { label: tr('Выручка', 'Tushum'), value: `${Number(summary.revenue).toLocaleString()} UZS`, sub: `${summary.days} ${tr('дней', 'kun')}` },
+            { label: tr('Средний чек', "O'rtacha chek"), value: `${Number(summary.avgCheck).toLocaleString()} UZS`, sub: tr('по завершённым', 'yakunlanganlarga') },
+            { label: tr('Новых клиентов', 'Yangi mijozlar'), value: summary.newCustomers, sub: tr('за период', 'davr uchun') },
+          ].map((kpi) => (
+            <article key={kpi.label} className="sg-card" style={{ padding: '14px 16px' }}>
+              <div className="sg-kpi-label">{kpi.label}</div>
+              <div className="sg-kpi-value" style={{ fontSize: typeof kpi.value === 'string' && kpi.value.length > 12 ? 20 : 28 }}>{kpi.value}</div>
+              <div className="sg-subtitle" style={{ marginTop: 2 }}>{kpi.sub}</div>
+            </article>
+          ))}
+        </div>
+      )}
 
       <div className="sg-grid cols-4">
         <article className="sg-card">
@@ -492,6 +548,13 @@ export default function Reports() {
                   <div className="sg-kpi-label">{tr('Категории с продажами', 'Savdo bo`lgan toifalar')}</div>
                   <div className="sg-kpi-value">{categories.length}</div>
                 </div>
+              </div>
+            )}
+
+            {access.advanced && revenue.length > 1 && (
+              <div style={{ marginTop: 10 }}>
+                <div className="sg-kpi-label" style={{ marginBottom: 6 }}>{tr('Выручка по дням', 'Kunlik tushum')}</div>
+                <RevenueChart data={revenue} />
               </div>
             )}
 

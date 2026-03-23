@@ -433,6 +433,50 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     };
   });
 
+  // Summary KPIs for selected period (BASIC+)
+  const summaryQuerySchema = z.object({
+    days: z.coerce.number().int().min(1).max(365).default(30),
+  });
+
+  fastify.get('/analytics/summary', async (request, reply) => {
+    const tenantId = request.tenantId!;
+    const reportLimits = await getTenantReportLimits(tenantId);
+    if (!hasReportsLevel(reportLimits.reportsLevel, 'BASIC')) {
+      return reply.status(402).send({ success: false, error: 'Reports are not available on your current plan.' });
+    }
+    let days: number;
+    try { ({ days } = summaryQuerySchema.parse(request.query)); }
+    catch (err: any) { return reply.status(400).send({ success: false, error: err.message }); }
+
+    const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 30), 30);
+    const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
+
+    const [orders, newCustomers] = await Promise.all([
+      prisma.order.findMany({
+        where: { tenantId, createdAt: { gte: since } },
+        select: { total: true, status: true },
+      }),
+      prisma.customer.count({ where: { tenantId, createdAt: { gte: since } } }),
+    ]);
+
+    const completed = orders.filter((o) => o.status === 'COMPLETED' || o.status === 'DELIVERED');
+    const revenue = completed.reduce((s, o) => s + Number(o.total), 0);
+    const avgCheck = completed.length > 0 ? Math.round(revenue / completed.length) : 0;
+
+    return {
+      success: true,
+      data: {
+        ordersCount: orders.length,
+        completedCount: completed.length,
+        cancelledCount: orders.filter((o) => o.status === 'CANCELLED').length,
+        revenue,
+        avgCheck,
+        newCustomers,
+        days: safeDays,
+      },
+    };
+  });
+
   // Top products
   fastify.get('/analytics/top-products', async (request, reply) => {
     const tenantId = request.tenantId!;

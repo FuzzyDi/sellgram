@@ -272,6 +272,7 @@ export const adminApi = {
   receivePurchaseOrder: (id: string, data: any) => request<any>(`/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
 
   getDashboard: () => request<any>('/analytics/dashboard'),
+  getAnalyticsSummary: (days?: number) => request<any>(`/analytics/summary?days=${days || 30}`),
   getTopProducts: (period?: number) => request<any>(`/analytics/top-products?period=${period || 30}`),
   getRevenue: (days?: number) => request<any>(`/analytics/revenue?days=${days || 30}`),
   getReportsMeta: () => request<any>('/analytics/reports/meta'),
