@@ -211,9 +211,38 @@ async function fetchRevenueSeries(tenantId: string, days: number) {
     byDate[date].count += 1;
   }
 
-  return Object.entries(byDate)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, data]) => ({ date, ...data }));
+  // Zero-fill all days in the range so the chart has a continuous x-axis
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const result = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    result.push({ date: d, ...(byDate[d] || { revenue: 0, count: 0 }) });
+  }
+  return result;
+}
+
+async function fetchNewCustomersSeries(tenantId: string, days: number) {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const customers = await prisma.customer.findMany({
+    where: { tenantId, createdAt: { gte: since } },
+    select: { createdAt: true },
+  });
+
+  const byDate: Record<string, number> = {};
+  for (const c of customers) {
+    const date = c.createdAt.toISOString().split('T')[0];
+    byDate[date] = (byDate[date] ?? 0) + 1;
+  }
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const result = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    result.push({ date: d, count: byDate[d] ?? 0 });
+  }
+  return result;
 }
 
 async function fetchCategoryReport(tenantId: string, days: number, limit: number) {
@@ -516,6 +545,24 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     const data = await fetchRevenueSeries(tenantId, safeDays);
 
     return { success: true, data, reportLimits, reportAccess: getReportAccess(reportLimits) };
+  });
+
+  // New customers time series (ADVANCED)
+  fastify.get('/analytics/new-customers-series', async (request, reply) => {
+    const tenantId = request.tenantId!;
+    const reportLimits = await getTenantReportLimits(tenantId);
+    if (!hasReportsLevel(reportLimits.reportsLevel, 'ADVANCED')) {
+      return reply.status(402).send({ success: false, error: 'Advanced reports are available on PRO/BUSINESS plans only.' });
+    }
+    let days: number;
+    try {
+      ({ days } = revenueQuerySchema.parse(request.query));
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+    const safeDays = clampDays(days, Number(reportLimits.reportsHistoryDays || 30), 30);
+    const data = await fetchNewCustomersSeries(tenantId, safeDays);
+    return { success: true, data };
   });
 
   // Sales by categories (ADVANCED)

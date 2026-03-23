@@ -238,32 +238,72 @@ function ScheduledReportsSection({
   );
 }
 
-function RevenueChart({ data }: { data: { date: string; revenue: number; count: number }[] }) {
+function SparkChart({
+  data, valueKey, color, gradientId,
+}: {
+  data: Record<string, number>[]; valueKey: string; color: string; gradientId: string;
+}) {
   if (!data || data.length < 2) return null;
   const W = 600, H = 120, PAD = { top: 8, right: 4, bottom: 28, left: 0 };
-  const maxVal = Math.max(...data.map((d) => d.revenue), 1);
+  const maxVal = Math.max(...data.map((d) => d[valueKey] ?? 0), 1);
   const xStep = (W - PAD.left - PAD.right) / Math.max(data.length - 1, 1);
   const toY = (v: number) => PAD.top + (1 - v / maxVal) * (H - PAD.top - PAD.bottom);
-  const pts = data.map((d, i) => [PAD.left + i * xStep, toY(d.revenue)] as [number, number]);
+  const pts = data.map((d, i) => [PAD.left + i * xStep, toY(d[valueKey] ?? 0)] as [number, number]);
   const area = `M${pts[0][0]},${H - PAD.bottom} L${pts.map(([x, y]) => `${x},${y}`).join(' L')} L${pts[pts.length - 1][0]},${H - PAD.bottom} Z`;
   const line = `M${pts.map(([x, y]) => `${x},${y}`).join(' L')}`;
   const labelEvery = Math.max(1, Math.round(data.length / 6));
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
       <defs>
-        <linearGradient id="rep-rev-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#00875a" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#00875a" stopOpacity="0" />
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.18" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={area} fill="url(#rep-rev-grad)" />
-      <path d={line} fill="none" stroke="#00875a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={area} fill={`url(#${gradientId})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
       {pts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={data[i].revenue > 0 ? 3 : 0} fill="#00875a" />
+        <circle key={i} cx={x} cy={y} r={(data[i][valueKey] ?? 0) > 0 ? 3 : 0} fill={color} />
       ))}
-      {data.map((d, i) => {
+      {data.map((d: any, i: number) => {
         if (i % labelEvery !== 0 && i !== data.length - 1) return null;
-        return <text key={i} x={pts[i][0]} y={H - 6} textAnchor="middle" fontSize="9" fill="#9ca3af">{d.date.slice(5)}</text>;
+        return <text key={i} x={pts[i][0]} y={H - 6} textAnchor="middle" fontSize="9" fill="#9ca3af">{String(d.date ?? '').slice(5)}</text>;
+      })}
+    </svg>
+  );
+}
+
+function RevenueChart({ data }: { data: { date: string; revenue: number; count: number }[] }) {
+  return <SparkChart data={data as any} valueKey="revenue" color="#00875a" gradientId="rep-rev-grad" />;
+}
+
+function NewCustomersChart({ data }: { data: { date: string; count: number }[] }) {
+  return <SparkChart data={data as any} valueKey="count" color="#2563eb" gradientId="rep-cust-grad" />;
+}
+
+function CategoryBarChart({ data }: { data: { categoryName: string; totalRevenue: number }[] }) {
+  if (!data || data.length === 0) return null;
+  const maxVal = Math.max(...data.map((d) => d.totalRevenue), 1);
+  const BAR_H = 22, GAP = 6, PAD_LEFT = 120, PAD_RIGHT = 80;
+  const H = data.length * (BAR_H + GAP);
+  const W = 500;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+      {data.map((row, i) => {
+        const y = i * (BAR_H + GAP);
+        const barW = Math.max(4, ((row.totalRevenue / maxVal) * (W - PAD_LEFT - PAD_RIGHT)));
+        return (
+          <g key={row.categoryName}>
+            <text x={PAD_LEFT - 8} y={y + BAR_H / 2 + 4} textAnchor="end" fontSize="11" fill="#6b7280"
+              style={{ overflow: 'hidden' }}>
+              {row.categoryName.length > 14 ? row.categoryName.slice(0, 13) + '…' : row.categoryName}
+            </text>
+            <rect x={PAD_LEFT} y={y} width={barW} height={BAR_H} rx="4" fill="#00875a" fillOpacity="0.75" />
+            <text x={PAD_LEFT + barW + 6} y={y + BAR_H / 2 + 4} fontSize="11" fill="#374151" fontWeight="600">
+              {Number(row.totalRevenue).toLocaleString()}
+            </text>
+          </g>
+        );
       })}
     </svg>
   );
@@ -278,6 +318,7 @@ export default function Reports() {
   const [revenue, setRevenue] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [newCustomersSeries, setNewCustomersSeries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
@@ -323,9 +364,15 @@ export default function Reports() {
               if (!cancelled) setCategories(Array.isArray(data) ? data : []);
             })
           );
+          calls.push(
+            adminApi.getNewCustomersSeries(period).then((data) => {
+              if (!cancelled) setNewCustomersSeries(Array.isArray(data) ? data : []);
+            }).catch(() => {})
+          );
         } else {
           setRevenue([]);
           setCategories([]);
+          setNewCustomersSeries([]);
         }
 
         if (access.full) {
@@ -552,14 +599,28 @@ export default function Reports() {
             )}
 
             {access.advanced && revenue.length > 1 && (
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 14 }}>
                 <div className="sg-kpi-label" style={{ marginBottom: 6 }}>{tr('Выручка по дням', 'Kunlik tushum')}</div>
                 <RevenueChart data={revenue} />
               </div>
             )}
 
+            {access.advanced && newCustomersSeries.some((d) => d.count > 0) && (
+              <div style={{ marginTop: 14 }}>
+                <div className="sg-kpi-label" style={{ marginBottom: 6 }}>{tr('Новые клиенты по дням', 'Kunlik yangi mijozlar')}</div>
+                <NewCustomersChart data={newCustomersSeries} />
+              </div>
+            )}
+
+            {access.advanced && categories.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div className="sg-kpi-label" style={{ marginBottom: 8 }}>{tr('Выручка по категориям', 'Toifalar bo`yicha tushum')}</div>
+                <CategoryBarChart data={categories.slice(0, 10)} />
+              </div>
+            )}
+
             {access.advanced && (
-              <table className="sg-table" style={{ marginTop: 10 }}>
+              <table className="sg-table" style={{ marginTop: 14 }}>
                 <thead>
                   <tr>
                     <th>{tr('Категория', 'Toifa')}</th>

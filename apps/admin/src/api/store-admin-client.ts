@@ -276,6 +276,7 @@ export const adminApi = {
   getTopProducts: (period?: number) => request<any>(`/analytics/top-products?period=${period || 30}`),
   getRevenue: (days?: number) => request<any>(`/analytics/revenue?days=${days || 30}`),
   getReportsMeta: () => request<any>('/analytics/reports/meta'),
+  getNewCustomersSeries: (days?: number) => request<any>(`/analytics/new-customers-series?days=${days || 30}`),
   getCategoryReport: (days?: number, limit?: number) =>
     request<any>(`/analytics/report-categories?days=${days || 30}&limit=${limit || 20}`),
   getCustomersReport: (days?: number, limit?: number) =>
