@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "refundAmount" DECIMAL(12,2);

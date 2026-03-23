@@ -10,6 +10,7 @@ export async function updateOrderStatus(input: {
   cancelReason?: string;
   trackingNumber?: string;
   deliveryPrice?: number;
+  refundAmount?: number;
 }): Promise<{ storeId: string }> {
   return prisma.$transaction(async (tx: any) => {
     const order = await tx.order.findFirst({
@@ -139,6 +140,10 @@ export async function updateOrderStatus(input: {
     if (input.trackingNumber) updateData.trackingNumber = input.trackingNumber;
     if (input.deliveryPrice !== undefined) updateData.deliveryPrice = input.deliveryPrice;
     if (input.status === 'COMPLETED') updateData.paymentStatus = 'PAID';
+    if (input.status === 'REFUNDED') {
+      updateData.paymentStatus = 'REFUNDED';
+      if (input.refundAmount !== undefined) updateData.refundAmount = input.refundAmount;
+    }
 
     // Guard against concurrent status changes (e.g. bot timer and HTTP route both
     // completing the same DELIVERED order). If another process already changed the

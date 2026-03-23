@@ -31,6 +31,13 @@ export default function Orders() {
   const [orderDetails, setOrderDetails] = useState<Record<string, any>>({});
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [actionDialog, setActionDialog] = useState<{
+    orderId: string;
+    orderTotal: number;
+    action: 'cancel' | 'refund';
+  } | null>(null);
+  const [dialogReason, setDialogReason] = useState('');
+  const [dialogRefundAmount, setDialogRefundAmount] = useState('');
 
   function showNotice(tone: 'success' | 'error', message: string) {
     setNotice({ tone, message });
@@ -114,6 +121,35 @@ export default function Orders() {
     },
     [loadOrders, pendingOrders]
   );
+
+  function openActionDialog(orderId: string, orderTotal: number, action: 'cancel' | 'refund') {
+    setDialogReason('');
+    setDialogRefundAmount(String(orderTotal));
+    setActionDialog({ orderId, orderTotal, action });
+  }
+
+  async function submitAction() {
+    if (!actionDialog) return;
+    const { orderId, action } = actionDialog;
+    const payload: any = {
+      status: action === 'cancel' ? 'CANCELLED' : 'REFUNDED',
+      cancelReason: dialogReason.trim() || undefined,
+    };
+    if (action === 'refund' && dialogRefundAmount) {
+      payload.refundAmount = Number(dialogRefundAmount);
+    }
+    setActionDialog(null);
+    if (pendingOrders.has(orderId)) return;
+    setPendingOrders((prev) => new Set(prev).add(orderId));
+    try {
+      await adminApi.updateOrderStatus(orderId, payload);
+      loadOrders();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setPendingOrders((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  }
 
   const noticeNode = notice ? (
     <div style={{
@@ -289,25 +325,40 @@ export default function Orders() {
                       <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'CONFIRMED')} className="sg-btn primary">
                         {tr('Подтвердить', 'Tasdiqlash')}
                       </Button>
-                      <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'CANCELLED')} className="sg-btn danger">
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => openActionDialog(order.id, Number(order.total), 'cancel')} className="sg-btn danger">
                         {tr('Отменить', 'Bekor qilish')}
                       </Button>
                     </>
                   )}
                   {order.status === 'CONFIRMED' && (
-                    <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'PREPARING')} className="sg-btn ghost">
-                      {tr('Готовить', 'Tayyorlash')}
-                    </Button>
+                    <>
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'PREPARING')} className="sg-btn ghost">
+                        {tr('Готовить', 'Tayyorlash')}
+                      </Button>
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => openActionDialog(order.id, Number(order.total), 'cancel')} className="sg-btn danger">
+                        {tr('Отменить', 'Bekor qilish')}
+                      </Button>
+                    </>
                   )}
                   {order.status === 'PREPARING' && (
-                    <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'READY')} className="sg-btn ghost">
-                      {tr('Готов', 'Tayyor')}
-                    </Button>
+                    <>
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'READY')} className="sg-btn ghost">
+                        {tr('Готов', 'Tayyor')}
+                      </Button>
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => openActionDialog(order.id, Number(order.total), 'cancel')} className="sg-btn danger">
+                        {tr('Отменить', 'Bekor qilish')}
+                      </Button>
+                    </>
                   )}
                   {order.status === 'READY' && (
-                    <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'SHIPPED')} className="sg-btn ghost">
-                      {tr('Отправить', "Jo'natish")}
-                    </Button>
+                    <>
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'SHIPPED')} className="sg-btn ghost">
+                        {tr('Отправить', "Jo'natish")}
+                      </Button>
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => openActionDialog(order.id, Number(order.total), 'cancel')} className="sg-btn danger">
+                        {tr('Отменить', 'Bekor qilish')}
+                      </Button>
+                    </>
                   )}
                   {order.status === 'SHIPPED' && (
                     <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'DELIVERED')} className="sg-btn ghost">
@@ -315,8 +366,18 @@ export default function Orders() {
                     </Button>
                   )}
                   {order.status === 'DELIVERED' && (
-                    <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'COMPLETED')} className="sg-btn primary">
-                      {tr('Завершить', 'Yakunlash')}
+                    <>
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'COMPLETED')} className="sg-btn primary">
+                        {tr('Завершить', 'Yakunlash')}
+                      </Button>
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => openActionDialog(order.id, Number(order.total), 'refund')} className="sg-btn danger">
+                        {tr('Возврат', 'Qaytarish')}
+                      </Button>
+                    </>
+                  )}
+                  {order.status === 'COMPLETED' && (
+                    <Button disabled={pendingOrders.has(order.id)} onClick={() => openActionDialog(order.id, Number(order.total), 'refund')} className="sg-btn danger">
+                      {tr('Возврат', 'Qaytarish')}
                     </Button>
                   )}
                 </div>
@@ -334,6 +395,18 @@ export default function Orders() {
 
               {expandedOrder === order.id && (
                 <div style={{ marginTop: 10, borderTop: '1px solid #edf2ee', paddingTop: 10 }}>
+                  {order.cancelReason && (
+                    <div style={{ marginBottom: 8, padding: '8px 10px', background: '#fee2e2', borderRadius: 8, fontSize: 13 }}>
+                      <span style={{ fontWeight: 700, color: '#991b1b' }}>{tr('Причина: ', 'Sabab: ')}</span>
+                      <span style={{ color: '#7f1d1d' }}>{order.cancelReason}</span>
+                    </div>
+                  )}
+                  {order.refundAmount != null && (
+                    <div style={{ marginBottom: 8, padding: '8px 10px', background: '#fef3c7', borderRadius: 8, fontSize: 13 }}>
+                      <span style={{ fontWeight: 700, color: '#92400e' }}>{tr('Сумма возврата: ', 'Qaytarish summasi: ')}</span>
+                      <span style={{ color: '#78350f' }}>{Number(order.refundAmount).toLocaleString()} UZS</span>
+                    </div>
+                  )}
                   {!orderDetails[order.id] ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {[1,2].map((i) => <div key={i} className="sg-skeleton" style={{ height: 12, width: i === 1 ? '60%' : '40%' }} />)}
@@ -384,6 +457,58 @@ export default function Orders() {
               <Button className="sg-btn ghost" disabled={(data?.page || page) >= Math.max(1, data?.totalPages || 1)} onClick={() => setPage((p) => p + 1)}>
                 {tr('Далее', 'Keyingi')}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {actionDialog && (
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+          <div className="sg-card" style={{ width: '100%', maxWidth: 460 }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+              {actionDialog.action === 'cancel'
+                ? tr('Отмена заказа', 'Buyurtmani bekor qilish')
+                : tr('Возврат', 'Qaytarish')}
+            </h3>
+
+            <div className="sg-grid" style={{ gap: 10, marginTop: 14 }}>
+              <textarea
+                autoFocus
+                value={dialogReason}
+                onChange={(e) => setDialogReason(e.target.value)}
+                placeholder={
+                  actionDialog.action === 'cancel'
+                    ? tr('Причина отмены (необязательно)', 'Bekor qilish sababi (ixtiyoriy)')
+                    : tr('Причина возврата (необязательно)', 'Qaytarish sababi (ixtiyoriy)')
+                }
+                rows={3}
+                style={{ width: '100%', border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+              {actionDialog.action === 'refund' && (
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                    {tr('Сумма возврата', 'Qaytarish summasi')}
+                  </label>
+                  <input
+                    type="number"
+                    value={dialogRefundAmount}
+                    onChange={(e) => setDialogRefundAmount(e.target.value)}
+                    min={0}
+                    max={actionDialog.orderTotal}
+                    style={{ width: '100%', border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', boxSizing: 'border-box' }}
+                  />
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7a71' }}>
+                    {tr('Макс:', 'Maks:')} {actionDialog.orderTotal.toLocaleString()} UZS
+                  </p>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="sg-btn danger" type="button" onClick={() => void submitAction()}>
+                  {actionDialog.action === 'cancel' ? tr('Отменить заказ', 'Bekor qilish') : tr('Оформить возврат', "Qaytarishni rasmiylashtirish")}
+                </button>
+                <button className="sg-btn ghost" type="button" onClick={() => setActionDialog(null)}>
+                  {tr('Отмена', 'Bekor')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -11,9 +11,10 @@ import { dispatchWebhook } from '../../lib/webhook-dispatcher.js';
 const updateStatusSchema = z.object({
   status: z.enum(['CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'REFUNDED']),
   note: z.string().optional(),
-  cancelReason: z.string().optional(),
+  cancelReason: z.string().max(500).optional(),
   trackingNumber: z.string().optional(),
   deliveryPrice: z.number().optional(),
+  refundAmount: z.number().positive().optional(),
 });
 
 const updatePaymentSchema = z.object({
@@ -229,6 +230,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
           cancelReason: body.cancelReason,
           trackingNumber: body.trackingNumber,
           deliveryPrice: body.deliveryPrice,
+          refundAmount: body.refundAmount,
         });
 
         notifyOrderStatus(result.storeId, id, body.status).catch(() => {});

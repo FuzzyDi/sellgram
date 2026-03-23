@@ -61,7 +61,7 @@
 
 - [ ] Cloudflare Page Rule: bypass cache для `/uploads/*` на `app.sellgram.uz`
 - [ ] SMTP в `.env.prod` для scheduled reports
-- [ ] `monitor-health.sh` + Telegram alerts
+- [x] `monitor-health.sh` + Telegram alerts — скрипт готов, настроить vars в `.env.prod`
 
 ---
 
