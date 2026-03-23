@@ -32,6 +32,7 @@ export default function Checkout() {
     paymentMethodId: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [usePoints, setUsePoints] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState<{ id: string; type: string; value: number; discount: number } | null>(null);
@@ -51,6 +52,7 @@ export default function Checkout() {
       .catch(() => setLoadError(true))
       .finally(() => setLoadingData(false));
     api.getLoyalty().then(setLoyalty).catch(() => {});
+    api.getAddresses().then(setSavedAddresses).catch(() => {});
     api.getPaymentMethods()
       .then((methods: PaymentMethod[]) => {
         const list = Array.isArray(methods) ? methods : [];
@@ -187,6 +189,29 @@ export default function Checkout() {
 
         {form.deliveryType === 'LOCAL' && (
           <Section title={tr('Адрес', 'Manzil')}>
+            {savedAddresses.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                {savedAddresses.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setForm({ ...form, deliveryAddress: a.address })}
+                    style={{
+                      textAlign: 'left', padding: '10px 12px', borderRadius: 'var(--radius-sm)',
+                      border: 'none', cursor: 'pointer',
+                      background: form.deliveryAddress === a.address ? 'var(--btn)' : 'var(--sec)',
+                      color: form.deliveryAddress === a.address ? 'var(--btn-text)' : 'var(--text)',
+                      fontSize: 13, transition: 'all 0.2s',
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, marginRight: 6 }}>
+                      {a.label === 'home' ? '🏠' : a.label === 'work' ? '🏢' : '📍'} {a.label}
+                    </span>
+                    <span style={{ opacity: 0.8 }}>{a.address}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <textarea className="field" value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} rows={2} placeholder={tr('Улица, дом, квартира', 'Kocha, uy, xonadon')} />
           </Section>
         )}

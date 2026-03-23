@@ -139,5 +139,11 @@ export const api = {
   removeFromWishlist: (productId: string) => request<any>(`/shop/wishlist/${productId}`, { method: 'DELETE' }),
   validatePromo: (code: string, orderTotal: number) =>
     request<any>('/shop/promo/validate', { method: 'POST', body: JSON.stringify({ code, orderTotal }) }),
+  getAddresses: () => request<any>('/shop/addresses'),
+  createAddress: (data: { address: string; label?: string; isDefault?: boolean }) =>
+    request<any>('/shop/addresses', { method: 'POST', body: JSON.stringify(data) }),
+  updateAddress: (id: string, data: { address?: string; label?: string; isDefault?: boolean }) =>
+    request<any>(`/shop/addresses/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAddress: (id: string) => request<any>(`/shop/addresses/${id}`, { method: 'DELETE' }),
 };
 

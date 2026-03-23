@@ -334,10 +334,25 @@ model Customer {
   cartItems   CartItem[]
   broadcastRecipients BroadcastRecipient[]
   wishlistItems WishlistItem[]
+  addresses   CustomerAddress[]
 
   @@unique([tenantId, telegramId])
   @@index([tenantId])
   @@map("customers")
+}
+
+model CustomerAddress {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tenantId   String
+  label      String   @default("home")
+  address    String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+  @@map("customer_addresses")
 }
 
 // ============================================================

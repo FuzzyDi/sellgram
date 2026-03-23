@@ -237,6 +237,71 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     return { success: true, data: updated };
   });
 
+  // ── Saved addresses ──────────────────────────────────────
+  fastify.get('/shop/addresses', async (request) => {
+    const addresses = await prisma.customerAddress.findMany({
+      where: { customerId: request.customer!.id },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+      select: { id: true, label: true, address: true, isDefault: true },
+    });
+    return { success: true, data: addresses };
+  });
+
+  fastify.post('/shop/addresses', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const body = (request.body as any) ?? {};
+    const address = String(body.address ?? '').trim();
+    const label = String(body.label ?? 'home').trim().slice(0, 50);
+    const isDefault = Boolean(body.isDefault);
+    if (!address) return reply.status(400).send({ success: false, error: 'Address required' });
+
+    const customerId = request.customer!.id;
+    const tenantId = request.customer!.tenantId;
+
+    if (isDefault) {
+      await prisma.customerAddress.updateMany({ where: { customerId }, data: { isDefault: false } });
+    }
+    const count = await prisma.customerAddress.count({ where: { customerId } });
+    const created = await prisma.customerAddress.create({
+      data: { customerId, tenantId, label, address, isDefault: isDefault || count === 0 },
+      select: { id: true, label: true, address: true, isDefault: true },
+    });
+    return reply.status(201).send({ success: true, data: created });
+  });
+
+  fastify.patch('/shop/addresses/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body as any) ?? {};
+    const customerId = request.customer!.id;
+    const existing = await prisma.customerAddress.findFirst({ where: { id, customerId }, select: { id: true } });
+    if (!existing) return reply.status(404).send({ success: false, error: 'Not found' });
+
+    if (body.isDefault) {
+      await prisma.customerAddress.updateMany({ where: { customerId }, data: { isDefault: false } });
+    }
+    const updateData: any = {};
+    if (body.label !== undefined) updateData.label = String(body.label).slice(0, 50);
+    if (body.address !== undefined) updateData.address = String(body.address).trim();
+    if (body.isDefault !== undefined) updateData.isDefault = Boolean(body.isDefault);
+
+    const updated = await prisma.customerAddress.update({
+      where: { id },
+      data: updateData,
+      select: { id: true, label: true, address: true, isDefault: true },
+    });
+    return { success: true, data: updated };
+  });
+
+  fastify.delete('/shop/addresses/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const customerId = request.customer!.id;
+    const existing = await prisma.customerAddress.findFirst({ where: { id, customerId }, select: { id: true } });
+    if (!existing) return reply.status(404).send({ success: false, error: 'Not found' });
+    await prisma.customerAddress.delete({ where: { id } });
+    return { success: true, data: { ok: true } };
+  });
+
   // ── Wishlist ──────────────────────────────────────────────
   fastify.get('/shop/wishlist', async (request) => {
     const items = await prisma.wishlistItem.findMany({
