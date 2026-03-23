@@ -3,6 +3,9 @@ import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
 type StockFilter = 'all' | 'low' | 'out';
+type AdjustMode = 'set' | 'add' | 'sub';
+type SortField = 'name' | 'qty' | null;
+type SortDir = 'asc' | 'desc';
 
 export default function Stock() {
   const { tr, locale } = useAdminI18n();
@@ -11,9 +14,25 @@ export default function Stock() {
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState<StockFilter>('all');
   const [search, setSearch] = useState('');
+  const [sortField, setSortField] = useState<SortField>('qty');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  // Stock edit state
   const [editing, setEditing] = useState<{ id: string; variantId?: string } | null>(null);
   const [editQty, setEditQty] = useState('');
+  const [editMode, setEditMode] = useState<AdjustMode>('set');
+  const [editNote, setEditNote] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // LowStockAlert inline edit
+  const [editingAlert, setEditingAlert] = useState<string | null>(null); // productId
+  const [editAlertVal, setEditAlertVal] = useState('');
+
+  // Movement log
+  const [showLog, setShowLog] = useState(false);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [movementsLoading, setMovementsLoading] = useState(false);
+
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
 
   function showNotice(tone: 'success' | 'error', message: string) {
@@ -35,9 +54,24 @@ export default function Stock() {
     }
   }
 
+  async function loadMovements() {
+    setMovementsLoading(true);
+    try {
+      const data = await adminApi.getStockMovements('limit=50');
+      setMovements(Array.isArray(data) ? data : []);
+    } catch {
+      setMovements([]);
+    } finally {
+      setMovementsLoading(false);
+    }
+  }
+
   useEffect(() => { void load(); }, []);
 
-  // Flatten products + variants into rows
+  useEffect(() => {
+    if (showLog && movements.length === 0) void loadMovements();
+  }, [showLog]);
+
   const rows = useMemo(() => {
     const result: any[] = [];
     for (const p of products) {
@@ -90,26 +124,47 @@ export default function Stock() {
         (r.sku && r.sku.toLowerCase().includes(q))
       );
     }
+    if (sortField) {
+      list = [...list].sort((a, b) => {
+        const av = sortField === 'qty' ? a.stockQty : a.name.toLowerCase();
+        const bv = sortField === 'qty' ? b.stockQty : b.name.toLowerCase();
+        if (av < bv) return sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
     return list;
-  }, [rows, filter, search]);
+  }, [rows, filter, search, sortField, sortDir]);
+
+  function toggleSort(field: SortField) {
+    if (sortField === field) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('asc'); }
+  }
 
   function startEdit(productId: string, variantId: string | undefined, currentQty: number) {
     setEditing({ id: productId, variantId });
     setEditQty(String(currentQty));
+    setEditMode('set');
+    setEditNote('');
   }
 
   async function saveEdit() {
     if (!editing) return;
     const qty = parseInt(editQty, 10);
-    if (isNaN(qty) || qty < 0) {
-      showNotice('error', tr('Некорректное количество', 'Noto\'g\'ri miqdor'));
-      return;
-    }
+    if (isNaN(qty)) { showNotice('error', tr('Некорректное количество', 'Noto\'g\'ri miqdor')); return; }
+    if (editMode === 'set' && qty < 0) { showNotice('error', tr('Значение не может быть отрицательным', 'Qiymat manfiy bo\'lishi mumkin emas')); return; }
     setSaving(true);
     try {
-      await adminApi.adjustStock(editing.id, qty, editing.variantId);
+      const apiMode = editMode === 'set' ? 'set' : 'delta';
+      const apiQty = editMode === 'sub' ? -qty : qty;
+      await adminApi.adjustStock(editing.id, apiQty, {
+        variantId: editing.variantId,
+        mode: apiMode,
+        note: editNote.trim() || undefined,
+      });
       setEditing(null);
       await load();
+      if (showLog) await loadMovements();
       showNotice('success', tr('Остаток обновлён', 'Qoldiq yangilandi'));
     } catch (err: any) {
       showNotice('error', err?.message || tr('Ошибка сохранения', 'Saqlash xatosi'));
@@ -118,10 +173,28 @@ export default function Stock() {
     }
   }
 
+  async function saveAlert(productId: string) {
+    const val = parseInt(editAlertVal, 10);
+    if (isNaN(val) || val < 0) { showNotice('error', tr('Некорректное значение', 'Noto\'g\'ri qiymat')); return; }
+    try {
+      await adminApi.updateProduct(productId, { lowStockAlert: val });
+      setEditingAlert(null);
+      await load();
+      showNotice('success', tr('Порог обновлён', 'Chegara yangilandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    }
+  }
+
   function stockBadgeStyle(qty: number, low: number) {
     if (qty === 0) return { background: '#fee2e2', color: '#991b1b' };
     if (qty <= low) return { background: '#fef9c3', color: '#854d0e' };
     return { background: '#d1fae5', color: '#065f46' };
+  }
+
+  function sortIcon(field: SortField) {
+    if (sortField !== field) return <span style={{ opacity: 0.3 }}>↕</span>;
+    return <span>{sortDir === 'asc' ? '↑' : '↓'}</span>;
   }
 
   const noticeNode = notice && (
@@ -173,9 +246,18 @@ export default function Stock() {
     <section className="sg-page sg-grid" style={{ gap: 16 }}>
       {noticeNode}
 
-      <header>
-        <h2 className="sg-title">{tr('Остатки на складе', 'Ombor qoldiqlari')}</h2>
-        <p className="sg-subtitle">{tr('Управление складскими остатками товаров', 'Mahsulotlar ombor qoldiqlarini boshqarish')}</p>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h2 className="sg-title">{tr('Остатки на складе', 'Ombor qoldiqlari')}</h2>
+          <p className="sg-subtitle">{tr('Управление складскими остатками товаров', 'Mahsulotlar ombor qoldiqlarini boshqarish')}</p>
+        </div>
+        <button
+          className={`sg-btn${showLog ? ' primary' : ' ghost'}`}
+          style={{ fontSize: 13 }}
+          onClick={() => setShowLog((v) => !v)}
+        >
+          {tr('Журнал движений', 'Harakatlar jurnali')}
+        </button>
       </header>
 
       {/* KPI cards */}
@@ -185,7 +267,11 @@ export default function Stock() {
           { label: tr('Мало остатков', 'Oz qoldiq'), value: stats.low, color: '#854d0e' },
           { label: tr('Нет в наличии', 'Mavjud emas'), value: stats.out, color: '#991b1b' },
         ].map((kpi) => (
-          <div key={kpi.label} className="sg-card" style={{ padding: '14px 16px' }}>
+          <div key={kpi.label} className="sg-card" style={{ padding: '14px 16px', cursor: kpi.value > 0 ? 'pointer' : 'default' }}
+            onClick={() => {
+              if (kpi.color === '#854d0e') setFilter('low');
+              else if (kpi.color === '#991b1b') setFilter('out');
+            }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#748278', textTransform: 'uppercase', letterSpacing: 0.5 }}>{kpi.label}</div>
             <div style={{ fontSize: 28, fontWeight: 900, color: kpi.color, marginTop: 4 }}>{kpi.value}</div>
           </div>
@@ -219,9 +305,13 @@ export default function Stock() {
           <table className="sg-table" style={{ margin: 0 }}>
             <thead>
               <tr>
-                <th>{tr('Товар', 'Mahsulot')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('name')}>
+                  {tr('Товар', 'Mahsulot')} {sortIcon('name')}
+                </th>
                 <th>{tr('Артикул', 'Artikul')}</th>
-                <th style={{ textAlign: 'right' }}>{tr('Остаток', 'Qoldiq')}</th>
+                <th style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('qty')}>
+                  {tr('Остаток', 'Qoldiq')} {sortIcon('qty')}
+                </th>
                 <th style={{ textAlign: 'right' }}>{tr('Мин. остаток', 'Min. qoldiq')}</th>
                 <th style={{ textAlign: 'right' }}>{tr('Цена', 'Narx')}</th>
                 <th />
@@ -231,6 +321,7 @@ export default function Stock() {
               {filtered.map((row) => {
                 const key = row.variantId ?? row.productId;
                 const isEditing = editing?.id === row.productId && editing?.variantId === row.variantId;
+                const isEditingAlert = editingAlert === row.productId && !row.variantId;
                 return (
                   <tr key={key}>
                     <td>
@@ -241,26 +332,70 @@ export default function Stock() {
                     <td style={{ fontSize: 12, color: '#748278' }}>{row.sku || '—'}</td>
                     <td style={{ textAlign: 'right' }}>
                       {isEditing ? (
-                        <input
-                          type="number"
-                          min={0}
-                          value={editQty}
-                          onChange={(e) => setEditQty(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditing(null); }}
-                          autoFocus
-                          style={{ width: 80, border: '1px solid #2563eb', borderRadius: 6, padding: '4px 8px', fontSize: 13, textAlign: 'right' }}
-                        />
+                        <div style={{ display: 'grid', gap: 6, minWidth: 180 }}>
+                          {/* Mode selector */}
+                          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                            {(['set', 'add', 'sub'] as AdjustMode[]).map((m) => (
+                              <button
+                                key={m}
+                                onClick={() => setEditMode(m)}
+                                className={`sg-btn${editMode === m ? ' primary' : ' ghost'}`}
+                                style={{ fontSize: 11, padding: '2px 8px' }}
+                              >
+                                {m === 'set' ? tr('Задать', 'Belgilash') : m === 'add' ? '+ Приход' : '− Списание'}
+                              </button>
+                            ))}
+                          </div>
+                          <input
+                            type="number"
+                            min={0}
+                            value={editQty}
+                            onChange={(e) => setEditQty(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditing(null); }}
+                            autoFocus
+                            placeholder={editMode === 'set' ? tr('Новый остаток', 'Yangi qoldiq') : tr('Количество', 'Miqdor')}
+                            style={{ width: '100%', border: '1px solid #2563eb', borderRadius: 6, padding: '4px 8px', fontSize: 13, textAlign: 'right', boxSizing: 'border-box' }}
+                          />
+                          <input
+                            value={editNote}
+                            onChange={(e) => setEditNote(e.target.value)}
+                            placeholder={tr('Причина (необязательно)', 'Sabab (ixtiyoriy)')}
+                            style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 8px', fontSize: 12, boxSizing: 'border-box' }}
+                          />
+                        </div>
                       ) : (
                         <span className="sg-badge" style={stockBadgeStyle(row.stockQty, row.lowStockAlert)}>
                           {row.stockQty}
                         </span>
                       )}
                     </td>
-                    <td style={{ textAlign: 'right', fontSize: 13, color: '#748278' }}>{row.lowStockAlert}</td>
+                    <td style={{ textAlign: 'right', fontSize: 13, color: '#748278' }}>
+                      {isEditingAlert ? (
+                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center' }}>
+                          <input
+                            type="number" min={0} value={editAlertVal}
+                            onChange={(e) => setEditAlertVal(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') saveAlert(row.productId); if (e.key === 'Escape') setEditingAlert(null); }}
+                            autoFocus
+                            style={{ width: 60, border: '1px solid #2563eb', borderRadius: 6, padding: '3px 6px', fontSize: 12, textAlign: 'right' }}
+                          />
+                          <button className="sg-btn primary" style={{ fontSize: 11, padding: '3px 6px' }} onClick={() => saveAlert(row.productId)}>✓</button>
+                          <button className="sg-btn ghost" style={{ fontSize: 11, padding: '3px 6px' }} onClick={() => setEditingAlert(null)}>✕</button>
+                        </div>
+                      ) : (
+                        <span
+                          title={tr('Нажмите, чтобы изменить', 'O\'zgartirish uchun bosing')}
+                          onClick={() => { if (!row.variantId) { setEditingAlert(row.productId); setEditAlertVal(String(row.lowStockAlert)); } }}
+                          style={{ cursor: row.variantId ? 'default' : 'pointer', borderBottom: row.variantId ? 'none' : '1px dashed #9ca3af' }}
+                        >
+                          {row.lowStockAlert}
+                        </span>
+                      )}
+                    </td>
                     <td style={{ textAlign: 'right', fontSize: 13 }}>{Number(row.price).toLocaleString(locale)}</td>
                     <td style={{ textAlign: 'right' }}>
                       {isEditing ? (
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 4 }}>
                           <button className="sg-btn primary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={saveEdit} disabled={saving}>
                             {tr('Сохранить', 'Saqlash')}
                           </button>
@@ -285,6 +420,54 @@ export default function Stock() {
           </table>
         )}
       </div>
+
+      {/* Movement log */}
+      {showLog && (
+        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid #edf2ee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{tr('Журнал движений остатков', 'Qoldiqlar harakati jurnali')}</h3>
+            <button className="sg-btn ghost" style={{ fontSize: 12 }} onClick={loadMovements} disabled={movementsLoading}>
+              {movementsLoading ? tr('Загрузка...', 'Yuklanmoqda...') : tr('Обновить', 'Yangilash')}
+            </button>
+          </div>
+          {movementsLoading ? (
+            <div style={{ padding: 16 }}>
+              {[1,2,3].map((i) => <div key={i} className="sg-skeleton" style={{ height: 36, marginBottom: 8 }} />)}
+            </div>
+          ) : movements.length === 0 ? (
+            <p className="sg-subtitle" style={{ padding: '20px 16px' }}>{tr('Движений пока нет', 'Hali harakatlar yo\'q')}</p>
+          ) : (
+            <table className="sg-table" style={{ margin: 0 }}>
+              <thead>
+                <tr>
+                  <th>{tr('Дата', 'Sana')}</th>
+                  <th>{tr('Товар', 'Mahsulot')}</th>
+                  <th style={{ textAlign: 'right' }}>{tr('Изменение', 'O\'zgarish')}</th>
+                  <th style={{ textAlign: 'right' }}>{tr('Было → Стало', 'Oldin → Keyin')}</th>
+                  <th>{tr('Причина', 'Sabab')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movements.map((m: any) => (
+                  <tr key={m.id}>
+                    <td style={{ fontSize: 12, color: '#748278', whiteSpace: 'nowrap' }}>
+                      {new Date(m.createdAt).toLocaleString(locale)}
+                    </td>
+                    <td style={{ fontSize: 13 }}>{m.product?.name ?? '—'}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: m.delta > 0 ? '#065f46' : m.delta < 0 ? '#991b1b' : '#748278' }}>
+                      {m.delta > 0 ? `+${m.delta}` : m.delta}
+                    </td>
+                    <td style={{ textAlign: 'right', fontSize: 12, color: '#748278' }}>
+                      {m.qtyBefore} → {m.qtyAfter}
+                    </td>
+                    <td style={{ fontSize: 12, color: '#748278' }}>{m.note || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </section>
   );
 }

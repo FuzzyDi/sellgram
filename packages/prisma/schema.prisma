@@ -217,11 +217,12 @@ model Product {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  images     ProductImage[]
-  variants   ProductVariant[]
-  orderItems OrderItem[]
-  poItems    PurchaseOrderItem[]
-  wishlistItems WishlistItem[]
+  images         ProductImage[]
+  variants       ProductVariant[]
+  orderItems     OrderItem[]
+  poItems        PurchaseOrderItem[]
+  wishlistItems  WishlistItem[]
+  stockMovements StockMovement[]
 
   @@index([tenantId])
   @@index([tenantId, categoryId])
@@ -253,6 +254,24 @@ model ProductVariant {
   orderItems OrderItem[]
 
   @@map("product_variants")
+}
+
+model StockMovement {
+  id         String   @id @default(cuid())
+  tenantId   String
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId  String?
+  delta      Int
+  qtyBefore  Int
+  qtyAfter   Int
+  note       String?
+  userId     String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, productId])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("stock_movements")
 }
 
 // ============================================================

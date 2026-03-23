@@ -198,39 +198,79 @@ export default async function productRoutes(fastify: FastifyInstance) {
   });
 
   const stockAdjustSchema = z.object({
-    qty: z.number().int().min(0),
+    qty: z.number().int(),
     variantId: z.string().optional(),
+    mode: z.enum(['set', 'delta']).default('set'),
+    note: z.string().max(255).optional(),
+  });
+
+  const stockMovementsQuerySchema = z.object({
+    productId: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  });
+
+  // List stock movements
+  fastify.get('/stock-movements', { preHandler: [permissionGuard('manageCatalog')] }, async (request) => {
+    const { productId, limit } = stockMovementsQuerySchema.parse(request.query);
+    const where: any = { tenantId: request.tenantId! };
+    if (productId) where.productId = productId;
+    const movements = await prisma.stockMovement.findMany({
+      where,
+      include: { product: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return { success: true, data: movements };
   });
 
   // Adjust stock
   fastify.patch('/products/:id/stock', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    let qty: number;
-    let variantId: string | undefined;
+    let qty: number, variantId: string | undefined, mode: 'set' | 'delta', note: string | undefined;
     try {
-      ({ qty, variantId } = stockAdjustSchema.parse(request.body));
+      ({ qty, variantId, mode, note } = stockAdjustSchema.parse(request.body));
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
 
+    if (mode === 'set' && qty < 0) {
+      return reply.status(400).send({ success: false, error: 'qty must be >= 0 in set mode' });
+    }
+
+    let qtyBefore: number;
+    let qtyAfter: number;
+
     if (variantId) {
       const variant = await prisma.productVariant.findFirst({
-        where: {
-          id: variantId,
-          productId: id,
-          product: { tenantId: request.tenantId! },
-        },
+        where: { id: variantId, productId: id, product: { tenantId: request.tenantId! } },
       });
       if (!variant) return reply.status(404).send({ success: false, error: 'Variant not found' });
-      await prisma.productVariant.update({ where: { id: variantId }, data: { stockQty: qty } });
+      qtyBefore = variant.stockQty;
+      qtyAfter = mode === 'delta' ? Math.max(0, qtyBefore + qty) : qty;
+      await prisma.productVariant.update({ where: { id: variantId }, data: { stockQty: qtyAfter } });
     } else {
-      const result = await prisma.product.updateMany({
-        where: { id, tenantId: request.tenantId! },
-        data: { stockQty: qty },
-      });
-      if (result.count === 0) return reply.status(404).send({ success: false, error: 'Product not found' });
+      const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId! } });
+      if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
+      qtyBefore = product.stockQty;
+      qtyAfter = mode === 'delta' ? Math.max(0, qtyBefore + qty) : qty;
+      await prisma.product.update({ where: { id }, data: { stockQty: qtyAfter } });
     }
-    return { success: true, message: 'Stock updated' };
+
+    const delta = mode === 'delta' ? qty : qtyAfter - qtyBefore;
+    await prisma.stockMovement.create({
+      data: {
+        tenantId: request.tenantId!,
+        productId: id,
+        variantId: variantId ?? null,
+        delta,
+        qtyBefore,
+        qtyAfter,
+        note: note ?? null,
+        userId: request.user?.userId ?? null,
+      },
+    });
+
+    return { success: true, data: { qtyBefore, qtyAfter, delta } };
   });
 
   // Product images
