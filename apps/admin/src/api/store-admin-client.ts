@@ -146,6 +146,10 @@ export const adminApi = {
 
   getCustomers: (params?: string) => request<any>(`/customers${params ? '?' + params : ''}`),
   getCustomer: (id: string) => request<any>(`/customers/${id}`),
+  updateCustomer: (id: string, data: { tags?: string[]; note?: string | null; phone?: string | null }) =>
+    request<any>(`/customers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  adjustCustomerLoyalty: (id: string, points: number, description?: string) =>
+    request<any>(`/customers/${id}/loyalty`, { method: 'POST', body: JSON.stringify({ points, description }) }),
 
   getStores: () => request<any>('/stores'),
   createStore: (data: any) => request<any>('/stores', { method: 'POST', body: JSON.stringify(data) }),
