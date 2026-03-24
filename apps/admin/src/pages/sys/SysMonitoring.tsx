@@ -57,8 +57,9 @@ export default function SysMonitoring() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [autoRefresh]);
 
-  const uptime = health?.uptime ? `${Math.floor(health.uptime / 3600)}ч ${Math.floor((health.uptime % 3600) / 60)}м` : '—';
-  const memMb = health?.memory?.rss ? Math.round(health.memory.rss / 1024 / 1024) : null;
+  const uptimeSec = health?.runtime?.uptimeSec ?? 0;
+  const uptime = uptimeSec > 0 ? `${Math.floor(uptimeSec / 3600)}ч ${Math.floor((uptimeSec % 3600) / 60)}м` : '—';
+  const memMb = health?.runtime?.memoryMb ?? null;
 
   const error4xx = errors.filter((e) => e.statusCode >= 400 && e.statusCode < 500).length;
   const error5xx = errors.filter((e) => e.statusCode >= 500).length;
@@ -97,8 +98,8 @@ export default function SysMonitoring() {
             ]} />
             <ServiceCard name="Redis" ok={health?.redis?.ok !== false} metrics={[
               { label: 'Статус', value: health?.redis?.status || (health?.redis?.ok !== false ? 'ok' : 'error') },
-              { label: 'Очередь broadcast', value: health?.queues?.broadcast ?? '—' },
-              { label: 'Очередь daily', value: health?.queues?.dailyDigest ?? '—' },
+              { label: 'broadcast wait', value: health?.queues?.broadcast?.waiting ?? '—' },
+              { label: 'daily-digest wait', value: health?.queues?.['daily-digest']?.waiting ?? '—' },
             ]} />
             <ServiceCard name="MinIO / Storage" ok={true} metrics={[
               { label: 'Бакет', value: storage?.bucket || '—' },
