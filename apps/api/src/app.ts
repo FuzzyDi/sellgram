@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import Fastify from 'fastify';
+import { pushError } from './lib/error-buffer.js';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
@@ -139,6 +140,20 @@ async function main() {
       error: safeMessage,
       requestId: request.id,
     });
+  });
+
+  // Capture 4xx/5xx into in-memory error ring buffer for system admin monitoring
+  fastify.addHook('onSend', (request, reply, _payload, done) => {
+    if (reply.statusCode >= 400) {
+      pushError({
+        time: Date.now(),
+        method: request.method,
+        url: request.url,
+        statusCode: reply.statusCode,
+        tenantId: (request as any).tenantId ?? null,
+      });
+    }
+    done();
   });
 
   // Serialize BigInt values (Telegram IDs) as strings without mutating BigInt.prototype

@@ -37,6 +37,11 @@ import {
   unblockSystemTenant,
   updateSystemSubscriptionReminderSettings,
   updateSystemTenantPlan,
+  getSystemBots,
+  getSystemErrors,
+  getSystemStorage,
+  sendSystemAnnouncement,
+  listSystemAnnouncements,
 } from './service.js';
 declare module 'fastify' {
   interface FastifyRequest {
@@ -274,6 +279,37 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
       return reply.status(400).send({ success: false, error: err.message });
     }
+  });
+
+  // Monitoring
+  fastify.get('/bots', { preHandler: [authenticateSystem] }, async () => {
+    const data = await getSystemBots();
+    return { success: true, data };
+  });
+
+  fastify.get('/errors', { preHandler: [authenticateSystem] }, async (request) => {
+    const limit = Math.min(Number((request.query as any).limit) || 100, 300);
+    const data = getSystemErrors(limit);
+    return { success: true, data };
+  });
+
+  fastify.get('/storage', { preHandler: [authenticateSystem] }, async () => {
+    const data = await getSystemStorage();
+    return { success: true, data };
+  });
+
+  // Announcements
+  fastify.post('/announcements', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    const body = request.body as any;
+    const message = String(body?.message || '').trim();
+    const filter = ['all', 'pro', 'business', 'active'].includes(body?.filter) ? body.filter : 'all';
+    if (!message) return reply.status(400).send({ success: false, error: 'message required' });
+    const data = await sendSystemAnnouncement(message, filter, request.systemAdmin?.email || 'system');
+    return { success: true, data };
+  });
+
+  fastify.get('/announcements', { preHandler: [authenticateSystem] }, async () => {
+    return { success: true, data: listSystemAnnouncements() };
   });
 
   fastify.post('/tenants/:id/impersonate', { preHandler: [authenticateSystem] }, async (request, reply) => {

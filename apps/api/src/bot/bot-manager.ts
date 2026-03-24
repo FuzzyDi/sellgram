@@ -958,6 +958,35 @@ export function getBot(storeId: string): Bot | undefined {
   return bots.get(storeId)?.bot;
 }
 
+export interface BotStatus {
+  storeId: string;
+  tenantId: string;
+  username: string | null;
+}
+
+export function getBotStatuses(): BotStatus[] {
+  return Array.from(bots.values()).map((instance) => ({
+    storeId: instance.storeId,
+    tenantId: instance.tenantId,
+    username: (instance.bot as any).botInfo?.username ?? null,
+  }));
+}
+
+export async function sendMessageToOwner(
+  tenantId: string,
+  telegramId: bigint,
+  message: string,
+): Promise<boolean> {
+  const instance = Array.from(bots.values()).find((b) => b.tenantId === tenantId);
+  if (!instance) return false;
+  try {
+    await instance.bot.api.sendMessage(Number(telegramId), message, { parse_mode: 'HTML' as any });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 
 
 

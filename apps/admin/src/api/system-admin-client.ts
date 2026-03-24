@@ -83,4 +83,14 @@ export const systemApi = {
   revenueTrend: () => systemRequest<any[]>('/revenue-trend'),
   createInvoice: (payload: { tenantId: string; plan: string; amount: number; paymentRef?: string; autoConfirm: boolean }) =>
     systemRequest<any>('/invoices', { method: 'POST', body: JSON.stringify(payload) }),
+
+  // Monitoring
+  bots: () => systemRequest<any[]>('/bots'),
+  errors: (limit?: number) => systemRequest<any[]>(`/errors${limit ? `?limit=${limit}` : ''}`),
+  storage: () => systemRequest<any>('/storage'),
+
+  // Announcements
+  sendAnnouncement: (message: string, filter: string) =>
+    systemRequest<any>('/announcements', { method: 'POST', body: JSON.stringify({ message, filter }) }),
+  announcements: () => systemRequest<any[]>('/announcements'),
 };

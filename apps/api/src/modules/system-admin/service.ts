@@ -5,6 +5,9 @@ import { signAccessToken, signRefreshToken } from '../../lib/jwt.js';
 import { getConfig } from '../../config/index.js';
 import { getRedis } from '../../lib/redis.js';
 import { PLANS, type PlanCode, type ReportsLevel } from '@sellgram/shared';
+import { getErrors } from '../../lib/error-buffer.js';
+import { getBotStatuses, sendMessageToOwner } from '../../bot/bot-manager.js';
+import { getS3, ensureBucket } from '../../lib/s3.js';
 const SUBSCRIPTION_REMINDER_SETTINGS_KEY = 'subscription_reminders';
 function getMonthKey(date = new Date()) {
   const y = date.getUTCFullYear();
@@ -795,4 +798,122 @@ export async function impersonateTenantOwner(tenantId: string) {
   ]);
 
   return { accessToken, refreshToken, user: { id: owner.id, email: owner.email, name: owner.name } };
+}
+
+/* ── Monitoring ─────────────────────────────────────────────── */
+
+export async function getSystemBots() {
+  const statuses = getBotStatuses();
+  if (statuses.length === 0) return [];
+
+  const storeIds = statuses.map((s) => s.storeId);
+  const stores = await prisma.store.findMany({
+    where: { id: { in: storeIds } },
+    select: { id: true, name: true, botUsername: true, isActive: true },
+  });
+  const storeMap = new Map(stores.map((s) => [s.id, s]));
+
+  return statuses.map((b) => {
+    const store = storeMap.get(b.storeId);
+    return {
+      storeId: b.storeId,
+      tenantId: b.tenantId,
+      storeName: store?.name ?? b.storeId,
+      username: b.username ?? store?.botUsername ?? null,
+      isActive: store?.isActive ?? true,
+    };
+  });
+}
+
+export function getSystemErrors(limit = 100) {
+  return getErrors(limit);
+}
+
+export async function getSystemStorage() {
+  try {
+    await ensureBucket();
+    const s3 = getS3();
+    const bucketName = process.env.S3_BUCKET || 'sellgram-files';
+
+    let fileCount = 0;
+    let totalBytes = 0;
+
+    await new Promise<void>((resolve, reject) => {
+      const stream = s3.listObjectsV2(bucketName, '', true);
+      stream.on('data', (obj: any) => {
+        fileCount++;
+        totalBytes += obj.size || 0;
+      });
+      stream.on('end', resolve);
+      stream.on('error', reject);
+    });
+
+    return {
+      bucket: bucketName,
+      fileCount,
+      totalBytes,
+      totalMb: Math.round(totalBytes / 1024 / 1024 * 10) / 10,
+    };
+  } catch {
+    return { bucket: 'unknown', fileCount: 0, totalBytes: 0, totalMb: 0 };
+  }
+}
+
+/* ── Announcements ──────────────────────────────────────────── */
+
+interface AnnouncementRecord {
+  id: string;
+  message: string;
+  filter: string;
+  sentCount: number;
+  failedCount: number;
+  sentAt: number;
+  sentBy: string;
+}
+const announcementHistory: AnnouncementRecord[] = [];
+
+export async function sendSystemAnnouncement(
+  message: string,
+  filter: 'all' | 'pro' | 'business' | 'active',
+  sentBy: string,
+): Promise<{ sentCount: number; failedCount: number; skipped: number }> {
+  const where: any = { role: 'OWNER', isActive: true, adminTelegramId: { not: null } };
+  if (filter === 'pro') where.tenant = { plan: 'PRO' };
+  else if (filter === 'business') where.tenant = { plan: 'BUSINESS' };
+  else if (filter === 'active') {
+    const cutoff = new Date(Date.now() - 30 * 86_400_000);
+    where.tenant = { orders: { some: { createdAt: { gte: cutoff } } } };
+  }
+
+  const owners = await prisma.user.findMany({
+    where,
+    select: { adminTelegramId: true, tenantId: true },
+  });
+
+  let sentCount = 0;
+  let failedCount = 0;
+  let skipped = 0;
+
+  for (const owner of owners) {
+    if (!owner.adminTelegramId) { skipped++; continue; }
+    const ok = await sendMessageToOwner(owner.tenantId, owner.adminTelegramId as bigint, message);
+    if (ok) sentCount++; else failedCount++;
+  }
+
+  announcementHistory.unshift({
+    id: crypto.randomUUID(),
+    message: message.slice(0, 500),
+    filter,
+    sentCount,
+    failedCount,
+    sentAt: Date.now(),
+    sentBy,
+  });
+  if (announcementHistory.length > 50) announcementHistory.pop();
+
+  return { sentCount, failedCount, skipped };
+}
+
+export function listSystemAnnouncements() {
+  return announcementHistory;
 }

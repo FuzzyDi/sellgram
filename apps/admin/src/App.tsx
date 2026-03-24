@@ -26,7 +26,7 @@ import PromoCodes from './pages/PromoCodes';
 import Banners from './pages/Banners';
 import OnboardingWizard, { isOnboardingDone, markOnboardingDone } from './pages/OnboardingWizard';
 import Settings from './pages/Settings';
-import SystemAdmin from './pages/SystemAdmin';
+import SysLayout from './pages/sys/SysLayout';
 
 interface AuthState { user: any; tenant: any; }
 
@@ -267,7 +267,7 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
   if (needPerm && !perms[needPerm]) return <Dashboard />;
 
   switch (route) {
-    case '/system-admin': return <SystemAdmin />;
+    case '/system-admin': return <SysLayout />;
     case '/products':     return <Products />;
     case '/procurement':  return <Procurement />;
     case '/stock':        return <Stock />;
@@ -359,7 +359,7 @@ export default function App() {
     );
   }
 
-  if (route === '/system-admin') return <SystemAdmin />;
+  if (route === '/system-admin') return <SysLayout />;
   if (!auth) return <Login onLogin={handleLogin} onRegister={handleRegister} />;
   if (showOnboarding) return <OnboardingWizard onFinish={() => setShowOnboarding(false)} />;
 
