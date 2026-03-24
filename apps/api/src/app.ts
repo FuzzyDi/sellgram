@@ -55,6 +55,7 @@ async function main() {
   const config = loadConfig();
 
   const fastify = Fastify({
+    bodyLimit: 10 * 1024 * 1024, // 10 MB — needed for banner/product image uploads
     trustProxy: config.TRUST_PROXY || config.NODE_ENV === 'production',
     logger: config.NODE_ENV === 'production'
       ? { level: 'info' }
