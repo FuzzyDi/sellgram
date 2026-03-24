@@ -64,7 +64,8 @@ if echo "$SERVICES" | grep -qw "api"; then
   [ "$STATUS" = "healthy" ] || err "API did not become healthy in 60s"
 
   step "Reload nginx (re-resolve container IPs)"
-  docker exec production-nginx-1 nginx -s reload
+  # Restart (not just reload) so bind-mounted config changes take effect
+  $COMPOSE restart nginx
   log "Nginx reloaded"
 fi
 
