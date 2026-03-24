@@ -32,6 +32,7 @@ export default function Stock() {
   const [showLog, setShowLog] = useState(false);
   const [movements, setMovements] = useState<any[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
+  const [logProductFilter, setLogProductFilter] = useState<{ id: string; name: string } | null>(null);
 
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
 
@@ -54,10 +55,12 @@ export default function Stock() {
     }
   }
 
-  async function loadMovements() {
+  async function loadMovements(productId?: string) {
     setMovementsLoading(true);
     try {
-      const data = await adminApi.getStockMovements('limit=50');
+      const params = new URLSearchParams({ limit: '200' });
+      if (productId) params.set('productId', productId);
+      const data = await adminApi.getStockMovements(params.toString());
       setMovements(Array.isArray(data) ? data : []);
     } catch {
       setMovements([]);
@@ -69,7 +72,7 @@ export default function Stock() {
   useEffect(() => { void load(); }, []);
 
   useEffect(() => {
-    if (showLog && movements.length === 0) void loadMovements();
+    if (showLog) void loadMovements(logProductFilter?.id);
   }, [showLog]);
 
   const rows = useMemo(() => {
@@ -186,6 +189,26 @@ export default function Stock() {
     }
   }
 
+  function variantNameForMovement(m: any): string | null {
+    if (!m.variantId) return null;
+    const product = products.find((p: any) => p.id === m.productId);
+    const variant = product?.variants?.find((v: any) => v.id === m.variantId);
+    return variant?.name ?? null;
+  }
+
+  function openLogForProduct(productId: string, productName: string) {
+    setLogProductFilter({ id: productId, name: productName });
+    setMovements([]);
+    setShowLog(true);
+    void loadMovements(productId);
+  }
+
+  function clearLogFilter() {
+    setLogProductFilter(null);
+    setMovements([]);
+    void loadMovements();
+  }
+
   function stockBadgeStyle(qty: number, low: number) {
     if (qty === 0) return { background: '#fee2e2', color: '#991b1b' };
     if (qty <= low) return { background: '#fef9c3', color: '#854d0e' };
@@ -254,7 +277,16 @@ export default function Stock() {
         <button
           className={`sg-btn${showLog ? ' primary' : ' ghost'}`}
           style={{ fontSize: 13 }}
-          onClick={() => setShowLog((v) => !v)}
+          onClick={() => {
+            if (showLog) {
+              setShowLog(false);
+              setLogProductFilter(null);
+            } else {
+              setLogProductFilter(null);
+              setMovements([]);
+              setShowLog(true);
+            }
+          }}
         >
           {tr('Журнал движений', 'Harakatlar jurnali')}
         </button>
@@ -404,13 +436,23 @@ export default function Stock() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          className="sg-btn ghost"
-                          style={{ fontSize: 12, padding: '4px 10px' }}
-                          onClick={() => startEdit(row.productId, row.variantId, row.stockQty)}
-                        >
-                          {tr('Изменить', 'O\'zgartirish')}
-                        </button>
+                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                          <button
+                            className="sg-btn ghost"
+                            style={{ fontSize: 12, padding: '4px 10px' }}
+                            onClick={() => startEdit(row.productId, row.variantId, row.stockQty)}
+                          >
+                            {tr('Изменить', 'O\'zgartirish')}
+                          </button>
+                          <button
+                            className="sg-btn ghost"
+                            style={{ fontSize: 12, padding: '4px 8px', color: '#2563eb' }}
+                            title={tr('История движений', 'Harakatlar tarixi')}
+                            onClick={() => openLogForProduct(row.productId, row.name)}
+                          >
+                            ↕
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -424,9 +466,27 @@ export default function Stock() {
       {/* Movement log */}
       {showLog && (
         <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', borderBottom: '1px solid #edf2ee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{tr('Журнал движений остатков', 'Qoldiqlar harakati jurnali')}</h3>
-            <button className="sg-btn ghost" style={{ fontSize: 12 }} onClick={loadMovements} disabled={movementsLoading}>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid #edf2ee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                {tr('Журнал движений', 'Harakatlar jurnali')}
+              </h3>
+              {logProductFilter && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#eff6ff', borderRadius: 8, padding: '3px 10px', fontSize: 12, color: '#1d4ed8', fontWeight: 600, minWidth: 0 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+                    {logProductFilter.name}
+                  </span>
+                  <button
+                    onClick={clearLogFilter}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1d4ed8', padding: 0, lineHeight: 1, fontSize: 14 }}
+                    title={tr('Показать все', 'Hammasini ko\'rsatish')}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+            <button className="sg-btn ghost" style={{ fontSize: 12, flexShrink: 0 }} onClick={() => loadMovements(logProductFilter?.id)} disabled={movementsLoading}>
               {movementsLoading ? tr('Загрузка...', 'Yuklanmoqda...') : tr('Обновить', 'Yangilash')}
             </button>
           </div>
@@ -448,21 +508,27 @@ export default function Stock() {
                 </tr>
               </thead>
               <tbody>
-                {movements.map((m: any) => (
-                  <tr key={m.id}>
-                    <td style={{ fontSize: 12, color: '#748278', whiteSpace: 'nowrap' }}>
-                      {new Date(m.createdAt).toLocaleString(locale)}
-                    </td>
-                    <td style={{ fontSize: 13 }}>{m.product?.name ?? '—'}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: m.delta > 0 ? '#065f46' : m.delta < 0 ? '#991b1b' : '#748278' }}>
-                      {m.delta > 0 ? `+${m.delta}` : m.delta}
-                    </td>
-                    <td style={{ textAlign: 'right', fontSize: 12, color: '#748278' }}>
-                      {m.qtyBefore} → {m.qtyAfter}
-                    </td>
-                    <td style={{ fontSize: 12, color: '#748278' }}>{m.note || '—'}</td>
-                  </tr>
-                ))}
+                {movements.map((m: any) => {
+                  const variantName = variantNameForMovement(m);
+                  return (
+                    <tr key={m.id}>
+                      <td style={{ fontSize: 12, color: '#748278', whiteSpace: 'nowrap' }}>
+                        {new Date(m.createdAt).toLocaleString(locale)}
+                      </td>
+                      <td style={{ fontSize: 13 }}>
+                        <div>{m.product?.name ?? '—'}</div>
+                        {variantName && <div style={{ fontSize: 11, color: '#748278', marginTop: 1 }}>{variantName}</div>}
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: m.delta > 0 ? '#065f46' : m.delta < 0 ? '#991b1b' : '#748278' }}>
+                        {m.delta > 0 ? `+${m.delta}` : m.delta}
+                      </td>
+                      <td style={{ textAlign: 'right', fontSize: 12, color: '#748278' }}>
+                        {m.qtyBefore} → {m.qtyAfter}
+                      </td>
+                      <td style={{ fontSize: 12, color: '#748278' }}>{m.note || '—'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
