@@ -55,13 +55,8 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
 
   const alerts: { text: string; severity: 'error' | 'warn' | 'info'; page?: SysPage }[] = [];
   if (pendingInvoices.length > 0) alerts.push({ text: `${pendingInvoices.length} инвойс(ов) ожидают подтверждения`, severity: 'warn', page: 'invoices' });
-  if (dash) {
-    const expiringSoon = dash.tenants?.filter((t: any) => {
-      if (!t.planExpiresAt) return false;
-      const days = (new Date(t.planExpiresAt).getTime() - Date.now()) / 86400000;
-      return days >= 0 && days <= 7;
-    }) || [];
-    if (expiringSoon.length > 0) alerts.push({ text: `${expiringSoon.length} план(ов) истекает в течение 7 дней`, severity: 'warn', page: 'tenants' });
+  if (dash?.expiringPlans > 0) {
+    alerts.push({ text: `${dash.expiringPlans} план(ов) истекает в течение 7 дней`, severity: 'warn', page: 'tenants' });
   }
   const failedBots = bots.filter((b) => !b.isActive);
   if (failedBots.length > 0) alerts.push({ text: `${failedBots.length} бот(ов) неактивны`, severity: 'error', page: 'monitoring' });

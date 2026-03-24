@@ -149,7 +149,8 @@ export async function getSystemDashboard() {
   const now = new Date();
   const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
-  const [tenants, activeStores, pendingInvoices, monthlyOrders, pendingAmountAgg, paidInvoicesMonth, paidRevenueMonthAgg] = await Promise.all([
+  const in7days = new Date(Date.now() + 7 * 86400000);
+  const [tenants, activeStores, pendingInvoices, monthlyOrders, pendingAmountAgg, paidInvoicesMonth, paidRevenueMonthAgg, expiringPlans] = await Promise.all([
     prisma.tenant.count(),
     prisma.store.count({ where: { isActive: true } }),
     prisma.invoice.count({ where: { status: 'PENDING', paymentRef: { not: null } } }),
@@ -177,6 +178,7 @@ export async function getSystemDashboard() {
       },
       _sum: { amount: true },
     }),
+    prisma.tenant.count({ where: { plan: { not: 'FREE' }, planExpiresAt: { gte: now, lte: in7days } } }),
   ]);
 
   return {
@@ -187,6 +189,7 @@ export async function getSystemDashboard() {
     pendingAmount: Number(pendingAmountAgg._sum.amount || 0),
     paidInvoicesMonth,
     paidRevenueMonth: Number(paidRevenueMonthAgg._sum.amount || 0),
+    expiringPlans,
   };
 }
 
