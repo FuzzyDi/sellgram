@@ -3,6 +3,7 @@ import prisma from '../../lib/prisma.js';
 import { validateInitData, type TelegramUser } from '../../lib/telegram-auth.js';
 import { decrypt } from '../../lib/encrypt.js';
 import { getConfig } from '../../config/index.js';
+import { dispatchWebhook } from '../../lib/webhook-dispatcher.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -51,7 +52,19 @@ export async function telegramShopAuth(request: FastifyRequest, reply: FastifyRe
           lastName: tgUser.last_name,
         },
         update: {},
+        select: { id: true, createdAt: true, firstName: true, lastName: true, telegramUser: true },
       });
+
+      // Dispatch customer.created only for genuinely new records (created within this request)
+      if (Date.now() - customer.createdAt.getTime() < 5000) {
+        dispatchWebhook(store.tenantId, 'customer.created', {
+          customerId: customer.id,
+          telegramId: tgUser.id.toString(),
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          username: customer.telegramUser,
+        });
+      }
 
       request.customer = { id: customer.id, tenantId: store.tenantId };
       return;

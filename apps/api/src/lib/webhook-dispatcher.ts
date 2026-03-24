@@ -4,7 +4,8 @@ import prisma from './prisma.js';
 export type WebhookEventType =
   | 'order.created'
   | 'order.status_changed'
-  | 'order.paid';
+  | 'order.paid'
+  | 'customer.created';
 
 export async function dispatchWebhook(tenantId: string, event: WebhookEventType, data: unknown) {
   const hooks = await prisma.webhook.findMany({

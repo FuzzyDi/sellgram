@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 
-const ALLOWED_EVENTS = ['order.created', 'order.status_changed', 'order.paid', '*'] as const;
+const ALLOWED_EVENTS = ['order.created', 'order.status_changed', 'order.paid', 'customer.created', '*'] as const;
 
 const createSchema = z.object({
   url: z.string().url().max(500),
