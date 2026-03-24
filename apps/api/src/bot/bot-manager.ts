@@ -630,6 +630,26 @@ function getBotInstanceForTenant(tenantId: string): BotInstance | null {
   return null;
 }
 
+async function downgradeExpiredPlans(): Promise<void> {
+  const now = new Date();
+  const expired = await prisma.tenant.findMany({
+    where: {
+      plan: { in: ['PRO', 'BUSINESS'] },
+      planExpiresAt: { lt: now },
+    },
+    select: { id: true, name: true, plan: true },
+  });
+  for (const tenant of expired) {
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { plan: 'FREE', planExpiresAt: null },
+    });
+  }
+  if (expired.length > 0) {
+    fastify.log.info(`Downgraded ${expired.length} expired tenant(s) to FREE`);
+  }
+}
+
 async function remindExpiringSubscriptions(): Promise<void> {
   const now = new Date();
   const reminder = await getSystemSubscriptionReminderSettings();
@@ -753,6 +773,10 @@ export async function initBotManager(fastify: FastifyInstance): Promise<void> {
 
   setInterval(() => void remindExpiringSubscriptions(), 60 * 60 * 1000);
   setTimeout(() => void remindExpiringSubscriptions(), 30_000);
+
+  // Downgrade expired plans — runs every 6 hours, once at startup after 1 min
+  setInterval(() => void downgradeExpiredPlans(), 6 * 60 * 60 * 1000);
+  setTimeout(() => void downgradeExpiredPlans(), 60_000);
 }
 
 async function retryTelegramSend(fn: () => Promise<unknown>, maxAttempts = 3): Promise<void> {

@@ -128,11 +128,13 @@ function toCsv(rows: Array<Record<string, unknown>>, columns: Array<{ key: strin
 async function getTenantReportLimits(tenantId: string): Promise<ReportLimits> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { plan: true },
+    select: { plan: true, planExpiresAt: true },
   });
 
   const fallback = PLANS.FREE;
-  const plan = tenant ? PLANS[tenant.plan as PlanCode] || fallback : fallback;
+  const effectivePlanCode: PlanCode =
+    tenant?.planExpiresAt && tenant.planExpiresAt < new Date() ? 'FREE' : (tenant?.plan as PlanCode) ?? 'FREE';
+  const plan = PLANS[effectivePlanCode] || fallback;
   const planCode = plan.code;
   const fallbackExports = planCode === 'BUSINESS' ? -1 : planCode === 'PRO' ? 50 : 0;
 

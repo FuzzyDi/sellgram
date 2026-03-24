@@ -12,14 +12,17 @@ export function planGuard(limitKey: LimitKey) {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: request.tenantId },
-      select: { plan: true },
+      select: { plan: true, planExpiresAt: true },
     });
 
     if (!tenant) {
       return reply.status(404).send({ success: false, error: 'Tenant not found' });
     }
 
-    const plan = PLANS[tenant.plan as PlanCode];
+    // Treat plan as FREE if subscription has expired
+    const effectivePlan: PlanCode =
+      tenant.planExpiresAt && tenant.planExpiresAt < new Date() ? 'FREE' : (tenant.plan as PlanCode);
+    const plan = PLANS[effectivePlan];
     if (!plan) {
       return reply.status(500).send({ success: false, error: 'Invalid plan' });
     }
