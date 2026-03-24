@@ -97,6 +97,38 @@ export default async function customerRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Customer updated' };
   });
 
+  fastify.get('/customers/export', async (request, reply) => {
+    const where: any = { tenantId: request.tenantId! };
+    const customers = await prisma.customer.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 10000,
+    });
+
+    const header = 'ID,First Name,Last Name,Telegram,Phone,Orders,Total Spent,Loyalty Points,Registered\n';
+    const rows = customers
+      .map((c: any) =>
+        [
+          c.id,
+          `"${(c.firstName || '').replace(/"/g, '""')}"`,
+          `"${(c.lastName || '').replace(/"/g, '""')}"`,
+          c.telegramUser ? `@${c.telegramUser}` : c.telegramId.toString(),
+          c.phone || '',
+          c.ordersCount ?? 0,
+          c.totalSpent ?? 0,
+          c.loyaltyPoints ?? 0,
+          new Date(c.createdAt).toISOString().slice(0, 10),
+        ].join(',')
+      )
+      .join('\n');
+
+    const date = new Date().toISOString().slice(0, 10);
+    reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="customers-${date}.csv"`)
+      .send(header + rows);
+  });
+
   // Manual loyalty adjustment
   fastify.post('/customers/:id/loyalty', { preHandler: [permissionGuard('manageCustomers')] }, async (request, reply) => {
     const { id } = request.params as { id: string };

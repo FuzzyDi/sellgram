@@ -146,6 +146,21 @@ export const adminApi = {
 
   getCustomers: (params?: string) => request<any>(`/customers${params ? '?' + params : ''}`),
   getCustomer: (id: string) => request<any>(`/customers/${id}`),
+  downloadCustomersCsv: async () => {
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch(`${ADMIN_API_BASE}/customers/export`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = parseFilenameFromDisposition(res.headers.get('content-disposition'), `customers-${date}.csv`);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    window.URL.revokeObjectURL(url);
+  },
   updateCustomer: (id: string, data: { tags?: string[]; note?: string | null; phone?: string | null }) =>
     request<any>(`/customers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   adjustCustomerLoyalty: (id: string, points: number, description?: string) =>

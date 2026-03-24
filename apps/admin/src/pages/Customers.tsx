@@ -271,7 +271,13 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function handleExport() {
+    setExporting(true);
+    try { await adminApi.downloadCustomersCsv(); } catch { /* ignore */ } finally { setExporting(false); }
+  }
 
   const handleSearch = (value: string) => {
     setSearch(value);
@@ -330,6 +336,9 @@ export default function Customers() {
             placeholder={tr('Поиск: имя, @username, телефон', 'Qidiruv: ism, @username, telefon')}
             style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13, minWidth: 280, flex: 1 }}
           />
+          <button className="sg-btn ghost" onClick={() => void handleExport()} disabled={exporting}>
+            {exporting ? '⏳' : '⬇️'} CSV
+          </button>
         </div>
 
         {loading ? (

@@ -809,7 +809,11 @@ export async function notifyOrderStatus(storeId: string, orderId: string, newSta
     CONFIRMED: tLangByCode(lang, `\u2705 \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D.`, `\u2705 #${order.orderNumber} buyurtma tasdiqlandi.`),
     PREPARING: tLangByCode(lang, `\u{1F468}\u200D\u{1F373} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0433\u043E\u0442\u043E\u0432\u0438\u0442\u0441\u044F.`, `\u{1F468}\u200D\u{1F373} #${order.orderNumber} buyurtma tayyorlanmoqda.`),
     READY: tLangByCode(lang, `\u{1F4E6} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0433\u043E\u0442\u043E\u0432.`, `\u{1F4E6} #${order.orderNumber} buyurtma tayyor.`),
-    SHIPPED: tLangByCode(lang, `\u{1F69A} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0432 \u043F\u0443\u0442\u0438.`, `\u{1F69A} #${order.orderNumber} buyurtma yo'lda.`),
+    SHIPPED: tLangByCode(
+      lang,
+      `\u{1F69A} \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u0432 \u043F\u0443\u0442\u0438.${(order as any).trackingNumber ? `\n\u{1F50D} \u0422\u0440\u0435\u043A-\u043D\u043E\u043C\u0435\u0440: ${(order as any).trackingNumber}` : ''}`,
+      `\u{1F69A} #${order.orderNumber} buyurtma yo'lda.${(order as any).trackingNumber ? `\n\u{1F50D} Kuzatuv raqami: ${(order as any).trackingNumber}` : ''}`
+    ),
     CANCELLED: tLangByCode(lang, `\u274C \u0417\u0430\u043A\u0430\u0437 #${order.orderNumber} \u043E\u0442\u043C\u0435\u043D\u0435\u043D.`, `\u274C #${order.orderNumber} buyurtma bekor qilindi.`),
     REFUNDED: tLangByCode(lang, `\u{1F4B8} \u0412\u043E\u0437\u0432\u0440\u0430\u0442 \u043F\u043E \u0437\u0430\u043A\u0430\u0437\u0443 #${order.orderNumber} \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D.`, `\u{1F4B8} #${order.orderNumber} buyurtma uchun qaytarish bajarildi.`),
   };
