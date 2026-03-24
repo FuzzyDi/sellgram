@@ -170,10 +170,22 @@ export default function OrderStatus({ id }: { id: string }) {
           </div>
         </div>
 
-        {order.deliveryAddress && (
+        {(order.deliveryAddress || order.trackingNumber) && (
           <div className="card" style={{ marginBottom: 12 }}>
             <p className="section-title">{tr('Доставка', 'Yetkazish')}</p>
-            <p style={{ fontSize: 14 }}>📍 {order.deliveryAddress}</p>
+            {order.deliveryAddress && <p style={{ fontSize: 14, marginBottom: order.trackingNumber ? 6 : 0 }}>📍 {order.deliveryAddress}</p>}
+            {order.trackingNumber && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <span style={{ fontSize: 13, color: 'var(--hint)' }}>🔍 {tr('Трек-номер', 'Kuzatuv raqami')}:</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14, flex: 1 }}>{order.trackingNumber}</span>
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(order.trackingNumber).catch(() => {}); window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success'); }}
+                  style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 8px', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}
+                >
+                  {tr('Копировать', 'Nusxa')}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

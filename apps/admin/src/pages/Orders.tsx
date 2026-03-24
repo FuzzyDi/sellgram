@@ -38,6 +38,8 @@ export default function Orders() {
   } | null>(null);
   const [dialogReason, setDialogReason] = useState('');
   const [dialogRefundAmount, setDialogRefundAmount] = useState('');
+  const [shipDialog, setShipDialog] = useState<{ orderId: string } | null>(null);
+  const [trackingInput, setTrackingInput] = useState('');
 
   function showNotice(tone: 'success' | 'error', message: string) {
     setNotice({ tone, message });
@@ -121,6 +123,30 @@ export default function Orders() {
     },
     [loadOrders, pendingOrders]
   );
+
+  function openShipDialog(orderId: string) {
+    setTrackingInput('');
+    setShipDialog({ orderId });
+  }
+
+  async function submitShip() {
+    if (!shipDialog) return;
+    const { orderId } = shipDialog;
+    setShipDialog(null);
+    if (pendingOrders.has(orderId)) return;
+    setPendingOrders((prev) => new Set(prev).add(orderId));
+    try {
+      await adminApi.updateOrderStatus(orderId, {
+        status: 'SHIPPED',
+        ...(trackingInput.trim() ? { trackingNumber: trackingInput.trim() } : {}),
+      });
+      loadOrders();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setPendingOrders((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  }
 
   function openActionDialog(orderId: string, orderTotal: number, action: 'cancel' | 'refund') {
     setDialogReason('');
@@ -352,7 +378,7 @@ export default function Orders() {
                   )}
                   {order.status === 'READY' && (
                     <>
-                      <Button disabled={pendingOrders.has(order.id)} onClick={() => handleStatusChange(order.id, 'SHIPPED')} className="sg-btn ghost">
+                      <Button disabled={pendingOrders.has(order.id)} onClick={() => openShipDialog(order.id)} className="sg-btn ghost">
                         {tr('Отправить', "Jo'natish")}
                       </Button>
                       <Button disabled={pendingOrders.has(order.id)} onClick={() => openActionDialog(order.id, Number(order.total), 'cancel')} className="sg-btn danger">
@@ -456,6 +482,33 @@ export default function Orders() {
               </Button>
               <Button className="sg-btn ghost" disabled={(data?.page || page) >= Math.max(1, data?.totalPages || 1)} onClick={() => setPage((p) => p + 1)}>
                 {tr('Далее', 'Keyingi')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {shipDialog && (
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+          <div className="sg-card" style={{ width: '100%', maxWidth: 420 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 800 }}>
+              {tr('Отправить заказ', "Buyurtmani jo'natish")}
+            </h3>
+            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 14px' }}>
+              {tr('Трек-номер (необязательно)', 'Kuzatuv raqami (ixtiyoriy)')}
+            </p>
+            <input
+              autoFocus
+              value={trackingInput}
+              onChange={(e) => setTrackingInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitShip()}
+              className="sg-input"
+              placeholder="TRK-123456"
+              style={{ marginBottom: 14 }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <Button className="sg-btn ghost" onClick={() => setShipDialog(null)}>{tr('Отмена', 'Bekor')}</Button>
+              <Button className="sg-btn primary" onClick={() => void submitShip()}>
+                {tr('Отправить', "Jo'natish")} 🚚
               </Button>
             </div>
           </div>
