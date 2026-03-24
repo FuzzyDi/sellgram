@@ -6,19 +6,90 @@ const STORAGE_KEY = 'sg_onboarding_done';
 export function markOnboardingDone() { localStorage.setItem(STORAGE_KEY, '1'); }
 export function isOnboardingDone() { return !!localStorage.getItem(STORAGE_KEY); }
 
-type Step = 'welcome' | 'store' | 'bot' | 'delivery' | 'done';
+type Step = 'welcome' | 'template' | 'store' | 'bot' | 'delivery' | 'done';
 
-const STEPS: Step[] = ['welcome', 'store', 'bot', 'delivery', 'done'];
+const STEPS: Step[] = ['welcome', 'template', 'store', 'bot', 'delivery', 'done'];
+
+interface IndustryTemplate {
+  id: string;
+  emoji: string;
+  nameRu: string;
+  nameUz: string;
+  categoriesRu: string[];
+  categoriesUz: string[];
+}
+
+const TEMPLATES: IndustryTemplate[] = [
+  {
+    id: 'flowers',
+    emoji: '🌸',
+    nameRu: 'Цветы',
+    nameUz: 'Gullar',
+    categoriesRu: ['Букеты', 'Горшечные растения', 'Композиции', 'Аксессуары'],
+    categoriesUz: ['Guldastalar', 'Idishli o\'simliklar', 'Kompozitsiyalar', 'Aksessuarlar'],
+  },
+  {
+    id: 'food',
+    emoji: '🍕',
+    nameRu: 'Еда и доставка',
+    nameUz: 'Ovqat va yetkazib berish',
+    categoriesRu: ['Горячие блюда', 'Напитки', 'Выпечка', 'Десерты'],
+    categoriesUz: ['Issiq taomlar', 'Ichimliklar', 'Pishiriqlar', 'Desertlar'],
+  },
+  {
+    id: 'clothing',
+    emoji: '👗',
+    nameRu: 'Одежда',
+    nameUz: 'Kiyim',
+    categoriesRu: ['Женское', 'Мужское', 'Детское', 'Аксессуары'],
+    categoriesUz: ['Ayollar', 'Erkaklar', 'Bolalar', 'Aksessuarlar'],
+  },
+  {
+    id: 'electronics',
+    emoji: '📱',
+    nameRu: 'Электроника',
+    nameUz: 'Elektronika',
+    categoriesRu: ['Смартфоны', 'Наушники', 'Аксессуары', 'Умный дом'],
+    categoriesUz: ['Smartfonlar', 'Quloqchinlar', 'Aksessuarlar', 'Aqlli uy'],
+  },
+  {
+    id: 'beauty',
+    emoji: '💄',
+    nameRu: 'Красота и уход',
+    nameUz: 'Go\'zallik va parvarishlash',
+    categoriesRu: ['Уход за лицом', 'Уход за телом', 'Макияж', 'Парфюмерия'],
+    categoriesUz: ['Yuz parvarishi', 'Tana parvarishi', 'Makiyaj', 'Atir-upa'],
+  },
+  {
+    id: 'grocery',
+    emoji: '🛒',
+    nameRu: 'Продукты',
+    nameUz: 'Oziq-ovqat',
+    categoriesRu: ['Фрукты и овощи', 'Молочное', 'Мясо и рыба', 'Бакалея'],
+    categoriesUz: ['Meva va sabzavotlar', 'Sut mahsulotlari', 'Go\'sht va baliq', 'Baqqollik'],
+  },
+  {
+    id: 'blank',
+    emoji: '📦',
+    nameRu: 'Пустой шаблон',
+    nameUz: 'Bo\'sh shablon',
+    categoriesRu: [],
+    categoriesUz: [],
+  },
+];
 
 interface Props {
   onFinish: () => void;
 }
 
 export default function OnboardingWizard({ onFinish }: Props) {
-  const { tr } = useAdminI18n();
+  const { tr, lang } = useAdminI18n();
   const [step, setStep] = useState<Step>('welcome');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Step: template
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('blank');
 
   // Step: store
   const [storeName, setStoreName] = useState('');
@@ -100,12 +171,19 @@ export default function OnboardingWizard({ onFinish }: Props) {
           storeId: createdStoreId || undefined,
         });
       } else {
-        // Самовывоз — create zone with price 0
         await adminApi.createDeliveryZone({
           name: tr('Самовывоз', 'O\'z-o\'ziga olish'),
           price: 0,
           storeId: createdStoreId || undefined,
         });
+      }
+      // Apply industry template — create categories
+      const tpl = TEMPLATES.find((t) => t.id === selectedTemplate);
+      if (tpl && tpl.categoriesRu.length > 0) {
+        const names = lang === 'uz' ? tpl.categoriesUz : tpl.categoriesRu;
+        for (let i = 0; i < names.length; i++) {
+          await adminApi.createCategory({ name: names[i], sortOrder: i });
+        }
       }
       setStep('done');
     } catch (e: any) {
@@ -196,9 +274,83 @@ export default function OnboardingWizard({ onFinish }: Props) {
             <button
               className="sg-btn primary"
               style={{ width: '100%', padding: '13px 0', fontSize: 16 }}
-              onClick={() => setStep('store')}
+              onClick={() => setStep('template')}
             >
               {tr('Начать настройку', 'Sozlashni boshlash')} →
+            </button>
+          </>
+        )}
+
+        {/* ── STEP: TEMPLATE ── */}
+        {step === 'template' && (
+          <>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>
+                {tr('Выберите шаблон отрасли', 'Soha shablonini tanlang')}
+              </h2>
+              <p style={{ margin: '6px 0 0', color: '#6b7280', fontSize: 14 }}>
+                {tr(
+                  'Создадим стартовые категории. Потом можно изменить.',
+                  'Boshlang\'ich kategoriyalar yaratiladi. Keyinchalik o\'zgartirish mumkin.'
+                )}
+              </p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {TEMPLATES.map((tpl) => {
+                const active = selectedTemplate === tpl.id;
+                return (
+                  <button
+                    key={tpl.id}
+                    onClick={() => setSelectedTemplate(tpl.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '11px 12px', borderRadius: 12, border: '2px solid',
+                      borderColor: active ? '#00875a' : '#e5e7eb',
+                      background: active ? '#f0faf4' : '#fff',
+                      cursor: 'pointer', textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>{tpl.emoji}</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: active ? '#065f46' : '#111827' }}>
+                        {lang === 'uz' ? tpl.nameUz : tpl.nameRu}
+                      </div>
+                      {tpl.categoriesRu.length > 0 && (
+                        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
+                          {tpl.categoriesRu.length} {tr('категорий', 'kategoriya')}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedTemplate !== 'blank' && (
+              <div style={{ background: '#f9fafb', borderRadius: 10, padding: '10px 12px', border: '1px solid #e5e7eb' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6 }}>
+                  {tr('Будут созданы категории:', 'Kategoriyalar yaratiladi:')}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {(lang === 'uz'
+                    ? TEMPLATES.find((t) => t.id === selectedTemplate)!.categoriesUz
+                    : TEMPLATES.find((t) => t.id === selectedTemplate)!.categoriesRu
+                  ).map((cat) => (
+                    <span key={cat} style={{
+                      background: '#e5e7eb', color: '#374151',
+                      borderRadius: 6, padding: '3px 8px', fontSize: 12, fontWeight: 500,
+                    }}>
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button
+              className="sg-btn primary"
+              style={{ width: '100%', padding: '13px 0', fontSize: 15 }}
+              onClick={() => setStep('store')}
+            >
+              {tr('Продолжить', 'Davom etish')} →
             </button>
           </>
         )}
@@ -369,7 +521,12 @@ export default function OnboardingWizard({ onFinish }: Props) {
               disabled={saving}
               onClick={saveDelivery}
             >
-              {saving ? tr('Сохранение...', 'Saqlanmoqda...') : tr('Сохранить и продолжить', 'Saqlash va davom etish')}
+              {saving
+                ? tr('Сохранение...', 'Saqlanmoqda...')
+                : TEMPLATES.find((t) => t.id === selectedTemplate)?.categoriesRu.length
+                  ? tr('Сохранить и создать категории', 'Saqlash va kategoriyalar yaratish')
+                  : tr('Сохранить и продолжить', 'Saqlash va davom etish')
+              }
             </button>
           </>
         )}
