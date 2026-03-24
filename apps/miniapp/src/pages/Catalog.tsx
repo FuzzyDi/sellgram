@@ -39,6 +39,7 @@ export default function Catalog() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
+  const [brandingWatermark, setBrandingWatermark] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounce search input 350ms
@@ -63,6 +64,7 @@ export default function Catalog() {
         if (cancelled) return;
         if (d.categories) setCategories(d.categories);
         if (d.banners && isFirstPage) setBanners(d.banners);
+        if (isFirstPage && d.brandingWatermark !== undefined) setBrandingWatermark(Boolean(d.brandingWatermark));
         setTotalPages(d.totalPages ?? 1);
         setProducts((prev) => isFirstPage ? (d.products || []) : [...prev, ...(d.products || [])]);
       })
@@ -179,6 +181,11 @@ export default function Catalog() {
         </>
       )}
 
+      {brandingWatermark && (
+        <div style={{ textAlign: 'center', padding: '4px 16px 8px', fontSize: 11, color: 'var(--hint)', opacity: 0.6 }}>
+          Powered by <a href="https://sellgram.uz" target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'none', fontWeight: 600 }}>SellGram</a>
+        </div>
+      )}
       <div style={{ paddingBottom: 16 }} />
       <BottomNav active="catalog" />
     </div>

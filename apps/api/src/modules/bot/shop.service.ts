@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma.js';
 import { DEFAULT_TIERS, computeTier } from '../loyalty/routes.js';
+import { PLANS, type PlanCode } from '@sellgram/shared';
 
 export class ShopApiError extends Error {
   code: 'PRODUCT_NOT_FOUND' | 'ORDER_NOT_FOUND' | 'ORDER_CANNOT_CANCEL' | 'ORDER_CANNOT_REVIEW' | 'REVIEW_ALREADY_SUBMITTED';
@@ -17,13 +18,14 @@ export async function getShopCatalog(
 ) {
   const { q, categoryId, page, pageSize } = opts;
 
-  const [categories, store] = await Promise.all([
+  const [categories, store, tenant] = await Promise.all([
     prisma.category.findMany({
       where: { tenantId, isActive: true },
       orderBy: { sortOrder: 'asc' },
       include: { _count: { select: { products: { where: { isActive: true } } } } },
     }),
     prisma.store.findUnique({ where: { id: storeId }, select: { botUsername: true } }),
+    prisma.tenant.findUnique({ where: { id: tenantId }, select: { plan: true, planExpiresAt: true } }),
   ]);
 
   const where: any = { tenantId, isActive: true };
@@ -44,7 +46,11 @@ export async function getShopCatalog(
     prisma.product.count({ where }),
   ]);
 
-  return { categories, products, total, page, pageSize, totalPages: Math.ceil(total / pageSize), botUsername: store?.botUsername ?? null };
+  const effectivePlan: PlanCode =
+    tenant?.planExpiresAt && tenant.planExpiresAt < new Date() ? 'FREE' : (tenant?.plan as PlanCode) ?? 'FREE';
+  const brandingWatermark = PLANS[effectivePlan]?.limits?.brandingWatermark ?? true;
+
+  return { categories, products, total, page, pageSize, totalPages: Math.ceil(total / pageSize), botUsername: store?.botUsername ?? null, brandingWatermark };
 }
 
 export async function getShopProduct(tenantId: string, id: string) {

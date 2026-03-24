@@ -914,12 +914,20 @@ export async function sendPromoBroadcast(
   const instance = bots.get(storeId);
   if (!instance) return { sent: 0, failed: recipients.length };
 
+  // Only add watermark for FREE plan (or expired paid plans)
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: instance.tenantId },
+    select: { plan: true, planExpiresAt: true },
+  });
+  const effectivePlan = tenant?.planExpiresAt && tenant.planExpiresAt < new Date() ? 'FREE' : (tenant?.plan ?? 'FREE');
+  const showWatermark = effectivePlan === 'FREE';
+
   let sent = 0;
   let failed = 0;
 
   for (const recipient of recipients) {
     const header = payload.title ? `*${payload.title}*\n\n` : '';
-    const footer = tLangByCode(recipient.language, '\n\n- SellGram', '\n\n- SellGram');
+    const footer = showWatermark ? tLangByCode(recipient.language, '\n\n- SellGram', '\n\n- SellGram') : '';
 
     try {
       await instance.bot.api.sendMessage(recipient.telegramId.toString(), `${header}${payload.message}${footer}`, { parse_mode: 'Markdown' });
