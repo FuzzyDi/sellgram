@@ -210,14 +210,27 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
 
   // ── Customer profile ───────────────────────────────────────
   fastify.get('/shop/profile', async (request, reply) => {
-    const customer = await prisma.customer.findUnique({
+    const profileSelect = {
+      id: true, firstName: true, lastName: true, telegramUser: true,
+      phone: true, loyaltyPoints: true, ordersCount: true, totalSpent: true,
+      referralCode: true, createdAt: true,
+    };
+    let customer = await prisma.customer.findUnique({
       where: { id: request.customer!.id },
-      select: {
-        id: true, firstName: true, lastName: true, telegramUser: true,
-        phone: true, loyaltyPoints: true, ordersCount: true, totalSpent: true, createdAt: true,
-      },
+      select: profileSelect,
     });
     if (!customer) return reply.status(404).send({ success: false, error: 'Customer not found' });
+
+    // Generate referral code on first profile access
+    if (!customer.referralCode) {
+      const code = request.customer!.id.slice(-6).toUpperCase();
+      customer = await prisma.customer.update({
+        where: { id: request.customer!.id },
+        data: { referralCode: code },
+        select: profileSelect,
+      });
+    }
+
     return { success: true, data: customer };
   });
 

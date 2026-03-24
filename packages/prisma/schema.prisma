@@ -326,6 +326,8 @@ model Customer {
   ordersCount   Int      @default(0)
   tags          String[] @default([])
   note          String?
+  referralCode  String?  @unique
+  referredBy    String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -584,6 +586,9 @@ model LoyaltyConfig {
   pointValue        Int     @default(100)     // 1 point = 100 UZS
   maxDiscountPct    Int     @default(30)
   minPointsToRedeem Int     @default(100)
+  tiers             Json?                     // [{name,nameUz,minSpend,multiplier,color}]
+  referralEnabled   Boolean @default(false)
+  referralBonus     Int     @default(500)
 
   @@map("loyalty_configs")
 }

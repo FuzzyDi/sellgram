@@ -9,6 +9,7 @@ export const checkoutSchema = z.object({
   contactPhone: z.string().optional(),
   paymentMethodId: z.string().optional(),
   promoCodeId: z.string().optional(),
+  referralCode: z.string().max(20).optional(),
 });
 
 export const cartAddSchema = z.object({

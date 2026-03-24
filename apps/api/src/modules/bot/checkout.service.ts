@@ -240,6 +240,20 @@ export async function createShopCheckoutOrder(input: {
       });
     }
 
+    // Apply referral code: link customer to referrer (only if not already referred)
+    if (body.referralCode) {
+      const referrer = await tx.customer.findFirst({
+        where: { referralCode: body.referralCode.toUpperCase(), tenantId },
+        select: { id: true },
+      });
+      if (referrer && referrer.id !== customerId) {
+        await tx.customer.updateMany({
+          where: { id: customerId, referredBy: null },
+          data: { referredBy: referrer.id },
+        });
+      }
+    }
+
     // Reserve stock immediately on order creation to prevent overselling
     for (const item of orderItems) {
       if (item.variantId) {

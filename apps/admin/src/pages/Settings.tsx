@@ -689,77 +689,180 @@ export default function Settings() {
       )}
 
       {tab === 'loyalty' && loyalty && (
-        <section className="sg-card" style={{ maxWidth: 720 }}>
-          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('\u041f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 \u043b\u043e\u044f\u043b\u044c\u043d\u043e\u0441\u0442\u0438', 'Loyallik dasturi')}</h3>
-          <p className="sg-subtitle">{tr('\u041d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0435 \u0431\u0430\u043b\u043b\u043e\u0432 \u0438 \u043b\u0438\u043c\u0438\u0442\u044b \u0441\u043a\u0438\u0434\u043a\u0438', 'Ball berish qoidalari va chegirma limitlari')}</p>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void saveLoyalty();
-            }}
-            className="sg-grid"
-            style={{ gap: 12, marginTop: 10 }}
-          >
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-              <input
-                type="checkbox"
-                checked={!!loyalty.isEnabled}
-                onChange={(e) => setLoyalty({ ...loyalty, isEnabled: e.target.checked })}
-              />
-              {tr('\u0412\u043a\u043b\u044e\u0447\u0435\u043d\u0430', 'Yoqilgan')}
-            </label>
-
-            <div className="sg-grid cols-2">
-              <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('\u0421\u0443\u043c\u043c\u0430 \u0448\u0430\u0433\u0430', 'Qadam summasi')}</label>
-                <input
-                  type="number"
-                  value={loyalty.unitAmount || 1000}
-                  onChange={(e) => setLoyalty({ ...loyalty, unitAmount: +e.target.value })}
-                  className="w-full"
-                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                />
+        <section className="sg-grid" style={{ gap: 12, maxWidth: 760 }}>
+          {/* Base settings */}
+          <article className="sg-card">
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Программа лояльности', 'Loyallik dasturi')}</h3>
+            <p className="sg-subtitle">{tr('Начисление баллов и лимиты скидки', 'Ball berish qoidalari va chegirma limitlari')}</p>
+            <form onSubmit={(e) => { e.preventDefault(); void saveLoyalty(); }} className="sg-grid" style={{ gap: 12, marginTop: 10 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                <input type="checkbox" checked={!!loyalty.isEnabled} onChange={(e) => setLoyalty({ ...loyalty, isEnabled: e.target.checked })} />
+                {tr('Включена', 'Yoqilgan')}
+              </label>
+              <div className="sg-grid cols-2">
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Сумма шага', 'Qadam summasi')}</label>
+                  <input type="number" value={loyalty.unitAmount || 1000} onChange={(e) => setLoyalty({ ...loyalty, unitAmount: +e.target.value })} style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Баллов за шаг', 'Qadam uchun ball')}</label>
+                  <input type="number" value={loyalty.pointsPerUnit || 1} onChange={(e) => setLoyalty({ ...loyalty, pointsPerUnit: +e.target.value })} style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }} />
+                </div>
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('\u0411\u0430\u043b\u043b\u043e\u0432 \u0437\u0430 \u0448\u0430\u0433', 'Qadam uchun ball')}</label>
-                <input
-                  type="number"
-                  value={loyalty.pointsPerUnit || 1}
-                  onChange={(e) => setLoyalty({ ...loyalty, pointsPerUnit: +e.target.value })}
-                  className="w-full"
-                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                />
+              <div className="sg-grid cols-2">
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Цена 1 балла (сум)', '1 ball qiymati (so\'m)')}</label>
+                  <input type="number" value={loyalty.pointValue || 100} onChange={(e) => setLoyalty({ ...loyalty, pointValue: +e.target.value })} style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Макс. скидка %', 'Maks. chegirma %')}</label>
+                  <input type="number" value={loyalty.maxDiscountPct || 30} onChange={(e) => setLoyalty({ ...loyalty, maxDiscountPct: +e.target.value })} style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }} />
+                </div>
               </div>
+              <button className="sg-btn primary" type="submit" disabled={saving}>
+                {saving ? '...' : tr('Сохранить', 'Saqlash')}
+              </button>
+            </form>
+          </article>
+
+          {/* Tiers */}
+          <article className="sg-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Уровни лояльности', 'Loyallik darajalari')}</h3>
+                <p className="sg-subtitle" style={{ margin: '4px 0 0' }}>{tr('Множитель баллов растёт с суммой покупок', 'Ball ko\'paytmasi umumiy xarid bilan o\'sadi')}</p>
+              </div>
+              <button
+                className="sg-btn ghost"
+                type="button"
+                style={{ fontSize: 12 }}
+                onClick={() => {
+                  const tiers = [...(loyalty.tiers || [])];
+                  tiers.push({ name: 'New', nameUz: 'Yangi', minSpend: 0, multiplier: 1, color: '#cd7f32' });
+                  setLoyalty({ ...loyalty, tiers });
+                }}
+              >
+                + {tr('Добавить', 'Qo\'shish')}
+              </button>
             </div>
-
-            <div className="sg-grid cols-2">
-              <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('\u0426\u0435\u043d\u0430 1 \u0431\u0430\u043b\u043b\u0430', '1 ball qiymati')}</label>
-                <input
-                  type="number"
-                  value={loyalty.pointValue || 100}
-                  onChange={(e) => setLoyalty({ ...loyalty, pointValue: +e.target.value })}
-                  className="w-full"
-                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('\u041c\u0430\u043a\u0441. \u0441\u043a\u0438\u0434\u043a\u0430 %', 'Maks. chegirma %')}</label>
-                <input
-                  type="number"
-                  value={loyalty.maxDiscountPct || 30}
-                  onChange={(e) => setLoyalty({ ...loyalty, maxDiscountPct: +e.target.value })}
-                  className="w-full"
-                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-                />
-              </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {(loyalty.tiers || []).map((tier: any, idx: number) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 80px 36px 36px', gap: 6, alignItems: 'center', background: '#f9fafb', borderRadius: 10, padding: '8px 10px' }}>
+                  <input
+                    value={tier.name}
+                    onChange={(e) => {
+                      const tiers = [...loyalty.tiers];
+                      tiers[idx] = { ...tiers[idx], name: e.target.value };
+                      setLoyalty({ ...loyalty, tiers });
+                    }}
+                    placeholder="Bronze"
+                    style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '5px 8px', fontSize: 13 }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="color"
+                      value={tier.color || '#cd7f32'}
+                      onChange={(e) => {
+                        const tiers = [...loyalty.tiers];
+                        tiers[idx] = { ...tiers[idx], color: e.target.value };
+                        setLoyalty({ ...loyalty, tiers });
+                      }}
+                      style={{ width: 28, height: 28, border: 'none', borderRadius: 6, cursor: 'pointer', padding: 0 }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>{tr('от суммы', 'summadan')}</div>
+                      <input
+                        type="number"
+                        value={tier.minSpend}
+                        min={0}
+                        onChange={(e) => {
+                          const tiers = [...loyalty.tiers];
+                          tiers[idx] = { ...tiers[idx], minSpend: +e.target.value };
+                          setLoyalty({ ...loyalty, tiers });
+                        }}
+                        style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '4px 6px', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>{tr('множитель', 'ko\'paytma')}</div>
+                    <input
+                      type="number"
+                      value={tier.multiplier}
+                      min={0.1}
+                      step={0.1}
+                      onChange={(e) => {
+                        const tiers = [...loyalty.tiers];
+                        tiers[idx] = { ...tiers[idx], multiplier: +e.target.value };
+                        setLoyalty({ ...loyalty, tiers });
+                      }}
+                      style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '4px 6px', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>x</div>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: tier.color || '#cd7f32' }}>{tier.multiplier}×</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="sg-btn ghost"
+                    style={{ fontSize: 11, padding: '4px 6px' }}
+                    disabled={(loyalty.tiers || []).length <= 1}
+                    onClick={() => {
+                      const tiers = loyalty.tiers.filter((_: any, i: number) => i !== idx);
+                      setLoyalty({ ...loyalty, tiers });
+                    }}
+                  >
+                    ✕
+                  </button>
+                  <button
+                    type="button"
+                    className="sg-btn primary"
+                    style={{ fontSize: 11, padding: '4px 6px' }}
+                    disabled={saving}
+                    onClick={() => void saveLoyalty()}
+                  >
+                    ✓
+                  </button>
+                </div>
+              ))}
             </div>
+          </article>
 
-            <button className="sg-btn primary" type="submit" disabled={saving}>
-              {saving ? '...' : tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
-            </button>
-          </form>
+          {/* Referral program */}
+          <article className="sg-card">
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, marginBottom: 4 }}>{tr('Реферальная программа', 'Referal dasturi')}</h3>
+            <p className="sg-subtitle" style={{ marginBottom: 12 }}>
+              {tr('Клиент получает код, делится с друзьями. Бонус — после первого заказа друга.', 'Mijoz kod oladi, do\'stlariga ulashadi. Bonus — do\'stning birinchi buyurtmasidan keyin.')}
+            </p>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={!!loyalty.referralEnabled}
+                  onChange={(e) => setLoyalty({ ...loyalty, referralEnabled: e.target.checked })}
+                />
+                {tr('Реферальная программа включена', 'Referal dasturi yoqilgan')}
+              </label>
+              {loyalty.referralEnabled && (
+                <div style={{ maxWidth: 200 }}>
+                  <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>
+                    {tr('Бонус рефереру (баллов)', 'Referal bonusi (ball)')}
+                  </label>
+                  <input
+                    type="number"
+                    value={loyalty.referralBonus ?? 500}
+                    min={0}
+                    onChange={(e) => setLoyalty({ ...loyalty, referralBonus: +e.target.value })}
+                    style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }}
+                  />
+                </div>
+              )}
+              <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void saveLoyalty()}>
+                {saving ? '...' : tr('Сохранить', 'Saqlash')}
+              </button>
+            </div>
+          </article>
         </section>
       )}
 

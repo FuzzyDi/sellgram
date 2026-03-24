@@ -1,4 +1,5 @@
 import prisma from '../../lib/prisma.js';
+import { DEFAULT_TIERS, computeTier } from '../loyalty/routes.js';
 
 export class ShopApiError extends Error {
   code: 'PRODUCT_NOT_FOUND' | 'ORDER_NOT_FOUND' | 'ORDER_CANNOT_CANCEL' | 'ORDER_CANNOT_REVIEW' | 'REVIEW_ALREADY_SUBMITTED';
@@ -201,7 +202,10 @@ export async function submitOrderReview(customerId: string, orderId: string, rat
 }
 
 export async function getCustomerLoyalty(customerId: string, tenantId: string) {
-  const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { loyaltyPoints: true } });
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { loyaltyPoints: true, totalSpent: true },
+  });
   const config = await prisma.loyaltyConfig.findUnique({ where: { tenantId } });
 
   const transactions = await prisma.loyaltyTransaction.findMany({
@@ -210,9 +214,24 @@ export async function getCustomerLoyalty(customerId: string, tenantId: string) {
     take: 20,
   });
 
+  const tiers = (config?.tiers as any) ?? DEFAULT_TIERS;
+  const totalSpent = Number(customer?.totalSpent ?? 0);
+  const currentTier = computeTier(totalSpent, tiers);
+  const sortedTiers = [...tiers].sort((a: any, b: any) => a.minSpend - b.minSpend);
+  const currentTierIdx = sortedTiers.findIndex((t: any) => t.name === currentTier.name);
+  const nextTier = sortedTiers[currentTierIdx + 1] ?? null;
+
   return {
     balance: customer?.loyaltyPoints ?? 0,
     config: config ? { pointValue: config.pointValue, unitAmount: config.unitAmount, pointsPerUnit: config.pointsPerUnit, isEnabled: config.isEnabled } : null,
     transactions,
+    tier: {
+      current: currentTier,
+      next: nextTier,
+      totalSpent,
+      progressPct: nextTier
+        ? Math.min(100, Math.round(((totalSpent - currentTier.minSpend) / (nextTier.minSpend - currentTier.minSpend)) * 100))
+        : 100,
+    },
   };
 }

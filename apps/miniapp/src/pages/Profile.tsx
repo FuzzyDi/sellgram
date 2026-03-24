@@ -193,6 +193,30 @@ export default function Profile() {
           {saved && <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 6 }}>{tr('Сохранено', 'Saqlandi')}</p>}
         </div>
 
+        {/* Referral code */}
+        {profile?.referralCode && (
+          <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 12 }}>
+            <p style={{ fontSize: 12, color: 'var(--hint)', margin: '0 0 8px' }}>{tr('Ваш реферальный код', 'Sizning referal kodingiz')}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontFamily: 'monospace', fontSize: 22, fontWeight: 800, letterSpacing: 3, flex: 1 }}>
+                {profile.referralCode}
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(profile.referralCode).catch(() => {});
+                  window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+                }}
+                style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                {tr('Копировать', 'Nusxa')}
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--hint)', marginTop: 6 }}>
+              {tr('Поделитесь кодом — друг вводит его при заказе, вы получаете бонусные баллы', 'Kodni ulashing — do\'st buyurtmada kiritadi, siz bonus ball olasiz')}
+            </p>
+          </div>
+        )}
+
         {/* Saved addresses */}
         <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>

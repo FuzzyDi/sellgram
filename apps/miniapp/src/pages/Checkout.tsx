@@ -38,6 +38,7 @@ export default function Checkout() {
   const [promoApplied, setPromoApplied] = useState<{ id: string; type: string; value: number; discount: number } | null>(null);
   const [promoError, setPromoError] = useState('');
   const [promoChecking, setPromoChecking] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -122,6 +123,7 @@ export default function Checkout() {
         ...form,
         loyaltyPointsToUse: usePoints ? form.loyaltyPointsToUse : 0,
         promoCodeId: promoApplied?.id,
+        referralCode: referralCode.trim().toUpperCase() || undefined,
       });
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       navigate(`/order/${order.id}`);
@@ -306,6 +308,18 @@ export default function Checkout() {
             </div>
           )}
           {promoError && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#f43f5e' }}>{promoError}</p>}
+
+          {/* Referral code */}
+          <div style={{ marginTop: 10, borderTop: '0.5px solid var(--divider)', paddingTop: 10 }}>
+            <p style={{ fontSize: 12, color: 'var(--hint)', marginBottom: 6 }}>{tr('Код друга (реферальный)', 'Do\'st kodi (referal)')}</p>
+            <input
+              className="field"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value)}
+              placeholder={tr('Необязательно', 'Ixtiyoriy')}
+              style={{ width: '100%', boxSizing: 'border-box', textTransform: 'uppercase', fontSize: 13 }}
+            />
+          </div>
         </div>
 
         <div className="card">

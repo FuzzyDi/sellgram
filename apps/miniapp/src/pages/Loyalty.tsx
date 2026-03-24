@@ -44,7 +44,8 @@ export default function Loyalty() {
         <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Баллы', 'Ballar')}</h1>
       </div>
 
-      <div className="anim-scale" style={{ margin: '12px 12px 16px', padding: '28px 24px', borderRadius: 20, background: 'linear-gradient(145deg, #00875a, #00b96b)', color: '#fff', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+      {/* Balance card */}
+      <div className="anim-scale" style={{ margin: '12px 12px 0', padding: '28px 24px', borderRadius: 20, background: 'linear-gradient(145deg, #00875a, #00b96b)', color: '#fff', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }} />
         <div style={{ position: 'absolute', bottom: -30, left: -10, width: 60, height: 60, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
         <p style={{ fontSize: 14, opacity: 0.85, fontWeight: 500 }}>{tr('Ваш баланс', 'Balansingiz')}</p>
@@ -65,6 +66,41 @@ export default function Loyalty() {
           </div>
         )}
       </div>
+
+      {/* Tier card */}
+      {data?.tier?.current && (
+        <div style={{ margin: '10px 12px 16px', padding: '16px 18px', borderRadius: 16, background: 'var(--sec)', border: '1px solid var(--divider)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: data.tier.current.color, display: 'inline-block', flexShrink: 0 }} />
+              <span style={{ fontWeight: 700, fontSize: 15 }}>
+                {locale === 'uz' ? data.tier.current.nameUz : data.tier.current.name}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--hint)', background: 'var(--bg)', borderRadius: 6, padding: '2px 7px' }}>
+                {data.tier.current.multiplier}× {tr('баллов', 'ball')}
+              </span>
+            </div>
+            {data.tier.next && (
+              <span style={{ fontSize: 12, color: 'var(--hint)' }}>
+                {locale === 'uz' ? data.tier.next.nameUz : data.tier.next.name} →
+              </span>
+            )}
+          </div>
+          {data.tier.next ? (
+            <>
+              <div style={{ height: 6, background: 'var(--divider)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${data.tier.progressPct}%`, background: data.tier.current.color, borderRadius: 99, transition: 'width .5s ease' }} />
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--hint)', marginTop: 5 }}>
+                {Number(data.tier.totalSpent).toLocaleString(locale)} / {Number(data.tier.next.minSpend).toLocaleString(locale)} {tr('сум', "so'm")}
+                {' '}· {tr('до уровня', 'darajagacha')} {locale === 'uz' ? data.tier.next.nameUz : data.tier.next.name}
+              </p>
+            </>
+          ) : (
+            <p style={{ fontSize: 12, color: 'var(--hint)', marginTop: 2 }}>{tr('Максимальный уровень', 'Maksimal daraja')} 🏆</p>
+          )}
+        </div>
+      )}
 
       {txns.length > 0 && (
         <div style={{ padding: '0 12px' }}>

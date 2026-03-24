@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma.js';
 import { canTransition } from '@sellgram/shared';
+import { DEFAULT_TIERS, computeTier } from '../loyalty/routes.js';
 
 export async function updateOrderStatus(input: {
   orderId: string;
@@ -87,8 +88,10 @@ export async function updateOrderStatus(input: {
     if (input.status === 'COMPLETED') {
       const loyaltyConfig = await tx.loyaltyConfig.findUnique({ where: { tenantId: input.tenantId } });
       if (loyaltyConfig?.isEnabled) {
-        const pointsEarned =
-          Math.floor(Number(order.total) / loyaltyConfig.unitAmount) * loyaltyConfig.pointsPerUnit;
+        const tiers = (loyaltyConfig.tiers as any) ?? DEFAULT_TIERS;
+        const tier = computeTier(Number(order.customer.totalSpent), tiers);
+        const basePoints = Math.floor(Number(order.total) / loyaltyConfig.unitAmount) * loyaltyConfig.pointsPerUnit;
+        const pointsEarned = Math.floor(basePoints * tier.multiplier);
         if (pointsEarned > 0) {
           const customer = await tx.customer.update({
             where: { id: order.customerId },
@@ -106,9 +109,33 @@ export async function updateOrderStatus(input: {
               points: pointsEarned,
               balanceAfter: customer.loyaltyPoints,
               orderId: order.id,
-              description: 'Loyalty points earned for order #' + order.orderNumber,
+              description: `Loyalty points earned (${tier.name}) for order #${order.orderNumber}`,
             },
           });
+        }
+
+        // Referral bonus: give bonus to referrer on customer's first completed order
+        if (loyaltyConfig.referralEnabled && order.customer.referredBy && order.customer.ordersCount === 0) {
+          const referrer = await tx.customer.findFirst({
+            where: { id: order.customer.referredBy, tenantId: input.tenantId },
+          });
+          if (referrer) {
+            const updatedReferrer = await tx.customer.update({
+              where: { id: referrer.id },
+              data: { loyaltyPoints: { increment: loyaltyConfig.referralBonus } },
+            });
+            await tx.loyaltyTransaction.create({
+              data: {
+                customerId: referrer.id,
+                tenantId: input.tenantId,
+                type: 'EARN',
+                points: loyaltyConfig.referralBonus,
+                balanceAfter: updatedReferrer.loyaltyPoints,
+                orderId: order.id,
+                description: `Referral bonus: friend placed first order #${order.orderNumber}`,
+              },
+            });
+          }
         }
       }
     }
