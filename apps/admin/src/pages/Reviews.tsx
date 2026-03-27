@@ -214,23 +214,28 @@ export default function Reviews() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 20 }}>
           <button
             className="sg-btn sg-btn-ghost"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
+            style={{ minWidth: 90, padding: '7px 14px' }}
           >
-            ←
+            ← {tr('Назад', 'Orqaga')}
           </button>
-          <span style={{ padding: '6px 12px', fontSize: 13, color: '#374151' }}>
+          <span style={{
+            padding: '7px 14px', fontSize: 13, fontWeight: 600, color: '#374151',
+            background: '#f3f4f6', borderRadius: 8, minWidth: 80, textAlign: 'center',
+          }}>
             {page} / {totalPages}
           </span>
           <button
             className="sg-btn sg-btn-ghost"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
+            style={{ minWidth: 90, padding: '7px 14px' }}
           >
-            →
+            {tr('Далее', 'Keyingi')} →
           </button>
         </div>
       )}

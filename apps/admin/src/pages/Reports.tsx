@@ -50,6 +50,7 @@ function ScheduledReportsSection({
     frequency: 'WEEKLY',
   });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
@@ -64,12 +65,13 @@ function ScheduledReportsSection({
   async function addSchedule() {
     if (!canAdd || saving) return;
     setSaving(true);
+    setSaveError('');
     try {
       const created = await adminApi.createScheduledReport(draft);
       setSchedules((prev) => [...prev, created]);
       setShowForm(false);
     } catch (err: any) {
-      alert(err?.message || tr('Ошибка', 'Xatolik'));
+      setSaveError(err?.message || tr('Ошибка сохранения', 'Saqlashda xato'));
     } finally {
       setSaving(false);
     }
@@ -80,7 +82,7 @@ function ScheduledReportsSection({
       await adminApi.deleteScheduledReport(id);
       setSchedules((prev) => prev.filter((s) => s.id !== id));
     } catch (err: any) {
-      alert(err?.message || tr('Ошибка', 'Xatolik'));
+      setSaveError(err?.message || tr('Ошибка удаления', "O'chirishda xato"));
     }
   }
 
@@ -194,8 +196,11 @@ function ScheduledReportsSection({
               </select>
             </div>
           </div>
+          {saveError && (
+            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>{saveError}</p>
+          )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="sg-btn ghost" onClick={() => setShowForm(false)}>{tr('Отмена', 'Bekor')}</button>
+            <button className="sg-btn ghost" onClick={() => { setShowForm(false); setSaveError(''); }}>{tr('Отмена', 'Bekor')}</button>
             <button className="sg-btn primary" onClick={() => void addSchedule()} disabled={saving}>
               {saving ? tr('Сохранение...', 'Saqlanmoqda...') : tr('Сохранить', 'Saqlash')}
             </button>
@@ -209,6 +214,9 @@ function ScheduledReportsSection({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {loadError && (
             <p className="sg-subtitle" style={{ color: '#b91c1c' }}>{tr('Не удалось загрузить расписания', 'Jadvallarni yuklab bo`lmadi')}</p>
+          )}
+          {saveError && !showForm && (
+            <p style={{ margin: 0, fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>{saveError}</p>
           )}
           {schedules.map((s) => (
             <div key={s.id} className="sg-card soft" style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>

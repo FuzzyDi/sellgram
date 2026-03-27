@@ -232,8 +232,21 @@ export default function Categories() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', color: '#6b7a71', padding: '20px' }}>
-                    {tr('\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442', "Toifalar hozircha yo'q")}
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '36px 16px' }}>
+                    {search.trim() ? (
+                      <span style={{ color: '#6b7a71' }}>
+                        {tr('Ничего не найдено', 'Hech narsa topilmadi')}
+                      </span>
+                    ) : (
+                      <div>
+                        <div style={{ color: '#6b7a71', marginBottom: 12 }}>
+                          {tr('Категорий пока нет — добавьте первую', "Toifalar hozircha yo'q — birinchisini qo'shing")}
+                        </div>
+                        <button className="sg-btn primary" type="button" onClick={openCreate}>
+                          + {tr('Создать категорию', 'Toifa yaratish')}
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               )}

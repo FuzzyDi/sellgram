@@ -265,8 +265,13 @@ export default function PaymentMethods() {
             ))}
             {methods.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ textAlign: 'center', color: '#6b7a71' }}>
-                  {tr('Способы оплаты не настроены', "To'lov usullari sozlanmagan")}
+                <td colSpan={5} style={{ textAlign: 'center', padding: '32px 16px' }}>
+                  <div style={{ color: '#6b7a71', marginBottom: 12 }}>
+                    {tr('Способы оплаты не настроены', "To'lov usullari sozlanmagan")}
+                  </div>
+                  <button className="sg-btn primary" type="button" onClick={openCreate}>
+                    + {tr('Добавить способ оплаты', "To'lov usulini qo'shish")}
+                  </button>
                 </td>
               </tr>
             )}

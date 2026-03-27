@@ -149,7 +149,7 @@ export default function Broadcasts() {
       setSearch('');
       setSelectedCustomers([]);
       await loadCampaigns(storeId);
-      showNotice('success', tr('Рассылка отправлена', 'Xabarnoma yuborildi'));
+      showNotice('success', tr('Рассылка поставлена в очередь', 'Xabarnoma navbatga qo\'yildi'));
     } catch (err: any) {
       showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
     } finally {

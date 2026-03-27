@@ -8,6 +8,7 @@ export default function PromoCodes() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ code: '', type: 'PERCENT', value: '', minOrder: '', maxUses: '', expiresAt: '' });
@@ -43,7 +44,9 @@ export default function PromoCodes() {
   }
 
   async function toggleActive(id: string, isActive: boolean) {
+    setTogglingId(id);
     try { await adminApi.updatePromoCode(id, { isActive: !isActive }); await load(); } catch {}
+    finally { setTogglingId(null); }
   }
 
   async function handleDelete(id: string) {
@@ -118,7 +121,10 @@ export default function PromoCodes() {
       {!loading && !loadError && items.length === 0 && (
         <div className="sg-card" style={{ padding: 48, textAlign: 'center', color: '#9ca3af' }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}>🏷️</div>
-          <p style={{ margin: 0 }}>{tr('Промокодов нет', 'Promokodlar yo\'q')}</p>
+          <p style={{ margin: 0, marginBottom: 16 }}>{tr('Промокодов нет', 'Promokodlar yo\'q')}</p>
+          <button className="sg-btn sg-btn-primary" onClick={() => { setShowForm(true); setFormError(''); }}>
+            + {tr('Создать первый промокод', 'Birinchi promokod yaratish')}
+          </button>
         </div>
       )}
 
@@ -138,8 +144,8 @@ export default function PromoCodes() {
                 {item.expiresAt && <span style={{ fontSize: 12, color: expired ? '#b91c1c' : '#6b7280' }}>{tr('до', 'gacha')} {new Date(item.expiresAt).toLocaleDateString()}</span>}
                 {(expired || exhausted) && <span style={{ fontSize: 11, fontWeight: 600, color: '#b91c1c', background: '#fef2f2', padding: '2px 8px', borderRadius: 6 }}>{expired ? tr('Истёк', 'Muddati o\'tgan') : tr('Исчерпан', 'Tugagan')}</span>}
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                  <button className={`sg-btn ${item.isActive ? 'sg-btn-ghost' : 'sg-btn-primary'}`} style={{ fontSize: 12 }} onClick={() => toggleActive(item.id, item.isActive)}>
-                    {item.isActive ? tr('Выкл.', 'O\'ch.') : tr('Вкл.', 'Yoq.')}
+                  <button className={`sg-btn ${item.isActive ? 'sg-btn-ghost' : 'sg-btn-primary'}`} style={{ fontSize: 12 }} disabled={togglingId === item.id} onClick={() => toggleActive(item.id, item.isActive)}>
+                    {togglingId === item.id ? '…' : item.isActive ? tr('Выкл.', 'O\'ch.') : tr('Вкл.', 'Yoq.')}
                   </button>
                   {deleteId === item.id
                     ? <>
