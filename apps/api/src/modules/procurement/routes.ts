@@ -73,6 +73,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
       where,
       include: { items: { include: { product: { select: { id: true, name: true } } } } },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
     return { success: true, data: pos };
   });

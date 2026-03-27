@@ -112,7 +112,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     storeId: z.string().optional(),
   });
 
-  fastify.get('/orders/export', async (request, reply) => {
+  fastify.get('/orders/export', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     let query: z.infer<typeof exportQuerySchema>;
     try {
       query = exportQuerySchema.parse(request.query);

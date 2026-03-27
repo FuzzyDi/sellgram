@@ -430,6 +430,7 @@ model Order {
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([tenantId, paymentStatus])
   @@index([paymentMethodId])
   @@index([tenantId, storeId])
   @@index([tenantId, customerId])
@@ -605,7 +606,7 @@ model LoyaltyTransaction {
   description  String?
   createdAt    DateTime       @default(now())
 
-  @@index([customerId])
+  @@index([customerId, createdAt(sort: Desc)])
   @@index([tenantId])
   @@map("loyalty_transactions")
 }
@@ -768,6 +769,7 @@ model BroadcastCampaign {
   recipients BroadcastRecipient[]
 
   @@index([tenantId, storeId, createdAt])
+  @@index([status])
   @@map("broadcast_campaigns")
 }
 

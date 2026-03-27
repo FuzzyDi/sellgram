@@ -97,7 +97,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Customer updated' };
   });
 
-  fastify.get('/customers/export', async (request, reply) => {
+  fastify.get('/customers/export', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const where: any = { tenantId: request.tenantId! };
     const customers = await prisma.customer.findMany({
       where,
@@ -130,7 +130,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
   });
 
   // Manual loyalty adjustment
-  fastify.post('/customers/:id/loyalty', { preHandler: [permissionGuard('manageCustomers')] }, async (request, reply) => {
+  fastify.post('/customers/:id/loyalty', { preHandler: [permissionGuard('manageCustomers')], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let loyaltyBody: z.infer<typeof loyaltyAdjustSchema>;
     try {
