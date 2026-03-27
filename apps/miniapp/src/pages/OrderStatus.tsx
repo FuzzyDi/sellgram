@@ -221,6 +221,27 @@ export default function OrderStatus({ id }: { id: string }) {
           </div>
         )}
 
+        {order.paymentStatus === 'PENDING' && order.paymentMeta?.paymentUrl && !cancelled && (
+          <div style={{ marginBottom: 12 }}>
+            <button
+              className="btn success full"
+              onClick={() => {
+                const url = order.paymentMeta.paymentUrl;
+                window.Telegram?.WebApp?.openLink
+                  ? window.Telegram.WebApp.openLink(url)
+                  : window.open(url, '_blank');
+              }}
+              style={{ fontSize: 16, fontWeight: 700 }}
+            >
+              {order.paymentMethod === 'CLICK'
+                ? tr('Оплатить через Click', 'Click orqali to\'lash')
+                : order.paymentMethod === 'PAYME'
+                  ? tr('Оплатить через Payme', 'Payme orqali to\'lash')
+                  : tr('Перейти к оплате', 'To\'lovga o\'tish')}
+            </button>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button onClick={() => navigate('/')} className="btn primary" style={{ flex: 1 }}>{tr('В каталог', 'Katalogga')}</button>
           <button onClick={() => navigate('/orders')} className="btn secondary" style={{ flex: 1 }}>{tr('Все заказы', 'Barcha buyurtmalar')}</button>

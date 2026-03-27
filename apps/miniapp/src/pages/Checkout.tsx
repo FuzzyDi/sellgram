@@ -126,7 +126,15 @@ export default function Checkout() {
         referralCode: referralCode.trim().toUpperCase() || undefined,
       });
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-      navigate(`/order/${order.id}`);
+      const paymentUrl = order.paymentMeta?.paymentUrl;
+      if (paymentUrl) {
+        navigate(`/order/${order.id}`);
+        window.Telegram?.WebApp?.openLink
+          ? window.Telegram.WebApp.openLink(paymentUrl)
+          : window.open(paymentUrl, '_blank');
+      } else {
+        navigate(`/order/${order.id}`);
+      }
     } catch (err: any) {
       setError(err.message || tr('Ошибка при оформлении', 'Buyurtmada xatolik'));
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
