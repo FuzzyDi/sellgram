@@ -5,4 +5,4 @@ dist/
 .turbo/
 coverage/
 .DS_Store
-deploy/production/.monitor/health.state
+deploy/production/.monitor/

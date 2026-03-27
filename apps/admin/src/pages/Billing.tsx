@@ -50,16 +50,24 @@ export default function Billing() {
     setTimeout(() => setNotice(null), 3200);
   }
 
+  const [loadFailed, setLoadFailed] = useState(false);
+
   const load = useCallback(async () => {
-    const [s, p, inv] = await Promise.all([
-      adminApi.getSubscription().catch(() => null),
-      adminApi.getPlans().catch(() => null),
-      adminApi.getInvoices().catch(() => []),
-    ]);
-    setSub(s);
-    setPlans(p);
-    setInvoices(Array.isArray(inv) ? inv : []);
-    setLoading(false);
+    setLoadFailed(false);
+    try {
+      const [s, p, inv] = await Promise.all([
+        adminApi.getSubscription().catch(() => null),
+        adminApi.getPlans(),
+        adminApi.getInvoices().catch(() => []),
+      ]);
+      setSub(s);
+      setPlans(p);
+      setInvoices(Array.isArray(inv) ? inv : []);
+    } catch {
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -177,6 +185,24 @@ export default function Billing() {
           ))}
         </div>
         <div className="sg-skeleton" style={{ height: 120, borderRadius: 14 }} />
+      </section>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+        <header>
+          <h2 className="sg-title">{tr('Тарифы и оплата', "Tariflar va to'lov")}</h2>
+        </header>
+        <div className="sg-card" style={{ textAlign: 'center', padding: '40px 16px' }}>
+          <p style={{ margin: '0 0 12px', fontWeight: 700, color: '#be123c' }}>
+            {tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}
+          </p>
+          <button className="sg-btn primary" onClick={() => { setLoading(true); void load(); }}>
+            {tr('Повторить', 'Qayta urinish')}
+          </button>
+        </div>
       </section>
     );
   }

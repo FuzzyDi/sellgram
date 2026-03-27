@@ -1,1 +1,3 @@
 0 3 * * * cd /opt/sellgram/deploy/production && BACKUP_DIR=/opt/sellgram/backups ./backup-db.sh >> /var/log/sellgram-backup.log 2>&1
+# Verify latest backup every Sunday at 04:00 (restore into throwaway container)
+0 4 * * 0 cd /opt/sellgram/deploy/production && BACKUP_DIR=/opt/sellgram/backups ./verify-backup.sh >> /var/log/sellgram-backup.log 2>&1
