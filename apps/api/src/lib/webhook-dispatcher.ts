@@ -26,6 +26,7 @@ export async function dispatchWebhook(tenantId: string, event: WebhookEventType,
 
     // Fire-and-forget with one retry after 3 s
     void (async () => {
+      let delivered = false;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
@@ -40,10 +41,13 @@ export async function dispatchWebhook(tenantId: string, event: WebhookEventType,
             body: payload,
             signal: AbortSignal.timeout(10_000),
           });
-          if (res.ok) break;
+          if (res.ok) { delivered = true; break; }
         } catch {
-          // ignore delivery failures
+          // network/timeout error — will retry once
         }
+      }
+      if (!delivered) {
+        console.warn('[webhook] delivery failed after retries', { hookId: hook.id, event, eventId });
       }
     })();
   }

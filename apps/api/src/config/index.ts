@@ -55,6 +55,22 @@ let config: Config;
 
 export function loadConfig(): Config {
   config = envSchema.parse(process.env);
+
+  // Warn in production if billing fields still have placeholder values
+  if (config.NODE_ENV === 'production') {
+    const placeholders = [
+      ['LEGAL_ENTITY_INN', config.LEGAL_ENTITY_INN],
+      ['BILLING_BANK_ACCOUNT', config.BILLING_BANK_ACCOUNT],
+      ['BILLING_INN', config.BILLING_INN],
+      ['BILLING_MFO', config.BILLING_MFO],
+    ] as const;
+    for (const [key, val] of placeholders) {
+      if (val.includes('X')) {
+        console.warn(`[config] WARNING: ${key} contains placeholder value "${val}" — invoices will have incorrect billing info. Set ${key} in .env.`);
+      }
+    }
+  }
+
   return config;
 }
 

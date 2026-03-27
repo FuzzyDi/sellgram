@@ -639,8 +639,11 @@ async function autoCancelUnpaidOrders(): Promise<void> {
           instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text)
         ).catch(() => {});
       }
-    } catch {
+    } catch (err: any) {
       // Swallow per-order errors (e.g. ORDER_CONCURRENT_MODIFICATION) — will retry next cycle
+      if (err?.message !== 'ORDER_CONCURRENT_MODIFICATION') {
+        console.error('[auto-cancel] failed to cancel order', order.id, err?.message);
+      }
     }
   }
 }
