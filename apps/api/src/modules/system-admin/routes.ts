@@ -42,6 +42,8 @@ import {
   getSystemStorage,
   sendSystemAnnouncement,
   listSystemAnnouncements,
+  getSystemPlanConfigs,
+  updateSystemPlanConfig,
 } from './service.js';
 declare module 'fastify' {
   interface FastifyRequest {
@@ -310,6 +312,29 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
 
   fastify.get('/announcements', { preHandler: [authenticateSystem] }, async () => {
     return { success: true, data: listSystemAnnouncements() };
+  });
+
+  // Plan config management
+  fastify.get('/plan-configs', { preHandler: [authenticateSystem] }, async () => {
+    const data = await getSystemPlanConfigs();
+    return { success: true, data };
+  });
+
+  fastify.patch('/plan-configs/:code', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { code } = request.params as { code: string };
+      if (!['FREE', 'PRO', 'BUSINESS'].includes(code)) {
+        return reply.status(400).send({ success: false, error: 'Invalid plan code' });
+      }
+      const body = request.body as any;
+      const patch: { price?: number; limits?: Record<string, any> } = {};
+      if (body.price !== undefined) patch.price = Number(body.price);
+      if (body.limits !== undefined) patch.limits = body.limits;
+      const data = await updateSystemPlanConfig(code as any, patch);
+      return { success: true, data };
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
   });
 
   fastify.post('/tenants/:id/impersonate', { preHandler: [authenticateSystem] }, async (request, reply) => {

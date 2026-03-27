@@ -69,19 +69,19 @@ const ORDER_STATUSES = [
 interface PlanRow { featureRu: string; featureUz: string; free: string; pro: string; business: string }
 
 const PLAN_ROWS: PlanRow[] = [
-  { featureRu: 'Магазинов',        featureUz: "Do'konlar",        free: '1',    pro: '3',       business: '∞' },
-  { featureRu: 'Товаров',          featureUz: 'Mahsulotlar',      free: '50',   pro: '500',     business: '∞' },
-  { featureRu: 'Участников команды', featureUz: 'Jamoa a\'zolari', free: '1',   pro: '5',       business: '∞' },
-  { featureRu: 'Рассылки',         featureUz: 'Xabar yuborish',   free: '—',    pro: '✓',       business: '✓' },
-  { featureRu: 'Экспорт CSV',      featureUz: 'CSV eksport',      free: '—',    pro: '✓',       business: '✓' },
-  { featureRu: 'Аналитика',        featureUz: 'Analitika',        free: 'базовая', pro: '✓',    business: '✓' },
-  { featureRu: 'Программа лояльности', featureUz: 'Loyallik',     free: '—',    pro: '✓',       business: '✓' },
-  { featureRu: 'Промокоды',        featureUz: 'Promokodlar',      free: '—',    pro: '✓',       business: '✓' },
-  { featureRu: 'Вебхуки / API',    featureUz: 'Webhook / API',    free: '—',    pro: '—',       business: '✓' },
-  { featureRu: 'Закупки (PO)',      featureUz: 'Xaridlar (PO)',    free: '—',    pro: '—',       business: '✓' },
-  { featureRu: 'Журнал аудита',    featureUz: 'Audit jurnali',    free: '—',    pro: '—',       business: '✓' },
-  { featureRu: 'Отчёты по расписанию', featureUz: 'Jadval hisobotlari', free: '—', pro: '—',   business: '✓' },
-  { featureRu: 'Поддержка',        featureUz: "Qo'llab-quvvatlash", free: 'email', pro: 'приоритет', business: 'VIP' },
+  { featureRu: 'Магазинов',            featureUz: "Do'konlar",           free: '1',       pro: '3',       business: '10' },
+  { featureRu: 'Товаров',              featureUz: 'Mahsulotlar',         free: '30',      pro: '500',     business: '∞' },
+  { featureRu: 'Заказов / месяц',      featureUz: 'Buyurtma / oy',       free: '50',      pro: '1 000',   business: '∞' },
+  { featureRu: 'Зон доставки',         featureUz: 'Yetkazish zonalari',  free: '2',       pro: '10',      business: '∞' },
+  { featureRu: 'Рассылки',             featureUz: 'Xabar yuborish',      free: '—',       pro: '✓',       business: '✓' },
+  { featureRu: 'Экспорт CSV',          featureUz: 'CSV eksport',         free: '—',       pro: '✓',       business: '✓' },
+  { featureRu: 'Аналитика',            featureUz: 'Analitika',           free: 'базовая', pro: '✓',       business: '✓' },
+  { featureRu: 'Программа лояльности', featureUz: 'Loyallik dasturi',    free: '—',       pro: '✓',       business: '✓' },
+  { featureRu: 'Промокоды',            featureUz: 'Promokodlar',         free: '—',       pro: '✓',       business: '✓' },
+  { featureRu: 'Вебхуки / API',        featureUz: 'Webhook / API',       free: '—',       pro: '✓',       business: '✓' },
+  { featureRu: 'Закупки (PO)',          featureUz: 'Xaridlar (PO)',       free: '—',       pro: '✓',       business: '✓' },
+  { featureRu: 'Отчёты по расписанию', featureUz: 'Jadval hisobotlari',  free: '—',       pro: 'до 3',    business: '∞' },
+  { featureRu: 'Поддержка',            featureUz: "Qo'llab-quvvatlash",  free: 'базовая', pro: 'приоритет', business: 'VIP' },
 ];
 
 // ─── FAQ sections ─────────────────────────────────────────────────────────────

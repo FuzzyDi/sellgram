@@ -8,6 +8,7 @@ import { PLANS, type PlanCode, type ReportsLevel } from '@sellgram/shared';
 import { getErrors } from '../../lib/error-buffer.js';
 import { getBotStatuses, sendMessageToOwner } from '../../bot/bot-manager.js';
 import { getS3, ensureBucket } from '../../lib/s3.js';
+import { getAllPlanConfigs, updatePlanConfig, type PlanLimitsOverride } from '../../lib/plan-config.js';
 const SUBSCRIPTION_REMINDER_SETTINGS_KEY = 'subscription_reminders';
 function getMonthKey(date = new Date()) {
   const y = date.getUTCFullYear();
@@ -919,4 +920,17 @@ export async function sendSystemAnnouncement(
 
 export function listSystemAnnouncements() {
   return announcementHistory;
+}
+
+// ─── Plan Config Management ────────────────────────────────────────────────────
+
+export async function getSystemPlanConfigs() {
+  return getAllPlanConfigs();
+}
+
+export async function updateSystemPlanConfig(
+  code: PlanCode,
+  patch: { price?: number; limits?: PlanLimitsOverride },
+) {
+  return updatePlanConfig(code, patch);
 }

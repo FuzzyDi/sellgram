@@ -8,7 +8,7 @@ type InvoiceStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'EXPIRED';
 type ActivityType = 'TENANT_PLAN_UPDATED' | 'INVOICE_CONFIRMED' | 'INVOICE_REJECTED';
 type ActivityTarget = 'tenant' | 'invoice';
 type NoticeTone = 'success' | 'error' | 'info';
-type Tab = 'overview' | 'invoices' | 'tenants' | 'users' | 'reports' | 'activity';
+type Tab = 'overview' | 'invoices' | 'tenants' | 'users' | 'reports' | 'activity' | 'plans';
 
 /* ── helpers ─────────────────────────────────────────────── */
 
@@ -608,6 +608,7 @@ export default function SystemAdmin() {
     { id: 'tenants',   label: tr('Тенанты', 'Tenantlar') },
     { id: 'users',     label: tr('Пользователи', 'Foydalanuvchilar') },
     { id: 'reports',   label: tr('Отчёты', 'Hisobotlar') },
+    { id: 'plans',     label: tr('Тарифы', 'Tariflar') },
     { id: 'activity',  label: tr('Активность', 'Faollik') },
   ];
 
@@ -1192,6 +1193,192 @@ export default function SystemAdmin() {
     );
   }
 
+  /* ── Tab: Тарифы ────────────────────────────────────────── */
+
+  function TabPlans() {
+    const [configs, setConfigs] = useState<Record<string, any> | null>(null);
+    const [loadErr, setLoadErr] = useState('');
+    const [drafts, setDrafts] = useState<Record<string, any>>({});
+    const [saving, setSaving] = useState<string | null>(null);
+    const [saveErr, setSaveErr] = useState<Record<string, string>>({});
+    const [saved, setSaved] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+      systemApi.planConfigs()
+        .then((data: any) => {
+          setConfigs(data);
+          const init: Record<string, any> = {};
+          for (const code of Object.keys(data)) {
+            const c = data[code];
+            init[code] = {
+              price: c.price ?? 0,
+              maxStores: c.limits?.maxStores ?? 1,
+              maxProducts: c.limits?.maxProducts ?? 30,
+              maxOrdersPerMonth: c.limits?.maxOrdersPerMonth ?? 50,
+              maxDeliveryZones: c.limits?.maxDeliveryZones ?? 2,
+              loyaltyEnabled: c.limits?.loyaltyEnabled ?? false,
+              procurementEnabled: c.limits?.procurementEnabled ?? false,
+              maxScheduledReports: c.limits?.maxScheduledReports ?? 0,
+              allowReportExport: c.limits?.allowReportExport ?? false,
+            };
+          }
+          setDrafts(init);
+        })
+        .catch((e: any) => setLoadErr(e?.message || tr('Ошибка загрузки', 'Yuklashda xato')));
+    }, []);
+
+    function setField(code: string, field: string, value: any) {
+      setDrafts(prev => ({ ...prev, [code]: { ...prev[code], [field]: value } }));
+    }
+
+    async function savePlan(code: string) {
+      if (!drafts[code]) return;
+      setSaving(code);
+      setSaveErr(prev => ({ ...prev, [code]: '' }));
+      try {
+        const d = drafts[code];
+        await systemApi.updatePlanConfig(code, {
+          price: Number(d.price),
+          limits: {
+            maxStores: Number(d.maxStores),
+            maxProducts: Number(d.maxProducts),
+            maxOrdersPerMonth: Number(d.maxOrdersPerMonth),
+            maxDeliveryZones: Number(d.maxDeliveryZones),
+            loyaltyEnabled: Boolean(d.loyaltyEnabled),
+            procurementEnabled: Boolean(d.procurementEnabled),
+            maxScheduledReports: Number(d.maxScheduledReports),
+            allowReportExport: Boolean(d.allowReportExport),
+          },
+        });
+        setSaved(prev => ({ ...prev, [code]: true }));
+        setTimeout(() => setSaved(prev => ({ ...prev, [code]: false })), 2500);
+      } catch (e: any) {
+        setSaveErr(prev => ({ ...prev, [code]: e?.message || tr('Ошибка сохранения', 'Saqlashda xato') }));
+      } finally {
+        setSaving(null);
+      }
+    }
+
+    if (loadErr) {
+      return (
+        <div className="sg-card" style={{ textAlign: 'center', padding: 32 }}>
+          <p style={{ color: '#b91c1c', margin: '0 0 12px' }}>{loadErr}</p>
+          <Button className="sg-btn ghost" onClick={() => { setLoadErr(''); setConfigs(null); }}>
+            {tr('Повторить', 'Qayta urinish')}
+          </Button>
+        </div>
+      );
+    }
+
+    if (!configs) {
+      return (
+        <div className="sg-grid cols-3" style={{ gap: 14 }}>
+          {[1, 2, 3].map(i => <Skeleton key={i} h={420} r={14} />)}
+        </div>
+      );
+    }
+
+    const PLAN_META: Record<string, { color: string; badge: string }> = {
+      FREE:     { color: '#6b7280', badge: '#f3f4f6' },
+      PRO:      { color: '#5b21b6', badge: '#ede9fe' },
+      BUSINESS: { color: '#92400e', badge: '#fef3c7' },
+    };
+
+    const FIELDS: { key: string; labelRu: string; labelUz: string; type: 'number' | 'bool'; hint?: string }[] = [
+      { key: 'price',              labelRu: 'Цена (UZS/мес)',          labelUz: 'Narx (UZS/oy)',            type: 'number', hint: '0 = бесплатно' },
+      { key: 'maxStores',          labelRu: 'Магазинов',               labelUz: "Do'konlar",                type: 'number', hint: '-1 = ∞' },
+      { key: 'maxProducts',        labelRu: 'Товаров',                 labelUz: 'Mahsulotlar',              type: 'number', hint: '-1 = ∞' },
+      { key: 'maxOrdersPerMonth',  labelRu: 'Заказов / месяц',         labelUz: 'Buyurtma / oy',            type: 'number', hint: '-1 = ∞' },
+      { key: 'maxDeliveryZones',   labelRu: 'Зон доставки',            labelUz: 'Yetkazish zonalari',       type: 'number', hint: '-1 = ∞' },
+      { key: 'maxScheduledReports',labelRu: 'Авто-отчётов',            labelUz: 'Avto-hisobotlar',          type: 'number', hint: '-1 = ∞, 0 = нет' },
+      { key: 'loyaltyEnabled',     labelRu: 'Программа лояльности',    labelUz: 'Loyallik dasturi',         type: 'bool' },
+      { key: 'procurementEnabled', labelRu: 'Закупки (PO)',            labelUz: 'Xaridlar (PO)',            type: 'bool' },
+      { key: 'allowReportExport',  labelRu: 'Экспорт CSV',             labelUz: 'CSV eksport',              type: 'bool' },
+    ];
+
+    return (
+      <div className="sg-grid" style={{ gap: 14 }}>
+        <div className="sg-card soft" style={{ padding: '10px 16px', background: '#fffbeb', border: '1px solid #fde68a' }}>
+          <p style={{ margin: 0, fontSize: 13, color: '#92400e' }}>
+            <strong>⚠ {tr('Изменения применяются сразу', "O'zgarishlar darhol qo'llaniladi")}.</strong>{' '}
+            {tr('Лимиты кешируются на 5 минут. Цена влияет на новые инвойсы.', 'Limitlar 5 daqiqa keshlanadi. Narx yangi invoicelarga ta\'sir qiladi.')}
+          </p>
+        </div>
+
+        <div className="sg-grid cols-3" style={{ gap: 14 }}>
+          {(['FREE', 'PRO', 'BUSINESS'] as const).map(code => {
+            const meta = PLAN_META[code];
+            const d = drafts[code] ?? {};
+            const isSaving = saving === code;
+            return (
+              <section key={code} className="sg-card" style={{ border: `2px solid ${meta.color}20` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <span className="sg-badge" style={{ background: meta.badge, color: meta.color, fontSize: 14, fontWeight: 800, padding: '4px 12px' }}>
+                    {code}
+                  </span>
+                  {configs[code]?.name && (
+                    <span style={{ fontSize: 12, color: '#9ca3af' }}>{configs[code].name}</span>
+                  )}
+                </div>
+
+                <div className="sg-grid" style={{ gap: 10 }}>
+                  {FIELDS.map(f => (
+                    <div key={f.key}>
+                      <label style={{ display: 'block', fontSize: 12, color: '#6b7280', marginBottom: 4, fontWeight: 600 }}>
+                        {tr(f.labelRu, f.labelUz)}
+                        {f.hint && <span style={{ fontWeight: 400, marginLeft: 4, color: '#9ca3af' }}>({f.hint})</span>}
+                      </label>
+                      {f.type === 'bool' ? (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(d[f.key])}
+                            onChange={e => setField(code, f.key, e.target.checked)}
+                            style={{ width: 16, height: 16, cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 13, color: d[f.key] ? '#059669' : '#9ca3af' }}>
+                            {d[f.key] ? tr('Включено', 'Yoqilgan') : tr('Выключено', "O'chirilgan")}
+                          </span>
+                        </label>
+                      ) : (
+                        <input
+                          type="number"
+                          value={d[f.key] ?? ''}
+                          onChange={e => setField(code, f.key, e.target.value)}
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                          style={{ width: '100%', textAlign: 'right' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {saveErr[code] && (
+                    <p style={{ margin: 0, fontSize: 12, color: '#b91c1c' }}>{saveErr[code]}</p>
+                  )}
+                  {saved[code] && (
+                    <p style={{ margin: 0, fontSize: 12, color: '#059669', fontWeight: 700 }}>
+                      ✓ {tr('Сохранено', 'Saqlandi')}
+                    </p>
+                  )}
+                  <Button
+                    className="sg-btn primary"
+                    style={{ width: '100%' }}
+                    disabled={isSaving}
+                    onClick={() => void savePlan(code)}
+                  >
+                    {isSaving ? '...' : tr('Сохранить', 'Saqlash')}
+                  </Button>
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   /* ── main render ─────────────────────────────────────────── */
 
   return (
@@ -1272,6 +1459,7 @@ export default function SystemAdmin() {
         {tab === 'tenants'   && <TabTenants />}
         {tab === 'users'     && <TabUsers />}
         {tab === 'reports'   && <TabReports />}
+        {tab === 'plans'     && <TabPlans />}
         {tab === 'activity'  && <TabActivity />}
 
       </section>

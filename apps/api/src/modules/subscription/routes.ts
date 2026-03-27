@@ -29,7 +29,7 @@ export default async function subscriptionRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/subscription/plans', async () => {
-    return { success: true, data: getSubscriptionPlans() };
+    return { success: true, data: await getSubscriptionPlans() };
   });
 
   fastify.post('/subscription/upgrade', {

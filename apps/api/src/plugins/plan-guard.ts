@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma.js';
 import { PLANS, type PlanCode } from '@sellgram/shared';
 import { getEffectivePlan } from '../lib/billing.js';
+import { getPlanConfig } from '../lib/plan-config.js';
 
 type LimitKey = keyof (typeof PLANS)['FREE']['limits'];
 
@@ -22,19 +23,19 @@ export function planGuard(limitKey: LimitKey) {
 
     // Treat plan as FREE if subscription has expired (3-day grace period applies)
     const effectivePlan = getEffectivePlan(tenant.plan, tenant.planExpiresAt) as PlanCode;
-    const plan = PLANS[effectivePlan];
-    if (!plan) {
+    const planCfg = await getPlanConfig(effectivePlan);
+    if (!planCfg) {
       return reply.status(500).send({ success: false, error: 'Invalid plan' });
     }
 
-    const limit = plan.limits[limitKey];
+    const limit = planCfg.limits[limitKey];
 
     // Boolean features
     if (limit === true) return;             // feature enabled
     if (limit === false) {
       return reply.status(402).send({
         success: false,
-        error: `Feature "${limitKey}" is not available on ${plan.name} plan. Please upgrade.`,
+        error: `Feature "${limitKey}" is not available on ${planCfg.name} plan. Please upgrade.`,
       });
     }
 

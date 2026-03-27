@@ -93,4 +93,9 @@ export const systemApi = {
   sendAnnouncement: (message: string, filter: string) =>
     systemRequest<any>('/announcements', { method: 'POST', body: JSON.stringify({ message, filter }) }),
   announcements: () => systemRequest<any[]>('/announcements'),
+
+  // Plan config management
+  planConfigs: () => systemRequest<any>('/plan-configs'),
+  updatePlanConfig: (code: string, patch: { price?: number; limits?: Record<string, any> }) =>
+    systemRequest<any>(`/plan-configs/${code}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 };

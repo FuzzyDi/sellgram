@@ -1,6 +1,7 @@
 import prisma from '../../lib/prisma.js';
 import { getConfig } from '../../config/index.js';
 import { PLANS, type PlanCode } from '@sellgram/shared';
+import { getAllPlanConfigs, getPlanConfig } from '../../lib/plan-config.js';
 
 function buildBankDetails() {
   const config = getConfig();
@@ -15,15 +16,15 @@ function buildBankDetails() {
   };
 }
 
-export function getSubscriptionPlans() {
-  return PLANS;
+export async function getSubscriptionPlans() {
+  return getAllPlanConfigs();
 }
 
 export async function getTenantSubscription(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
   if (!tenant) throw new Error('TENANT_NOT_FOUND');
 
-  const plan = PLANS[tenant.plan as PlanCode];
+  const planCfg = await getPlanConfig(tenant.plan as PlanCode);
   const now = new Date();
   const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
@@ -36,20 +37,20 @@ export async function getTenantSubscription(tenantId: string) {
 
   return {
     plan: tenant.plan,
-    planDetails: plan,
+    planDetails: planCfg,
     planExpiresAt: tenant.planExpiresAt,
     usage: {
-      stores: { current: storesCount, limit: plan.limits.maxStores },
-      products: { current: productsCount, limit: plan.limits.maxProducts },
-      ordersThisMonth: { current: ordersThisMonth, limit: plan.limits.maxOrdersPerMonth },
-      deliveryZones: { current: zonesCount, limit: plan.limits.maxDeliveryZones },
+      stores: { current: storesCount, limit: planCfg.limits.maxStores },
+      products: { current: productsCount, limit: planCfg.limits.maxProducts },
+      ordersThisMonth: { current: ordersThisMonth, limit: planCfg.limits.maxOrdersPerMonth },
+      deliveryZones: { current: zonesCount, limit: planCfg.limits.maxDeliveryZones },
     },
   };
 }
 
 export async function upgradeTenantPlan(input: { tenantId: string; plan: PlanCode }) {
   const bankDetails = buildBankDetails();
-  const planData = PLANS[input.plan];
+  const planData = await getPlanConfig(input.plan);
 
   if (input.plan === 'FREE') {
     await prisma.tenant.update({
