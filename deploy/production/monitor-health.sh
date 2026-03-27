@@ -48,12 +48,35 @@ TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 if [ "$STATUS" = "down" ]; then
   echo "[$TIMESTAMP] healthcheck failed for $HEALTH_URL"
   if [ "$PREV_STATUS" != "down" ]; then
-    notify "SellGram healthcheck is DOWN: ${HEALTH_URL} (${TIMESTAMP})"
+    notify "🔴 SellGram healthcheck is DOWN: ${HEALTH_URL} (${TIMESTAMP})"
   fi
   exit 1
 fi
 
 echo "[$TIMESTAMP] healthcheck ok for $HEALTH_URL"
 if [ "$PREV_STATUS" = "down" ]; then
-  notify "SellGram healthcheck recovered: ${HEALTH_URL} (${TIMESTAMP})"
+  notify "✅ SellGram healthcheck recovered: ${HEALTH_URL} (${TIMESTAMP})"
+fi
+
+# ── Disk space check ────────────────────────────────────────────────────────
+DISK_THRESHOLD="${MONITOR_DISK_THRESHOLD:-85}"
+DISK_STATE_FILE="$STATE_DIR/disk.state"
+PREV_DISK_ALERT=""
+if [ -f "$DISK_STATE_FILE" ]; then
+  PREV_DISK_ALERT="$(cat "$DISK_STATE_FILE")"
+fi
+
+DISK_USAGE="$(df / --output=pcent | tail -1 | tr -d '% ')"
+if [ "${DISK_USAGE:-0}" -ge "$DISK_THRESHOLD" ]; then
+  echo "[$TIMESTAMP] disk usage ${DISK_USAGE}% >= threshold ${DISK_THRESHOLD}%"
+  printf 'alert' > "$DISK_STATE_FILE"
+  if [ "$PREV_DISK_ALERT" != "alert" ]; then
+    notify "⚠️ SellGram disk usage is ${DISK_USAGE}% (threshold ${DISK_THRESHOLD}%) — clean up or expand storage (${TIMESTAMP})"
+  fi
+else
+  echo "[$TIMESTAMP] disk usage ${DISK_USAGE}% ok"
+  printf 'ok' > "$DISK_STATE_FILE"
+  if [ "$PREV_DISK_ALERT" = "alert" ]; then
+    notify "✅ SellGram disk usage recovered: ${DISK_USAGE}% (${TIMESTAMP})"
+  fi
 fi

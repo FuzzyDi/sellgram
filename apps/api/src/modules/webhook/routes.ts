@@ -5,13 +5,35 @@ import prisma from '../../lib/prisma.js';
 
 const ALLOWED_EVENTS = ['order.created', 'order.status_changed', 'order.paid', 'customer.created', '*'] as const;
 
+// Block SSRF: reject URLs that resolve to private/internal network addresses.
+// Covers localhost, loopback, RFC-1918 ranges, Docker service names, and cloud metadata IPs.
+const BLOCKED_HOSTNAMES = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|::1|redis|postgres|minio|api|admin|miniapp|nginx)$/i;
+const PRIVATE_IP = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/;
+
+function isSafeWebhookUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    if (BLOCKED_HOSTNAMES.test(host)) return false;
+    if (PRIVATE_IP.test(host)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const webhookUrlSchema = z.string().url().max(500).refine(isSafeWebhookUrl, {
+  message: 'URL must be a public HTTPS address',
+});
+
 const createSchema = z.object({
-  url: z.string().url().max(500),
+  url: webhookUrlSchema,
   events: z.array(z.enum(ALLOWED_EVENTS)).min(1),
 });
 
 const updateSchema = z.object({
-  url: z.string().url().max(500).optional(),
+  url: webhookUrlSchema.optional(),
   events: z.array(z.enum(ALLOWED_EVENTS)).min(1).optional(),
   isActive: z.boolean().optional(),
 });
