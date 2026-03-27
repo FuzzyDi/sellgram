@@ -4,7 +4,7 @@ import type { OrderStatusType } from '@sellgram/shared';
 import prisma from '../lib/prisma.js';
 import { decrypt } from '../lib/encrypt.js';
 import { getRedis } from '../lib/redis.js';
-import { getSystemSubscriptionReminderSettings } from '../modules/system-admin/service.js';
+import { getSystemSubscriptionReminderSettings, getSystemSoftMode } from '../modules/system-admin/service.js';
 import { updateOrderStatus } from '../modules/order/order.service.js';
 import { getEffectivePlan, planDowngradeThreshold } from '../lib/billing.js';
 
@@ -680,6 +680,9 @@ function getBotInstanceForTenant(tenantId: string): BotInstance | null {
 }
 
 async function downgradeExpiredPlans(): Promise<void> {
+  const softMode = await getSystemSoftMode();
+  if (softMode) return; // soft mode: sys-admin handles downgrades manually
+
   const expired = await prisma.tenant.findMany({
     where: {
       plan: { in: ['PRO', 'BUSINESS'] },

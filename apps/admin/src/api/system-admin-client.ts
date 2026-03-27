@@ -98,4 +98,18 @@ export const systemApi = {
   planConfigs: () => systemRequest<any>('/plan-configs'),
   updatePlanConfig: (code: string, patch: { price?: number; limits?: Record<string, any> }) =>
     systemRequest<any>(`/plan-configs/${code}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  // Billing payment settings
+  billingSettings: () => systemRequest<any>('/billing-settings'),
+  updateBillingSettings: (patch: Record<string, string>) =>
+    systemRequest<any>('/billing-settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  // Soft mode
+  softMode: () => systemRequest<any>('/settings/soft-mode'),
+  updateSoftMode: (enabled: boolean) =>
+    systemRequest<any>('/settings/soft-mode', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+
+  // Manual plan extension
+  extendPlan: (id: string, payload: { plan: string; months: number; amount: number; note?: string }) =>
+    systemRequest<any>(`/tenants/${id}/extend-plan`, { method: 'POST', body: JSON.stringify(payload) }),
 };

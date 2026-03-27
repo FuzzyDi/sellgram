@@ -934,3 +934,129 @@ export async function updateSystemPlanConfig(
 ) {
   return updatePlanConfig(code, patch);
 }
+
+// ─── Billing Payment Settings ─────────────────────────────────────────────────
+
+const BILLING_SETTINGS_KEY = 'billing_payment_settings';
+
+export async function getSystemBillingSettings() {
+  const config = getConfig();
+  const defaults = {
+    bank: config.BILLING_BANK_NAME ?? '',
+    account: config.BILLING_BANK_ACCOUNT ?? '',
+    recipient: config.BILLING_RECIPIENT ?? '',
+    inn: config.BILLING_INN ?? '',
+    mfo: config.BILLING_MFO ?? '',
+    note: config.BILLING_PAYMENT_NOTE ?? '',
+    email: config.BILLING_EMAIL ?? '',
+  };
+  const setting = await prisma.systemSetting.findUnique({ where: { key: BILLING_SETTINGS_KEY } });
+  if (setting?.value && typeof setting.value === 'object') {
+    return { ...defaults, ...(setting.value as Record<string, string>) };
+  }
+  return defaults;
+}
+
+export async function updateSystemBillingSettings(patch: Record<string, string>) {
+  const current = await getSystemBillingSettings();
+  const updated = { ...current, ...patch };
+  await prisma.systemSetting.upsert({
+    where: { key: BILLING_SETTINGS_KEY },
+    create: { key: BILLING_SETTINGS_KEY, value: updated as any },
+    update: { value: updated as any },
+  });
+  return updated;
+}
+
+// ─── Soft Mode (no auto-downgrade) ────────────────────────────────────────────
+
+const SOFT_MODE_KEY = 'billing_soft_mode';
+
+export async function getSystemSoftMode(): Promise<boolean> {
+  const setting = await prisma.systemSetting.findUnique({ where: { key: SOFT_MODE_KEY } });
+  if (setting?.value && typeof setting.value === 'object') {
+    return Boolean((setting.value as any).enabled);
+  }
+  return false;
+}
+
+export async function updateSystemSoftMode(enabled: boolean): Promise<boolean> {
+  await prisma.systemSetting.upsert({
+    where: { key: SOFT_MODE_KEY },
+    create: { key: SOFT_MODE_KEY, value: { enabled } as any },
+    update: { value: { enabled } as any },
+  });
+  return enabled;
+}
+
+// ─── Manual Plan Extension ────────────────────────────────────────────────────
+
+export async function extendTenantPlan(input: {
+  id: string;
+  plan: PlanCode;
+  months: number;
+  amount: number;
+  note?: string;
+  changedBy: string;
+}) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: input.id },
+    select: { id: true, name: true, plan: true, planExpiresAt: true },
+  });
+  if (!tenant) throw new Error('TENANT_NOT_FOUND');
+
+  // Compute new expiry: extend from current expiry (or now if expired/free)
+  const base = tenant.planExpiresAt && tenant.planExpiresAt > new Date()
+    ? tenant.planExpiresAt
+    : new Date();
+  const newExpiry = new Date(base);
+  newExpiry.setMonth(newExpiry.getMonth() + input.months);
+
+  await prisma.$transaction(async (tx: any) => {
+    // Update tenant
+    await tx.tenant.update({
+      where: { id: input.id },
+      data: { plan: input.plan as any, planExpiresAt: newExpiry },
+    });
+
+    // Create a pre-confirmed invoice if amount > 0
+    if (input.amount > 0) {
+      await tx.invoice.create({
+        data: {
+          tenantId: input.id,
+          plan: input.plan as any,
+          amount: input.amount,
+          status: 'PAID' as any,
+          paymentRef: 'manual',
+          paymentNote: input.note || `Manual extension by ${input.changedBy}`,
+          confirmedBy: input.changedBy,
+          confirmedAt: new Date(),
+          expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        },
+      });
+    }
+
+    // Audit log
+    await tx.systemAuditLog.create({
+      data: {
+        action: 'TENANT_PLAN_UPDATED' as any,
+        actorEmail: input.changedBy,
+        targetType: 'tenant',
+        targetId: input.id,
+        details: {
+          event: 'MANUAL_EXTENSION',
+          tenantName: tenant.name,
+          fromPlan: tenant.plan,
+          toPlan: input.plan,
+          months: input.months,
+          amount: input.amount,
+          newExpiry: newExpiry.toISOString(),
+          note: input.note || null,
+          changedBy: input.changedBy,
+        } as any,
+      },
+    });
+  });
+
+  return { plan: input.plan, planExpiresAt: newExpiry };
+}

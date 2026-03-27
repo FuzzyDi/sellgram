@@ -8,7 +8,7 @@ type InvoiceStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'EXPIRED';
 type ActivityType = 'TENANT_PLAN_UPDATED' | 'INVOICE_CONFIRMED' | 'INVOICE_REJECTED';
 type ActivityTarget = 'tenant' | 'invoice';
 type NoticeTone = 'success' | 'error' | 'info';
-type Tab = 'overview' | 'invoices' | 'tenants' | 'users' | 'reports' | 'activity' | 'plans';
+type Tab = 'overview' | 'invoices' | 'tenants' | 'users' | 'reports' | 'activity' | 'plans' | 'payment';
 
 /* ── helpers ─────────────────────────────────────────────── */
 
@@ -112,16 +112,23 @@ function RevenueChart({ data }: { data: { label: string; revenue: number }[] }) 
 
 /* ── Tenant detail drawer ─────────────────────────────────── */
 function TenantDrawer({
-  tenant, onClose, locale, tr, onBlock, onUnblock, onImpersonate,
+  tenant, onClose, locale, tr, onBlock, onUnblock, onImpersonate, onExtend,
 }: {
   tenant: any; onClose: () => void; locale: string;
   tr: (ru: string, uz: string) => string;
   onBlock: () => Promise<void>; onUnblock: () => Promise<void>; onImpersonate: () => Promise<void>;
+  onExtend: (plan: string, months: number, amount: number, note: string) => Promise<void>;
 }) {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [blocking, setBlocking] = useState(false);
   const [impersonating, setImpersonating] = useState(false);
+  const [showExtend, setShowExtend] = useState(false);
+  const [extendPlan, setExtendPlan] = useState(tenant.plan ?? 'PRO');
+  const [extendMonths, setExtendMonths] = useState(1);
+  const [extendAmount, setExtendAmount] = useState(0);
+  const [extendNote, setExtendNote] = useState('');
+  const [extending, setExtending] = useState(false);
 
   useEffect(() => {
     systemApi.tenantDetail(tenant.id)
@@ -220,8 +227,63 @@ function TenantDrawer({
           </>
         )}
 
+        {/* Extend plan form */}
+        {showExtend && (
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, background: '#f9fafb', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 14 }}>{tr('Продлить подписку', 'Obunani uzaytirish')}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 3 }}>{tr('Тариф', 'Tarif')}</label>
+                <select value={extendPlan} onChange={e => setExtendPlan(e.target.value)}
+                  className="border rounded-lg px-3 py-2 text-sm" style={{ width: '100%' }}>
+                  <option value="PRO">PRO</option>
+                  <option value="BUSINESS">BUSINESS</option>
+                  <option value="FREE">FREE</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 3 }}>{tr('Месяцев', 'Oy')}</label>
+                <input type="number" min={1} max={24} value={extendMonths}
+                  onChange={e => setExtendMonths(Number(e.target.value))}
+                  className="border rounded-lg px-3 py-2 text-sm" style={{ width: '100%' }} />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 3 }}>
+                {tr('Сумма (UZS, 0 = бесплатно)', "Summa (UZS, 0 = bepul)")}
+              </label>
+              <input type="number" min={0} value={extendAmount}
+                onChange={e => setExtendAmount(Number(e.target.value))}
+                className="border rounded-lg px-3 py-2 text-sm" style={{ width: '100%' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 3 }}>{tr('Примечание', 'Izoh')}</label>
+              <input value={extendNote} onChange={e => setExtendNote(e.target.value)}
+                placeholder={tr('Необязательно', 'Ixtiyoriy')}
+                className="border rounded-lg px-3 py-2 text-sm" style={{ width: '100%' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button className="sg-btn primary" disabled={extending} style={{ flex: 1 }}
+                onClick={async () => {
+                  setExtending(true);
+                  try {
+                    await onExtend(extendPlan, extendMonths, extendAmount, extendNote);
+                    setShowExtend(false);
+                  } catch { /* parent shows notice */ }
+                  finally { setExtending(false); }
+                }}>
+                {extending ? '...' : tr('Продлить', 'Uzaytirish')}
+              </Button>
+              <Button className="sg-btn ghost" onClick={() => setShowExtend(false)}>{tr('Отмена', 'Bekor')}</Button>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
+          <Button className="sg-btn primary" onClick={() => setShowExtend(v => !v)}>
+            {showExtend ? tr('Закрыть', 'Yopish') : '+ ' + tr('Продлить', 'Uzaytirish')}
+          </Button>
           <Button
             className={isBlocked ? 'sg-btn primary' : 'sg-btn danger'}
             disabled={blocking}
@@ -300,6 +362,9 @@ export default function SystemAdmin() {
   const [reminderDaysInput, setReminderDaysInput] = useState('7,3,1');
   const [reminderSaving, setReminderSaving] = useState(false);
 
+  const [softModeEnabled, setSoftModeEnabled] = useState(false);
+  const [softModeSaving, setSoftModeSaving] = useState(false);
+
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
 
@@ -364,7 +429,7 @@ export default function SystemAdmin() {
       const usersQuery = `page=${uPg}&pageSize=${PAGE_SIZE}${userSearch.trim() ? '&search=' + encodeURIComponent(userSearch.trim()) : ''}`;
       const tenantsQuery = `page=${tPg}&pageSize=${PAGE_SIZE}${tenantSearch.trim() ? '&search=' + encodeURIComponent(tenantSearch.trim()) : ''}`;
 
-      const [d, h, trend, a, t, s, inv, ru, us] = await Promise.all([
+      const [d, h, trend, a, t, s, inv, ru, us, sm] = await Promise.all([
         systemApi.dashboard(),
         systemApi.health(),
         systemApi.revenueTrend(),
@@ -374,6 +439,7 @@ export default function SystemAdmin() {
         systemApi.invoices(invoiceQuery.toString()),
         systemApi.reportUsage(reportUsageQuery),
         systemApi.users(usersQuery),
+        systemApi.softMode().catch(() => ({ enabled: false })),
       ]);
 
       setDashboard(d);
@@ -381,6 +447,7 @@ export default function SystemAdmin() {
       setRevenueTrend(Array.isArray(trend) ? trend : []);
       setReminderEnabled(Boolean(h?.subscriptionReminders?.enabled));
       setReminderDaysInput(Array.isArray(h?.subscriptionReminders?.days) ? h.subscriptionReminders.days.join(',') : '7,3,1');
+      setSoftModeEnabled(Boolean((sm as any)?.enabled));
       setActivity(Array.isArray(a) ? a : []);
 
       const tenantItems = Array.isArray(t?.items) ? t.items : [];
@@ -451,6 +518,27 @@ export default function SystemAdmin() {
     } finally {
       setReminderSaving(false);
     }
+  }
+
+  async function saveSoftMode(val: boolean) {
+    setSoftModeSaving(true);
+    try {
+      await systemApi.updateSoftMode(val);
+      setSoftModeEnabled(val);
+      showNotice('success', val
+        ? tr('Мягкий режим включён — авто-даунгрейд отключён', 'Yumshoq rejim yoqildi — auto-downgrade o\'chirildi')
+        : tr('Мягкий режим отключён — авто-даунгрейд включён', 'Yumshoq rejim o\'chirildi — auto-downgrade yoqildi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setSoftModeSaving(false);
+    }
+  }
+
+  async function handleExtendPlan(tenantId: string, plan: string, months: number, amount: number, note: string) {
+    await systemApi.extendPlan(tenantId, { plan, months, amount, note: note.trim() || undefined });
+    await load(true);
+    showNotice('success', tr(`Подписка продлена на ${months} мес.`, `Obuna ${months} oyga uzaytirildi`));
   }
 
   function requestPlanChange(tenantId: string, plan: string) {
@@ -609,6 +697,7 @@ export default function SystemAdmin() {
     { id: 'users',     label: tr('Пользователи', 'Foydalanuvchilar') },
     { id: 'reports',   label: tr('Отчёты', 'Hisobotlar') },
     { id: 'plans',     label: tr('Тарифы', 'Tariflar') },
+    { id: 'payment',   label: tr('Оплата', "To'lov") },
     { id: 'activity',  label: tr('Активность', 'Faollik') },
   ];
 
@@ -748,6 +837,33 @@ export default function SystemAdmin() {
           <p className="sg-subtitle" style={{ marginTop: 8 }}>
             {tr('Дни через запятую, 1–30. Бот отправит напоминания арендаторам.', "Kunlar vergul bilan, 1–30. Bot tenantlarga eslatma jo'natadi.")}
           </p>
+        </section>
+
+        {/* Soft mode */}
+        <section className="sg-card" style={{ border: softModeEnabled ? '2px solid #f59e0b' : undefined }}>
+          <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>
+            {tr('Мягкий режим биллинга', 'Billing yumshoq rejimi')}
+          </h3>
+          <p className="sg-subtitle" style={{ margin: '0 0 12px' }}>
+            {tr(
+              'Если включён — истёкшие подписки НЕ даунгрейдятся автоматически. Вы переключаете тенантов вручную.',
+              "Yoqilgan bo'lsa — muddati o'tgan obunalar avtomatik ravishda pasaytirılmaydi. Siz tenantlarni qo'lda o'zgartirasiz."
+            )}
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, cursor: 'pointer' }}>
+              <input type="checkbox" checked={softModeEnabled}
+                onChange={e => void saveSoftMode(e.target.checked)}
+                disabled={softModeSaving}
+                style={{ accentColor: '#f59e0b', width: 18, height: 18 }} />
+              <span style={{ color: softModeEnabled ? '#d97706' : '#374151' }}>
+                {softModeEnabled
+                  ? tr('⚠ Мягкий режим ВКЛЮЧЁН', '⚠ Yumshoq rejim YOQILGAN')
+                  : tr('Авто-даунгрейд активен', 'Auto-downgrade faol')}
+              </span>
+            </label>
+            {softModeSaving && <span style={{ fontSize: 12, color: '#9ca3af' }}>...</span>}
+          </div>
         </section>
       </div>
     );
@@ -1379,6 +1495,113 @@ export default function SystemAdmin() {
     );
   }
 
+  /* ── Tab: Оплата ────────────────────────────────────────── */
+
+  function TabPayment() {
+    const FIELDS = [
+      { key: 'bank',      labelRu: 'Название банка',          labelUz: 'Bank nomi' },
+      { key: 'account',   labelRu: 'Номер счёта / IBAN',      labelUz: 'Hisob raqami / IBAN' },
+      { key: 'recipient', labelRu: 'Получатель',              labelUz: 'Qabul qiluvchi' },
+      { key: 'inn',       labelRu: 'ИНН',                     labelUz: 'INN' },
+      { key: 'mfo',       labelRu: 'МФО',                     labelUz: 'MFO' },
+      { key: 'note',      labelRu: 'Пометка к платёжке',      labelUz: "To'lov izohi" },
+      { key: 'email',     labelRu: 'Email для уведомлений',   labelUz: "Bildirishnoma emaili" },
+    ];
+
+    const [settings, setSettings] = useState<Record<string, string> | null>(null);
+    const [draft, setDraft] = useState<Record<string, string>>({});
+    const [loadErr, setLoadErr] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [saveErr, setSaveErr] = useState('');
+
+    useEffect(() => {
+      systemApi.billingSettings()
+        .then((data: any) => { setSettings(data); setDraft(data ?? {}); })
+        .catch((e: any) => setLoadErr(e?.message || tr('Ошибка загрузки', 'Yuklashda xato')));
+    }, []);
+
+    async function save() {
+      setSaving(true); setSaveErr('');
+      try {
+        const updated = await systemApi.updateBillingSettings(draft);
+        setSettings(updated); setDraft(updated);
+        setSaved(true); setTimeout(() => setSaved(false), 2500);
+      } catch (e: any) {
+        setSaveErr(e?.message || tr('Ошибка сохранения', 'Saqlashda xato'));
+      } finally { setSaving(false); }
+    }
+
+    if (loadErr) return (
+      <div className="sg-card" style={{ textAlign: 'center', padding: 32 }}>
+        <p style={{ color: '#b91c1c', margin: '0 0 12px' }}>{loadErr}</p>
+      </div>
+    );
+
+    if (!settings) return <Skeleton h={320} r={14} />;
+
+    return (
+      <div className="sg-grid" style={{ gap: 14, maxWidth: 600 }}>
+        <section className="sg-card">
+          <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 800 }}>
+            {tr('Банковские реквизиты для оплаты подписки', "Obuna to'lovi uchun bank rekvizitlari")}
+          </h3>
+          <p className="sg-subtitle" style={{ margin: '0 0 16px' }}>
+            {tr('Отображаются тенантам при создании инвойса на оплату.', "Invoice to'lovida tenantlarga ko'rsatiladi.")}
+          </p>
+
+          <div className="sg-grid" style={{ gap: 12 }}>
+            {FIELDS.map(f => (
+              <div key={f.key}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>
+                  {tr(f.labelRu, f.labelUz)}
+                </label>
+                <input
+                  value={draft[f.key] ?? ''}
+                  onChange={e => setDraft(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {saveErr && <p style={{ margin: '12px 0 0', color: '#b91c1c', fontSize: 13 }}>{saveErr}</p>}
+          {saved && <p style={{ margin: '12px 0 0', color: '#059669', fontSize: 13, fontWeight: 700 }}>✓ {tr('Сохранено', 'Saqlandi')}</p>}
+
+          <Button className="sg-btn primary" style={{ marginTop: 16, minWidth: 160 }} disabled={saving} onClick={() => void save()}>
+            {saving ? tr('Сохранение...', 'Saqlanmoqda...') : tr('Сохранить', 'Saqlash')}
+          </Button>
+        </section>
+
+        <section className="sg-card soft" style={{ padding: 16 }}>
+          <p style={{ margin: 0, fontSize: 13, color: '#6b7280' }}>
+            <strong>{tr('Предпросмотр:', "Ko'rinish:")}</strong>{' '}
+            {tr('Тенанты увидят эти данные при оформлении инвойса.', "Tenantlar invoice rasmiylashtirish paytida bu ma'lumotlarni ko'radi.")}
+          </p>
+          {draft.bank && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+              {[
+                ['Банк', draft.bank],
+                ['Счёт', draft.account],
+                ['Получатель', draft.recipient],
+                ['ИНН', draft.inn],
+                ['МФО', draft.mfo],
+                ['Пометка', draft.note],
+                ['Email', draft.email],
+              ].filter(([, v]) => v).map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', gap: 8 }}>
+                  <span style={{ color: '#9ca3af', minWidth: 90 }}>{k}:</span>
+                  <span style={{ fontWeight: 600 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   /* ── main render ─────────────────────────────────────────── */
 
   return (
@@ -1402,6 +1625,7 @@ export default function SystemAdmin() {
             showNotice('success', tr('Тенант разблокирован', 'Tenant blokdan chiqarildi'));
           }}
           onImpersonate={() => handleImpersonate(selectedTenant.id)}
+          onExtend={(plan, months, amount, note) => handleExtendPlan(selectedTenant.id, plan, months, amount, note)}
         />
       )}
 
@@ -1460,6 +1684,7 @@ export default function SystemAdmin() {
         {tab === 'users'     && <TabUsers />}
         {tab === 'reports'   && <TabReports />}
         {tab === 'plans'     && <TabPlans />}
+        {tab === 'payment'   && <TabPayment />}
         {tab === 'activity'  && <TabActivity />}
 
       </section>

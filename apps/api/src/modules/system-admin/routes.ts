@@ -44,6 +44,11 @@ import {
   listSystemAnnouncements,
   getSystemPlanConfigs,
   updateSystemPlanConfig,
+  getSystemBillingSettings,
+  updateSystemBillingSettings,
+  getSystemSoftMode,
+  updateSystemSoftMode,
+  extendTenantPlan,
 } from './service.js';
 declare module 'fastify' {
   interface FastifyRequest {
@@ -333,6 +338,74 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       const data = await updateSystemPlanConfig(code as any, patch);
       return { success: true, data };
     } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  // Billing payment settings
+  fastify.get('/billing-settings', { preHandler: [authenticateSystem] }, async () => {
+    const data = await getSystemBillingSettings();
+    return { success: true, data };
+  });
+
+  fastify.patch('/billing-settings', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const body = request.body as Record<string, any>;
+      const allowed = ['bank', 'account', 'recipient', 'inn', 'mfo', 'note', 'email'];
+      const patch: Record<string, string> = {};
+      for (const key of allowed) {
+        if (body[key] !== undefined) patch[key] = String(body[key]);
+      }
+      const data = await updateSystemBillingSettings(patch);
+      return { success: true, data };
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  // Soft mode
+  fastify.get('/settings/soft-mode', { preHandler: [authenticateSystem] }, async () => {
+    const enabled = await getSystemSoftMode();
+    return { success: true, data: { enabled } };
+  });
+
+  fastify.patch('/settings/soft-mode', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const body = request.body as any;
+      if (typeof body?.enabled !== 'boolean') {
+        return reply.status(400).send({ success: false, error: 'enabled (boolean) required' });
+      }
+      const enabled = await updateSystemSoftMode(body.enabled);
+      return { success: true, data: { enabled } };
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  // Manual plan extension
+  fastify.post('/tenants/:id/extend-plan', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { id } = systemAdminIdParamSchema.parse(request.params);
+      const body = request.body as any;
+      const months = Number(body?.months);
+      const amount = Number(body?.amount ?? 0);
+      if (!['FREE', 'PRO', 'BUSINESS'].includes(body?.plan)) {
+        return reply.status(400).send({ success: false, error: 'Invalid plan' });
+      }
+      if (!Number.isInteger(months) || months < 1 || months > 24) {
+        return reply.status(400).send({ success: false, error: 'months must be 1–24' });
+      }
+      const data = await extendTenantPlan({
+        id,
+        plan: body.plan,
+        months,
+        amount,
+        note: body.note ? String(body.note) : undefined,
+        changedBy: request.systemAdmin?.email || 'system',
+      });
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
       return reply.status(400).send({ success: false, error: err.message });
     }
   });

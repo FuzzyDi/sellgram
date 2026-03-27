@@ -3,9 +3,9 @@ import { getConfig } from '../../config/index.js';
 import { PLANS, type PlanCode } from '@sellgram/shared';
 import { getAllPlanConfigs, getPlanConfig } from '../../lib/plan-config.js';
 
-function buildBankDetails() {
+async function buildBankDetails() {
   const config = getConfig();
-  return {
+  const defaults = {
     bank: config.BILLING_BANK_NAME,
     account: config.BILLING_BANK_ACCOUNT,
     recipient: config.BILLING_RECIPIENT,
@@ -14,6 +14,15 @@ function buildBankDetails() {
     note: config.BILLING_PAYMENT_NOTE,
     email: config.BILLING_EMAIL,
   };
+  try {
+    const setting = await prisma.systemSetting.findUnique({ where: { key: 'billing_payment_settings' } });
+    if (setting?.value && typeof setting.value === 'object') {
+      return { ...defaults, ...(setting.value as Record<string, string>) };
+    }
+  } catch {
+    // DB failure → use env defaults
+  }
+  return defaults;
 }
 
 export async function getSubscriptionPlans() {
@@ -49,7 +58,7 @@ export async function getTenantSubscription(tenantId: string) {
 }
 
 export async function upgradeTenantPlan(input: { tenantId: string; plan: PlanCode }) {
-  const bankDetails = buildBankDetails();
+  const bankDetails = await buildBankDetails();
   const planData = await getPlanConfig(input.plan);
 
   if (input.plan === 'FREE') {
