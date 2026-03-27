@@ -112,4 +112,8 @@ export const systemApi = {
   // Manual plan extension
   extendPlan: (id: string, payload: { plan: string; months: number; amount: number; note?: string }) =>
     systemRequest<any>(`/tenants/${id}/extend-plan`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  // Expiring tenants
+  expiringTenants: (days = 7) => systemRequest<any[]>(`/tenants/expiring?days=${days}`),
+  sendReminder: (id: string) => systemRequest<any>(`/tenants/${id}/send-reminder`, { method: 'POST' }),
 };

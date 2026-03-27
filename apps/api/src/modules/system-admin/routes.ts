@@ -49,6 +49,8 @@ import {
   getSystemSoftMode,
   updateSystemSoftMode,
   extendTenantPlan,
+  getExpiringTenants,
+  sendReminderToTenant,
 } from './service.js';
 declare module 'fastify' {
   interface FastifyRequest {
@@ -338,6 +340,24 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       const data = await updateSystemPlanConfig(code as any, patch);
       return { success: true, data };
     } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  // Expiring tenants
+  fastify.get('/tenants/expiring', { preHandler: [authenticateSystem] }, async (request) => {
+    const days = Math.min(Number((request.query as any).days) || 7, 30);
+    const data = await getExpiringTenants(days);
+    return { success: true, data };
+  });
+
+  fastify.post('/tenants/:id/send-reminder', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { id } = systemAdminIdParamSchema.parse(request.params);
+      const data = await sendReminderToTenant(id);
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
       return reply.status(400).send({ success: false, error: err.message });
     }
   });

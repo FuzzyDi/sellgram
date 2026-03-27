@@ -364,6 +364,8 @@ export default function SystemAdmin() {
 
   const [softModeEnabled, setSoftModeEnabled] = useState(false);
   const [softModeSaving, setSoftModeSaving] = useState(false);
+  const [expiringTenants, setExpiringTenants] = useState<any[]>([]);
+  const [sendingReminder, setSendingReminder] = useState<string | null>(null);
 
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
@@ -429,7 +431,7 @@ export default function SystemAdmin() {
       const usersQuery = `page=${uPg}&pageSize=${PAGE_SIZE}${userSearch.trim() ? '&search=' + encodeURIComponent(userSearch.trim()) : ''}`;
       const tenantsQuery = `page=${tPg}&pageSize=${PAGE_SIZE}${tenantSearch.trim() ? '&search=' + encodeURIComponent(tenantSearch.trim()) : ''}`;
 
-      const [d, h, trend, a, t, s, inv, ru, us, sm] = await Promise.all([
+      const [d, h, trend, a, t, s, inv, ru, us, sm, exp] = await Promise.all([
         systemApi.dashboard(),
         systemApi.health(),
         systemApi.revenueTrend(),
@@ -440,6 +442,7 @@ export default function SystemAdmin() {
         systemApi.reportUsage(reportUsageQuery),
         systemApi.users(usersQuery),
         systemApi.softMode().catch(() => ({ enabled: false })),
+        systemApi.expiringTenants(14).catch(() => []),
       ]);
 
       setDashboard(d);
@@ -448,6 +451,7 @@ export default function SystemAdmin() {
       setReminderEnabled(Boolean(h?.subscriptionReminders?.enabled));
       setReminderDaysInput(Array.isArray(h?.subscriptionReminders?.days) ? h.subscriptionReminders.days.join(',') : '7,3,1');
       setSoftModeEnabled(Boolean((sm as any)?.enabled));
+      setExpiringTenants(Array.isArray(exp) ? exp : []);
       setActivity(Array.isArray(a) ? a : []);
 
       const tenantItems = Array.isArray(t?.items) ? t.items : [];
@@ -532,6 +536,22 @@ export default function SystemAdmin() {
       showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
     } finally {
       setSoftModeSaving(false);
+    }
+  }
+
+  async function sendReminder(tenantId: string, tenantName: string) {
+    setSendingReminder(tenantId);
+    try {
+      const result = await systemApi.sendReminder(tenantId);
+      if (result?.sent) {
+        showNotice('success', tr(`Напоминание отправлено: ${tenantName}`, `Eslatma yuborildi: ${tenantName}`));
+      } else {
+        showNotice('info', tr(`Telegram не привязан у владельца ${tenantName}`, `${tenantName} egasining Telegram bog'lanmagan`));
+      }
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка отправки', 'Yuborishda xato'));
+    } finally {
+      setSendingReminder(null);
     }
   }
 
@@ -865,6 +885,43 @@ export default function SystemAdmin() {
             {softModeSaving && <span style={{ fontSize: 12, color: '#9ca3af' }}>...</span>}
           </div>
         </section>
+
+        {/* Expiring tenants */}
+        {expiringTenants.length > 0 && (
+          <section className="sg-card" style={{ border: '2px solid #f97316' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 800, color: '#c2410c' }}>
+              {tr(`⏳ Истекают скоро (${expiringTenants.length})`, `⏳ Tez orada tugaydi (${expiringTenants.length})`)}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {expiringTenants.map((t: any) => (
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</div>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                      <span style={{ ...planBadgeStyle(t.plan), borderRadius: 4, padding: '1px 6px', fontWeight: 700, fontSize: 11, marginRight: 6 }}>{t.plan}</span>
+                      <span style={{ color: t.daysLeft <= 3 ? '#dc2626' : '#d97706', fontWeight: 600 }}>
+                        {tr(`${t.daysLeft} д`, `${t.daysLeft} kun`)}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedTenant(t)}
+                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #6b7280', background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                  >
+                    {tr('Продлить', 'Uzaytirish')}
+                  </button>
+                  <button
+                    onClick={() => void sendReminder(t.id, t.name)}
+                    disabled={sendingReminder === t.id}
+                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#1d4ed8', opacity: sendingReminder === t.id ? 0.5 : 1 }}
+                  >
+                    {sendingReminder === t.id ? '...' : tr('Напомнить', 'Eslatish')}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     );
   }

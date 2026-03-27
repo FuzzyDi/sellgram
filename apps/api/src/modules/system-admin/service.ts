@@ -935,6 +935,59 @@ export async function updateSystemPlanConfig(
   return updatePlanConfig(code, patch);
 }
 
+// ─── Expiring Tenants ─────────────────────────────────────────────────────────
+
+export async function getExpiringTenants(days = 7) {
+  const now = new Date();
+  const until = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+  const tenants = await prisma.tenant.findMany({
+    where: {
+      plan: { in: ['PRO', 'BUSINESS'] },
+      planExpiresAt: { not: null, gte: now, lte: until },
+    },
+    select: {
+      id: true, name: true, slug: true, plan: true, planExpiresAt: true,
+      _count: { select: { stores: true, orders: true } },
+    },
+    orderBy: { planExpiresAt: 'asc' },
+  });
+
+  return tenants.map((t) => ({
+    id: t.id,
+    name: t.name,
+    slug: t.slug,
+    plan: t.plan,
+    planExpiresAt: t.planExpiresAt,
+    daysLeft: Math.ceil(((t.planExpiresAt as Date).getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
+    storesCount: t._count.stores,
+  }));
+}
+
+export async function sendReminderToTenant(tenantId: string): Promise<{ sent: boolean; reason?: string }> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { id: true, name: true, plan: true, planExpiresAt: true },
+  });
+  if (!tenant) throw new Error('TENANT_NOT_FOUND');
+
+  const admin = await prisma.user.findFirst({
+    where: { tenantId, role: 'OWNER', isActive: true, adminTelegramId: { not: null } },
+    select: { adminTelegramId: true },
+  });
+  if (!admin?.adminTelegramId) return { sent: false, reason: 'OWNER_NO_TELEGRAM' };
+
+  const daysLeft = tenant.planExpiresAt
+    ? Math.ceil((tenant.planExpiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    : 0;
+  const expires = tenant.planExpiresAt?.toLocaleDateString('ru-RU') ?? '—';
+  const message = `⚠️ <b>Напоминание о продлении</b>\n\nТариф <b>${tenant.plan}</b> для магазина «${tenant.name}» истекает через <b>${daysLeft} дн.</b> (${expires}).\n\nПродлите подписку в панели управления: Тарифы → Выбрать тариф → Оплатить.`;
+
+  const { sendMessageToOwner } = await import('../../../bot/bot-manager.js');
+  const sent = await sendMessageToOwner(tenantId, admin.adminTelegramId, message);
+  return { sent };
+}
+
 // ─── Billing Payment Settings ─────────────────────────────────────────────────
 
 const BILLING_SETTINGS_KEY = 'billing_payment_settings';
