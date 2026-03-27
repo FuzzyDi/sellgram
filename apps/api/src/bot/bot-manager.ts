@@ -5,6 +5,7 @@ import prisma from '../lib/prisma.js';
 import { decrypt } from '../lib/encrypt.js';
 import { getRedis } from '../lib/redis.js';
 import { getSystemSubscriptionReminderSettings } from '../modules/system-admin/service.js';
+import { updateOrderStatus } from '../modules/order/order.service.js';
 
 interface BotInstance {
   bot: Bot;
@@ -600,6 +601,50 @@ async function remindPendingPayments(): Promise<void> {
   }
 }
 
+// Auto-cancel unpaid online orders after 2 hours.
+// Restores stock and loyalty points via updateOrderStatus (same as manual cancel).
+async function autoCancelUnpaidOrders(): Promise<void> {
+  const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const orders = await prisma.order.findMany({
+    where: {
+      status: 'NEW',
+      paymentStatus: 'PENDING',
+      paymentMethod: { in: ['CLICK', 'PAYME'] },
+      createdAt: { lt: cutoff },
+    },
+    include: { customer: { select: { telegramId: true, languageCode: true } } },
+    take: 100,
+  });
+
+  for (const order of orders) {
+    try {
+      await updateOrderStatus({
+        orderId: order.id,
+        tenantId: order.tenantId,
+        actorUserId: 'system',
+        status: 'CANCELLED',
+        cancelReason: 'Автоотмена: оплата не поступила в течение 2 часов',
+      });
+
+      // Notify customer
+      const instance = bots.get(order.storeId);
+      if (instance && order.customer?.telegramId) {
+        const lang = order.customer.languageCode;
+        const text = tLangByCode(
+          lang,
+          `❌ Заказ #${order.orderNumber} отменён — оплата не поступила в течение 2 часов.`,
+          `❌ #${order.orderNumber} buyurtma bekor qilindi — 2 soat ichida to'lov kelmadi.`
+        );
+        await retryTelegramSend(() =>
+          instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text)
+        ).catch(() => {});
+      }
+    } catch {
+      // Swallow per-order errors (e.g. ORDER_CONCURRENT_MODIFICATION) — will retry next cycle
+    }
+  }
+}
+
 async function autoCompleteDelivered(): Promise<void> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const delivered = await prisma.order.findMany({
@@ -770,6 +815,10 @@ export async function initBotManager(fastify: FastifyInstance): Promise<void> {
 
   setInterval(() => void remindPendingPayments(), 30 * 60 * 1000);
   setTimeout(() => void remindPendingPayments(), 15_000);
+
+  // Auto-cancel unpaid Click/Payme orders after 2h — runs every 15 min
+  setInterval(() => void autoCancelUnpaidOrders(), 15 * 60 * 1000);
+  setTimeout(() => void autoCancelUnpaidOrders(), 25_000);
 
   setInterval(() => void remindExpiringSubscriptions(), 60 * 60 * 1000);
   setTimeout(() => void remindExpiringSubscriptions(), 30_000);
