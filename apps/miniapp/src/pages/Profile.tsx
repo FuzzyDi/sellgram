@@ -43,13 +43,18 @@ export default function Profile() {
       setAddresses((prev) => [...prev, created]);
       setNewAddress('');
       setShowAddForm(false);
-    } catch { /* ignore */ }
-    finally { setAddingAddress(false); }
+    } catch {
+      window.Telegram?.WebApp?.showAlert?.(tr('Не удалось сохранить адрес', "Manzilni saqlash imkoni bo'lmadi"));
+    } finally { setAddingAddress(false); }
   }
 
   async function removeAddress(id: string) {
-    await api.deleteAddress(id).catch(() => {});
-    setAddresses((prev) => prev.filter((a) => a.id !== id));
+    try {
+      await api.deleteAddress(id);
+      setAddresses((prev) => prev.filter((a) => a.id !== id));
+    } catch {
+      window.Telegram?.WebApp?.showAlert?.(tr('Не удалось удалить адрес', "Manzilni o'chirib bo'lmadi"));
+    }
   }
 
   async function setDefaultAddress(id: string) {
@@ -68,8 +73,9 @@ export default function Profile() {
       setEditPhone(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch { /* keep editing */ }
-    finally { setSaving(false); }
+    } catch {
+      window.Telegram?.WebApp?.showAlert?.(tr('Не удалось сохранить номер', "Raqamni saqlash imkoni bo'lmadi"));
+    } finally { setSaving(false); }
   }
 
   const initials = profile

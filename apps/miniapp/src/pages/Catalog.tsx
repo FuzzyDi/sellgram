@@ -39,6 +39,7 @@ export default function Catalog() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [brandingWatermark, setBrandingWatermark] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -72,7 +73,7 @@ export default function Catalog() {
       .finally(() => { if (!cancelled) { setLoading(false); setLoadingMore(false); } });
 
     return () => { cancelled = true; };
-  }, [debouncedQuery, selected, page]);
+  }, [debouncedQuery, selected, page, retryKey]);
 
   const filtered = products;
 
@@ -140,7 +141,7 @@ export default function Catalog() {
         <div style={{ padding: 32, textAlign: 'center' }}>
           <p style={{ fontSize: 40, marginBottom: 12 }}>⚠️</p>
           <p style={{ fontWeight: 600, color: 'var(--hint)', marginBottom: 20 }}>{tr('Не удалось загрузить каталог', 'Katalogni yuklab bo`lmadi')}</p>
-          <button className="btn primary pill" onClick={() => setPage((p) => p)}>
+          <button className="btn primary pill" onClick={() => { setPage(1); setRetryKey((k) => k + 1); }}>
             {tr('Повторить', 'Qayta urinish')}
           </button>
         </div>

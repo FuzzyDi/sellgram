@@ -55,6 +55,7 @@ export default function MyOrders() {
       navigate('/cart');
     } catch {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+      window.Telegram?.WebApp?.showAlert?.(tr('Не удалось добавить товары в корзину', "Mahsulotlarni savatga qo'shib bo'lmadi"));
     }
   }
 

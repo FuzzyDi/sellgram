@@ -30,7 +30,10 @@ export default function Cart() {
       if (qty <= 0) await api.removeCartItem(id);
       else await api.updateCartItem(id, qty);
       loadCart();
-    } catch {}
+    } catch {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+      loadCart();
+    }
   };
 
   if (loading) {

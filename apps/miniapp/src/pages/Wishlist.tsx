@@ -11,18 +11,23 @@ export default function Wishlist() {
   useTelegramBackButton(goBack);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
 
   useEffect(() => {
     api.getWishlist()
       .then((data) => setItems(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
 
   const removeFromWishlist = async (productId: string) => {
-    await api.removeFromWishlist(productId).catch(() => {});
-    setItems((prev) => prev.filter((i) => i.productId !== productId && i.product?.id !== productId));
+    try {
+      await api.removeFromWishlist(productId);
+      setItems((prev) => prev.filter((i) => i.productId !== productId && i.product?.id !== productId));
+    } catch {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+    }
   };
 
   const addToCart = async (productId: string) => {
@@ -31,7 +36,9 @@ export default function Wishlist() {
       await api.addToCart(productId);
       cartStore.inc();
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    } catch {}
+    } catch {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+    }
     setAdding(null);
   };
 
@@ -39,6 +46,15 @@ export default function Wishlist() {
     return (
       <div style={{ padding: 16 }}>
         {[1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 72, borderRadius: 12, marginBottom: 10 }} />)}
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center' }}>
+        <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить избранное', "Sevimlilarni yuklab bo'lmadi")}</p>
+        <button className="btn secondary sm pill" onClick={() => window.location.reload()}>{tr('Повторить', 'Qayta urinish')}</button>
       </div>
     );
   }
