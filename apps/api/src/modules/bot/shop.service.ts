@@ -1,6 +1,7 @@
 import prisma from '../../lib/prisma.js';
 import { DEFAULT_TIERS, computeTier } from '../loyalty/routes.js';
 import { PLANS, type PlanCode } from '@sellgram/shared';
+import { getEffectivePlan } from '../../lib/billing.js';
 
 export class ShopApiError extends Error {
   code: 'PRODUCT_NOT_FOUND' | 'ORDER_NOT_FOUND' | 'ORDER_CANNOT_CANCEL' | 'ORDER_CANNOT_REVIEW' | 'REVIEW_ALREADY_SUBMITTED';
@@ -46,8 +47,7 @@ export async function getShopCatalog(
     prisma.product.count({ where }),
   ]);
 
-  const effectivePlan: PlanCode =
-    tenant?.planExpiresAt && tenant.planExpiresAt < new Date() ? 'FREE' : (tenant?.plan as PlanCode) ?? 'FREE';
+  const effectivePlan = getEffectivePlan(tenant?.plan, tenant?.planExpiresAt) as PlanCode;
   const brandingWatermark = PLANS[effectivePlan]?.limits?.brandingWatermark ?? true;
 
   return { categories, products, total, page, pageSize, totalPages: Math.ceil(total / pageSize), botUsername: store?.botUsername ?? null, brandingWatermark };

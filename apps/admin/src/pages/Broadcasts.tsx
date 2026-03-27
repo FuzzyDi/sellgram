@@ -306,6 +306,12 @@ export default function Broadcasts() {
           <button className="sg-btn primary" type="button" onClick={sendCampaign} disabled={!canSend || sending}>
             {sending ? tr('Отправка...', 'Yuborilmoqda...') : tr('Отправить', 'Yuborish')}
           </button>
+          <p style={{ margin: 0, fontSize: 12, color: '#748278', lineHeight: 1.5 }}>
+            {tr(
+              'Сообщения доставляются только клиентам, не заблокировавшим бота. Счётчик аудитории учитывает только активных получателей.',
+              "Xabarlar faqat botni bloklamagan mijozlarga yetkaziladi. Auditoriya hisoblagichi faqat faol qabul qiluvchilarni ko'rsatadi."
+            )}
+          </p>
         </article>
 
         {/* ── Right: history ── */}

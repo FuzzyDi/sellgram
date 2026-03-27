@@ -272,6 +272,7 @@ export default function Orders() {
               }
             }}
             style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 12px', fontSize: 12, background: 'transparent', cursor: 'pointer', color: '#374151', whiteSpace: 'nowrap' }}
+            title={tr('Экспорт до 5 000 заказов с текущими фильтрами. Лимит: 5 выгрузок в минуту.', "Joriy filtrlar bilan 5 000 ta buyurtmani eksport qilish. Limit: daqiqada 5 ta.")}
           >
             {exporting ? '...' : tr('↓ CSV', '↓ CSV')}
           </button>

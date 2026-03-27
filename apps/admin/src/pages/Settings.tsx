@@ -1049,6 +1049,12 @@ export default function Settings() {
               <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>
                 {tr('Эндпоинты: GET /v1/products, GET /v1/products/:id, GET /v1/orders, GET /v1/orders/:id, PATCH /v1/orders/:id/status', 'Endpointlar: GET /v1/products, GET /v1/products/:id, GET /v1/orders, GET /v1/orders/:id, PATCH /v1/orders/:id/status')}
               </p>
+              <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>
+                {tr(
+                  'Лимит: 60 запросов / минуту на ключ. Ключ можно отозвать в любой момент — он перестанет работать немедленно.',
+                  "Limit: daqiqada 60 so'rov / kalit. Kalitni istalgan vaqtda bekor qilish mumkin — u darhol ishlamay qoladi."
+                )}
+              </p>
             </div>
           </article>
         </section>
@@ -1059,6 +1065,12 @@ export default function Settings() {
           <article className="sg-card">
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Webhooks', 'Webhooks')}</h3>
             <p className="sg-subtitle">{tr('Получайте события заказов на ваш URL в реальном времени.', 'Buyurtma voqealarini real vaqtda URL manzilingizga oling.')}</p>
+            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#748278', lineHeight: 1.6 }}>
+              {tr(
+                'При каждом событии SellGram делает POST-запрос на ваш URL. Если сервер не ответил 2xx — одна повторная попытка через 3 секунды. Подпись запроса передаётся в заголовке X-Sellgram-Signature: sha256=...',
+                "Har bir voqeada SellGram URL manzilingizga POST so'rov yuboradi. Server 2xx javob bermasa — 3 soniyadan so'ng bitta qayta urinish. So'rov imzosi X-Sellgram-Signature: sha256=... sarlavhasida uzatiladi."
+              )}
+            </p>
 
             {newWebhookSecret && (
               <div className="sg-card" style={{ marginTop: 10, background: '#f0fdf4', border: '1px solid #86efac' }}>

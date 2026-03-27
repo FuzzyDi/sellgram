@@ -4,6 +4,7 @@ import prisma from '../../lib/prisma.js';
 import { getRedis } from '../../lib/redis.js';
 import { PLANS, type PlanCode, type ReportsLevel } from '@sellgram/shared';
 import { calcNextRunAt } from '../../jobs/scheduled-reports.js';
+import { getEffectivePlan } from '../../lib/billing.js';
 
 const REPORTS_LEVEL_WEIGHT: Record<ReportsLevel, number> = {
   BASIC: 1,
@@ -132,8 +133,7 @@ async function getTenantReportLimits(tenantId: string): Promise<ReportLimits> {
   });
 
   const fallback = PLANS.FREE;
-  const effectivePlanCode: PlanCode =
-    tenant?.planExpiresAt && tenant.planExpiresAt < new Date() ? 'FREE' : (tenant?.plan as PlanCode) ?? 'FREE';
+  const effectivePlanCode = getEffectivePlan(tenant?.plan, tenant?.planExpiresAt) as PlanCode;
   const plan = PLANS[effectivePlanCode] || fallback;
   const planCode = plan.code;
   const fallbackExports = planCode === 'BUSINESS' ? -1 : planCode === 'PRO' ? 50 : 0;

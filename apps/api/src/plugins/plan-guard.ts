@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma.js';
 import { PLANS, type PlanCode } from '@sellgram/shared';
+import { getEffectivePlan } from '../lib/billing.js';
 
 type LimitKey = keyof (typeof PLANS)['FREE']['limits'];
 
@@ -19,9 +20,8 @@ export function planGuard(limitKey: LimitKey) {
       return reply.status(404).send({ success: false, error: 'Tenant not found' });
     }
 
-    // Treat plan as FREE if subscription has expired
-    const effectivePlan: PlanCode =
-      tenant.planExpiresAt && tenant.planExpiresAt < new Date() ? 'FREE' : (tenant.plan as PlanCode);
+    // Treat plan as FREE if subscription has expired (3-day grace period applies)
+    const effectivePlan = getEffectivePlan(tenant.plan, tenant.planExpiresAt) as PlanCode;
     const plan = PLANS[effectivePlan];
     if (!plan) {
       return reply.status(500).send({ success: false, error: 'Invalid plan' });

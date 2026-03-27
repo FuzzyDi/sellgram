@@ -336,7 +336,12 @@ export default function Customers() {
             placeholder={tr('Поиск: имя, @username, телефон', 'Qidiruv: ism, @username, telefon')}
             style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13, minWidth: 280, flex: 1 }}
           />
-          <button className="sg-btn ghost" onClick={() => void handleExport()} disabled={exporting}>
+          <button
+            className="sg-btn ghost"
+            onClick={() => void handleExport()}
+            disabled={exporting}
+            title={tr('Экспорт до 10 000 клиентов. Лимит: 5 выгрузок в минуту.', "Maksimal 10 000 mijoz. Limit: daqiqada 5 ta yuklab olish.")}
+          >
             {exporting ? '⏳' : '⬇️'} CSV
           </button>
         </div>

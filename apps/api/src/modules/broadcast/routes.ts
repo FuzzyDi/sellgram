@@ -43,7 +43,7 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
     });
     if (!store) return { success: true, data: { count: 0 } };
 
-    const where: any = { tenantId: request.tenantId! };
+    const where: any = { tenantId: request.tenantId!, botBlocked: false };
     if (segment) Object.assign(where, buildSegmentWhere(segment));
 
     const count = await prisma.customer.count({ where });
@@ -101,9 +101,9 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
         if (!targetCustomerIds.length) {
           return reply.status(400).send({ success: false, error: 'customerIds required for SELECTED mode' });
         }
-        recipientWhere = { tenantId: request.tenantId!, id: { in: targetCustomerIds } };
+        recipientWhere = { tenantId: request.tenantId!, botBlocked: false, id: { in: targetCustomerIds } };
       } else {
-        recipientWhere = { tenantId: request.tenantId! };
+        recipientWhere = { tenantId: request.tenantId!, botBlocked: false };
         if (body.segmentFilter) Object.assign(recipientWhere, buildSegmentWhere(body.segmentFilter));
       }
 

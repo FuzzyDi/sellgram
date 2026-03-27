@@ -6,6 +6,7 @@ import { decrypt } from '../lib/encrypt.js';
 import { getRedis } from '../lib/redis.js';
 import { getSystemSubscriptionReminderSettings } from '../modules/system-admin/service.js';
 import { updateOrderStatus } from '../modules/order/order.service.js';
+import { getEffectivePlan, planDowngradeThreshold } from '../lib/billing.js';
 
 interface BotInstance {
   bot: Bot;
@@ -679,11 +680,10 @@ function getBotInstanceForTenant(tenantId: string): BotInstance | null {
 }
 
 async function downgradeExpiredPlans(): Promise<void> {
-  const now = new Date();
   const expired = await prisma.tenant.findMany({
     where: {
       plan: { in: ['PRO', 'BUSINESS'] },
-      planExpiresAt: { lt: now },
+      planExpiresAt: { lt: planDowngradeThreshold() },
     },
     select: { id: true, name: true, plan: true },
   });
@@ -831,15 +831,22 @@ export async function initBotManager(fastify: FastifyInstance): Promise<void> {
   setTimeout(() => void downgradeExpiredPlans(), 60_000);
 }
 
-async function retryTelegramSend(fn: () => Promise<unknown>, maxAttempts = 3): Promise<void> {
+async function retryTelegramSend(fn: () => Promise<unknown>, maxAttempts = 3, customerId?: string): Promise<void> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await fn();
       return;
     } catch (err: any) {
       const code: number | undefined = err?.error_code;
-      // 400 Bad Request (invalid chat id) and 403 Forbidden (bot blocked) are permanent — don't retry
-      if (code === 400 || code === 403) return;
+      if (code === 403) {
+        // Bot was blocked by the user — mark so we skip future sends
+        if (customerId) {
+          prisma.customer.updateMany({ where: { id: customerId }, data: { botBlocked: true } }).catch(() => {});
+        }
+        return;
+      }
+      // 400 Bad Request (invalid chat id) is also permanent — don't retry
+      if (code === 400) return;
       if (attempt === maxAttempts) return;
       await new Promise((r) => setTimeout(r, attempt * 1000));
     }
@@ -854,7 +861,7 @@ export async function notifyOrderStatus(storeId: string, orderId: string, newSta
     where: { id: orderId },
     include: { customer: true },
   });
-  if (!order?.customer?.telegramId) return;
+  if (!order?.customer?.telegramId || order.customer.botBlocked) return;
 
   const lang = order.customer.languageCode;
   const textByStatus: Partial<Record<OrderStatusType, string>> = {
@@ -883,7 +890,8 @@ export async function notifyOrderStatus(storeId: string, orderId: string, newSta
     );
 
     await retryTelegramSend(() =>
-      instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), deliveredText, { reply_markup: kb })
+      instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), deliveredText, { reply_markup: kb }),
+      3, order.customer!.id
     );
     return;
   }
@@ -891,7 +899,8 @@ export async function notifyOrderStatus(storeId: string, orderId: string, newSta
   const text = textByStatus[newStatus];
   if (!text) return;
   await retryTelegramSend(() =>
-    instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text)
+    instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text),
+    3, order.customer!.id
   );
 }
 
@@ -903,7 +912,7 @@ export async function notifyPaymentPaid(storeId: string, orderId: string): Promi
     where: { id: orderId },
     include: { customer: true },
   });
-  if (!order?.customer?.telegramId) return;
+  if (!order?.customer?.telegramId || order.customer.botBlocked) return;
 
   const lang = order.customer.languageCode;
   const text = tLangByCode(
@@ -913,7 +922,8 @@ export async function notifyPaymentPaid(storeId: string, orderId: string): Promi
   );
 
   await retryTelegramSend(() =>
-    instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text)
+    instance.bot.api.sendMessage(order.customer!.telegramId!.toString(), text),
+    3, order.customer!.id
   );
 }
 
@@ -964,7 +974,7 @@ export async function notifyNewOrder(storeId: string, order: any): Promise<void>
 
 export async function sendPromoBroadcast(
   storeId: string,
-  recipients: Array<{ telegramId: bigint; language?: string | null; firstName?: string | null }>,
+  recipients: Array<{ id: string; telegramId: bigint; language?: string | null; firstName?: string | null }>,
   payload: { title?: string; message: string }
 ): Promise<{ sent: number; failed: number }> {
   const instance = bots.get(storeId);
@@ -975,7 +985,7 @@ export async function sendPromoBroadcast(
     where: { id: instance.tenantId },
     select: { plan: true, planExpiresAt: true },
   });
-  const effectivePlan = tenant?.planExpiresAt && tenant.planExpiresAt < new Date() ? 'FREE' : (tenant?.plan ?? 'FREE');
+  const effectivePlan = getEffectivePlan(tenant?.plan, tenant?.planExpiresAt);
   const showWatermark = effectivePlan === 'FREE';
 
   let sent = 0;
@@ -988,7 +998,11 @@ export async function sendPromoBroadcast(
     try {
       await instance.bot.api.sendMessage(recipient.telegramId.toString(), `${header}${payload.message}${footer}`, { parse_mode: 'Markdown' });
       sent += 1;
-    } catch {
+    } catch (err: any) {
+      if (err?.error_code === 403) {
+        // Bot blocked — mark customer so future sends are skipped
+        prisma.customer.updateMany({ where: { id: recipient.id }, data: { botBlocked: true } }).catch(() => {});
+      }
       failed += 1;
     }
   }
