@@ -53,7 +53,7 @@ export default function Reviews() {
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       const res = await adminApi.getReviews(params.toString());
-      setData(res.data);
+      setData(res);
     } catch {
       setLoadError(true);
     } finally {
