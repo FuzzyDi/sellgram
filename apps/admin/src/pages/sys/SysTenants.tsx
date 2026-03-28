@@ -27,6 +27,9 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
   const [createInvoice, setCreateInvoice] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState({ plan: tenant.plan, amount: '', paymentRef: '', autoConfirm: false });
   const [submittingInvoice, setSubmittingInvoice] = useState(false);
+  const [showExtend, setShowExtend] = useState(false);
+  const [extendForm, setExtendForm] = useState({ plan: tenant.plan, months: '1', amount: '', note: '' });
+  const [extending, setExtending] = useState(false);
 
   useEffect(() => {
     systemApi.tenantDetail(tenant.id).then(setDetail).catch(() => {}).finally(() => setLoading(false));
@@ -78,6 +81,23 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
       setResetPwd(null);
       setNewPwd('');
     } catch (e: any) { showNotice('❌ ' + e.message); }
+  }
+
+  async function submitExtend() {
+    if (!extendForm.amount) return;
+    setExtending(true);
+    try {
+      await systemApi.extendPlan(tenant.id, {
+        plan: extendForm.plan,
+        months: Number(extendForm.months),
+        amount: Number(extendForm.amount),
+        note: extendForm.note || undefined,
+      });
+      showNotice('✅ Подписка продлена');
+      setShowExtend(false);
+      onRefresh();
+    } catch (e: any) { showNotice('❌ ' + e.message); }
+    finally { setExtending(false); }
   }
 
   async function submitInvoice() {
@@ -152,6 +172,9 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => setShowExtend(true)} style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            ➕ Продлить
+          </button>
           <button onClick={impersonate} disabled={impersonating} style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
             {impersonating ? '...' : '🎭 Impersonate'}
           </button>
@@ -162,6 +185,45 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
             {blocking ? '...' : isBlocked ? '🔓 Разблок' : '🚫 Блок'}
           </button>
         </div>
+
+        {/* Extend plan form */}
+        {showExtend && (
+          <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#5b21b6' }}>Продлить подписку</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Тариф</label>
+                <select value={extendForm.plan} onChange={(e) => setExtendForm((f) => ({ ...f, plan: e.target.value }))}
+                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }}>
+                  {['FREE', 'PRO', 'BUSINESS'].map((p) => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Месяцев</label>
+                <select value={extendForm.months} onChange={(e) => setExtendForm((f) => ({ ...f, months: e.target.value }))}
+                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }}>
+                  {[1,2,3,6,12].map((m) => <option key={m} value={m}>{m} мес.</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Сумма (UZS)</label>
+                <input placeholder="500000" value={extendForm.amount} onChange={(e) => setExtendForm((f) => ({ ...f, amount: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Примечание</label>
+                <input placeholder="Необязательно" value={extendForm.note} onChange={(e) => setExtendForm((f) => ({ ...f, note: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={submitExtend} disabled={extending || !extendForm.amount} style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: !extendForm.amount ? 0.5 : 1 }}>
+                {extending ? '...' : 'Продлить'}
+              </button>
+              <button onClick={() => setShowExtend(false)} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}>Отмена</button>
+            </div>
+          </div>
+        )}
 
         {/* Create invoice modal */}
         {createInvoice && (
