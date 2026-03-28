@@ -1,6 +1,104 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { systemApi } from '../../api/system-admin-client';
 
+function MonitorSettings() {
+  const [settings, setSettings] = useState<any>(null);
+  const [draft, setDraft] = useState({ botToken: '', chatId: '', diskThreshold: 85 });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveErr, setSaveErr] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState('');
+
+  useEffect(() => {
+    systemApi.monitorSettings().then((d: any) => {
+      setSettings(d);
+      setDraft({ botToken: d.botToken ?? '', chatId: d.chatId ?? '', diskThreshold: d.diskThreshold ?? 85 });
+    });
+  }, []);
+
+  async function save() {
+    setSaving(true); setSaveErr('');
+    try {
+      const updated = await systemApi.updateMonitorSettings({ ...draft, diskThreshold: Number(draft.diskThreshold) });
+      setSettings(updated);
+      setDraft({ botToken: updated.botToken ?? '', chatId: updated.chatId ?? '', diskThreshold: updated.diskThreshold ?? 85 });
+      setSaved(true); setTimeout(() => setSaved(false), 2500);
+    } catch (e: any) {
+      setSaveErr(e?.message || 'Ошибка сохранения');
+    } finally { setSaving(false); }
+  }
+
+  async function sendTest() {
+    if (!draft.botToken || !draft.chatId) return;
+    setTesting(true); setTestResult('');
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${draft.botToken}/sendMessage`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: draft.chatId, text: '✅ SellGram monitor — тест уведомления' }) }
+      );
+      const json = await res.json() as any;
+      setTestResult(json.ok ? '✅ Сообщение отправлено' : '❌ ' + (json.description || 'Ошибка'));
+    } catch (e: any) {
+      setTestResult('❌ ' + (e?.message || 'Ошибка'));
+    } finally { setTesting(false); }
+  }
+
+  if (!settings) return <div style={{ color: '#94a3b8', fontSize: 13 }}>Загрузка настроек...</div>;
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 12, padding: '20px 22px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginTop: 24 }}>
+      <h2 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: '#0f172a' }}>⚙️ Настройки уведомлений</h2>
+      <p style={{ margin: '0 0 18px', fontSize: 12, color: '#64748b' }}>Telegram-бот для healthcheck и disk-alert. Скрипт читает из API при каждом запуске.</p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 480 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>Токен бота</label>
+          <input
+            value={draft.botToken}
+            onChange={e => setDraft(p => ({ ...p, botToken: e.target.value }))}
+            style={{ width: '100%', boxSizing: 'border-box', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontFamily: 'monospace', color: '#0f172a' }}
+            placeholder="123456:ABC-DEF..."
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat ID</label>
+          <input
+            value={draft.chatId}
+            onChange={e => setDraft(p => ({ ...p, chatId: e.target.value }))}
+            style={{ width: '100%', boxSizing: 'border-box', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontFamily: 'monospace', color: '#0f172a' }}
+            placeholder="-1001234567890"
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>Порог диска (%)</label>
+          <input
+            type="number" min={50} max={99}
+            value={draft.diskThreshold}
+            onChange={e => setDraft(p => ({ ...p, diskThreshold: Number(e.target.value) }))}
+            style={{ width: 100, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0f172a' }}
+          />
+        </div>
+      </div>
+
+      {saveErr && <p style={{ margin: '10px 0 0', color: '#dc2626', fontSize: 12 }}>{saveErr}</p>}
+      {saved && <p style={{ margin: '10px 0 0', color: '#059669', fontSize: 12, fontWeight: 700 }}>✓ Сохранено</p>}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button onClick={() => void save()} disabled={saving}
+          style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+          {saving ? 'Сохранение...' : 'Сохранить'}
+        </button>
+        <button onClick={() => void sendTest()} disabled={testing || !draft.botToken || !draft.chatId}
+          style={{ background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: (testing || !draft.botToken || !draft.chatId) ? 'not-allowed' : 'pointer', opacity: (testing || !draft.botToken || !draft.chatId) ? 0.5 : 1 }}>
+          {testing ? 'Отправка...' : '📨 Тест уведомления'}
+        </button>
+        {testResult && <span style={{ fontSize: 12, color: testResult.startsWith('✅') ? '#059669' : '#dc2626' }}>{testResult}</span>}
+      </div>
+    </div>
+  );
+}
+
 function ServiceCard({ name, ok, metrics }: { name: string; ok: boolean; metrics: { label: string; value: string | number }[] }) {
   return (
     <div style={{ background: '#fff', borderRadius: 12, padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: `4px solid ${ok ? '#22c55e' : '#ef4444'}` }}>
@@ -146,8 +244,11 @@ export default function SysMonitoring() {
             )}
           </div>
 
+          {/* Monitor settings */}
+          <MonitorSettings />
+
           {/* Error log */}
-          <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+          <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden', marginTop: 24 }}>
             <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 700, fontSize: 15, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>🔴 Лог ошибок (последние {errors.length})</span>
               <div style={{ display: 'flex', gap: 8 }}>
