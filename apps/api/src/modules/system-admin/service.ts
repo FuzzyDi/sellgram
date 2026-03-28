@@ -1161,3 +1161,66 @@ export async function extendTenantPlan(input: {
 
   return { plan: input.plan, planExpiresAt: newExpiry };
 }
+
+export async function getSystemGrowth() {
+  const now = new Date();
+
+  // Last 12 weeks of registrations
+  const weeks: { label: string; from: Date; to: Date }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i * 7));
+    const from = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate() - 7));
+    const label = `${String(from.getUTCMonth() + 1).padStart(2, '0')}.${String(from.getUTCDate()).padStart(2, '0')}`;
+    weeks.push({ label, from, to });
+  }
+  const twelveWeeksAgo = weeks[0].from;
+  const allNewTenants = await prisma.tenant.findMany({
+    where: { createdAt: { gte: twelveWeeksAgo } },
+    select: { createdAt: true },
+  });
+  const registrations = weeks.map(({ label, from, to }) => ({
+    label,
+    count: allNewTenants.filter(t => t.createdAt >= from && t.createdAt < to).length,
+  }));
+
+  // Conversion funnel
+  const [total, withStores, withOrders, paid] = await Promise.all([
+    prisma.tenant.count(),
+    prisma.tenant.count({ where: { stores: { some: {} } } }),
+    prisma.tenant.count({ where: { orders: { some: {} } } }),
+    prisma.tenant.count({ where: { plan: { in: ['PRO', 'BUSINESS'] } } }),
+  ]);
+
+  // Inactive tenants — have a store but no orders in last 14 days
+  const fourteenDaysAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 14));
+  const activeTenantIds = await prisma.order.findMany({
+    where: { createdAt: { gte: fourteenDaysAgo } },
+    select: { tenantId: true },
+    distinct: ['tenantId'],
+  });
+  const activeTenantIdSet = new Set(activeTenantIds.map(o => o.tenantId));
+  const tenantsWithStores = await prisma.tenant.findMany({
+    where: { stores: { some: { isActive: true } } },
+    select: {
+      id: true,
+      name: true,
+      plan: true,
+      createdAt: true,
+      users: { where: { role: 'OWNER' }, select: { email: true }, take: 1 },
+      _count: { select: { orders: true } },
+    },
+  });
+  const inactive = tenantsWithStores
+    .filter(t => !activeTenantIdSet.has(t.id))
+    .slice(0, 20)
+    .map(t => ({
+      id: t.id,
+      name: t.name,
+      email: t.users[0]?.email ?? '—',
+      plan: t.plan,
+      totalOrders: t._count.orders,
+      createdAt: t.createdAt,
+    }));
+
+  return { registrations, funnel: { total, withStores, withOrders, paid }, inactive };
+}

@@ -81,6 +81,7 @@ export const systemApi = {
   tenantDetail: (id: string) => systemRequest<any>(`/tenants/${id}`),
   impersonate: (id: string) => systemRequest<any>(`/tenants/${id}/impersonate`, { method: 'POST' }),
   revenueTrend: () => systemRequest<any[]>('/revenue-trend'),
+  growth: () => systemRequest<any>('/growth'),
   createInvoice: (payload: { tenantId: string; plan: string; amount: number; paymentRef?: string; autoConfirm: boolean }) =>
     systemRequest<any>('/invoices', { method: 'POST', body: JSON.stringify(payload) }),
 

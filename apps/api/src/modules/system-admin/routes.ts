@@ -53,6 +53,7 @@ import {
   sendReminderToTenant,
   getMonitorSettings,
   updateMonitorSettings,
+  getSystemGrowth,
 } from './service.js';
 declare module 'fastify' {
   interface FastifyRequest {
@@ -256,6 +257,11 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
 
   fastify.get('/revenue-trend', { preHandler: [authenticateSystem] }, async () => {
     const data = await getSystemRevenueTrend();
+    return { success: true, data };
+  });
+
+  fastify.get('/growth', { preHandler: [authenticateSystem] }, async () => {
+    const data = await getSystemGrowth();
     return { success: true, data };
   });
 
