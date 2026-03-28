@@ -267,7 +267,6 @@ function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
   if (needPerm && !perms[needPerm]) return <Dashboard />;
 
   switch (route) {
-    case '/system-admin': return <SysLayout />;
     case '/products':     return <Products />;
     case '/procurement':  return <Procurement />;
     case '/stock':        return <Stock />;
