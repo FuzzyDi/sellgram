@@ -14,6 +14,7 @@ import {
   StoreServiceError,
   updateTenantStore,
 } from './service.js';
+import { sendWelcomeMessage } from '../../bot/bot-manager.js';
 
 function mapStoreError(err: unknown) {
   if (err instanceof StoreServiceError) {
@@ -96,6 +97,11 @@ export default async function storeRoutes(fastify: FastifyInstance) {
       const mapped = mapStoreError(err);
       return reply.status(mapped.status).send({ success: false, error: mapped.error });
     }
+  });
+
+  fastify.post('/onboarding/complete', async (request, reply) => {
+    sendWelcomeMessage(request.tenantId!).catch(() => {/* non-fatal */});
+    return { success: true };
   });
 
   fastify.post('/stores/:id/activate', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {

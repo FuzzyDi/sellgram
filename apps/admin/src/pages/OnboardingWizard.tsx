@@ -185,6 +185,7 @@ export default function OnboardingWizard({ onFinish }: Props) {
           await adminApi.createCategory({ name: names[i], sortOrder: i });
         }
       }
+      adminApi.completeOnboarding().catch(() => {/* non-fatal */});
       setStep('done');
     } catch (e: any) {
       setError(e.message);

@@ -182,6 +182,7 @@ export const adminApi = {
   updateStore: (id: string, data: any) => request<any>(`/stores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   checkStoreBot: (id: string) => request<any>(`/stores/${id}/check-bot`),
   activateStore: (id: string) => request<any>(`/stores/${id}/activate`, { method: 'POST' }),
+  completeOnboarding: () => request<any>('/onboarding/complete', { method: 'POST' }),
   deleteStore: (id: string) => request<any>(`/stores/${id}`, { method: 'DELETE' }),
 
   getStorePaymentMethods: (storeId: string) => request<any>(`/stores/${storeId}/payment-methods`),

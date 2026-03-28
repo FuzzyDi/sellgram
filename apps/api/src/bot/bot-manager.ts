@@ -962,6 +962,37 @@ export async function notifyPaymentPaid(storeId: string, orderId: string): Promi
   );
 }
 
+export async function sendWelcomeMessage(tenantId: string): Promise<void> {
+  const instance = getBotInstanceForTenant(tenantId);
+  if (!instance) return;
+
+  const { ADMIN_URL } = (await import('../config/index.js')).getConfig();
+  const adminUrl = ADMIN_URL || 'https://app.sellgram.uz';
+
+  const admins = await prisma.user.findMany({
+    where: { tenantId, role: 'OWNER', adminTelegramId: { not: null }, isActive: true },
+    select: { adminTelegramId: true },
+  });
+
+  for (const admin of admins) {
+    if (!admin.adminTelegramId) continue;
+    const text =
+      `🎉 <b>Ваш магазин запущен!</b>\n\n` +
+      `Добро пожаловать в SellGram. Бот активирован и готов принимать заказы.\n\n` +
+      `Следующие шаги:\n` +
+      `📦 Добавьте товары в каталог\n` +
+      `🚚 Настройте зоны и цены доставки\n` +
+      `📢 Поделитесь ссылкой на бот с клиентами\n\n` +
+      `<a href="${adminUrl}">👉 Открыть панель управления</a>\n\n` +
+      `🎉 <b>Do'koningiz ishga tushdi!</b>\n\n` +
+      `SellGram'ga xush kelibsiz. Bot faollashtirildi va buyurtmalar qabul qilishga tayyor.\n\n` +
+      `<a href="${adminUrl}">👉 Boshqaruv paneliga o'tish</a>`;
+    await retryTelegramSend(() =>
+      instance.bot.api.sendMessage(admin.adminTelegramId!.toString(), text, { parse_mode: 'HTML' })
+    );
+  }
+}
+
 export async function notifyNewOrder(storeId: string, order: any): Promise<void> {
   const instance = bots.get(storeId);
   if (!instance) return;
