@@ -690,12 +690,41 @@ async function downgradeExpiredPlans(): Promise<void> {
     },
     select: { id: true, name: true, plan: true },
   });
+
   for (const tenant of expired) {
     await prisma.tenant.update({
       where: { id: tenant.id },
       data: { plan: 'FREE', planExpiresAt: null },
     });
+
+    // Notify owner about downgrade
+    const instance = getBotInstanceForTenant(tenant.id);
+    if (!instance) continue;
+
+    const admins = await prisma.user.findMany({
+      where: {
+        tenantId: tenant.id,
+        role: { in: ['OWNER', 'MANAGER'] },
+        adminTelegramId: { not: null },
+        isActive: true,
+      },
+      select: { adminTelegramId: true },
+    });
+
+    if (admins.length === 0) continue;
+
+    const { ADMIN_URL } = (await import('../config/index.js')).getConfig();
+    const billingUrl = `${ADMIN_URL}/#/billing`;
+    const msg = `🔴 <b>Тариф ${tenant.plan} отключён.</b>\n\nМагазин «${tenant.name}» переведён на <b>Бесплатный</b> план. Часть функций ограничена.\n\n<a href="${billingUrl}">👉 Восстановить тариф</a>\n\n🔴 <b>${tenant.plan} tarifi o'chirildi.</b>\n\n«${tenant.name}» do'koni <b>Bepul</b> rejaga o'tkazildi. Ba'zi funksiyalar cheklangan.\n\n<a href="${billingUrl}">👉 Tarifni tiklash</a>`;
+
+    for (const admin of admins) {
+      if (!admin.adminTelegramId) continue;
+      try {
+        await instance.bot.api.sendMessage(admin.adminTelegramId.toString(), msg, { parse_mode: 'HTML' });
+      } catch {}
+    }
   }
+
   if (expired.length > 0) {
     fastify.log.info(`Downgraded ${expired.length} expired tenant(s) to FREE`);
   }
@@ -705,9 +734,10 @@ async function remindExpiringSubscriptions(): Promise<void> {
   const now = new Date();
   const reminder = await getSystemSubscriptionReminderSettings();
   if (!reminder.enabled || reminder.days.length === 0) return;
-  const reminderDays = reminder.days;
 
-  const maxReminderDay = Math.max(...reminderDays);
+  // Always include day 0 (expires today) regardless of config
+  const reminderDays = Array.from(new Set([...reminder.days, 0]));
+  const maxReminderDay = Math.max(...reminder.days);
   const until = new Date(now.getTime() + maxReminderDay * 24 * 60 * 60 * 1000);
 
   const expiringTenants = await prisma.tenant.findMany({
@@ -725,6 +755,8 @@ async function remindExpiringSubscriptions(): Promise<void> {
   if (expiringTenants.length === 0) return;
 
   const redis = getRedis();
+  const { ADMIN_URL } = (await import('../config/index.js')).getConfig();
+  const billingUrl = `${ADMIN_URL}/#/billing`;
 
   for (const tenant of expiringTenants) {
     if (!tenant.planExpiresAt) continue;
@@ -751,23 +783,23 @@ async function remindExpiringSubscriptions(): Promise<void> {
 
     if (admins.length === 0) continue;
 
+    const expires = tenant.planExpiresAt.toLocaleDateString('ru-RU');
+    const expiresUz = tenant.planExpiresAt.toLocaleDateString('uz-UZ');
+
+    const text = daysLeft === 0
+      ? `🚨 <b>Сегодня истекает тариф ${tenant.plan}!</b>\n\nМагазин «${tenant.name}» будет переведён на бесплатный план — часть функций станет недоступна.\n\n<a href="${billingUrl}">👉 Оплатить прямо сейчас</a>`
+      : `⚠️ <b>Тариф ${tenant.plan} истекает через ${daysLeft} дн.</b>\n\nМагазин «${tenant.name}» — до ${expires}\n\n<a href="${billingUrl}">👉 Продлить тариф</a>`;
+
+    const textUz = daysLeft === 0
+      ? `🚨 <b>${tenant.plan} tarifi bugun tugaydi!</b>\n\n«${tenant.name}» do'koni bepul rejaga o'tkaziladi — ba'zi funksiyalar mavjud bo'lmaydi.\n\n<a href="${billingUrl}">👉 Hozir to'lash</a>`
+      : `⚠️ <b>${tenant.plan} tarifi ${daysLeft} kundan so'ng tugaydi.</b>\n\n«${tenant.name}» do'koni — ${expiresUz} gacha\n\n<a href="${billingUrl}">👉 Tarifni uzaytirish</a>`;
+
     for (const admin of admins) {
       if (!admin.adminTelegramId) continue;
-
-      const renewHint = tLangByCode(
-        undefined,
-        '\u041F\u0440\u043E\u0434\u043B\u0438\u0442\u0435 \u0442\u0430\u0440\u0438\u0444 \u0432 \u043F\u0430\u043D\u0435\u043B\u0438: \u0422\u0430\u0440\u0438\u0444\u044B -> \u0412\u044B\u0431\u0440\u0430\u0442\u044C \u0442\u0430\u0440\u0438\u0444 -> \u041E\u043F\u043B\u0430\u0442\u0430.',
-        "Tarifni panelda uzaytiring: Tariflar -> Tarifni tanlash -> To'lov."
-      );
-
-      const text = tLangByCode(
-        undefined,
-        `\u26A0\uFE0F \u0422\u0430\u0440\u0438\u0444 ${tenant.plan} \u0434\u043B\u044F \u043C\u0430\u0433\u0430\u0437\u0438\u043D\u0430 "${tenant.name}" \u0438\u0441\u0442\u0435\u043A\u0430\u0435\u0442 \u0447\u0435\u0440\u0435\u0437 ${daysLeft} \u0434\u043D.\n\u0414\u0430\u0442\u0430 \u043E\u043A\u043E\u043D\u0447\u0430\u043D\u0438\u044F: ${tenant.planExpiresAt.toLocaleDateString('ru-RU')}\n\n${renewHint}`,
-        `\u26A0\uFE0F "${tenant.name}" do'koni uchun ${tenant.plan} tarifi ${daysLeft} kundan so'ng tugaydi.\nTugash sanasi: ${tenant.planExpiresAt.toLocaleDateString('uz-UZ')}\n\n${renewHint}`
-      );
-
+      // Send both languages so the owner definitely reads it
+      const msg = `${text}\n\n${textUz}`;
       try {
-        await instance.bot.api.sendMessage(admin.adminTelegramId.toString(), text);
+        await instance.bot.api.sendMessage(admin.adminTelegramId.toString(), msg, { parse_mode: 'HTML' });
       } catch {}
     }
   }
