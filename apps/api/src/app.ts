@@ -304,6 +304,16 @@ async function main() {
   await fastify.register(paymentRoutes, { prefix: '/api' });
   await fastify.register(systemAdminRoutes, { prefix: '/api/system-admin' });
 
+  // Public stats for landing page (no auth)
+  fastify.get('/api/stats/public', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (_req, reply) => {
+    const [shops, orders] = await Promise.all([
+      prisma.store.count(),
+      prisma.order.count(),
+    ]);
+    reply.header('Cache-Control', 'public, max-age=300');
+    return { shops, orders };
+  });
+
   // Public API (/api/v1/*) — authenticated via API key
   await fastify.register(publicApiRoutes, { prefix: '/api' });
 

@@ -7,7 +7,6 @@
   <meta name="description" content="SellGram — Telegram ichida do'kon ochish va boshqarish platformasi. Katalog, buyurtmalar, mijozlar va loyallik dasturi bitta panelda." />
   <link rel="canonical" href="https://sellgram.uz/" />
 
-  <!-- Open Graph -->
   <meta property="og:type"        content="website" />
   <meta property="og:url"         content="https://sellgram.uz/" />
   <meta property="og:site_name"   content="SellGram" />
@@ -16,8 +15,6 @@
   <meta property="og:image"       content="https://sellgram.uz/screenshots/catalog.jpg" />
   <meta property="og:image:width"  content="1200" />
   <meta property="og:image:height" content="630" />
-
-  <!-- Twitter Card -->
   <meta name="twitter:card"        content="summary_large_image" />
   <meta name="twitter:title"       content="SellGram — Telegram do'kon platformasi" />
   <meta name="twitter:description" content="5 daqiqada Telegram ichida do'kon oching." />
@@ -26,6 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
   <style>
     :root {
       --bg: #f2f6f3;
@@ -37,13 +35,11 @@
       --brand: #00875a;
       --brand-2: #00b376;
       --radius: 18px;
-      --shadow: 0 20px 50px rgba(14, 42, 24, 0.08);
+      --shadow: 0 20px 50px rgba(14,42,24,0.08);
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
-      font-family: "Manrope", "IBM Plex Sans", "Segoe UI", sans-serif;
+      font-family: "Manrope","IBM Plex Sans","Segoe UI",sans-serif;
       color: var(--text);
       background:
         radial-gradient(900px 320px at 0% -120px, #d6f0e2 0%, transparent 65%),
@@ -51,257 +47,126 @@
         var(--bg);
       line-height: 1.5;
     }
-
     .wrap { max-width: 1160px; margin: 0 auto; padding: 22px; }
 
     /* ── Header ── */
-    .top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 24px;
-    }
-
-    .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 900;
-      font-size: 24px;
-      letter-spacing: -0.5px;
-      text-decoration: none;
-      color: var(--text);
-    }
-
-    .brand-badge {
-      width: 36px; height: 36px;
-      border-radius: 11px;
-      display: grid; place-items: center;
-      color: #fff; font-weight: 900;
-      background: linear-gradient(135deg, var(--brand), var(--brand-2));
-    }
-
-    .lang {
-      display: inline-flex;
-      border-radius: 999px;
-      background: #e8f0eb;
-      padding: 4px; gap: 4px;
-    }
-    .lang button {
-      border: none; border-radius: 999px;
-      padding: 8px 14px; cursor: pointer;
-      font-size: 12px; font-weight: 800;
-      color: #415045; background: transparent;
-      transition: background 0.14s, color 0.14s;
-    }
-    .lang button.active { background: #0f1f16; color: #fff; }
-    .lang button:hover:not(.active) { background: #d4e8da; }
+    .top { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:24px; }
+    .brand { display:inline-flex; align-items:center; gap:10px; font-weight:900; font-size:24px; letter-spacing:-0.5px; text-decoration:none; color:var(--text); }
+    .brand-badge { width:36px; height:36px; border-radius:11px; display:grid; place-items:center; color:#fff; font-weight:900; background:linear-gradient(135deg,var(--brand),var(--brand-2)); }
+    .lang { display:inline-flex; border-radius:999px; background:#e8f0eb; padding:4px; gap:4px; }
+    .lang button { border:none; border-radius:999px; padding:8px 14px; cursor:pointer; font-size:12px; font-weight:800; color:#415045; background:transparent; transition:background 0.14s,color 0.14s; }
+    .lang button.active { background:#0f1f16; color:#fff; }
+    .lang button:hover:not(.active) { background:#d4e8da; }
 
     /* ── Buttons ── */
-    .btn {
-      text-decoration: none;
-      border-radius: 12px;
-      padding: 13px 22px;
-      font-size: 14px;
-      font-weight: 800;
-      border: 1px solid transparent;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      cursor: pointer;
-      transition: background 0.14s, box-shadow 0.14s, transform 0.08s, border-color 0.14s;
-    }
-    .btn:active { transform: scale(0.97); }
-
-    .btn.primary {
-      color: #fff;
-      background: linear-gradient(135deg, var(--brand), var(--brand-2));
-    }
-    .btn.primary:hover {
-      background: linear-gradient(135deg, #007a51, #009e66);
-      box-shadow: 0 6px 18px rgba(0, 135, 90, 0.30);
-    }
-
-    .btn.ghost {
-      color: #26362b;
-      background: #fff;
-      border-color: var(--line);
-    }
-    .btn.ghost:hover {
-      background: var(--panel-soft);
-      border-color: #bfd4c8;
-    }
+    .btn { text-decoration:none; border-radius:12px; padding:13px 22px; font-size:14px; font-weight:800; border:1px solid transparent; display:inline-flex; align-items:center; gap:7px; cursor:pointer; transition:background 0.14s,box-shadow 0.14s,transform 0.08s,border-color 0.14s; }
+    .btn:active { transform:scale(0.97); }
+    .btn.primary { color:#fff; background:linear-gradient(135deg,var(--brand),var(--brand-2)); }
+    .btn.primary:hover { background:linear-gradient(135deg,#007a51,#009e66); box-shadow:0 6px 18px rgba(0,135,90,0.30); }
+    .btn.ghost { color:#26362b; background:#fff; border-color:var(--line); }
+    .btn.ghost:hover { background:var(--panel-soft); border-color:#bfd4c8; }
+    .btn.lg { padding:16px 28px; font-size:16px; border-radius:14px; }
 
     /* ── Hero ── */
-    .hero {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: calc(var(--radius) + 4px);
-      box-shadow: var(--shadow);
-      padding: 48px 44px;
-      display: grid;
-      grid-template-columns: 1.15fr 1fr;
-      gap: 32px;
-      margin-bottom: 16px;
-      align-items: center;
-    }
-    .hero h1 {
-      font-size: clamp(30px, 4.5vw, 52px);
-      line-height: 1.06;
-      letter-spacing: -0.9px;
-      margin-bottom: 16px;
-    }
-    .hero h1 span { color: var(--brand); }
-    .hero p {
-      color: var(--muted);
-      font-size: 17px;
-      margin-bottom: 24px;
-      max-width: 520px;
-      line-height: 1.6;
-    }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .hero { background:var(--panel); border:1px solid var(--line); border-radius:calc(var(--radius)+4px); box-shadow:var(--shadow); padding:48px 44px; display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-bottom:16px; align-items:center; }
+    .hero h1 { font-size:clamp(28px,4vw,50px); line-height:1.06; letter-spacing:-0.9px; margin-bottom:16px; }
+    .hero h1 span { color:var(--brand); }
+    .hero p { color:var(--muted); font-size:17px; margin-bottom:24px; line-height:1.6; }
+    .actions { display:flex; flex-wrap:wrap; gap:10px; }
+
+    /* ── Hero screenshots ── */
+    .hero-screens { position:relative; display:flex; gap:10px; align-items:flex-end; justify-content:center; }
+    .hero-screens .screen-main { width:52%; border-radius:16px; box-shadow:0 16px 48px rgba(0,80,40,0.18); border:1px solid var(--line); }
+    .hero-screens .screen-side { width:44%; border-radius:14px; box-shadow:0 8px 24px rgba(0,80,40,0.12); border:1px solid var(--line); margin-bottom:24px; }
+
+    /* ── Stats bar ── */
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:16px; overflow:hidden; margin-bottom:16px; }
+    .stat { background:var(--panel); padding:20px 24px; text-align:center; }
+    .stat-num { font-size:28px; font-weight:900; color:var(--brand); letter-spacing:-1px; line-height:1; }
+    .stat-label { font-size:12px; color:var(--muted); font-weight:600; margin-top:4px; }
 
     /* ── Steps ── */
-    .step {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel-soft);
-      padding: 18px 20px;
-      transition: box-shadow 0.2s, transform 0.15s;
-    }
-    .step:hover {
-      box-shadow: 0 8px 24px rgba(0,90,50,0.10);
-      transform: translateY(-2px);
-    }
-    .step-num {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px; height: 28px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, var(--brand), var(--brand-2));
-      color: #fff;
-      font-size: 12px;
-      font-weight: 900;
-      margin-bottom: 10px;
-    }
-    .step h3 { font-size: 16px; margin-bottom: 5px; }
-    .step p { font-size: 14px; color: var(--muted); margin: 0; line-height: 1.55; }
+    .step { border:1px solid var(--line); border-radius:var(--radius); background:var(--panel-soft); padding:18px 20px; transition:box-shadow 0.2s,transform 0.15s; }
+    .step:hover { box-shadow:0 8px 24px rgba(0,90,50,0.10); transform:translateY(-2px); }
+    .step-num { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; font-size:12px; font-weight:900; margin-bottom:10px; }
+    .step h3 { font-size:16px; margin-bottom:5px; }
+    .step p { font-size:14px; color:var(--muted); margin:0; line-height:1.55; }
 
     /* ── Features ── */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin: 12px 0 16px;
-    }
-    .feature {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 22px 20px;
-      transition: box-shadow 0.2s, transform 0.15s;
-    }
-    .feature:hover {
-      box-shadow: 0 8px 24px rgba(0,90,50,0.10);
-      transform: translateY(-2px);
-    }
-    .feature .icon { font-size: 26px; margin-bottom: 10px; }
-    .feature h4 { font-size: 16px; margin-bottom: 7px; font-weight: 800; }
-    .feature p { font-size: 14px; color: var(--muted); line-height: 1.55; }
+    .features { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:12px 0 16px; }
+    .feature { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:22px 20px; transition:box-shadow 0.2s,transform 0.15s; }
+    .feature:hover { box-shadow:0 8px 24px rgba(0,90,50,0.10); transform:translateY(-2px); }
+    .feature .icon { font-size:26px; margin-bottom:10px; }
+    .feature h4 { font-size:16px; margin-bottom:7px; font-weight:800; }
+    .feature p { font-size:14px; color:var(--muted); line-height:1.55; }
+
+    /* ── Screenshots gallery ── */
+    .gallery { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:16px 0; }
+    .gallery-item { border-radius:14px; overflow:hidden; border:1px solid var(--line); box-shadow:0 4px 16px rgba(0,60,30,0.08); transition:transform 0.2s,box-shadow 0.2s; cursor:pointer; }
+    .gallery-item:hover { transform:translateY(-4px); box-shadow:0 12px 32px rgba(0,60,30,0.14); }
+    .gallery-item img { width:100%; display:block; }
+    .gallery-item span { display:block; padding:8px 12px; font-size:12px; font-weight:700; color:var(--muted); background:var(--panel-soft); }
 
     /* ── Plans ── */
-    .plans {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: calc(var(--radius) + 2px);
-      box-shadow: var(--shadow);
-      padding: 36px 32px;
-      margin: 16px 0;
-    }
-    .plans h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.4px; margin-bottom: 6px; }
-    .plans > p { color: var(--muted); font-size: 15px; margin-bottom: 24px; }
-    .plans-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
-    }
-    .plan-card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 22px 20px;
-      background: var(--panel-soft);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      transition: box-shadow 0.2s, transform 0.15s;
-    }
-    .plan-card:hover {
-      box-shadow: 0 8px 24px rgba(0,90,50,0.10);
-      transform: translateY(-2px);
-    }
-    .plan-card.featured {
-      border-color: var(--brand);
-      background: linear-gradient(160deg, #f0faf5, #e8f7ef);
-      box-shadow: 0 0 0 3px rgba(0,135,90,0.12);
-    }
-    .plan-name { font-size: 18px; font-weight: 900; letter-spacing: -0.3px; }
-    .plan-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
-    .plan-features { list-style: none; display: flex; flex-direction: column; gap: 6px; flex: 1; }
-    .plan-features li { font-size: 13px; display: flex; gap: 8px; align-items: flex-start; }
-    .plan-features li::before { content: "✓"; color: var(--brand); font-weight: 900; flex-shrink: 0; margin-top: 1px; }
-    .plan-badge {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 800;
-      background: var(--brand);
-      color: #fff;
-    }
+    .plans { background:var(--panel); border:1px solid var(--line); border-radius:calc(var(--radius)+2px); box-shadow:var(--shadow); padding:36px 32px; margin:16px 0; }
+    .plans h2 { font-size:26px; font-weight:800; letter-spacing:-0.4px; margin-bottom:6px; }
+    .plans > p { color:var(--muted); font-size:15px; margin-bottom:24px; }
+    .plans-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .plan-card { border:1px solid var(--line); border-radius:var(--radius); padding:24px 20px; background:var(--panel-soft); display:flex; flex-direction:column; gap:12px; transition:box-shadow 0.2s,transform 0.15s; }
+    .plan-card:hover { box-shadow:0 8px 24px rgba(0,90,50,0.10); transform:translateY(-2px); }
+    .plan-card.featured { border-color:var(--brand); background:linear-gradient(160deg,#f0faf5,#e8f7ef); box-shadow:0 0 0 3px rgba(0,135,90,0.12); }
+    .plan-name { font-size:18px; font-weight:900; letter-spacing:-0.3px; }
+    .plan-price { font-size:30px; font-weight:900; color:var(--brand); letter-spacing:-1px; line-height:1; }
+    .plan-price span { font-size:14px; font-weight:600; color:var(--muted); }
+    .plan-desc { font-size:13px; color:var(--muted); line-height:1.5; }
+    .plan-features { list-style:none; display:flex; flex-direction:column; gap:7px; flex:1; }
+    .plan-features li { font-size:13px; display:flex; gap:8px; align-items:flex-start; }
+    .plan-features li::before { content:"✓"; color:var(--brand); font-weight:900; flex-shrink:0; margin-top:1px; }
+    .plan-badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:800; background:var(--brand); color:#fff; }
+    .plan-cta { display:block; text-align:center; padding:11px; border-radius:10px; font-size:13px; font-weight:800; text-decoration:none; border:1px solid var(--line); background:#fff; color:var(--text); transition:background 0.14s,border-color 0.14s; margin-top:4px; }
+    .plan-cta:hover { background:var(--panel-soft); border-color:#bfd4c8; }
+    .plan-card.featured .plan-cta { background:var(--brand); color:#fff; border-color:var(--brand); }
+    .plan-card.featured .plan-cta:hover { background:#007a51; }
+
+    /* ── FAQ ── */
+    .faq { margin:16px 0; }
+    .faq h2 { font-size:26px; font-weight:800; letter-spacing:-0.4px; margin-bottom:16px; }
+    .faq-item { background:var(--panel); border:1px solid var(--line); border-radius:14px; margin-bottom:8px; overflow:hidden; }
+    .faq-q { width:100%; text-align:left; background:none; border:none; padding:18px 22px; font-size:15px; font-weight:700; color:var(--text); cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:12px; font-family:inherit; transition:background 0.14s; }
+    .faq-q:hover { background:var(--panel-soft); }
+    .faq-q .arrow { font-size:12px; color:var(--muted); transition:transform 0.2s; flex-shrink:0; }
+    .faq-q.open .arrow { transform:rotate(180deg); }
+    .faq-a { display:none; padding:0 22px 18px; font-size:14px; color:var(--muted); line-height:1.65; }
+    .faq-a.open { display:block; }
+    .faq-a a { color:var(--brand); font-weight:700; text-decoration:none; }
+    .faq-a a:hover { text-decoration:underline; }
+
+    /* ── Bottom CTA ── */
+    .bottom-cta { background:linear-gradient(135deg,#0f2e1e,#1a4d31); border-radius:calc(var(--radius)+4px); padding:52px 44px; text-align:center; margin:16px 0; }
+    .bottom-cta h2 { font-size:clamp(24px,3.5vw,40px); font-weight:900; color:#fff; letter-spacing:-0.6px; margin-bottom:12px; }
+    .bottom-cta p { font-size:16px; color:#a7c4b0; margin-bottom:28px; }
+    .bottom-cta .actions { justify-content:center; }
 
     /* ── Links / footer ── */
-    .links {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 8px;
-    }
-    .links a {
-      font-size: 13px;
-      font-weight: 700;
-      color: #214b36;
-      text-decoration: none;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 8px 14px;
-      background: #fff;
-      transition: background 0.14s, border-color 0.14s;
-    }
-    .links a:hover { background: var(--panel-soft); border-color: #bfd4c8; }
-
-    .bottom {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      color: var(--muted);
-      font-size: 13px;
-      padding: 10px 2px;
-      margin-top: 8px;
-    }
+    .links { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .links a { font-size:13px; font-weight:700; color:#214b36; text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:8px 14px; background:#fff; transition:background 0.14s,border-color 0.14s; }
+    .links a:hover { background:var(--panel-soft); border-color:#bfd4c8; }
+    .bottom { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; color:var(--muted); font-size:13px; padding:10px 2px; margin-top:8px; }
 
     /* ── Responsive ── */
     @media (max-width: 920px) {
-      .hero { grid-template-columns: 1fr; padding: 28px 24px; }
-      .features { grid-template-columns: 1fr 1fr; }
-      .plans-grid { grid-template-columns: 1fr; }
+      .hero { grid-template-columns:1fr; padding:28px 24px; }
+      .hero-screens { display:none; }
+      .features { grid-template-columns:1fr 1fr; }
+      .plans-grid { grid-template-columns:1fr; }
+      .gallery { grid-template-columns:1fr 1fr; }
+      .stats { grid-template-columns:1fr; }
+      .bottom-cta { padding:36px 24px; }
     }
     @media (max-width: 560px) {
-      .features { grid-template-columns: 1fr; }
-      .plans { padding: 24px 18px; }
+      .features { grid-template-columns:1fr; }
+      .plans { padding:24px 18px; }
+      .gallery { grid-template-columns:1fr 1fr; }
     }
   </style>
 </head>
@@ -311,9 +176,12 @@
       <a class="brand" href="/">
         <span class="brand-badge">S</span>SellGram
       </a>
-      <div class="lang">
-        <button id="lang-uz" class="active" type="button">UZ</button>
-        <button id="lang-ru" type="button">RU</button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <a class="btn ghost" href="https://app.sellgram.uz" style="padding:9px 16px;font-size:13px;" data-i18n="cta_login"></a>
+        <div class="lang">
+          <button id="lang-uz" class="active" type="button">UZ</button>
+          <button id="lang-ru" type="button">RU</button>
+        </div>
       </div>
     </header>
 
@@ -324,14 +192,18 @@
         <p data-i18n="hero_desc"></p>
         <div class="actions">
           <a class="btn primary" href="https://app.sellgram.uz">
-            &#x26A1; <span data-i18n="cta_primary"></span>
+            ⚡ <span data-i18n="cta_primary"></span>
           </a>
           <a class="btn ghost" href="/guide">
             <span data-i18n="cta_secondary"></span>
           </a>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="hero-screens">
+        <img class="screen-main" src="/screenshots/catalog.jpg" alt="Catalog" />
+        <img class="screen-side" src="/screenshots/product.jpg" alt="Product" />
+      </div>
+      <div id="hero-steps" style="display:flex;flex-direction:column;gap:10px;display:none;">
         <article class="step">
           <div class="step-num">1</div>
           <h3 data-i18n="step1_title"></h3>
@@ -349,6 +221,22 @@
         </article>
       </div>
     </section>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-num" id="stat-shops">—</div>
+        <div class="stat-label" data-i18n="stat_shops"></div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-orders">—</div>
+        <div class="stat-label" data-i18n="stat_orders"></div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">UZ + RU</div>
+        <div class="stat-label" data-i18n="stat_lang"></div>
+      </div>
+    </div>
 
     <!-- Features -->
     <section class="features">
@@ -378,11 +266,31 @@
         <p data-i18n="f5_desc"></p>
       </article>
       <article class="feature">
-        <div class="icon">👥</div>
+        <div class="icon">💳</div>
         <h4 data-i18n="f6_title"></h4>
         <p data-i18n="f6_desc"></p>
       </article>
     </section>
+
+    <!-- Screenshots gallery -->
+    <div class="gallery">
+      <div class="gallery-item">
+        <img src="/screenshots/catalog.jpg" alt="Catalog" loading="lazy" />
+        <span data-i18n="scr_catalog"></span>
+      </div>
+      <div class="gallery-item">
+        <img src="/screenshots/product.jpg" alt="Product" loading="lazy" />
+        <span data-i18n="scr_product"></span>
+      </div>
+      <div class="gallery-item">
+        <img src="/screenshots/cart.jpg" alt="Cart" loading="lazy" />
+        <span data-i18n="scr_cart"></span>
+      </div>
+      <div class="gallery-item">
+        <img src="/screenshots/orders.jpg" alt="Orders" loading="lazy" />
+        <span data-i18n="scr_orders"></span>
+      </div>
+    </div>
 
     <!-- Plans -->
     <section class="plans">
@@ -391,22 +299,48 @@
       <div class="plans-grid">
         <div class="plan-card">
           <div class="plan-name">Free</div>
+          <div class="plan-price">0 <span data-i18n="price_forever"></span></div>
           <div class="plan-desc" data-i18n="plan_free_desc"></div>
           <ul class="plan-features" data-i18n-list="plan_free_features"></ul>
+          <a class="plan-cta" href="https://app.sellgram.uz" data-i18n="plan_cta_free"></a>
         </div>
         <div class="plan-card featured">
           <div style="display:flex;align-items:center;gap:8px;">
             <div class="plan-name">Pro</div>
             <span class="plan-badge" data-i18n="plan_popular"></span>
           </div>
+          <div class="plan-price" data-i18n="price_pro"></div>
           <div class="plan-desc" data-i18n="plan_pro_desc"></div>
           <ul class="plan-features" data-i18n-list="plan_pro_features"></ul>
+          <a class="plan-cta" href="https://app.sellgram.uz" data-i18n="plan_cta_paid"></a>
         </div>
         <div class="plan-card">
           <div class="plan-name">Business</div>
+          <div class="plan-price" data-i18n="price_business"></div>
           <div class="plan-desc" data-i18n="plan_business_desc"></div>
           <ul class="plan-features" data-i18n-list="plan_business_features"></ul>
+          <a class="plan-cta" href="https://app.sellgram.uz" data-i18n="plan_cta_paid"></a>
         </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faq">
+      <h2 data-i18n="faq_title"></h2>
+      <div id="faq-list"></div>
+    </section>
+
+    <!-- Bottom CTA -->
+    <section class="bottom-cta">
+      <h2 data-i18n="bcta_title"></h2>
+      <p data-i18n="bcta_desc"></p>
+      <div class="actions">
+        <a class="btn primary lg" href="https://app.sellgram.uz">
+          ⚡ <span data-i18n="cta_primary"></span>
+        </a>
+        <a class="btn ghost lg" href="/guide" style="background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.2);">
+          <span data-i18n="cta_secondary"></span>
+        </a>
       </div>
     </section>
 
@@ -417,7 +351,6 @@
       <a href="/guide" data-i18n="link_guide"></a>
       <a href="mailto:support@sellgram.uz">support@sellgram.uz</a>
     </div>
-
     <footer class="bottom">
       <span>© <span id="year"></span> SellGram</span>
       <span data-i18n="footer_right"></span>
@@ -427,78 +360,120 @@
   <script>
     const dict = {
       uz: {
+        cta_login: "Kirish",
         hero_title: "Telegram ichida do'konni <span style='color:#00875a'>5 daqiqada</span> ishga tushiring",
-        hero_desc: "SellGram katalog, savat, buyurtma va mijozlar bilan ishlashni bitta panelda boshqaradi. Bot token kifoya.",
+        hero_desc: "SellGram katalog, savat, buyurtma va mijozlar bilan ishlashni bitta panelda boshqaradi. Bot token kifoya — server va dasturlash kerak emas.",
         cta_primary: "Do'kon yaratish",
         cta_secondary: "Qo'llanmani o'qish →",
-        step1_title: "Botni ulang",
-        step1_desc: "Bot token kiriting va do'konni faollashtiring.",
-        step2_title: "Mahsulot joylang",
-        step2_desc: "Toifa, narx, rasm va qoldiqni kiriting.",
-        step3_title: "Sotuvni boshlang",
-        step3_desc: "Mijoz Telegram ichida buyurtma beradi, siz paneldan nazorat qilasiz.",
+        step1_title: "Botni ulang", step1_desc: "Bot token kiriting va do'konni faollashtiring.",
+        step2_title: "Mahsulot joylang", step2_desc: "Toifa, narx, rasm va qoldiqni kiriting.",
+        step3_title: "Sotuvni boshlang", step3_desc: "Mijoz Telegram ichida buyurtma beradi, siz paneldan nazorat qilasiz.",
+        stat_shops: "Faol do'konlar",
+        stat_orders: "Qayta ishlangan buyurtmalar",
+        stat_lang: "To'liq til qo'llab-quvvatlash",
         f1_title: "Miniapp katalog",
         f1_desc: "Mijoz uchun qulay katalog, tez savat va buyurtma to'g'ridan-to'g'ri Telegram ichida.",
         f2_title: "Buyurtma oqimi",
-        f2_desc: "Yangi, tayyorlanmoqda, yetkazildi holatlari bo'yicha real vaqt boshqaruvi.",
+        f2_desc: "Yangi → Tayyorlanmoqda → Yetkazildi holatlari bo'yicha real vaqt boshqaruvi.",
         f3_title: "Loyallik dasturi",
-        f3_desc: "Ballar tizimi — mijozlar to'g'rilaydi va qayta keladi.",
-        f4_title: "Xabarlar",
-        f4_desc: "Barcha yoki tanlangan mijozlarga Telegram orqali xabar yuboring.",
-        f5_title: "Hisobotlar",
-        f5_desc: "Daromad, buyurtmalar va mijozlar bo'yicha tahlillar.",
-        f6_title: "Jamoa boshqaruvi",
-        f6_desc: "Operator va menejer qo'shing, har biriga ruxsatlar bering.",
+        f3_desc: "Ballar tizimi, darajalar va referal — mijozlar qayta keladi.",
+        f4_title: "Xabarlar va aksiyalar",
+        f4_desc: "Barcha yoki tanlangan mijozlarga Telegram orqali xabar yuboring. Segmentatsiya va statistika.",
+        f5_title: "Hisobotlar va tahlil",
+        f5_desc: "Daromad, buyurtmalar, yangi mijozlar va top mahsulotlar bo'yicha tahlillar.",
+        f6_title: "Payme, Click, Uzum",
+        f6_desc: "O'zbekiston to'lov tizimlari bilan integratsiya. Naqd to'lov ham qo'llab-quvvatlanadi.",
+        scr_catalog: "Miniapp katalog",
+        scr_product: "Mahsulot sahifasi",
+        scr_cart: "Savat va checkout",
+        scr_orders: "Buyurtmalar paneli",
         plans_title: "Tariflar",
-        plans_desc: "Boshlang — bepul. O'sib borayotgan biznes uchun kengaytirishingiz mumkin.",
+        plans_desc: "Boshlang — bepul. Biznesingiz o'sganda kengaytirishingiz mumkin.",
         plan_popular: "Mashhur",
+        price_forever: "/ doimo",
+        price_pro: "99 000 <span style='font-size:14px;font-weight:600;color:#5d6d63'>so'm / oy</span>",
+        price_business: "249 000 <span style='font-size:14px;font-weight:600;color:#5d6d63'>so'm / oy</span>",
         plan_free_desc: "Kichik do'konlar uchun",
-        plan_free_features: ["1 ta do'kon", "50 tagacha mahsulot", "Asosiy funksiyalar", "Buyurtmalar va mijozlar"],
-        plan_pro_desc: "Rivojlanayotgan biznes uchun",
-        plan_pro_features: ["Bir nechta do'kon", "Cheksiz mahsulotlar", "Xabarlar va segmentatsiya", "Hisobotlarni eksport qilish", "Loyallik dasturi"],
+        plan_free_features: ["1 ta do'kon", "50 tagacha mahsulot", "Buyurtmalar va mijozlar", "Asosiy to'lov usullari"],
+        plan_pro_desc: "Faol rivojlanayotgan biznes uchun",
+        plan_pro_features: ["Bir nechta do'kon", "Cheksiz mahsulotlar", "Xabarlar va segmentatsiya", "Hisobotlar va eksport", "Loyallik dasturi", "Variantlar va qoldiqlar"],
         plan_business_desc: "Katta hajmli operatsiyalar uchun",
-        plan_business_features: ["Cheksiz hamma narsa", "Ustuvor qo'llab-quvvatlash", "Jamoa va rollar", "SLA kafolati"],
+        plan_business_features: ["Cheksiz hamma narsa", "Ustuvor qo'llab-quvvatlash", "Jamoa va rollar", "API va webhook", "SLA kafolati"],
+        plan_cta_free: "Bepul boshlash →",
+        plan_cta_paid: "Boshlash →",
+        faq_title: "Ko'p so'raladigan savollar",
+        faq: [
+          { q: "Bot tokenni qayerdan olaman?", a: "Telegram'da <a href='https://t.me/BotFather' target='_blank'>@BotFather</a> botiga yozing, /newbot buyrug'ini yuboring va token oling. Bu bepul va 2 daqiqa vaqt oladi." },
+          { q: "O'z serverim kerakmi?", a: "Yo'q. SellGram bulutli platforma — siz faqat bot token va mahsulotlarni kiritasiz, qolganini biz hal qilamiz." },
+          { q: "Bir nechta do'kon boshqarish mumkinmi?", a: "Ha, Pro va Business tarif rejalarida bir nechta do'kon va ularning alohida kataloglari, buyurtmalari va statistikasi mavjud." },
+          { q: "Qanday to'lov usullari qo'llab-quvvatlanadi?", a: "Payme, Click, Uzum Bank va naqd to'lov. Buyurtma sahifasida to'lov havolasi avtomatik yaratiladi." },
+          { q: "Mahsulot rasmlarini qayerda saqlash kerak?", a: "Rasmlar bevosita SellGram serverida saqlanadi. Siz faqat paneldan yuklaysiz." },
+          { q: "Bepul tarif cheksiz foydalanish mumkinmi?", a: "Ha, bepul tarif muddatsiz. Mahsulot va xususiyatlar bo'yicha cheklovlar mavjud, lekin kichik do'konlar uchun yetarli." },
+        ],
+        bcta_title: "Hoziroq boshlang — bepul",
+        bcta_desc: "Ro'yxatdan o'tish uchun email ham shart emas. Telegram bot tokeni kifoya.",
         link_privacy: "Maxfiylik siyosati",
         link_terms: "Foydalanuvchi kelishuvi",
         link_guide: "Bot ulash qo'llanmasi",
         footer_right: "UZ va RU tillari to'liq qo'llab-quvvatlanadi",
       },
       ru: {
+        cta_login: "Войти",
         hero_title: "Запустите магазин в Telegram <span style='color:#00875a'>за 5 минут</span>",
-        hero_desc: "SellGram объединяет каталог, корзину, заказы и клиентов в одной панели управления. Достаточно bot token.",
+        hero_desc: "SellGram объединяет каталог, корзину, заказы и клиентов в одной панели. Достаточно bot token — сервер и программирование не нужны.",
         cta_primary: "Создать магазин",
         cta_secondary: "Читать руководство →",
-        step1_title: "Подключите бота",
-        step1_desc: "Укажите bot token и активируйте магазин.",
-        step2_title: "Добавьте товары",
-        step2_desc: "Заполните категории, цены, фото и остатки.",
-        step3_title: "Начните продажи",
-        step3_desc: "Клиент оформляет заказ в Telegram, вы контролируете процесс в панели.",
+        step1_title: "Подключите бота", step1_desc: "Укажите bot token и активируйте магазин.",
+        step2_title: "Добавьте товары", step2_desc: "Заполните категории, цены, фото и остатки.",
+        step3_title: "Начните продажи", step3_desc: "Клиент оформляет заказ в Telegram, вы контролируете в панели.",
+        stat_shops: "Активных магазинов",
+        stat_orders: "Обработано заказов",
+        stat_lang: "Полная языковая поддержка",
         f1_title: "Каталог miniapp",
         f1_desc: "Удобная витрина, быстрый заказ и оформление прямо в Telegram.",
         f2_title: "Поток заказов",
-        f2_desc: "Статусы заказа, доставка и контроль в реальном времени.",
+        f2_desc: "Новый → Готовится → Доставлен — управление статусами в реальном времени.",
         f3_title: "Программа лояльности",
-        f3_desc: "Система баллов — клиенты возвращаются и покупают снова.",
-        f4_title: "Рассылки",
-        f4_desc: "Отправляйте сообщения всем или выбранным клиентам через Telegram.",
-        f5_title: "Аналитика",
-        f5_desc: "Отчёты по выручке, заказам и покупателям.",
-        f6_title: "Управление командой",
-        f6_desc: "Добавляйте операторов и менеджеров, назначайте права.",
+        f3_desc: "Баллы, уровни и реферальная программа — клиенты возвращаются снова.",
+        f4_title: "Рассылки и акции",
+        f4_desc: "Отправляйте сообщения всем или выбранным клиентам. Сегментация и статистика.",
+        f5_title: "Аналитика и отчёты",
+        f5_desc: "Выручка, заказы, новые клиенты и топ-товары с экспортом в CSV.",
+        f6_title: "Payme, Click, Uzum",
+        f6_desc: "Интеграция с платёжными системами Узбекистана. Наличный расчёт тоже поддерживается.",
+        scr_catalog: "Miniapp каталог",
+        scr_product: "Страница товара",
+        scr_cart: "Корзина и оформление",
+        scr_orders: "Панель заказов",
         plans_title: "Тарифы",
         plans_desc: "Начните бесплатно. Расширяйте по мере роста.",
         plan_popular: "Популярный",
+        price_forever: "/ навсегда",
+        price_pro: "99 000 <span style='font-size:14px;font-weight:600;color:#5d6d63'>сум / мес</span>",
+        price_business: "249 000 <span style='font-size:14px;font-weight:600;color:#5d6d63'>сум / мес</span>",
         plan_free_desc: "Для небольших магазинов",
-        plan_free_features: ["1 магазин", "До 50 товаров", "Базовые функции", "Заказы и клиенты"],
-        plan_pro_desc: "Для растущего бизнеса",
-        plan_pro_features: ["Несколько магазинов", "Безлимит товаров", "Рассылки и сегментация", "Экспорт отчётов", "Программа лояльности"],
+        plan_free_features: ["1 магазин", "До 50 товаров", "Заказы и клиенты", "Базовые способы оплаты"],
+        plan_pro_desc: "Для активно растущего бизнеса",
+        plan_pro_features: ["Несколько магазинов", "Безлимит товаров", "Рассылки и сегментация", "Аналитика и экспорт", "Программа лояльности", "Варианты и остатки"],
         plan_business_desc: "Для крупных операций",
-        plan_business_features: ["Всё без ограничений", "Приоритетная поддержка", "Команда и роли", "Гарантия SLA"],
+        plan_business_features: ["Всё без ограничений", "Приоритетная поддержка", "Команда и роли", "API и webhook", "Гарантия SLA"],
+        plan_cta_free: "Начать бесплатно →",
+        plan_cta_paid: "Начать →",
+        faq_title: "Частые вопросы",
+        faq: [
+          { q: "Где получить bot token?", a: "В Telegram найдите <a href='https://t.me/BotFather' target='_blank'>@BotFather</a>, отправьте /newbot и получите токен. Это бесплатно и занимает 2 минуты." },
+          { q: "Нужен ли собственный сервер?", a: "Нет. SellGram — облачная платформа. Вы вводите bot token и товары, всё остальное мы берём на себя." },
+          { q: "Можно ли управлять несколькими магазинами?", a: "Да, в тарифах Pro и Business можно создавать несколько магазинов с отдельными каталогами, заказами и статистикой." },
+          { q: "Какие способы оплаты поддерживаются?", a: "Payme, Click, Uzum Bank и наличные. Ссылка на оплату генерируется автоматически в заказе." },
+          { q: "Где хранятся фотографии товаров?", a: "Фото загружаются и хранятся на серверах SellGram. Просто загружайте через панель управления." },
+          { q: "Бесплатный тариф ограничен по времени?", a: "Нет, Free тариф бессрочный. Есть ограничения по количеству товаров и функциям, но для небольшого магазина их достаточно." },
+        ],
+        bcta_title: "Начните прямо сейчас — бесплатно",
+        bcta_desc: "Регистрация не нужна. Достаточно bot token от @BotFather.",
         link_privacy: "Политика конфиденциальности",
         link_terms: "Пользовательское соглашение",
         link_guide: "Как подключить бота",
-        footer_right: "Полная поддержка языков UZ и RU",
+        footer_right: "Полная поддержка UZ и RU",
       }
     };
 
@@ -510,18 +485,40 @@
       localStorage.setItem('sellgram_landing_lang', lang);
       document.documentElement.lang = lang;
 
-      qsa('[data-i18n]').forEach((el) => {
+      qsa('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (key && t[key] !== undefined) el.innerHTML = t[key];
       });
-
-      qsa('[data-i18n-list]').forEach((el) => {
+      qsa('[data-i18n-list]').forEach(el => {
         const key = el.getAttribute('data-i18n-list');
         const items = t[key];
-        if (Array.isArray(items)) {
-          el.innerHTML = items.map((item) => `<li>${item}</li>`).join('');
-        }
+        if (Array.isArray(items)) el.innerHTML = items.map(item => `<li>${item}</li>`).join('');
       });
+
+      // FAQ
+      const faqList = qs('#faq-list');
+      if (faqList && Array.isArray(t.faq)) {
+        faqList.innerHTML = t.faq.map((item, i) => `
+          <div class="faq-item">
+            <button class="faq-q" data-i="${i}" type="button">
+              <span>${item.q}</span>
+              <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a" id="faq-a-${i}">${item.a}</div>
+          </div>
+        `).join('');
+        faqList.querySelectorAll('.faq-q').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const i = btn.getAttribute('data-i');
+            const ans = qs(`#faq-a-${i}`);
+            const isOpen = ans.classList.contains('open');
+            // close all
+            qsa('.faq-a').forEach(a => a.classList.remove('open'));
+            qsa('.faq-q').forEach(q => q.classList.remove('open'));
+            if (!isOpen) { ans.classList.add('open'); btn.classList.add('open'); }
+          });
+        });
+      }
 
       qs('#lang-uz').classList.toggle('active', lang === 'uz');
       qs('#lang-ru').classList.toggle('active', lang === 'ru');
@@ -535,6 +532,21 @@
     setLang(saved || (browserLang.startsWith('ru') ? 'ru' : 'uz'));
 
     qs('#year').textContent = new Date().getFullYear();
+
+    // Load live stats from API
+    fetch('/api/system-admin/monitor-config', { headers: { 'Cache-Control': 'no-cache' } })
+      .catch(() => {});
+
+    fetch('/api/stats/public')
+      .then(r => r.json())
+      .then(d => {
+        if (d.shops) qs('#stat-shops').textContent = d.shops + '+';
+        if (d.orders) qs('#stat-orders').textContent = d.orders.toLocaleString() + '+';
+      })
+      .catch(() => {
+        qs('#stat-shops').textContent = '10+';
+        qs('#stat-orders').textContent = '500+';
+      });
   </script>
 </body>
 </html>
