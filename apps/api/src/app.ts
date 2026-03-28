@@ -398,6 +398,23 @@ async function main() {
     fastify.log.error(`Scheduled reports runner failed to start: ${err.message}`);
   }
 
+  // Nightly cleanup: hard-delete tenants 30+ days after deletion request
+  setInterval(async () => {
+    try {
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const stale = await prisma.tenant.findMany({
+        where: { deletedAt: { not: null, lte: cutoff } },
+        select: { id: true },
+      });
+      for (const t of stale) {
+        await prisma.tenant.delete({ where: { id: t.id } });
+        fastify.log.info(`Hard-deleted tenant ${t.id} (30-day retention expired)`);
+      }
+    } catch (err: any) {
+      fastify.log.error(`Tenant cleanup job failed: ${err.message}`);
+    }
+  }, 24 * 60 * 60 * 1000);
+
   // Graceful shutdown: drain in-flight requests before exiting
   const shutdown = async (signal: string) => {
     fastify.log.info(`Received ${signal}, shutting down gracefully...`);

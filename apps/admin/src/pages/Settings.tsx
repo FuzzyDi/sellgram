@@ -55,6 +55,11 @@ export default function Settings() {
   const [webhooks, setWebhooks] = useState<any[]>([]);
   const [webhookForm, setWebhookForm] = useState({ url: '', events: ['order.created', 'order.status_changed', 'order.paid', 'customer.created'] as string[] });
 
+  // Account deletion
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   // CRM tab
   const [crmUrl, setCrmUrl] = useState('');
   const [crmSaving, setCrmSaving] = useState(false);
@@ -117,6 +122,21 @@ export default function Settings() {
     setTimeout(() => setNotice(null), 3200);
   }
   const canManageUsers = me?.role === 'OWNER' || me?.role === 'MANAGER' || Boolean(me?.effectivePermissions?.manageUsers);
+  const isOwner = me?.role === 'OWNER';
+
+  async function deleteMyAccount() {
+    if (deletingAccount || !deleteAccountPassword) return;
+    setDeletingAccount(true);
+    try {
+      await adminApi.deleteAccount(deleteAccountPassword);
+      // Log out and reload — server has deactivated all users
+      localStorage.clear();
+      window.location.href = '/login';
+    } catch (err: any) {
+      showNotice('error', err?.message === 'Invalid credentials' ? tr('Неверный пароль', 'Parol noto\'g\'ri') : tr('Ошибка удаления', 'Xatolik'));
+      setDeletingAccount(false);
+    }
+  }
 
   async function saveMyProfile() {
     if (saving) return;
@@ -965,8 +985,67 @@ export default function Settings() {
               </div>
             </article>
           )}
+
+          {isOwner && (
+            <article className="sg-card" style={{ border: '1px solid #fecaca' }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#dc2626' }}>{tr('Опасная зона', 'Xavfli zona')}</h3>
+              <p className="sg-subtitle" style={{ marginTop: 6 }}>
+                {tr('Удаление аккаунта отключит все магазины и боты. Данные будут окончательно удалены через 30 дней.',
+                    'Akkauntni o\'chirish barcha do\'kon va botlarni o\'chiradi. Ma\'lumotlar 30 kundan so\'ng butunlay o\'chiriladi.')}
+              </p>
+              <button
+                className="sg-btn"
+                type="button"
+                style={{ marginTop: 10, background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', fontWeight: 700 }}
+                onClick={() => { setShowDeleteAccountModal(true); setDeleteAccountPassword(''); }}
+              >
+                {tr('Удалить аккаунт', 'Akkauntni o\'chirish')}
+              </button>
+            </article>
+          )}
         </section>
       )}
+
+      {showDeleteAccountModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 420, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+            <h3 style={{ margin: '0 0 8px', color: '#dc2626', fontWeight: 800 }}>{tr('Подтвердите удаление', 'O\'chirishni tasdiqlang')}</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 14, color: '#374151' }}>
+              {tr('Это действие нельзя отменить. Все магазины, товары и заказы будут удалены. Введите пароль для подтверждения.',
+                  'Bu amalni bekor qilib bo\'lmaydi. Barcha do\'kon, mahsulot va buyurtmalar o\'chiriladi. Tasdiqlash uchun parolni kiriting.')}
+            </p>
+            <input
+              type="password"
+              autoFocus
+              value={deleteAccountPassword}
+              onChange={(e) => setDeleteAccountPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void deleteMyAccount()}
+              placeholder={tr('Ваш пароль', 'Parolingiz')}
+              style={{ width: '100%', border: '1px solid #fca5a5', borderRadius: 10, padding: '10px 12px', marginBottom: 14, fontSize: 14, boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                className="sg-btn"
+                type="button"
+                style={{ flex: 1, background: '#dc2626', color: '#fff', fontWeight: 700 }}
+                disabled={!deleteAccountPassword || deletingAccount}
+                onClick={() => void deleteMyAccount()}
+              >
+                {deletingAccount ? '...' : tr('Удалить навсегда', 'Butunlay o\'chirish')}
+              </button>
+              <button
+                className="sg-btn ghost"
+                type="button"
+                onClick={() => setShowDeleteAccountModal(false)}
+                disabled={deletingAccount}
+              >
+                {tr('Отмена', 'Bekor')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {tab === 'api' && (
         <section className="sg-grid" style={{ gap: 10 }}>
           <article className="sg-card">

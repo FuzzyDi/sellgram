@@ -210,6 +210,20 @@ export default async function authRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.post('/auth/account/delete', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    try {
+      const { password } = request.body as { password: string };
+      if (!password) return reply.status(400).send({ success: false, error: 'Password required' });
+      await authService.requestAccountDeletion({ userId: request.user!.userId, tenantId: request.user!.tenantId, password });
+      return { success: true };
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
+  });
+
   fastify.post('/auth/telegram-link-code', {
     preHandler: [fastify.authenticate],
   }, async (request) => {

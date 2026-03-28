@@ -428,4 +428,22 @@ export async function resetTeamUserPassword(input: {
   return { ok: true };
 }
 
+export async function requestAccountDeletion(input: { userId: string; tenantId: string; password: string }) {
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { role: true, passwordHash: true, isActive: true },
+  });
+  if (!user?.isActive) throw new Error('FORBIDDEN');
+  if (user.role !== 'OWNER') throw new Error('FORBIDDEN');
+
+  const valid = await bcrypt.compare(input.password, user.passwordHash);
+  if (!valid) throw new AuthServiceError('INVALID_CREDENTIALS');
+
+  await prisma.$transaction([
+    prisma.tenant.update({ where: { id: input.tenantId }, data: { deletedAt: new Date() } }),
+    prisma.store.updateMany({ where: { tenantId: input.tenantId }, data: { isActive: false } }),
+    prisma.user.updateMany({ where: { tenantId: input.tenantId }, data: { isActive: false } }),
+  ]);
+}
+
 export { getEffectivePermissions };

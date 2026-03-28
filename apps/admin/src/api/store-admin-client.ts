@@ -93,6 +93,8 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+  deleteAccount: (password: string) =>
+    request<any>('/auth/account/delete', { method: 'POST', body: JSON.stringify({ password }) }),
   getTeamUsers: () => request<any>('/auth/team'),
   createTeamUser: (data: any) => request<any>('/auth/team', { method: 'POST', body: JSON.stringify(data) }),
   updateTeamUser: (id: string, data: any) => request<any>(`/auth/team/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
