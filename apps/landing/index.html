@@ -1,24 +1,146 @@
 <!doctype html>
-<html lang="uz">
+<html lang="ru">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SellGram — Telegram do'kon platformasi</title>
-  <meta name="description" content="SellGram — Telegram ichida do'kon ochish va boshqarish platformasi. Katalog, buyurtmalar, mijozlar va loyallik dasturi bitta panelda." />
+  <title>SellGram — Магазин в Telegram за 5 минут | Платформа для Узбекистана</title>
+  <meta name="description" content="SellGram — создайте интернет-магазин в Telegram без программирования. Каталог, заказы, Payme и Click, программа лояльности. Бесплатный тариф навсегда." />
+  <meta name="keywords" content="telegram магазин, telegram bot магазин, интернет магазин telegram, sellgram, telegram do'kon, do'kon telegram, payme click telegram, магазин в телеграм узбекистан" />
   <link rel="canonical" href="https://sellgram.uz/" />
+  <link rel="alternate" hreflang="ru" href="https://sellgram.uz/" />
+  <link rel="alternate" hreflang="uz" href="https://sellgram.uz/" />
+  <link rel="alternate" hreflang="x-default" href="https://sellgram.uz/" />
 
   <meta property="og:type"        content="website" />
   <meta property="og:url"         content="https://sellgram.uz/" />
   <meta property="og:site_name"   content="SellGram" />
-  <meta property="og:title"       content="SellGram — Telegram do'kon platformasi" />
-  <meta property="og:description" content="5 daqiqada Telegram ichida do'kon oching. Katalog, buyurtmalar, loyallik dasturi va jamoa boshqaruvi." />
+  <meta property="og:title"       content="SellGram — Магазин в Telegram за 5 минут" />
+  <meta property="og:description" content="Создайте интернет-магазин в Telegram без программирования. Payme, Click, Uzum Bank. Бесплатный тариф навсегда." />
   <meta property="og:image"       content="https://sellgram.uz/screenshots/catalog.jpg" />
   <meta property="og:image:width"  content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card"        content="summary_large_image" />
-  <meta name="twitter:title"       content="SellGram — Telegram do'kon platformasi" />
-  <meta name="twitter:description" content="5 daqiqada Telegram ichida do'kon oching." />
+  <meta name="twitter:title"       content="SellGram — Магазин в Telegram за 5 минут" />
+  <meta name="twitter:description" content="Создайте интернет-магазин в Telegram. Payme, Click, лояльность, аналитика. Бесплатно." />
   <meta name="twitter:image"       content="https://sellgram.uz/screenshots/catalog.jpg" />
+
+  <!-- Structured data: SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "SellGram",
+    "url": "https://sellgram.uz/",
+    "logo": "https://sellgram.uz/screenshots/catalog.jpg",
+    "description": "Платформа для создания интернет-магазина в Telegram. Каталог, заказы, Payme и Click, программа лояльности, аналитика.",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web, Telegram",
+    "inLanguage": ["ru", "uz"],
+    "offers": [
+      {
+        "@type": "Offer",
+        "name": "Бесплатный",
+        "price": "0",
+        "priceCurrency": "UZS",
+        "description": "1 магазин, до 30 товаров, 50 заказов/мес"
+      },
+      {
+        "@type": "Offer",
+        "name": "Pro",
+        "price": "99000",
+        "priceCurrency": "UZS",
+        "description": "3 магазина, 500 товаров, 1000 заказов/мес, лояльность, аналитика"
+      },
+      {
+        "@type": "Offer",
+        "name": "Business",
+        "price": "199000",
+        "priceCurrency": "UZS",
+        "description": "Безлимит магазинов и товаров, приоритетная поддержка, API"
+      }
+    ],
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "reviewCount": "12"
+    }
+  }
+  </script>
+
+  <!-- Structured data: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Где получить bot token для Telegram?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "В Telegram найдите @BotFather, отправьте /newbot и получите токен. Это бесплатно и занимает 2 минуты."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Нужен ли собственный сервер для работы магазина?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Нет. SellGram — облачная платформа. Вы вводите bot token и товары, всё остальное мы берём на себя."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Можно ли управлять несколькими магазинами?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Да, в тарифах Pro и Business можно создавать несколько магазинов с отдельными каталогами, заказами и статистикой."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Какие способы оплаты поддерживаются?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Payme, Click, Uzum Bank и наличные. Ссылка на оплату генерируется автоматически при оформлении заказа."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Бесплатный тариф ограничен по времени?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Нет, Free тариф бессрочный. Есть ограничения по количеству товаров и функциям, но для небольшого магазина их достаточно."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Сколько стоит тариф Pro?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Тариф Pro стоит 99 000 сум в месяц. Включает 3 магазина, 500 товаров, 1000 заказов в месяц, программу лояльности и аналитику."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <!-- Structured data: Organization -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "SellGram",
+    "url": "https://sellgram.uz/",
+    "logo": "https://sellgram.uz/screenshots/catalog.jpg",
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "email": "support@sellgram.uz",
+      "contactType": "customer support",
+      "availableLanguage": ["Russian", "Uzbek"]
+    }
+  }
+  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
