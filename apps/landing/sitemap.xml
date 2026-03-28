@@ -10,6 +10,12 @@
     <xhtml:link rel="alternate" hreflang="uz" href="https://sellgram.uz/"/>
   </url>
   <url>
+    <loc>https://sellgram.uz/about</loc>
+    <lastmod>2026-03-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://sellgram.uz/guide</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>monthly</changefreq>

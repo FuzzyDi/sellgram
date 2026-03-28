@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SellGram — О платформе | Telegram-магазин для Узбекистана</title>
+  <meta name="description" content="SellGram — платформа для создания интернет-магазина в Telegram. Каталог, заказы, Payme и Click, программа лояльности. Для бизнеса в Узбекистане." />
+  <link rel="canonical" href="https://sellgram.uz/about" />
+  <meta property="og:type"        content="website" />
+  <meta property="og:url"         content="https://sellgram.uz/about" />
+  <meta property="og:title"       content="О платформе SellGram — Telegram-магазин для Узбекистана" />
+  <meta property="og:description" content="SellGram — создайте интернет-магазин в Telegram за 5 минут. Каталог, заказы, Payme и Click, лояльность, аналитика." />
+  <meta property="og:image"       content="https://sellgram.uz/screenshots/catalog.jpg" />
+  <meta name="twitter:card"       content="summary_large_image" />
+  <meta name="twitter:image"      content="https://sellgram.uz/screenshots/catalog.jpg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f2f6f3;
+      --panel: #fff;
+      --text: #17241b;
+      --muted: #5d6c62;
+      --line: #d9e5de;
+      --brand: #00875a;
+      --brand-2: #00b376;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Manrope", "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+    }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 22px; }
+    .top { display:flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .brand { display:inline-flex; align-items:center; gap:10px; font-weight:900; font-size:22px; text-decoration:none; color: var(--text); }
+    .badge { width:34px; height:34px; border-radius:10px; background: linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; display:grid; place-items:center; font-weight:900; }
+    .lang { display:inline-flex; border-radius:999px; background:#e8f0eb; padding:4px; gap:4px; }
+    .lang button { border:none; border-radius:999px; padding:8px 14px; font-size:12px; font-weight:800; cursor:pointer; background:transparent; color:#425247; }
+    .lang button.active { background:#102117; color:#fff; }
+
+    .card { background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 32px; }
+    .back { display:inline-block; color:var(--brand); text-decoration:none; font-weight:700; margin-bottom:16px; }
+    h1 { font-size: 32px; line-height:1.1; margin-bottom: 6px; letter-spacing:-0.7px; }
+    .tagline { color: var(--muted); font-size: 16px; margin-bottom: 24px; }
+    h2 { font-size: 18px; margin: 24px 0 8px; color: var(--text); }
+    p { font-size: 15px; color: #2f3e33; margin-bottom: 12px; }
+    ul { padding-left: 20px; margin-bottom: 12px; }
+    li { font-size: 15px; color: #2f3e33; margin-bottom: 6px; }
+    .divider { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
+
+    .features { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+    .feature { background: var(--bg); border-radius: 12px; padding: 14px 16px; }
+    .feature-icon { font-size: 22px; margin-bottom: 4px; }
+    .feature-title { font-weight: 700; font-size: 14px; color: var(--text); }
+    .feature-desc { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    .contacts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+    .contact-item { background: var(--bg); border-radius: 12px; padding: 12px 16px; }
+    .contact-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .contact-val { font-size: 14px; font-weight: 600; color: var(--brand); }
+    .contact-val a { color: var(--brand); text-decoration: none; }
+    .contact-val a:hover { text-decoration: underline; }
+
+    .cta-bar { display:flex; gap:10px; flex-wrap:wrap; margin-top:24px; }
+    .btn { display:inline-block; font-weight:700; font-size:15px; text-decoration:none; padding:11px 24px; border-radius:10px; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--brand); color: #fff; }
+    .btn-outline { background: transparent; color: var(--brand); border: 1.5px solid var(--brand); }
+
+    .doc-links { display:flex; gap:16px; flex-wrap:wrap; margin-top:20px; }
+    .doc-links a { color: var(--muted); font-size:13px; text-decoration:none; }
+    .doc-links a:hover { color: var(--brand); }
+
+    @media (max-width: 560px) {
+      .features { grid-template-columns: 1fr; }
+      .contacts { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <a class="brand" href="/"><span class="badge">S</span>SellGram</a>
+      <div class="lang">
+        <button id="lang-uz" type="button">UZ</button>
+        <button id="lang-ru" class="active" type="button">RU</button>
+      </div>
+    </header>
+
+    <article class="card">
+      <a class="back" href="/" data-i18n="back"></a>
+      <h1 data-i18n="title"></h1>
+      <p class="tagline" data-i18n="tagline"></p>
+
+      <p data-i18n="intro"></p>
+
+      <h2 data-i18n="feat_title"></h2>
+      <div class="features">
+        <div class="feature">
+          <div class="feature-icon">🛍️</div>
+          <div class="feature-title" data-i18n="f1_title"></div>
+          <div class="feature-desc" data-i18n="f1_desc"></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📦</div>
+          <div class="feature-title" data-i18n="f2_title"></div>
+          <div class="feature-desc" data-i18n="f2_desc"></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">💳</div>
+          <div class="feature-title" data-i18n="f3_title"></div>
+          <div class="feature-desc" data-i18n="f3_desc"></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📊</div>
+          <div class="feature-title" data-i18n="f4_title"></div>
+          <div class="feature-desc" data-i18n="f4_desc"></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🎁</div>
+          <div class="feature-title" data-i18n="f5_title"></div>
+          <div class="feature-desc" data-i18n="f5_desc"></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📣</div>
+          <div class="feature-title" data-i18n="f6_title"></div>
+          <div class="feature-desc" data-i18n="f6_desc"></div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <h2 data-i18n="contact_title"></h2>
+      <div class="contacts">
+        <div class="contact-item">
+          <div class="contact-label" data-i18n="c1_label"></div>
+          <div class="contact-val"><a href="mailto:support@sellgram.uz">support@sellgram.uz</a></div>
+        </div>
+        <div class="contact-item">
+          <div class="contact-label" data-i18n="c2_label"></div>
+          <div class="contact-val"><a href="mailto:billing@sellgram.uz">billing@sellgram.uz</a></div>
+        </div>
+        <div class="contact-item">
+          <div class="contact-label" data-i18n="c3_label"></div>
+          <div class="contact-val"><a href="mailto:privacy@sellgram.uz">privacy@sellgram.uz</a></div>
+        </div>
+        <div class="contact-item">
+          <div class="contact-label" data-i18n="c4_label"></div>
+          <div class="contact-val"><a href="https://sellgram.uz" target="_blank">sellgram.uz</a></div>
+        </div>
+      </div>
+
+      <div class="cta-bar">
+        <a class="btn btn-primary" href="https://app.sellgram.uz" data-i18n="cta_register"></a>
+        <a class="btn btn-outline" href="https://t.me/shopuz_test_bot" target="_blank" rel="noopener" data-i18n="cta_demo"></a>
+      </div>
+
+      <div class="doc-links">
+        <a href="/privacy" data-i18n="link_privacy"></a>
+        <a href="/terms" data-i18n="link_terms"></a>
+        <a href="/guide" data-i18n="link_guide"></a>
+      </div>
+    </article>
+  </div>
+
+  <script>
+    const dict = {
+      uz: {
+        back: '← Asosiy sahifaga qaytish',
+        title: 'SellGram haqida',
+        tagline: 'Telegram do\'koni — 5 daqiqada',
+        intro: 'SellGram — Telegram orqali onlayn do\'kon yuritish uchun texnik platforma. Do\'kon egasi admin panel orqali mahsulotlarni boshqaradi, buyurtmalarni kuzatadi va mijozlar bilan muloqot qiladi. Xaridorlar esa Telegram miniapp orqali qulay xarid qiladi.',
+        feat_title: 'Platforma imkoniyatlari',
+        f1_title: 'Katalog va tovarlar',
+        f1_desc: 'Kategoriyalar, variantlar, ombor hisobi, import Excel',
+        f2_title: 'Buyurtmalar',
+        f2_desc: 'To\'liq hayot sikli, bildirishnomalar, qaytarishlar',
+        f3_title: 'To\'lov tizimlari',
+        f3_desc: 'Payme, Click, Uzum Bank, bank o\'tkazmasi',
+        f4_title: 'Tahlil va hisobotlar',
+        f4_desc: 'Daromad, buyurtmalar, eng ko\'p sotilgan tovarlar',
+        f5_title: 'Sodiqlik dasturi',
+        f5_desc: 'Ballar, darajalar, referal tizimi, chegirmalar',
+        f6_title: 'Marketing',
+        f6_desc: 'Ommaviy xabarlar, promokodlar, bannerlar',
+        contact_title: 'Aloqa',
+        c1_label: 'Yordam',
+        c2_label: 'To\'lov',
+        c3_label: 'Maxfiylik',
+        c4_label: 'Sayt',
+        cta_register: '⚡ Do\'kon ochish — bepul',
+        cta_demo: 'Demo botni sinab ko\'rish',
+        link_privacy: 'Maxfiylik siyosati',
+        link_terms: 'Foydalanuvchi kelishuvi',
+        link_guide: 'Bot ulash qo\'llanmasi',
+      },
+      ru: {
+        back: '← Вернуться на главную',
+        title: 'О платформе SellGram',
+        tagline: 'Telegram-магазин — за 5 минут',
+        intro: 'SellGram — техническая платформа для ведения интернет-магазина через Telegram. Владелец управляет товарами, заказами и клиентами через панель администратора. Покупатели оформляют заказы через удобный Telegram miniapp.',
+        feat_title: 'Возможности платформы',
+        f1_title: 'Каталог и товары',
+        f1_desc: 'Категории, варианты, складской учёт, импорт Excel',
+        f2_title: 'Заказы',
+        f2_desc: 'Полный жизненный цикл, уведомления, возвраты',
+        f3_title: 'Платёжные системы',
+        f3_desc: 'Payme, Click, Uzum Bank, банковский перевод',
+        f4_title: 'Аналитика и отчёты',
+        f4_desc: 'Выручка, заказы, топ товаров по периоду',
+        f5_title: 'Программа лояльности',
+        f5_desc: 'Баллы, уровни, реферальная система, скидки',
+        f6_title: 'Маркетинг',
+        f6_desc: 'Рассылки, промокоды, баннеры, акции',
+        contact_title: 'Контакты',
+        c1_label: 'Поддержка',
+        c2_label: 'Биллинг',
+        c3_label: 'Конфиденциальность',
+        c4_label: 'Сайт',
+        cta_register: '⚡ Открыть магазин — бесплатно',
+        cta_demo: 'Попробовать демо-бот',
+        link_privacy: 'Политика конфиденциальности',
+        link_terms: 'Пользовательское соглашение',
+        link_guide: 'Как подключить бота',
+      }
+    };
+
+    const qs = (s) => document.querySelector(s);
+    const qsa = (s) => document.querySelectorAll(s);
+
+    function setLang(lang) {
+      const t = dict[lang] || dict.ru;
+      localStorage.setItem('sellgram_landing_lang', lang);
+      document.documentElement.lang = lang;
+      qsa('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (key && t[key]) el.textContent = t[key];
+      });
+      qs('#lang-uz').classList.toggle('active', lang === 'uz');
+      qs('#lang-ru').classList.toggle('active', lang === 'ru');
+    }
+
+    qs('#lang-uz').addEventListener('click', () => setLang('uz'));
+    qs('#lang-ru').addEventListener('click', () => setLang('ru'));
+
+    const saved = localStorage.getItem('sellgram_landing_lang');
+    const browserLang = (navigator.language || '').toLowerCase();
+    setLang(saved || (browserLang.startsWith('uz') ? 'uz' : 'ru'));
+  </script>
+</body>
+</html>
