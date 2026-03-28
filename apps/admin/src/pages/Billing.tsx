@@ -17,7 +17,7 @@ const planLimitFallbacks: Record<
   string,
   { maxStores: number; maxProducts: number; maxOrdersPerMonth: number; maxDeliveryZones: number }
 > = {
-  FREE: { maxStores: 1, maxProducts: 30, maxOrdersPerMonth: 50, maxDeliveryZones: 2 },
+  FREE: { maxStores: 1, maxProducts: 30, maxOrdersPerMonth: 100, maxDeliveryZones: 2 },
   PRO: { maxStores: 3, maxProducts: 500, maxOrdersPerMonth: 1000, maxDeliveryZones: 10 },
   BUSINESS: { maxStores: 10, maxProducts: -1, maxOrdersPerMonth: -1, maxDeliveryZones: -1 },
 };

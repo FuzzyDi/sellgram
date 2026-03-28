@@ -11,7 +11,7 @@ export const PLANS = {
     limits: {
       maxStores: 1,
       maxProducts: 30,
-      maxOrdersPerMonth: 50,
+      maxOrdersPerMonth: 100,
       maxDeliveryZones: 2,
       loyaltyEnabled: false,
       procurementEnabled: false,
