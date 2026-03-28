@@ -66,6 +66,37 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.get('/shop/products/:id/reviews', async (request, reply) => {
+    try {
+      const { id } = itemIdParamsSchema.parse(request.params);
+      const reviews = await prisma.orderReview.findMany({
+        where: {
+          tenantId: request.customer!.tenantId,
+          order: { items: { some: { productId: id } } },
+        },
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+          order: {
+            select: {
+              customer: { select: { firstName: true, lastName: true, telegramUser: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+      const avg = reviews.length > 0
+        ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) / 10
+        : null;
+      return { success: true, data: { reviews, avg, total: reviews.length } };
+    } catch (err: unknown) {
+      return sendCodedError(reply, err, SHOP_READ_ERROR_STATUS);
+    }
+  });
+
   fastify.get('/shop/cart', async (request) => {
     const data = await getCustomerCart(request.customer!.id, request.storeId!);
     return { success: true, data };

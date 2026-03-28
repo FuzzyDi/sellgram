@@ -20,6 +20,7 @@ export default function Product({ id }: { id: string }) {
   const [qty, setQty] = useState(1);
   const [wishlisted, setWishlisted] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [reviews, setReviews] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const shareProduct = async () => {
@@ -56,10 +57,12 @@ export default function Product({ id }: { id: string }) {
     Promise.all([
       api.getProduct(id),
       api.getWishlist().catch(() => ({ items: [] })),
-    ]).then(([p, wl]) => {
+      api.getProductReviews(id).catch(() => null),
+    ]).then(([p, wl, rv]) => {
       setProduct(p);
       const list: any[] = Array.isArray(wl) ? wl : (wl?.items ?? []);
       setWishlisted(list.some((w: any) => w.productId === id || w.product?.id === id));
+      setReviews(rv);
     }).catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }
@@ -255,6 +258,42 @@ export default function Product({ id }: { id: string }) {
           </div>
         )}
       </div>
+
+      {/* Reviews */}
+      {reviews && reviews.total > 0 && (
+        <div style={{ padding: '4px 16px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>{tr('Отзывы', 'Sharhlar')}</span>
+            <span style={{ display: 'flex', gap: 2 }}>
+              {[1,2,3,4,5].map(s => (
+                <span key={s} style={{ fontSize: 14, color: s <= Math.round(reviews.avg) ? '#f59e0b' : 'var(--divider)' }}>★</span>
+              ))}
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b' }}>{reviews.avg}</span>
+            <span style={{ fontSize: 12, color: 'var(--hint)' }}>({reviews.total})</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {reviews.reviews.slice(0, 5).map((r: any) => {
+              const name = r.order?.customer
+                ? [r.order.customer.firstName, r.order.customer.lastName].filter(Boolean).join(' ') || r.order.customer.telegramUser || tr('Покупатель', 'Xaridor')
+                : tr('Покупатель', 'Xaridor');
+              return (
+                <div key={r.id} style={{ background: 'var(--sec)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{name}</span>
+                    <span style={{ display: 'flex', gap: 1 }}>
+                      {[1,2,3,4,5].map(s => (
+                        <span key={s} style={{ fontSize: 12, color: s <= r.rating ? '#f59e0b' : 'var(--divider)' }}>★</span>
+                      ))}
+                    </span>
+                  </div>
+                  {r.comment && <p style={{ fontSize: 13, color: 'var(--hint)', margin: 0, lineHeight: 1.4 }}>{r.comment}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="glass" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30, padding: '10px 16px max(env(safe-area-inset-bottom, 0px), 10px)', borderTop: '0.5px solid var(--divider)' }}>
         {addError && <div className="error-banner" style={{ marginBottom: 8 }}>{addError}</div>}
