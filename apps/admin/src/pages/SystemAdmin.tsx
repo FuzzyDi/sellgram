@@ -1714,7 +1714,7 @@ export default function SystemAdmin() {
         </header>
 
         {/* Tab bar */}
-        <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #e5e7eb', paddingBottom: 0, overflowX: 'auto', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #e5e7eb', paddingBottom: 0, flexWrap: 'wrap', rowGap: 0 }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               style={{
