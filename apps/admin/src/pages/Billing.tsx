@@ -461,20 +461,56 @@ export default function Billing() {
       )}
 
       {showInvoice && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(11, 20, 16, 0.5)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(11, 20, 16, 0.5)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16, overflowY: 'auto' }}>
           <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
             <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Оплата тарифа', "Tarif to'lovi")} {planLabel(showInvoice.invoice.plan)}</h3>
-            <p className="sg-subtitle">{tr('Переведите оплату и укажите номер транзакции', "To'lovni o'tkazing va tranzaksiya raqamini kiriting")}</p>
+            <p className="sg-subtitle">{tr('Выберите способ оплаты и переведите', "To'lov usulini tanlang va o'tkazing")}</p>
+            <p style={{ margin: '4px 0 0', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+              {tr('Сумма', 'Summa')}: {Number(showInvoice.invoice.amount).toLocaleString()} UZS
+            </p>
 
-            <div className="sg-card soft" style={{ marginTop: 12 }}>
-              <p style={{ margin: 0, fontSize: 13 }}><b>{tr('Bank', 'Bank')}:</b> {showInvoice.bankDetails.bank}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13 }}><b>{tr('Account', 'Hisob')}:</b> {showInvoice.bankDetails.account}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13 }}><b>{tr('Recipient', 'Qabul qiluvchi')}:</b> {showInvoice.bankDetails.recipient}</p>
-            </div>
+            {/* Payment methods */}
+            {(() => {
+              const bd = showInvoice.bankDetails || {};
+              const methods: any[] = bd.paymentMethods || [{ type: 'bank', ...bd }];
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+                  {methods.map((m: any, i: number) => {
+                    const icons: Record<string, string> = { bank: '🏦', card: '💳', payme: '🔵', click: '🟢' };
+                    const titles: Record<string, string> = { bank: tr('Банковский перевод', "Bank o'tkazmasi"), card: tr('Карта', 'Karta'), payme: 'Payme', click: 'Click' };
+                    return (
+                      <div key={i} className="sg-card soft" style={{ padding: '12px 14px' }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{icons[m.type] || '💰'} {titles[m.type] || m.type}</div>
+                        {m.type === 'bank' && (<>
+                          {m.recipient && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Получатель', 'Qabul qiluvchi')}:</b> {m.recipient}</p>}
+                          {m.bank     && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Банк', 'Bank')}:</b> {m.bank}</p>}
+                          {m.account  && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Счёт', 'Hisob')}:</b> {m.account}</p>}
+                          {m.inn      && <p style={{ margin: '2px 0', fontSize: 13 }}><b>ИНН:</b> {m.inn}</p>}
+                          {m.mfo      && <p style={{ margin: '2px 0', fontSize: 13 }}><b>МФО:</b> {m.mfo}</p>}
+                          {m.note     && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#607167' }}>{m.note}</p>}
+                        </>)}
+                        {m.type === 'card' && (<>
+                          {m.number && <p style={{ margin: '2px 0', fontSize: 15, fontWeight: 800, letterSpacing: 2 }}>{m.number}</p>}
+                          {m.holder && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Владелец', 'Egasi')}:</b> {m.holder}</p>}
+                          {m.bank   && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Банк', 'Bank')}:</b> {m.bank}</p>}
+                          {m.note   && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#607167' }}>{m.note}</p>}
+                        </>)}
+                        {(m.type === 'payme' || m.type === 'click') && (<>
+                          {m.merchantId && <p style={{ margin: '2px 0', fontSize: 13 }}><b>Merchant ID:</b> {m.merchantId}</p>}
+                          {m.serviceId  && <p style={{ margin: '2px 0', fontSize: 13 }}><b>Service ID:</b> {m.serviceId}</p>}
+                          {m.note       && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#607167' }}>{m.note}</p>}
+                        </>)}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
-            <label style={{ display: 'grid', gap: 4, marginTop: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#516057' }}>{tr('Transaction / receipt number', 'Tranzaksiya / chek raqami')}</span>
-              <input value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+            <label style={{ display: 'grid', gap: 4, marginTop: 14 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#516057' }}>{tr('Номер транзакции / чека', 'Tranzaksiya / chek raqami')}</span>
+              <input value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder={tr('После оплаты введите номер', "To'lovdan keyin raqamni kiriting")} />
             </label>
 
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
