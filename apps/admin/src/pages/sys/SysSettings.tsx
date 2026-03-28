@@ -149,25 +149,6 @@ export default function SysSettings() {
             )}
           </div>
 
-          {/* Plans info */}
-          <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#0f172a' }}>💳 Тарифные планы</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {[
-                { plan: 'FREE', color: '#94a3b8', features: ['1 магазин', '100 товаров', 'Базовый бот'] },
-                { plan: 'PRO', color: '#8b5cf6', features: ['5 магазинов', '∞ товаров', 'Рассылки', 'Аналитика'] },
-                { plan: 'BUSINESS', color: '#f59e0b', features: ['∞ магазинов', '∞ товаров', 'Приоритет', 'API'] },
-              ].map(({ plan, color, features }) => (
-                <div key={plan} style={{ border: `2px solid ${color}40`, borderRadius: 10, padding: '14px 16px' }}>
-                  <div style={{ fontWeight: 800, fontSize: 16, color, marginBottom: 8 }}>{plan}</div>
-                  <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: 12, color: '#4b5563', lineHeight: 1.8 }}>
-                    {features.map((f) => <li key={f}>{f}</li>)}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Counters */}
           <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#0f172a' }}>📊 Счётчики системы</div>
