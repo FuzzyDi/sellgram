@@ -264,6 +264,17 @@
     .faq-a a:hover { text-decoration:underline; }
 
     /* ── Bottom CTA ── */
+    .lead-form { background:var(--panel); border:1px solid var(--line); border-radius:calc(var(--radius)+4px); padding:40px 44px; margin:16px 0; display:grid; grid-template-columns:1fr 1fr; gap:32px; align-items:center; }
+    .lead-form h2 { font-size:26px; font-weight:900; letter-spacing:-0.4px; margin-bottom:10px; }
+    .lead-form p { color:var(--muted); font-size:15px; line-height:1.6; }
+    .lead-fields { display:flex; flex-direction:column; gap:10px; }
+    .lead-fields input { padding:13px 16px; border:1.5px solid var(--line); border-radius:12px; font-size:15px; font-family:inherit; background:var(--bg); color:var(--text); outline:none; transition:border-color 0.14s; }
+    .lead-fields input:focus { border-color:var(--brand); }
+    .lead-fields input::placeholder { color:#9ca3af; }
+    #lead-result { font-size:14px; font-weight:700; text-align:center; padding:10px; border-radius:10px; display:none; }
+    #lead-result.ok  { background:#d1fae5; color:#065f46; display:block; }
+    #lead-result.err { background:#fee2e2; color:#991b1b; display:block; }
+    @media(max-width:700px) { .lead-form { grid-template-columns:1fr; padding:28px 24px; gap:20px; } }
     .bottom-cta { background:linear-gradient(135deg,#0f2e1e,#1a4d31); border-radius:calc(var(--radius)+4px); padding:52px 44px; text-align:center; margin:16px 0; }
     .bottom-cta h2 { font-size:clamp(24px,3.5vw,40px); font-weight:900; color:#fff; letter-spacing:-0.6px; margin-bottom:12px; }
     .bottom-cta p { font-size:16px; color:#a7c4b0; margin-bottom:28px; }
@@ -453,6 +464,20 @@
       <div id="faq-list"></div>
     </section>
 
+    <!-- Lead form -->
+    <section class="lead-form">
+      <div>
+        <h2 data-i18n="lead_title"></h2>
+        <p data-i18n="lead_desc"></p>
+      </div>
+      <div class="lead-fields">
+        <input id="lead-name"  type="text"  data-i18n-placeholder="lead_name_ph"  maxlength="100" autocomplete="name" />
+        <input id="lead-phone" type="tel"   data-i18n-placeholder="lead_phone_ph" maxlength="30"  autocomplete="tel" />
+        <button class="btn primary" id="lead-submit" onclick="submitLead()" data-i18n="lead_btn"></button>
+        <div id="lead-result"></div>
+      </div>
+    </section>
+
     <!-- Bottom CTA -->
     <section class="bottom-cta">
       <h2 data-i18n="bcta_title"></h2>
@@ -538,6 +563,13 @@
         ],
         bcta_title: "Hoziroq boshlang — bepul",
         bcta_desc: "Ro'yxatdan o'tish uchun email ham shart emas. Telegram bot tokeni kifoya.",
+        lead_title: "Biz bilan bog'laning",
+        lead_desc: "Savollaringiz bormi? Ismingiz va telefon raqamingizni qoldiring — tez orada javob beramiz.",
+        lead_name_ph: "Ismingiz",
+        lead_phone_ph: "Telefon raqamingiz",
+        lead_btn: "Ariza yuborish",
+        lead_ok: "Arizangiz qabul qilindi! Tez orada bog'lanamiz.",
+        lead_err: "Xato yuz berdi. Keyinroq urinib ko'ring.",
         link_privacy: "Maxfiylik siyosati",
         link_terms: "Foydalanuvchi kelishuvi",
         link_guide: "Bot ulash qo'llanmasi",
@@ -598,6 +630,13 @@
         ],
         bcta_title: "Начните прямо сейчас — бесплатно",
         bcta_desc: "Регистрация не нужна. Достаточно bot token от @BotFather.",
+        lead_title: "Свяжитесь с нами",
+        lead_desc: "Есть вопросы? Оставьте имя и телефон — мы ответим в ближайшее время.",
+        lead_name_ph: "Ваше имя",
+        lead_phone_ph: "Номер телефона",
+        lead_btn: "Отправить заявку",
+        lead_ok: "Заявка принята! Скоро свяжемся с вами.",
+        lead_err: "Произошла ошибка. Попробуйте позже.",
         link_privacy: "Политика конфиденциальности",
         link_terms: "Пользовательское соглашение",
         link_guide: "Как подключить бота",
@@ -608,7 +647,9 @@
     function qs(s) { return document.querySelector(s); }
     function qsa(s) { return document.querySelectorAll(s); }
 
+    let currentLang = 'uz';
     function setLang(lang) {
+      currentLang = lang;
       const t = dict[lang] || dict.uz;
       localStorage.setItem('sellgram_landing_lang', lang);
       document.documentElement.lang = lang;
@@ -616,6 +657,10 @@
       qsa('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (key && t[key] !== undefined) el.innerHTML = t[key];
+      });
+      qsa('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (key && t[key] !== undefined) el.placeholder = t[key];
       });
       qsa('[data-i18n-list]').forEach(el => {
         const key = el.getAttribute('data-i18n-list');
@@ -660,6 +705,42 @@
     setLang(saved || (browserLang.startsWith('ru') ? 'ru' : 'uz'));
 
     qs('#year').textContent = new Date().getFullYear();
+
+    // Lead form submit
+    window.submitLead = async function() {
+      const name  = qs('#lead-name')?.value?.trim();
+      const phone = qs('#lead-phone')?.value?.trim();
+      const result = qs('#lead-result');
+      const btn = qs('#lead-submit');
+      const t = dict[currentLang];
+      if (!name || !phone) return;
+      btn.disabled = true;
+      btn.textContent = '...';
+      result.className = '';
+      result.style.display = 'none';
+      try {
+        const res = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone }),
+        });
+        if (res.ok) {
+          result.textContent = t.lead_ok;
+          result.className = 'ok';
+          qs('#lead-name').value = '';
+          qs('#lead-phone').value = '';
+        } else {
+          result.textContent = t.lead_err;
+          result.className = 'err';
+        }
+      } catch {
+        result.textContent = t.lead_err;
+        result.className = 'err';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = t.lead_btn;
+      }
+    };
 
     // Load live stats from API
     fetch('/api/system-admin/monitor-config', { headers: { 'Cache-Control': 'no-cache' } })

@@ -314,6 +314,30 @@ async function main() {
     return { shops, orders };
   });
 
+  // Lead form from landing page (no auth)
+  fastify.post('/api/leads', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (request, reply) => {
+    const { name, phone, message } = (request.body as any) || {};
+    if (!name || !phone) return reply.status(400).send({ success: false, error: 'name and phone required' });
+    const safeName = String(name).slice(0, 100).replace(/[<>]/g, '');
+    const safePhone = String(phone).slice(0, 30).replace(/[^+\d\s\-()]/g, '');
+    const safeMsg = message ? String(message).slice(0, 500).replace(/[<>]/g, '') : '';
+
+    try {
+      const { getMonitorSettings } = await import('./modules/system-admin/service.js');
+      const { botToken, chatId } = await getMonitorSettings();
+      if (botToken && chatId) {
+        const text = `📋 <b>Новая заявка с сайта</b>\n\n👤 Имя: ${safeName}\n📞 Телефон: ${safePhone}${safeMsg ? `\n💬 Сообщение: ${safeMsg}` : ''}\n\n🕐 ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' })}`;
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+        });
+      }
+    } catch { /* non-fatal */ }
+
+    return { success: true };
+  });
+
   // Public API (/api/v1/*) — authenticated via API key
   await fastify.register(publicApiRoutes, { prefix: '/api' });
 
