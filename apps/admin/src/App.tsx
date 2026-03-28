@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Tag, Users,
   CreditCard, Megaphone, BarChart2, Settings as SettingsIcon, Receipt,
@@ -6,27 +6,28 @@ import {
 } from 'lucide-react';
 import { adminApi, clearTokens, setTokens } from './api/store-admin-client';
 import { useAdminI18n } from './i18n';
-import Billing from './pages/Billing';
-import Broadcasts from './pages/Broadcasts';
-import Categories from './pages/Categories';
-import Customers from './pages/Customers';
-import Dashboard from './pages/Dashboard';
-import Help from './pages/Help';
 import Login from './pages/Login';
-import Orders from './pages/Orders';
-import PaymentMethods from './pages/PaymentMethods';
-import Products from './pages/Products';
-import Procurement from './pages/Procurement';
-import Stock from './pages/Stock';
-import Suppliers from './pages/Suppliers';
-import AuditLog from './pages/AuditLog';
-import Reports from './pages/Reports';
-import Reviews from './pages/Reviews';
-import PromoCodes from './pages/PromoCodes';
-import Banners from './pages/Banners';
+import Dashboard from './pages/Dashboard';
 import OnboardingWizard, { isOnboardingDone, markOnboardingDone } from './pages/OnboardingWizard';
-import Settings from './pages/Settings';
-import SysLayout from './pages/sys/SysLayout';
+
+const Billing       = lazy(() => import('./pages/Billing'));
+const Broadcasts    = lazy(() => import('./pages/Broadcasts'));
+const Categories    = lazy(() => import('./pages/Categories'));
+const Customers     = lazy(() => import('./pages/Customers'));
+const Help          = lazy(() => import('./pages/Help'));
+const Orders        = lazy(() => import('./pages/Orders'));
+const PaymentMethods = lazy(() => import('./pages/PaymentMethods'));
+const Products      = lazy(() => import('./pages/Products'));
+const Procurement   = lazy(() => import('./pages/Procurement'));
+const Stock         = lazy(() => import('./pages/Stock'));
+const Suppliers     = lazy(() => import('./pages/Suppliers'));
+const AuditLog      = lazy(() => import('./pages/AuditLog'));
+const Reports       = lazy(() => import('./pages/Reports'));
+const Reviews       = lazy(() => import('./pages/Reviews'));
+const PromoCodes    = lazy(() => import('./pages/PromoCodes'));
+const Banners       = lazy(() => import('./pages/Banners'));
+const Settings      = lazy(() => import('./pages/Settings'));
+const SysLayout     = lazy(() => import('./pages/sys/SysLayout'));
 
 interface AuthState { user: any; tenant: any; }
 
@@ -358,7 +359,7 @@ export default function App() {
     );
   }
 
-  if (route === '/system-admin') return <SysLayout />;
+  if (route === '/system-admin') return <Suspense fallback={null}><SysLayout /></Suspense>;
   if (!auth) return <Login onLogin={handleLogin} onRegister={handleRegister} />;
   if (showOnboarding) return <OnboardingWizard onFinish={() => setShowOnboarding(false)} />;
 
@@ -404,7 +405,9 @@ export default function App() {
           className="sg-page-enter"
           style={{ flex: 1, padding: 20, overflowY: 'auto' }}
         >
-          <PageRouter route={route} auth={auth} />
+          <Suspense fallback={<div style={{ padding: 28, color: '#94a3b8' }}>Загрузка...</div>}>
+            <PageRouter route={route} auth={auth} />
+          </Suspense>
         </main>
       </div>
     </div>
