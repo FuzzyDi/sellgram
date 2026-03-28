@@ -19,9 +19,9 @@ STATUS="down"
 BODY=""
 
 # ── Load monitor settings from API (overrides env if available) ──────────────
-API_PORT="${API_PORT:-3001}"
-MONITOR_CONFIG_URL="http://localhost:${API_PORT}/api/system-admin/monitor-config"
-if MONITOR_JSON="$(curl --silent --max-time 5 "$MONITOR_CONFIG_URL" 2>/dev/null)"; then
+NGINX_HTTP_PORT="${NGINX_HTTP_PORT:-8080}"
+MONITOR_CONFIG_URL="http://localhost:${NGINX_HTTP_PORT}/api/system-admin/monitor-config"
+if MONITOR_JSON="$(curl --silent --max-time 5 -H "Host: app.sellgram.uz" "$MONITOR_CONFIG_URL" 2>/dev/null)"; then
   _BOT="$(printf '%s' "$MONITOR_JSON" | grep -o '"botToken":"[^"]*"' | head -1 | sed 's/"botToken":"//;s/"//')"
   _CHAT="$(printf '%s' "$MONITOR_JSON" | grep -o '"chatId":"[^"]*"' | head -1 | sed 's/"chatId":"//;s/"//')"
   _DISK="$(printf '%s' "$MONITOR_JSON" | grep -o '"diskThreshold":[0-9]*' | head -1 | sed 's/"diskThreshold"://')"
