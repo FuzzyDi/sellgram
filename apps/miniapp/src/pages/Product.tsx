@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from '../App';
-import { api, getBotUsername } from '../api/client';
+import { api, getBotUsername, getStoreName } from '../api/client';
 import { useMiniI18n } from '../i18n';
 import { cartStore } from '../stores/cartStore';
 import { useTelegramBackButton } from '../hooks/useTelegramBackButton';
+import { setPageMeta } from '../hooks/useMeta';
 
 export default function Product({ id }: { id: string }) {
   const { tr } = useMiniI18n();
@@ -63,6 +64,10 @@ export default function Product({ id }: { id: string }) {
       const list: any[] = Array.isArray(wl) ? wl : (wl?.items ?? []);
       setWishlisted(list.some((w: any) => w.productId === id || w.product?.id === id));
       setReviews(rv);
+      const storeName = getStoreName();
+      const title = storeName ? `${p.name} — ${storeName}` : p.name;
+      const image = p.images?.[0]?.url;
+      setPageMeta(title, p.description || undefined, image || undefined);
     }).catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }

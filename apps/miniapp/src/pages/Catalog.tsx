@@ -3,6 +3,7 @@ import { navigate } from '../App';
 import { api } from '../api/client';
 import { useMiniI18n } from '../i18n';
 import { cartStore } from '../stores/cartStore';
+import { setPageMeta } from '../hooks/useMeta';
 
 interface Product {
   id: string;
@@ -66,6 +67,7 @@ export default function Catalog() {
         if (d.categories) setCategories(d.categories);
         if (d.banners && isFirstPage) setBanners(d.banners);
         if (isFirstPage && d.brandingWatermark !== undefined) setBrandingWatermark(Boolean(d.brandingWatermark));
+        if (isFirstPage && d.storeName) setPageMeta(d.storeName);
         setTotalPages(d.totalPages ?? 1);
         setProducts((prev) => isFirstPage ? (d.products || []) : [...prev, ...(d.products || [])]);
       })

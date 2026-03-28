@@ -25,7 +25,7 @@ export async function getShopCatalog(
       orderBy: { sortOrder: 'asc' },
       include: { _count: { select: { products: { where: { isActive: true } } } } },
     }),
-    prisma.store.findUnique({ where: { id: storeId }, select: { botUsername: true } }),
+    prisma.store.findUnique({ where: { id: storeId }, select: { botUsername: true, name: true } }),
     prisma.tenant.findUnique({ where: { id: tenantId }, select: { plan: true, planExpiresAt: true } }),
   ]);
 
@@ -50,7 +50,7 @@ export async function getShopCatalog(
   const effectivePlan = getEffectivePlan(tenant?.plan, tenant?.planExpiresAt) as PlanCode;
   const brandingWatermark = PLANS[effectivePlan]?.limits?.brandingWatermark ?? true;
 
-  return { categories, products, total, page, pageSize, totalPages: Math.ceil(total / pageSize), botUsername: store?.botUsername ?? null, brandingWatermark };
+  return { categories, products, total, page, pageSize, totalPages: Math.ceil(total / pageSize), botUsername: store?.botUsername ?? null, storeName: store?.name ?? null, brandingWatermark };
 }
 
 export async function getShopProduct(tenantId: string, id: string) {

@@ -5,6 +5,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 let _initData = '';
 let _storeId = '';
 let _botUsername = '';
+let _storeName = '';
 
 export function setAuthData(initData: string, storeId: string) {
   _initData = initData;
@@ -12,6 +13,7 @@ export function setAuthData(initData: string, storeId: string) {
 }
 
 export function getBotUsername(): string { return _botUsername; }
+export function getStoreName(): string { return _storeName; }
 
 function normalizeImageUrl(url?: string | null): string | null | undefined {
   if (!url) return url;
@@ -99,6 +101,7 @@ export const api = {
     const search = qs.toString();
     const data = normalizeCatalog(await request<any>(`/shop/catalog${search ? '?' + search : ''}`));
     if (data?.botUsername) _botUsername = data.botUsername;
+    if (data?.storeName) _storeName = data.storeName;
     return data;
   },
   getProduct: async (id: string) => normalizeProduct(await request<any>(`/shop/products/${id}`)),
