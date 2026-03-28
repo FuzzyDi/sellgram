@@ -17,12 +17,37 @@ async function buildBankDetails() {
   try {
     const setting = await prisma.systemSetting.findUnique({ where: { key: 'billing_payment_settings' } });
     if (setting?.value && typeof setting.value === 'object') {
-      return { ...defaults, ...(setting.value as Record<string, string>) };
+      const s = setting.value as Record<string, string>;
+      const flat = { ...defaults, ...s };
+
+      // Build paymentMethods array from method-prefixed keys
+      const methods: Record<string, any>[] = [];
+      for (const type of ['bank', 'card', 'payme', 'click'] as const) {
+        const enabledKey = `${type}_enabled`;
+        // bank is enabled by default unless explicitly disabled
+        const enabled = enabledKey in s ? s[enabledKey] === 'true' : type === 'bank';
+        if (!enabled) continue;
+        const method: Record<string, string> = { type };
+        for (const [k, v] of Object.entries(s)) {
+          if (k.startsWith(`${type}_`) && k !== enabledKey) {
+            method[k.slice(type.length + 1)] = v;
+          }
+        }
+        // For legacy bank keys, also include top-level fields
+        if (type === 'bank') {
+          for (const k of ['bank', 'account', 'recipient', 'inn', 'mfo', 'note'] as const) {
+            if (!method[k] && flat[k]) method[k] = flat[k];
+          }
+        }
+        methods.push(method);
+      }
+
+      return { ...flat, paymentMethods: methods.length > 0 ? methods : [{ type: 'bank', ...defaults }] };
     }
   } catch {
     // DB failure → use env defaults
   }
-  return defaults;
+  return { ...defaults, paymentMethods: [{ type: 'bank', ...defaults }] };
 }
 
 export async function getSubscriptionPlans() {
