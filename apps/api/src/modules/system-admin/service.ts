@@ -10,6 +10,7 @@ import { getBotStatuses, sendMessageToOwner } from '../../bot/bot-manager.js';
 import { getS3, ensureBucket } from '../../lib/s3.js';
 import { getAllPlanConfigs, updatePlanConfig, type PlanLimitsOverride } from '../../lib/plan-config.js';
 const SUBSCRIPTION_REMINDER_SETTINGS_KEY = 'subscription_reminders';
+const MONITOR_SETTINGS_KEY = 'monitor_settings';
 function getMonthKey(date = new Date()) {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -101,6 +102,53 @@ export async function updateSystemSubscriptionReminderSettings(input: {
     update: {
       value: ({ enabled: next.enabled, days: next.days } as any),
     },
+  });
+
+  return next;
+}
+
+type MonitorSettings = {
+  botToken: string;
+  chatId: string;
+  diskThreshold: number;
+};
+
+export async function getMonitorSettings(): Promise<MonitorSettings> {
+  const cfg = getConfig();
+  const fallback: MonitorSettings = {
+    botToken: (cfg as any).MONITOR_TELEGRAM_BOT_TOKEN || '',
+    chatId: (cfg as any).MONITOR_TELEGRAM_CHAT_ID || '',
+    diskThreshold: Number((cfg as any).MONITOR_DISK_THRESHOLD || 85),
+  };
+
+  const row = await prisma.systemSetting.findUnique({
+    where: { key: MONITOR_SETTINGS_KEY },
+    select: { value: true },
+  });
+  if (!row?.value || typeof row.value !== 'object' || Array.isArray(row.value)) {
+    return fallback;
+  }
+
+  const v = row.value as Record<string, unknown>;
+  return {
+    botToken: typeof v.botToken === 'string' ? v.botToken : fallback.botToken,
+    chatId: typeof v.chatId === 'string' ? v.chatId : fallback.chatId,
+    diskThreshold: typeof v.diskThreshold === 'number' ? v.diskThreshold : fallback.diskThreshold,
+  };
+}
+
+export async function updateMonitorSettings(input: Partial<MonitorSettings>): Promise<MonitorSettings> {
+  const current = await getMonitorSettings();
+  const next: MonitorSettings = {
+    botToken: typeof input.botToken === 'string' ? input.botToken : current.botToken,
+    chatId: typeof input.chatId === 'string' ? input.chatId : current.chatId,
+    diskThreshold: typeof input.diskThreshold === 'number' ? Number(input.diskThreshold) : current.diskThreshold,
+  };
+
+  await prisma.systemSetting.upsert({
+    where: { key: MONITOR_SETTINGS_KEY },
+    create: { key: MONITOR_SETTINGS_KEY, value: next as any },
+    update: { value: next as any },
   });
 
   return next;

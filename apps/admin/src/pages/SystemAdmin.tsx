@@ -8,7 +8,7 @@ type InvoiceStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'EXPIRED';
 type ActivityType = 'TENANT_PLAN_UPDATED' | 'INVOICE_CONFIRMED' | 'INVOICE_REJECTED';
 type ActivityTarget = 'tenant' | 'invoice';
 type NoticeTone = 'success' | 'error' | 'info';
-type Tab = 'overview' | 'invoices' | 'tenants' | 'users' | 'reports' | 'activity' | 'plans' | 'payment';
+type Tab = 'overview' | 'invoices' | 'tenants' | 'users' | 'reports' | 'activity' | 'plans' | 'payment' | 'monitor';
 
 /* ── helpers ─────────────────────────────────────────────── */
 
@@ -718,6 +718,7 @@ export default function SystemAdmin() {
     { id: 'reports',   label: tr('Отчёты', 'Hisobotlar') },
     { id: 'plans',     label: tr('Тарифы', 'Tariflar') },
     { id: 'payment',   label: tr('Оплата', "To'lov") },
+    { id: 'monitor',   label: tr('Мониторинг', 'Monitoring') },
     { id: 'activity',  label: tr('Активность', 'Faollik') },
   ];
 
@@ -1659,6 +1660,138 @@ export default function SystemAdmin() {
     );
   }
 
+  function TabMonitor() {
+    const [settings, setSettings] = useState<any>(null);
+    const [draft, setDraft] = useState<{ botToken: string; chatId: string; diskThreshold: number }>({ botToken: '', chatId: '', diskThreshold: 85 });
+    const [loadErr, setLoadErr] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [saveErr, setSaveErr] = useState('');
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState('');
+
+    useEffect(() => {
+      systemApi.monitorSettings()
+        .then((data: any) => {
+          setSettings(data);
+          setDraft({ botToken: data.botToken ?? '', chatId: data.chatId ?? '', diskThreshold: data.diskThreshold ?? 85 });
+        })
+        .catch((e: any) => setLoadErr(e?.message || tr('Ошибка загрузки', 'Yuklashda xato')));
+    }, []);
+
+    async function save() {
+      setSaving(true); setSaveErr('');
+      try {
+        const updated = await systemApi.updateMonitorSettings({ ...draft, diskThreshold: Number(draft.diskThreshold) });
+        setSettings(updated);
+        setDraft({ botToken: updated.botToken ?? '', chatId: updated.chatId ?? '', diskThreshold: updated.diskThreshold ?? 85 });
+        setSaved(true); setTimeout(() => setSaved(false), 2500);
+      } catch (e: any) {
+        setSaveErr(e?.message || tr('Ошибка сохранения', 'Saqlashda xato'));
+      } finally { setSaving(false); }
+    }
+
+    async function sendTest() {
+      if (!draft.botToken || !draft.chatId) return;
+      setTesting(true); setTestResult('');
+      try {
+        const res = await fetch(
+          `https://api.telegram.org/bot${draft.botToken}/sendMessage`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: draft.chatId, text: '✅ SellGram monitor — тест уведомления' }) }
+        );
+        const json = await res.json() as any;
+        setTestResult(json.ok ? '✅ ' + tr('Сообщение отправлено', 'Xabar yuborildi') : '❌ ' + (json.description || tr('Ошибка', 'Xato')));
+      } catch (e: any) {
+        setTestResult('❌ ' + (e?.message || tr('Ошибка', 'Xato')));
+      } finally { setTesting(false); }
+    }
+
+    if (loadErr) return (
+      <div className="sg-card" style={{ textAlign: 'center', padding: 32 }}>
+        <p style={{ color: '#b91c1c', margin: '0 0 12px' }}>{loadErr}</p>
+      </div>
+    );
+
+    if (!settings) return <Skeleton h={280} r={14} />;
+
+    return (
+      <div className="sg-grid" style={{ gap: 14, maxWidth: 600 }}>
+        <section className="sg-card">
+          <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 800 }}>
+            {tr('Настройки мониторинга', 'Monitoring sozlamalari')}
+          </h3>
+          <p className="sg-subtitle" style={{ margin: '0 0 16px' }}>
+            {tr('Уведомления о падении сервиса и переполнении диска отправляются в Telegram.', 'Xizmat tushishi va disk to\'lib ketishi haqida Telegram orqali xabar yuboriladi.')}
+          </p>
+
+          <div className="sg-grid" style={{ gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>
+                {tr('Токен бота', 'Bot token')}
+              </label>
+              <input
+                value={draft.botToken}
+                onChange={e => setDraft(p => ({ ...p, botToken: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+                placeholder="123456:ABC-DEF..."
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>
+                {tr('Chat ID', 'Chat ID')}
+              </label>
+              <input
+                value={draft.chatId}
+                onChange={e => setDraft(p => ({ ...p, chatId: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+                placeholder="-1001234567890"
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>
+                {tr('Порог диска (%)', 'Disk chegarasi (%)')}
+              </label>
+              <input
+                type="number"
+                min={50} max={99}
+                value={draft.diskThreshold}
+                onChange={e => setDraft(p => ({ ...p, diskThreshold: Number(e.target.value) }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                style={{ width: 120 }}
+              />
+            </div>
+          </div>
+
+          {saveErr && <p style={{ margin: '12px 0 0', color: '#b91c1c', fontSize: 13 }}>{saveErr}</p>}
+          {saved && <p style={{ margin: '12px 0 0', color: '#059669', fontSize: 13, fontWeight: 700 }}>✓ {tr('Сохранено', 'Saqlandi')}</p>}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Button className="sg-btn primary" style={{ minWidth: 160 }} disabled={saving} onClick={() => void save()}>
+              {saving ? tr('Сохранение...', 'Saqlanmoqda...') : tr('Сохранить', 'Saqlash')}
+            </Button>
+            <Button className="sg-btn ghost" disabled={testing || !draft.botToken || !draft.chatId} onClick={() => void sendTest()}>
+              {testing ? tr('Отправка...', 'Yuborilmoqda...') : tr('Тест уведомления', 'Test xabari')}
+            </Button>
+            {testResult && <span style={{ fontSize: 13, color: testResult.startsWith('✅') ? '#059669' : '#b91c1c' }}>{testResult}</span>}
+          </div>
+        </section>
+
+        <section className="sg-card soft" style={{ padding: 16 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#374151' }}>
+            {tr('Как это работает', 'Qanday ishlaydi')}
+          </p>
+          <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: 13, color: '#6b7280', lineHeight: 1.7 }}>
+            <li>{tr('Скрипт monitor-health.sh запускается каждые 5 минут через cron', 'monitor-health.sh skripti har 5 daqiqada cron orqali ishga tushadi')}</li>
+            <li>{tr('Настройки читаются из API автоматически — перезапуск не нужен', 'Sozlamalar APIdan avtomatik o\'qiladi — qayta ishga tushirish shart emas')}</li>
+            <li>{tr('Уведомление о падении — только при первом событии (не спамит)', 'Tushish haqida xabar — faqat birinchi hodisada (spam qilmaydi)')}</li>
+          </ul>
+        </section>
+      </div>
+    );
+  }
+
   /* ── main render ─────────────────────────────────────────── */
 
   return (
@@ -1742,6 +1875,7 @@ export default function SystemAdmin() {
         {tab === 'reports'   && <TabReports />}
         {tab === 'plans'     && <TabPlans />}
         {tab === 'payment'   && <TabPayment />}
+        {tab === 'monitor'   && <TabMonitor />}
         {tab === 'activity'  && <TabActivity />}
 
       </section>

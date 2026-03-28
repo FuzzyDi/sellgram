@@ -51,6 +51,8 @@ import {
   extendTenantPlan,
   getExpiringTenants,
   sendReminderToTenant,
+  getMonitorSettings,
+  updateMonitorSettings,
 } from './service.js';
 declare module 'fastify' {
   interface FastifyRequest {
@@ -428,6 +430,32 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
       return reply.status(400).send({ success: false, error: err.message });
     }
+  });
+
+  // Monitor settings
+  fastify.get('/settings/monitor', { preHandler: [authenticateSystem] }, async () => {
+    const data = await getMonitorSettings();
+    return { success: true, data };
+  });
+
+  fastify.patch('/settings/monitor', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const body = request.body as any;
+      const patch: any = {};
+      if (body.botToken !== undefined) patch.botToken = String(body.botToken);
+      if (body.chatId !== undefined) patch.chatId = String(body.chatId);
+      if (body.diskThreshold !== undefined) patch.diskThreshold = Number(body.diskThreshold);
+      const data = await updateMonitorSettings(patch);
+      return { success: true, data };
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  // Public endpoint for monitor-health.sh (no auth, returns only operational config)
+  fastify.get('/monitor-config', async () => {
+    const s = await getMonitorSettings();
+    return { botToken: s.botToken, chatId: s.chatId, diskThreshold: s.diskThreshold };
   });
 
   fastify.post('/tenants/:id/impersonate', { preHandler: [authenticateSystem] }, async (request, reply) => {

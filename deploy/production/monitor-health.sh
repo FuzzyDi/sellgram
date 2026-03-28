@@ -18,6 +18,18 @@ STATE_FILE="$STATE_DIR/health.state"
 STATUS="down"
 BODY=""
 
+# ── Load monitor settings from API (overrides env if available) ──────────────
+API_PORT="${API_PORT:-3001}"
+MONITOR_CONFIG_URL="http://localhost:${API_PORT}/api/system-admin/monitor-config"
+if MONITOR_JSON="$(curl --silent --max-time 5 "$MONITOR_CONFIG_URL" 2>/dev/null)"; then
+  _BOT="$(printf '%s' "$MONITOR_JSON" | grep -o '"botToken":"[^"]*"' | head -1 | sed 's/"botToken":"//;s/"//')"
+  _CHAT="$(printf '%s' "$MONITOR_JSON" | grep -o '"chatId":"[^"]*"' | head -1 | sed 's/"chatId":"//;s/"//')"
+  _DISK="$(printf '%s' "$MONITOR_JSON" | grep -o '"diskThreshold":[0-9]*' | head -1 | sed 's/"diskThreshold"://')"
+  [ -n "$_BOT"  ] && MONITOR_TELEGRAM_BOT_TOKEN="$_BOT"
+  [ -n "$_CHAT" ] && MONITOR_TELEGRAM_CHAT_ID="$_CHAT"
+  [ -n "$_DISK" ] && MONITOR_DISK_THRESHOLD="$_DISK"
+fi
+
 mkdir -p "$STATE_DIR"
 
 if BODY="$(curl --silent --show-error --max-time "$TIMEOUT_SEC" "$HEALTH_URL")"; then

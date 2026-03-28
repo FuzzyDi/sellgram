@@ -116,4 +116,9 @@ export const systemApi = {
   // Expiring tenants
   expiringTenants: (days = 7) => systemRequest<any[]>(`/tenants/expiring?days=${days}`),
   sendReminder: (id: string) => systemRequest<any>(`/tenants/${id}/send-reminder`, { method: 'POST' }),
+
+  // Monitor settings
+  monitorSettings: () => systemRequest<any>('/settings/monitor'),
+  updateMonitorSettings: (patch: { botToken?: string; chatId?: string; diskThreshold?: number }) =>
+    systemRequest<any>('/settings/monitor', { method: 'PATCH', body: JSON.stringify(patch) }),
 };
