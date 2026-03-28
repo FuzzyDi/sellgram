@@ -41,6 +41,7 @@ export default function OrderStatus({ id }: { id: string }) {
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewDone, setReviewDone] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   const SC = useMemo(() => ({
     NEW:       { emoji: '🆕', label: tr('Новый', 'Yangi'),               color: 'var(--status-new)' },
@@ -263,16 +264,21 @@ export default function OrderStatus({ id }: { id: string }) {
                   maxLength={1000}
                   style={{ width: '100%', marginTop: 12, padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1.5px solid var(--divider)', background: 'var(--bg)', color: 'var(--text)', fontSize: 14, resize: 'none', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' }}
                 />
+                {reviewError && (
+                  <p style={{ fontSize: 13, color: 'var(--danger)', marginTop: 8, textAlign: 'center' }}>{reviewError}</p>
+                )}
                 <button
                   disabled={submittingReview}
                   onClick={async () => {
                     setSubmittingReview(true);
+                    setReviewError(null);
                     try {
                       await api.reviewOrder(id, reviewRating, reviewComment || undefined);
                       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
                       setReviewDone(true);
-                    } catch {
+                    } catch (err: any) {
                       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+                      setReviewError(err?.message || tr('Ошибка при отправке', 'Yuborishda xatolik'));
                     }
                     setSubmittingReview(false);
                   }}

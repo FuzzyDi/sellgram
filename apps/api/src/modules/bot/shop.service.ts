@@ -59,7 +59,13 @@ export async function getShopProduct(tenantId: string, id: string) {
     include: {
       images: { orderBy: { sortOrder: 'asc' } },
       variants: { where: { isActive: true } },
-      category: { select: { id: true, name: true } },
+      category: {
+        select: {
+          id: true,
+          name: true,
+          attributes: { orderBy: { sortOrder: 'asc' }, select: { name: true } },
+        },
+      },
     },
   });
 

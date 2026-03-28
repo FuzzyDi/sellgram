@@ -224,11 +224,24 @@ model Category {
   isActive  Boolean    @default(true)
   createdAt DateTime   @default(now())
 
-  products Product[]
+  products   Product[]
+  attributes CategoryAttribute[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
   @@map("categories")
+}
+
+model CategoryAttribute {
+  id         String   @id @default(cuid())
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name       String
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([categoryId])
+  @@map("category_attributes")
 }
 
 model Product {

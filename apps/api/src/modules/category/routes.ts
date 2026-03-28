@@ -20,10 +20,46 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
   fastify.get('/categories', async (request) => {
     const categories = await prisma.category.findMany({
       where: { tenantId: request.tenantId!, isActive: true },
-      include: { _count: { select: { products: true } }, children: true },
+      include: {
+        _count: { select: { products: true } },
+        children: true,
+        attributes: { orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, sortOrder: true } },
+      },
       orderBy: { sortOrder: 'asc' },
     });
     return { success: true, data: categories };
+  });
+
+  // Replace all attributes for a category
+  const attributesSchema = z.object({
+    attributes: z.array(z.object({ name: z.string().min(1).max(50) })).max(10),
+  });
+
+  fastify.put('/categories/:id/attributes', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const category = await prisma.category.findFirst({ where: { id, tenantId: request.tenantId! }, select: { id: true } });
+    if (!category) return reply.status(404).send({ success: false, error: 'Not found' });
+
+    let body: z.infer<typeof attributesSchema>;
+    try {
+      body = attributesSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    await prisma.$transaction([
+      prisma.categoryAttribute.deleteMany({ where: { categoryId: id } }),
+      ...body.attributes.map((attr, i) =>
+        prisma.categoryAttribute.create({ data: { categoryId: id, name: attr.name, sortOrder: i } })
+      ),
+    ]);
+
+    const updated = await prisma.categoryAttribute.findMany({
+      where: { categoryId: id },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, name: true, sortOrder: true },
+    });
+    return { success: true, data: updated };
   });
 
   fastify.post('/categories', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {

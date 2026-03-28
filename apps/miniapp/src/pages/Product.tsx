@@ -208,7 +208,9 @@ export default function Product({ id }: { id: string }) {
         {hasVariants && (
           <div className="anim-fade anim-d4" style={{ marginTop: 16 }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--hint)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              {tr('Вариант', 'Variant')}
+              {(product.category?.attributes?.length > 0
+                ? product.category.attributes.map((a: any) => a.name).join(' / ')
+                : null) || tr('Вариант', 'Variant')}
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {variants.map((v: any) => {
@@ -265,6 +267,12 @@ export default function Product({ id }: { id: string }) {
       </div>
 
       {/* Reviews */}
+      {reviews && reviews.total === 0 && (
+        <div style={{ padding: '4px 16px 16px' }}>
+          <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{tr('Отзывы', 'Sharhlar')}</p>
+          <p style={{ fontSize: 13, color: 'var(--hint)' }}>{tr('Отзывов пока нет', 'Hali sharhlar yo\'q')}</p>
+        </div>
+      )}
       {reviews && reviews.total > 0 && (
         <div style={{ padding: '4px 16px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>

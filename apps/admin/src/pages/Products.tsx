@@ -225,9 +225,25 @@ interface Product {
   images?: { id: string; url: string }[];
 }
 
+interface CategoryAttribute {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
+
 interface Category {
   id: string;
   name: string;
+  attributes?: CategoryAttribute[];
+}
+
+interface Variant {
+  id: string;
+  name: string;
+  price: number | null;
+  stockQty: number;
+  isActive: boolean;
+  sku?: string | null;
 }
 
 interface FormData {
@@ -283,6 +299,16 @@ export default function Products() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulking, setBulking] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Variant state
+  const [editVariants, setEditVariants] = useState<Variant[]>([]);
+  const [newVName, setNewVName] = useState('');
+  const [newVPrice, setNewVPrice] = useState('');
+  const [newVStock, setNewVStock] = useState('0');
+  const [addingVariant, setAddingVariant] = useState(false);
+  const [generatorValues, setGeneratorValues] = useState<Record<string, string>>({});
+  const [pendingVariants, setPendingVariants] = useState<{ name: string; price: string; stockQty: string }[]>([]);
+  const [savingPending, setSavingPending] = useState(false);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -358,6 +384,10 @@ export default function Products() {
 
     setEditingId(fullProduct.id);
     setEditImages(fullProduct.images || []);
+    setEditVariants((fullProduct as any).variants || []);
+    setNewVName(''); setNewVPrice(''); setNewVStock('0');
+    setGeneratorValues({});
+    setPendingVariants([]);
     setError('');
     setShowForm(true);
   }, []);
@@ -497,6 +527,91 @@ export default function Products() {
     },
     [editingId, loadProducts]
   );
+
+  const addVariant = useCallback(async () => {
+    if (!editingId || !newVName.trim()) return;
+    setAddingVariant(true);
+    try {
+      const v = await adminApi.createProductVariant(editingId, {
+        name: newVName.trim(),
+        price: newVPrice ? parseFloat(newVPrice) : null,
+        stockQty: parseInt(newVStock, 10) || 0,
+      });
+      setEditVariants((prev) => [...prev, v]);
+      setNewVName(''); setNewVPrice(''); setNewVStock('0');
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setAddingVariant(false);
+    }
+  }, [editingId, newVName, newVPrice, newVStock]);
+
+  const deleteVariant = useCallback(async (variantId: string) => {
+    if (!editingId) return;
+    try {
+      await adminApi.deleteProductVariant(editingId, variantId);
+      setEditVariants((prev) => prev.filter((v) => v.id !== variantId));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    }
+  }, [editingId]);
+
+  const toggleVariantActive = useCallback(async (variantId: string, isActive: boolean) => {
+    if (!editingId) return;
+    try {
+      await adminApi.updateProductVariant(editingId, variantId, { isActive });
+      setEditVariants((prev) => prev.map((v) => v.id === variantId ? { ...v, isActive } : v));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    }
+  }, [editingId]);
+
+  const generateVariants = useCallback(() => {
+    const categoryAttrs = (categories.find((c) => c.id === form.categoryId)?.attributes || []);
+    if (categoryAttrs.length === 0) return;
+
+    const axes = categoryAttrs.map((attr) => {
+      const raw = generatorValues[attr.name] || '';
+      return raw.split(',').map((v) => v.trim()).filter(Boolean);
+    });
+
+    // Cartesian product of all axes
+    const combinations: string[][] = axes.reduce<string[][]>(
+      (acc, values) => acc.flatMap((combo) => values.map((v) => [...combo, v])),
+      [[]]
+    );
+
+    const rows = combinations.map((combo) => ({
+      name: combo.join(' / '),
+      price: '',
+      stockQty: '0',
+    }));
+    setPendingVariants(rows);
+  }, [categories, form.categoryId, generatorValues]);
+
+  const savePendingVariants = useCallback(async () => {
+    if (!editingId || pendingVariants.length === 0) return;
+    setSavingPending(true);
+    try {
+      const created: Variant[] = [];
+      for (const row of pendingVariants) {
+        if (!row.name.trim()) continue;
+        const v = await adminApi.createProductVariant(editingId, {
+          name: row.name.trim(),
+          price: row.price ? parseFloat(row.price) : null,
+          stockQty: parseInt(row.stockQty, 10) || 0,
+        });
+        created.push(v);
+      }
+      setEditVariants((prev) => [...prev, ...created]);
+      setPendingVariants([]);
+      setGeneratorValues({});
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setSavingPending(false);
+    }
+  }, [editingId, pendingVariants]);
 
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
@@ -857,7 +972,146 @@ export default function Products() {
                 </div>
               )}
 
-              {!editingId && <p className="sg-subtitle">{tr('Фото можно добавить после создания товара', "Rasmni mahsulot yaratilgandan keyin qo'shish mumkin")}</p>}
+              {!editingId && <p className="sg-subtitle">{tr('Фото и варианты можно добавить после создания товара', "Rasm va variantlarni mahsulot yaratilgandan keyin qo'shish mumkin")}</p>}
+
+              {editingId && (() => {
+                const categoryAttrs = (categories.find((c) => c.id === form.categoryId)?.attributes || []);
+                return (
+                  <div style={{ borderTop: '1px solid #edf2ee', paddingTop: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <label style={{ fontSize: 13, fontWeight: 700 }}>
+                        {tr('Варианты', 'Variantlar')}
+                        {categoryAttrs.length > 0 && (
+                          <span style={{ fontWeight: 400, color: '#748278' }}> — {categoryAttrs.map((a) => a.name).join(', ')}</span>
+                        )}
+                      </label>
+                    </div>
+
+                    {/* Generator */}
+                    {categoryAttrs.length > 0 && (
+                      <div style={{ background: '#f0faf4', border: '1px solid #bbf0d8', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: '#3d6b52', marginBottom: 10 }}>
+                          {tr('Генератор вариантов', 'Variantlar generatori')}
+                        </p>
+                        {categoryAttrs.map((attr) => (
+                          <div key={attr.id} style={{ marginBottom: 8 }}>
+                            <label style={{ fontSize: 12, color: '#3d6b52', display: 'block', marginBottom: 4 }}>{attr.name}:</label>
+                            <input
+                              value={generatorValues[attr.name] || ''}
+                              onChange={(e) => setGeneratorValues((prev) => ({ ...prev, [attr.name]: e.target.value }))}
+                              placeholder={tr('S, M, L, XL (через запятую)', 'S, M, L, XL (vergul bilan)')}
+                              style={{ border: '1px solid #bbf0d8', borderRadius: 8, padding: '7px 10px', width: '100%', fontSize: 13, boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        ))}
+                        <button type="button" className="sg-btn ghost" style={{ fontSize: 12, marginTop: 4 }} onClick={generateVariants}>
+                          {tr('Сгенерировать', 'Generatsiya qilish')}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Pending (unsaved) variants */}
+                    {pendingVariants.length > 0 && (
+                      <div style={{ marginBottom: 14, border: '1px solid #fde68a', borderRadius: 10, overflow: 'hidden' }}>
+                        <div style={{ background: '#fffbeb', padding: '8px 14px', fontSize: 12, fontWeight: 700, color: '#92400e' }}>
+                          {tr(`Сгенерировано ${pendingVariants.length} вариантов — задайте цену и остаток`, `${pendingVariants.length} ta variant — narx va qoldiqni kiriting`)}
+                        </div>
+                        <table className="sg-table" style={{ fontSize: 12 }}>
+                          <thead>
+                            <tr>
+                              <th>{tr('Название', 'Nomi')}</th>
+                              <th>{tr('Цена', 'Narx')}</th>
+                              <th>{tr('Остаток', 'Qoldiq')}</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pendingVariants.map((v, i) => (
+                              <tr key={i}>
+                                <td>
+                                  <input value={v.name} onChange={(e) => setPendingVariants((prev) => prev.map((r, idx) => idx === i ? { ...r, name: e.target.value } : r))} style={{ border: '1px solid #d6e0da', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: '100%' }} />
+                                </td>
+                                <td>
+                                  <input type="number" value={v.price} placeholder={tr('= цена товара', '= mahsulot narxi')} onChange={(e) => setPendingVariants((prev) => prev.map((r, idx) => idx === i ? { ...r, price: e.target.value } : r))} style={{ border: '1px solid #d6e0da', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 110 }} />
+                                </td>
+                                <td>
+                                  <input type="number" value={v.stockQty} onChange={(e) => setPendingVariants((prev) => prev.map((r, idx) => idx === i ? { ...r, stockQty: e.target.value } : r))} style={{ border: '1px solid #d6e0da', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 80 }} />
+                                </td>
+                                <td>
+                                  <button type="button" onClick={() => setPendingVariants((prev) => prev.filter((_, idx) => idx !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#be123c', fontSize: 16 }}>×</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div style={{ padding: '10px 14px', display: 'flex', gap: 8 }}>
+                          <button type="button" className="sg-btn primary" style={{ fontSize: 12 }} disabled={savingPending} onClick={savePendingVariants}>
+                            {savingPending ? tr('Сохранение...', 'Saqlanmoqda...') : tr(`Добавить все (${pendingVariants.length})`, `Hammasini qo'shish (${pendingVariants.length})`)}
+                          </button>
+                          <button type="button" className="sg-btn ghost" style={{ fontSize: 12 }} onClick={() => setPendingVariants([])}>
+                            {tr('Отмена', 'Bekor')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Existing variants */}
+                    {editVariants.length > 0 && (
+                      <div style={{ border: '1px solid #edf2ee', borderRadius: 10, overflow: 'hidden', marginBottom: 12 }}>
+                        <table className="sg-table" style={{ fontSize: 13 }}>
+                          <thead>
+                            <tr>
+                              <th>{tr('Название', 'Nomi')}</th>
+                              <th>{tr('Цена', 'Narx')}</th>
+                              <th>{tr('Остаток', 'Qoldiq')}</th>
+                              <th>{tr('Статус', 'Holat')}</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {editVariants.map((v) => (
+                              <tr key={v.id}>
+                                <td style={{ fontWeight: 600 }}>{v.name}</td>
+                                <td style={{ color: v.price != null ? 'inherit' : '#9ca3af' }}>
+                                  {v.price != null ? `${Number(v.price).toLocaleString()} UZS` : tr('= цена товара', '= mahsulot narxi')}
+                                </td>
+                                <td style={{ fontWeight: 600, color: v.stockQty === 0 ? '#be123c' : 'inherit' }}>{v.stockQty} {tr('шт', 'dona')}</td>
+                                <td>
+                                  <button type="button" className="sg-btn ghost" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => void toggleVariantActive(v.id, !v.isActive)}>
+                                    {v.isActive ? tr('Скрыть', 'Yashirish') : tr('Показать', "Ko'rsatish")}
+                                  </button>
+                                </td>
+                                <td>
+                                  <button type="button" onClick={() => void deleteVariant(v.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#be123c', fontSize: 15 }}>×</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Add single variant */}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                      <div style={{ flex: 2 }}>
+                        <label style={{ fontSize: 11, color: '#748278', display: 'block', marginBottom: 3 }}>{tr('Название', 'Nomi')}</label>
+                        <input value={newVName} onChange={(e) => setNewVName(e.target.value)} placeholder={categoryAttrs[0]?.name ? `${tr('Например', 'Masalan')}: XL` : tr('Название варианта', 'Variant nomi')} style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '7px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: 11, color: '#748278', display: 'block', marginBottom: 3 }}>{tr('Цена (необяз.)', 'Narx (ixtiyoriy)')}</label>
+                        <input type="number" value={newVPrice} onChange={(e) => setNewVPrice(e.target.value)} placeholder="—" style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '7px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: 11, color: '#748278', display: 'block', marginBottom: 3 }}>{tr('Остаток', 'Qoldiq')}</label>
+                        <input type="number" value={newVStock} onChange={(e) => setNewVStock(e.target.value)} style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '7px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }} />
+                      </div>
+                      <button type="button" className="sg-btn primary" style={{ flexShrink: 0, fontSize: 13 }} disabled={!newVName.trim() || addingVariant} onClick={() => void addVariant()}>
+                        {addingVariant ? '...' : `+ ${tr('Вариант', 'Variant')}`}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                 <button className="sg-btn primary" type="submit" disabled={saving}>

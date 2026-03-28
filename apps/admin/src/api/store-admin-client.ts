@@ -115,6 +115,15 @@ export const adminApi = {
   createCategory: (data: any) => request<any>('/categories', { method: 'POST', body: JSON.stringify(data) }),
   updateCategory: (id: string, data: any) => request<any>(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteCategory: (id: string) => request<any>(`/categories/${id}`, { method: 'DELETE' }),
+  updateCategoryAttributes: (id: string, attributes: { name: string }[]) =>
+    request<any>(`/categories/${id}/attributes`, { method: 'PUT', body: JSON.stringify({ attributes }) }),
+
+  createProductVariant: (productId: string, data: { name: string; price?: number | null; stockQty?: number; sku?: string }) =>
+    request<any>(`/products/${productId}/variants`, { method: 'POST', body: JSON.stringify(data) }),
+  updateProductVariant: (productId: string, variantId: string, data: { name?: string; price?: number | null; stockQty?: number; isActive?: boolean }) =>
+    request<any>(`/products/${productId}/variants/${variantId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteProductVariant: (productId: string, variantId: string) =>
+    request<any>(`/products/${productId}/variants/${variantId}`, { method: 'DELETE' }),
 
   getOrders: (params?: string) => request<any>(`/orders${params ? '?' + params : ''}`),
   getOrder: (id: string) => request<any>(`/orders/${id}`),

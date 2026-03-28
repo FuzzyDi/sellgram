@@ -197,6 +197,70 @@ export default async function productRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Product deactivated' };
   });
 
+  // Variant CRUD
+  const variantBodySchema = z.object({
+    name: z.string().min(1).max(100),
+    sku: z.string().max(100).optional(),
+    price: z.number().positive().nullable().optional(),
+    stockQty: z.number().int().min(0).default(0),
+    isActive: z.boolean().optional(),
+  });
+
+  fastify.post('/products/:id/variants', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId! }, select: { id: true } });
+    if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
+
+    let body: z.infer<typeof variantBodySchema>;
+    try {
+      body = variantBodySchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    const variant = await prisma.productVariant.create({
+      data: { productId: id, name: body.name, sku: body.sku, price: body.price ?? null, stockQty: body.stockQty },
+    });
+    return { success: true, data: variant };
+  });
+
+  fastify.patch('/products/:id/variants/:variantId', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id, variantId } = request.params as { id: string; variantId: string };
+    const variant = await prisma.productVariant.findFirst({
+      where: { id: variantId, productId: id, product: { tenantId: request.tenantId! } },
+    });
+    if (!variant) return reply.status(404).send({ success: false, error: 'Variant not found' });
+
+    let body: Partial<z.infer<typeof variantBodySchema>>;
+    try {
+      body = variantBodySchema.partial().parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    const updated = await prisma.productVariant.update({
+      where: { id: variantId },
+      data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.sku !== undefined && { sku: body.sku }),
+        ...(body.price !== undefined && { price: body.price }),
+        ...(body.stockQty !== undefined && { stockQty: body.stockQty }),
+        ...(body.isActive !== undefined && { isActive: body.isActive }),
+      },
+    });
+    return { success: true, data: updated };
+  });
+
+  fastify.delete('/products/:id/variants/:variantId', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id, variantId } = request.params as { id: string; variantId: string };
+    const variant = await prisma.productVariant.findFirst({
+      where: { id: variantId, productId: id, product: { tenantId: request.tenantId! } },
+    });
+    if (!variant) return reply.status(404).send({ success: false, error: 'Variant not found' });
+    await prisma.productVariant.delete({ where: { id: variantId } });
+    return { success: true, message: 'Variant deleted' };
+  });
+
   const stockAdjustSchema = z.object({
     qty: z.number().int(),
     variantId: z.string().optional(),

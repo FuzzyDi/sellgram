@@ -2,6 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
+interface CategoryAttribute {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
+
 interface Category {
   id: string;
   name: string;
@@ -9,6 +15,7 @@ interface Category {
   sortOrder: number;
   isActive: boolean;
   _count?: { products: number };
+  attributes?: CategoryAttribute[];
 }
 
 export default function Categories() {
@@ -18,6 +25,8 @@ export default function Categories() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [name, setName] = useState('');
+  const [attributes, setAttributes] = useState<string[]>([]);
+  const [newAttrName, setNewAttrName] = useState('');
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -56,13 +65,28 @@ export default function Categories() {
   function openCreate() {
     setEditing(null);
     setName('');
+    setAttributes([]);
+    setNewAttrName('');
     setShowForm(true);
   }
 
   function openEdit(category: Category) {
     setEditing(category);
     setName(category.name);
+    setAttributes((category.attributes || []).map((a) => a.name));
+    setNewAttrName('');
     setShowForm(true);
+  }
+
+  function addAttr() {
+    const v = newAttrName.trim();
+    if (!v || attributes.includes(v)) return;
+    setAttributes((prev) => [...prev, v]);
+    setNewAttrName('');
+  }
+
+  function removeAttr(name: string) {
+    setAttributes((prev) => prev.filter((a) => a !== name));
   }
 
   async function saveCategory() {
@@ -71,14 +95,19 @@ export default function Categories() {
 
     setSaving(true);
     try {
+      let savedId: string;
       if (editing) {
         await adminApi.updateCategory(editing.id, { name: nextName });
+        savedId = editing.id;
       } else {
-        await adminApi.createCategory({ name: nextName });
+        const created = await adminApi.createCategory({ name: nextName });
+        savedId = created.id;
       }
+      await adminApi.updateCategoryAttributes(savedId, attributes.map((name) => ({ name })));
       setShowForm(false);
       setEditing(null);
       setName('');
+      setAttributes([]);
       await load();
     } catch (err: any) {
       showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f', 'Saqlashda xato'));
@@ -158,6 +187,7 @@ export default function Categories() {
               <tr>
                 <th>{tr('\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435', 'Nomi')}</th>
                 <th>Slug</th>
+                <th>{tr('Атрибуты', 'Atributlar')}</th>
                 <th>{tr('\u0422\u043e\u0432\u0430\u0440\u043e\u0432', 'Mahsulotlar')}</th>
                 <th>{tr('\u0421\u0442\u0430\u0442\u0443\u0441', 'Holat')}</th>
                 <th>{tr('\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f', 'Amallar')}</th>
@@ -172,6 +202,11 @@ export default function Categories() {
                     <tr>
                       <td style={{ fontWeight: 700 }}>{category.name}</td>
                       <td style={{ color: '#64756b', fontSize: 13 }}>{category.slug}</td>
+                      <td style={{ fontSize: 12, color: '#5a6b61' }}>
+                        {(category.attributes || []).length > 0
+                          ? (category.attributes || []).map((a) => a.name).join(', ')
+                          : <span style={{ color: '#b0bcb5' }}>—</span>}
+                      </td>
                       <td>{productCount}</td>
                       <td>
                         <span className="sg-badge" style={category.isActive
@@ -197,7 +232,7 @@ export default function Categories() {
                     </tr>
                     {isConfirming && (
                       <tr>
-                        <td colSpan={5} style={{ background: '#fff8f0', padding: '10px 16px' }}>
+                        <td colSpan={6} style={{ background: '#fff8f0', padding: '10px 16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>
                               {productCount > 0
@@ -232,7 +267,7 @@ export default function Categories() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: '36px 16px' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '36px 16px' }}>
                     {search.trim() ? (
                       <span style={{ color: '#6b7a71' }}>
                         {tr('Ничего не найдено', 'Hech narsa topilmadi')}
@@ -267,11 +302,40 @@ export default function Categories() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoFocus
-              onKeyDown={(e) => e.key === 'Enter' && void saveCategory()}
               className="w-full"
               style={{ marginTop: 12, border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px' }}
               placeholder={tr('\u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u041d\u0430\u043f\u0438\u0442\u043a\u0438', 'Masalan: Ichimliklar')}
             />
+
+            <div style={{ marginTop: 16 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
+                {tr('Атрибуты вариантов', 'Variant atributlari')}
+              </label>
+              <p style={{ fontSize: 12, color: '#748278', marginBottom: 8 }}>
+                {tr('Например: Размер, Цвет — используются при создании вариантов товара', 'Masalan: O\'lchov, Rang — mahsulot variantlarida ishlatiladi')}
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {attributes.map((attr) => (
+                  <span key={attr} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#e8f5ee', color: '#1a5c36', borderRadius: 8, padding: '4px 10px', fontSize: 13, fontWeight: 600 }}>
+                    {attr}
+                    <button type="button" onClick={() => removeAttr(attr)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#748278', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                  </span>
+                ))}
+                {attributes.length === 0 && <span style={{ fontSize: 12, color: '#b0bcb5' }}>{tr('Нет атрибутов', 'Atributlar yo\'q')}</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={newAttrName}
+                  onChange={(e) => setNewAttrName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAttr(); } }}
+                  placeholder={tr('Размер', "O'lchov")}
+                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 11px', flex: 1, fontSize: 13 }}
+                />
+                <button type="button" className="sg-btn ghost" onClick={addAttr} disabled={!newAttrName.trim()}>
+                  + {tr('Добавить', "Qo'shish")}
+                </button>
+              </div>
+            </div>
 
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
               <button className="sg-btn primary" type="button" onClick={() => void saveCategory()} disabled={saving || !name.trim()}>
