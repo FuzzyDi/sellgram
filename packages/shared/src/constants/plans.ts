@@ -38,8 +38,8 @@ export const PLANS = {
     code: 'PRO',
     name: 'Про',
     nameEn: 'Pro',
-    price: 299_000,
-    priceMonthly: 299_000,
+    price: 99_000,
+    priceMonthly: 99_000,
     currency: 'UZS',
     limits: {
       maxStores: 3,
@@ -74,8 +74,8 @@ export const PLANS = {
     code: 'BUSINESS',
     name: 'Бизнес',
     nameEn: 'Business',
-    price: 799_000,
-    priceMonthly: 799_000,
+    price: 199_000,
+    priceMonthly: 199_000,
     currency: 'UZS',
     limits: {
       maxStores: 10,

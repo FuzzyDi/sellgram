@@ -398,7 +398,7 @@ async function main() {
     data: {
       tenantId: tenantId,
       plan: 'BUSINESS',
-      amount: 799000,
+      amount: 199000,
       currency: 'UZS',
       status: 'PENDING',
       paymentRef: 'DEMO-TX-001',
