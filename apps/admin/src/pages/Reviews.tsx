@@ -43,6 +43,8 @@ export default function Reviews() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   const load = useCallback(async (p = page) => {
     setLoading(true);
@@ -52,6 +54,7 @@ export default function Reviews() {
       if (ratingFilter) params.set('rating', ratingFilter);
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
+      params.set('hidden', showHidden ? 'true' : 'false');
       const res = await adminApi.getReviews(params.toString());
       setData(res);
     } catch {
@@ -59,10 +62,21 @@ export default function Reviews() {
     } finally {
       setLoading(false);
     }
-  }, [page, ratingFilter, dateFrom, dateTo]);
+  }, [page, ratingFilter, dateFrom, dateTo, showHidden]);
 
-  useEffect(() => { setPage(1); }, [ratingFilter, dateFrom, dateTo]);
-  useEffect(() => { load(page); }, [page, ratingFilter, dateFrom, dateTo]);
+  const toggleHidden = async (id: string, currentlyHidden: boolean) => {
+    setToggling(id);
+    try {
+      if (currentlyHidden) await adminApi.showReview(id);
+      else await adminApi.hideReview(id);
+      await load(page);
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  useEffect(() => { setPage(1); }, [ratingFilter, dateFrom, dateTo, showHidden]);
+  useEffect(() => { load(page); }, [page, ratingFilter, dateFrom, dateTo, showHidden]);
 
   const stats = data?.stats;
   const items: any[] = data?.items ?? [];
@@ -74,9 +88,29 @@ export default function Reviews() {
       <h2 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 4px' }}>
         {tr('Отзывы', 'Sharhlar')}
       </h2>
-      <p style={{ color: '#6b7280', fontSize: 13, margin: '0 0 20px' }}>
+      <p style={{ color: '#6b7280', fontSize: 13, margin: '0 0 16px' }}>
         {tr('Оценки клиентов после получения заказов', "Buyurtmalardan so'ng mijozlar reytingi")}
       </p>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '2px solid #e5e7eb', paddingBottom: 0 }}>
+        {[
+          { key: false, label: tr('Видимые', 'Ko\'rinadigan') },
+          { key: true,  label: tr('Скрытые', 'Yashirilgan') },
+        ].map(({ key, label }) => (
+          <button
+            key={String(key)}
+            onClick={() => setShowHidden(key)}
+            style={{
+              padding: '8px 18px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+              background: 'transparent', borderBottom: showHidden === key ? '2px solid #111' : '2px solid transparent',
+              color: showHidden === key ? '#111' : '#6b7280', marginBottom: -2,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* Stats */}
       {stats && (
@@ -197,12 +231,25 @@ export default function Reviews() {
                       {item.order.store.name}
                     </span>
                   )}
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: '#9ca3af', whiteSpace: 'nowrap' }}>
                     {new Date(item.createdAt).toLocaleDateString(locale)}
                   </span>
+                  <button
+                    onClick={() => toggleHidden(item.id, item.hidden)}
+                    disabled={toggling === item.id}
+                    style={{
+                      marginLeft: 'auto', border: 'none', cursor: 'pointer', borderRadius: 6,
+                      padding: '3px 10px', fontSize: 11, fontWeight: 700,
+                      background: item.hidden ? '#d1fae5' : '#fee2e2',
+                      color: item.hidden ? '#065f46' : '#991b1b',
+                      opacity: toggling === item.id ? 0.5 : 1,
+                    }}
+                  >
+                    {toggling === item.id ? '...' : item.hidden ? tr('Показать', 'Ko\'rsatish') : tr('Скрыть', 'Yashirish')}
+                  </button>
                 </div>
                 {item.comment && (
-                  <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.5 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: item.hidden ? '#9ca3af' : '#374151', lineHeight: 1.5 }}>
                     {item.comment}
                   </p>
                 )}

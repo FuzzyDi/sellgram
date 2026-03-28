@@ -322,6 +322,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     storeId: z.string().optional(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
+    hidden: z.enum(['true', 'false']).optional(),
   });
 
   fastify.get('/reviews', async (request, reply) => {
@@ -332,11 +333,13 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
 
-    const { page: pageNum, pageSize: pageSizeNum, rating, storeId, dateFrom, dateTo } = query;
+    const { page: pageNum, pageSize: pageSizeNum, rating, storeId, dateFrom, dateTo, hidden } = query;
     const skip = (pageNum - 1) * pageSizeNum;
 
     const where: any = { tenantId: request.tenantId! };
     if (rating) where.rating = rating;
+    if (hidden !== undefined) where.hidden = hidden === 'true';
+    else where.hidden = false; // by default show only visible reviews
     if (storeId) where.order = { storeId };
     if (dateFrom || dateTo) {
       where.createdAt = {};
@@ -388,6 +391,22 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         },
       },
     };
+  });
+
+  fastify.patch('/reviews/:id/hide', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const review = await prisma.orderReview.findFirst({ where: { id, tenantId: request.tenantId! } });
+    if (!review) return reply.status(404).send({ success: false, error: 'Review not found' });
+    await prisma.orderReview.update({ where: { id }, data: { hidden: true } });
+    return { success: true };
+  });
+
+  fastify.patch('/reviews/:id/show', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const review = await prisma.orderReview.findFirst({ where: { id, tenantId: request.tenantId! } });
+    if (!review) return reply.status(404).send({ success: false, error: 'Review not found' });
+    await prisma.orderReview.update({ where: { id }, data: { hidden: false } });
+    return { success: true };
   });
 
   // ── Promo Codes (admin CRUD) ──────────────────────────────

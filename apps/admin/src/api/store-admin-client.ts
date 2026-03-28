@@ -147,6 +147,8 @@ export const adminApi = {
   },
   updateOrderStatus: (id: string, data: any) => request<any>(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify(data) }),
   getReviews: (params?: string) => request<any>(`/reviews${params ? '?' + params : ''}`),
+  hideReview: (id: string) => request<any>(`/reviews/${id}/hide`, { method: 'PATCH' }),
+  showReview: (id: string) => request<any>(`/reviews/${id}/show`, { method: 'PATCH' }),
 
   getPromoCodes: () => request<any>('/promo-codes'),
   createPromoCode: (data: any) => request<any>('/promo-codes', { method: 'POST', body: JSON.stringify(data) }),

@@ -72,6 +72,7 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
       const reviews = await prisma.orderReview.findMany({
         where: {
           tenantId: request.customer!.tenantId,
+          hidden: false,
           order: { items: { some: { productId: id } } },
         },
         select: {

@@ -494,10 +494,12 @@ model OrderReview {
   tenantId   String
   rating     Int
   comment    String?
+  hidden     Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   @@index([tenantId])
   @@index([customerId])
+  @@index([tenantId, hidden], name: "order_reviews_hidden_idx")
   @@map("order_reviews")
 }
 
