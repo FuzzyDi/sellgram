@@ -141,6 +141,8 @@ model User {
   adminTelegramId BigInt?  // For receiving order notifications in Telegram
   telegramLinkCode String?
   telegramLinkCodeExpiresAt DateTime?
+  passwordResetToken  String?   @unique
+  passwordResetExpiry DateTime?
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

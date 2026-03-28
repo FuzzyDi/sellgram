@@ -93,6 +93,10 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+  forgotPassword: (email: string) =>
+    request<any>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    request<any>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, code, newPassword }) }),
   deleteAccount: (password: string) =>
     request<any>('/auth/account/delete', { method: 'POST', body: JSON.stringify({ password }) }),
   getTeamUsers: () => request<any>('/auth/team'),

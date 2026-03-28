@@ -210,6 +210,33 @@ export default async function authRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.post('/auth/forgot-password', async (request, reply) => {
+    const { email } = request.body as { email?: string };
+    if (!email) return reply.status(400).send({ success: false, error: 'Email required' });
+    try {
+      const result = await authService.forgotPassword(email);
+      return { success: true, data: result };
+    } catch (err: unknown) {
+      // Always return 200 to prevent email enumeration
+      if (err instanceof Error && err.message === 'NO_TELEGRAM') {
+        return reply.status(400).send({ success: false, error: 'NO_TELEGRAM' });
+      }
+      return { success: true, data: { method: 'telegram' } };
+    }
+  });
+
+  fastify.post('/auth/reset-password', async (request, reply) => {
+    const { email, code, newPassword } = request.body as { email?: string; code?: string; newPassword?: string };
+    if (!email || !code || !newPassword) return reply.status(400).send({ success: false, error: 'Missing fields' });
+    try {
+      await authService.resetPasswordWithCode({ email, code, newPassword });
+      return { success: true };
+    } catch (err: unknown) {
+      const mapped = mapAuthError(err);
+      return reply.status(mapped.status).send({ success: false, error: mapped.error });
+    }
+  });
+
   fastify.post('/auth/account/delete', {
     preHandler: [fastify.authenticate],
   }, async (request, reply) => {

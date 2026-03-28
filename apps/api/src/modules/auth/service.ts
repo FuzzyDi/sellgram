@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library.js';
 import prisma from '../../lib/prisma.js';
@@ -426,6 +427,55 @@ export async function resetTeamUserPassword(input: {
   await prisma.user.update({ where: { id: target.id }, data: { passwordHash } });
 
   return { ok: true };
+}
+
+export async function forgotPassword(email: string): Promise<{ method: string }> {
+  const user = await prisma.user.findUnique({
+    where: { email: email.toLowerCase().trim() },
+    select: { id: true, tenantId: true, adminTelegramId: true, isActive: true },
+  });
+  // Silently succeed if user not found (prevent enumeration)
+  if (!user || !user.isActive) return { method: 'telegram' };
+  if (!user.adminTelegramId) throw new Error('NO_TELEGRAM');
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const tokenHash = crypto.createHash('sha256').update(code).digest('hex');
+  const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordResetToken: tokenHash, passwordResetExpiry: expiry },
+  });
+
+  const { sendMessageToOwner } = await import('../../bot/bot-manager.js');
+  const sent = await sendMessageToOwner(
+    user.tenantId,
+    user.adminTelegramId,
+    `🔐 <b>Сброс пароля SellGram</b>\n\nВаш код: <code>${code}</code>\n\nКод действителен 15 минут. Если вы не запрашивали сброс — проигнорируйте это сообщение.`,
+  );
+  if (!sent) throw new Error('NO_TELEGRAM');
+
+  return { method: 'telegram' };
+}
+
+export async function resetPasswordWithCode(input: { email: string; code: string; newPassword: string }) {
+  const user = await prisma.user.findUnique({
+    where: { email: input.email.toLowerCase().trim() },
+    select: { id: true, passwordResetToken: true, passwordResetExpiry: true },
+  });
+  if (!user || !user.passwordResetToken || !user.passwordResetExpiry) {
+    throw new AuthServiceError('INVALID_CREDENTIALS');
+  }
+  if (user.passwordResetExpiry < new Date()) throw new AuthServiceError('INVALID_CREDENTIALS');
+
+  const tokenHash = crypto.createHash('sha256').update(input.code.trim()).digest('hex');
+  if (tokenHash !== user.passwordResetToken) throw new AuthServiceError('INVALID_CREDENTIALS');
+
+  const passwordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, passwordResetToken: null, passwordResetExpiry: null },
+  });
 }
 
 export async function requestAccountDeletion(input: { userId: string; tenantId: string; password: string }) {
