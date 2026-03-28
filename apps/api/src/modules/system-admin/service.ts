@@ -615,6 +615,20 @@ export async function confirmSystemInvoice(input: { id: string; confirmedBy: str
     },
   });
 
+  // Email notification to tenant owner — fire and forget
+  import('../../lib/mailer.js').then(async ({ sendEmail, tplInvoiceConfirmed }) => {
+    const { getConfig } = await import('../../config/index.js');
+    const { ADMIN_URL } = getConfig();
+    const owner = await prisma.user.findFirst({
+      where: { tenantId: invoice.tenantId, role: 'OWNER', isActive: true },
+      select: { email: true, name: true },
+    });
+    if (!owner) return;
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const tpl = tplInvoiceConfirmed({ name: owner.name, plan: invoice.plan, amount: Number(invoice.amount), expiresAt, adminUrl: ADMIN_URL });
+    return sendEmail({ to: owner.email, ...tpl });
+  }).catch(() => {});
+
   return invoice.plan;
 }
 
@@ -646,6 +660,19 @@ export async function rejectSystemInvoice(input: { id: string; confirmedBy: stri
       rejectedBy: input.confirmedBy,
     },
   });
+
+  // Email notification — fire and forget
+  import('../../lib/mailer.js').then(async ({ sendEmail, tplInvoiceRejected }) => {
+    const { getConfig } = await import('../../config/index.js');
+    const { BILLING_EMAIL } = getConfig();
+    const owner = await prisma.user.findFirst({
+      where: { tenantId: invoice.tenantId, role: 'OWNER', isActive: true },
+      select: { email: true, name: true },
+    });
+    if (!owner) return;
+    const tpl = tplInvoiceRejected({ name: owner.name, amount: Number(invoice.amount), billingEmail: BILLING_EMAIL });
+    return sendEmail({ to: owner.email, ...tpl });
+  }).catch(() => {});
 }
 
 export async function listSystemUsers(input: {
@@ -1023,17 +1050,32 @@ export async function sendReminderToTenant(tenantId: string): Promise<{ sent: bo
     where: { tenantId, role: 'OWNER', isActive: true, adminTelegramId: { not: null } },
     select: { adminTelegramId: true },
   });
-  if (!admin?.adminTelegramId) return { sent: false, reason: 'OWNER_NO_TELEGRAM' };
-
   const daysLeft = tenant.planExpiresAt
     ? Math.ceil((tenant.planExpiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
     : 0;
-  const expires = tenant.planExpiresAt?.toLocaleDateString('ru-RU') ?? '—';
-  const message = `⚠️ <b>Напоминание о продлении</b>\n\nТариф <b>${tenant.plan}</b> для магазина «${tenant.name}» истекает через <b>${daysLeft} дн.</b> (${expires}).\n\nПродлите подписку в панели управления: Тарифы → Выбрать тариф → Оплатить.`;
 
-  const { sendMessageToOwner } = await import('../../../bot/bot-manager.js');
-  const sent = await sendMessageToOwner(tenantId, admin.adminTelegramId, message);
-  return { sent };
+  let telegramSent = false;
+  if (admin?.adminTelegramId) {
+    const expires = tenant.planExpiresAt?.toLocaleDateString('ru-RU') ?? '—';
+    const message = `⚠️ <b>Напоминание о продлении</b>\n\nТариф <b>${tenant.plan}</b> для магазина «${tenant.name}» истекает через <b>${daysLeft} дн.</b> (${expires}).\n\nПродлите подписку в панели управления: Тарифы → Выбрать тариф → Оплатить.`;
+    const { sendMessageToOwner } = await import('../../../bot/bot-manager.js');
+    telegramSent = await sendMessageToOwner(tenantId, admin.adminTelegramId, message);
+  }
+
+  // Also send email reminder
+  const owner = await prisma.user.findFirst({
+    where: { tenantId, role: 'OWNER', isActive: true },
+    select: { email: true, name: true },
+  });
+  if (owner && tenant.planExpiresAt) {
+    const { sendEmail, tplPlanExpiring } = await import('../../../lib/mailer.js');
+    const { getConfig } = await import('../../../config/index.js');
+    const { ADMIN_URL } = getConfig();
+    const tpl = tplPlanExpiring({ name: owner.name, plan: tenant.plan, daysLeft, expiresAt: tenant.planExpiresAt, adminUrl: ADMIN_URL });
+    sendEmail({ to: owner.email, ...tpl }).catch(() => {});
+  }
+
+  return { sent: telegramSent || !!owner };
 }
 
 // ─── Billing Payment Settings ─────────────────────────────────────────────────

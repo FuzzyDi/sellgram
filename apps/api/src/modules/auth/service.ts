@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
+import { getConfig } from '../../config/index.js';
 import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library.js';
 import prisma from '../../lib/prisma.js';
@@ -185,6 +186,13 @@ export async function register(input: RegisterInput) {
   const payload = { userId: user.id, tenantId: tenant.id, role: user.role };
   const accessToken = await signAccessToken(payload);
   const refreshToken = await signRefreshToken(payload);
+
+  // Welcome email — fire and forget
+  import('../../lib/mailer.js').then(({ sendEmail, tplWelcome }) => {
+    const { ADMIN_URL } = getConfig();
+    const tpl = tplWelcome({ name: user.name, tenantName: tenant.name, adminUrl: ADMIN_URL });
+    return sendEmail({ to: user.email, ...tpl });
+  }).catch(() => {});
 
   return {
     accessToken,
@@ -447,15 +455,28 @@ export async function forgotPassword(email: string): Promise<{ method: string }>
     data: { passwordResetToken: tokenHash, passwordResetExpiry: expiry },
   });
 
-  const { sendMessageToOwner } = await import('../../bot/bot-manager.js');
-  const sent = await sendMessageToOwner(
-    user.tenantId,
-    user.adminTelegramId,
-    `🔐 <b>Сброс пароля SellGram</b>\n\nВаш код: <code>${code}</code>\n\nКод действителен 15 минут. Если вы не запрашивали сброс — проигнорируйте это сообщение.`,
-  );
-  if (!sent) throw new Error('NO_TELEGRAM');
+  // Try Telegram first, fall back to email
+  let method = 'telegram';
+  if (user.adminTelegramId) {
+    const { sendMessageToOwner } = await import('../../bot/bot-manager.js');
+    const sent = await sendMessageToOwner(
+      user.tenantId,
+      user.adminTelegramId,
+      `🔐 <b>Сброс пароля SellGram</b>\n\nВаш код: <code>${code}</code>\n\nКод действителен 15 минут. Если вы не запрашивали сброс — проигнорируйте это сообщение.`,
+    );
+    if (!sent) method = 'email';
+  } else {
+    method = 'email';
+  }
 
-  return { method: 'telegram' };
+  if (method === 'email') {
+    const { sendEmail, tplPasswordReset } = await import('../../lib/mailer.js');
+    const tpl = tplPasswordReset({ code });
+    const sent = await sendEmail({ to: email.toLowerCase().trim(), ...tpl });
+    if (!sent) throw new Error('NO_TELEGRAM');
+  }
+
+  return { method };
 }
 
 export async function resetPasswordWithCode(input: { email: string; code: string; newPassword: string }) {

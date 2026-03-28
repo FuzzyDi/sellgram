@@ -40,6 +40,8 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('SellGram <noreply@sellgram.uz>'),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default('SellGram <noreply@sellgram.uz>'),
   GA_MEASUREMENT_ID: z.string().optional(),
   YANDEX_METRIKA_ID: z.string().optional(),
   API_PORT: z.coerce.number().default(4000),
