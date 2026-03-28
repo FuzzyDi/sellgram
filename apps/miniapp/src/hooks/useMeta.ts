@@ -14,5 +14,5 @@ export function setPageMeta(title: string, description?: string, imageUrl?: stri
   if (description) setMetaTag('og:description', description);
   if (imageUrl) setMetaTag('og:image', imageUrl);
   // Telegram WebApp title (shown in webview header)
-  window.Telegram?.WebApp?.setTitle?.(title);
+  (window.Telegram?.WebApp as any)?.setTitle?.(title);
 }
