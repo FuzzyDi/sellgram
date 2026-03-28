@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+import { planGuard } from '../../plugins/plan-guard.js';
 
 const ALLOWED_EVENTS = ['order.created', 'order.status_changed', 'order.paid', 'customer.created', '*'] as const;
 
@@ -51,7 +52,7 @@ export default async function webhookAdminRoutes(fastify: FastifyInstance) {
     return { success: true, data: hooks };
   });
 
-  fastify.post('/webhooks', async (request, reply) => {
+  fastify.post('/webhooks', { preHandler: planGuard('webhooksEnabled') }, async (request, reply) => {
     const tenantId = request.tenantId!;
     const body = createSchema.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ success: false, error: 'Invalid input' });

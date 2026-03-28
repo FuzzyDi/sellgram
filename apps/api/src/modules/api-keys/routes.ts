@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { createHash, randomBytes } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+import { planGuard } from '../../plugins/plan-guard.js';
 
 export default async function apiKeyAdminRoutes(fastify: FastifyInstance) {
   // List API keys for tenant
@@ -29,7 +30,7 @@ export default async function apiKeyAdminRoutes(fastify: FastifyInstance) {
   });
 
   // Create new API key — returns the raw key ONCE
-  fastify.post('/api-keys', async (request, reply) => {
+  fastify.post('/api-keys', { preHandler: planGuard('apiEnabled') }, async (request, reply) => {
     const tenantId = (request as any).user?.tenantId as string;
     const body = createSchema.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ success: false, error: 'Invalid input' });
