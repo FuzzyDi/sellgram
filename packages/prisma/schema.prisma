@@ -607,8 +607,9 @@ model LoyaltyConfig {
   maxDiscountPct    Int     @default(30)
   minPointsToRedeem Int     @default(100)
   tiers             Json?                     // [{name,nameUz,minSpend,multiplier,color}]
-  referralEnabled   Boolean @default(false)
-  referralBonus     Int     @default(500)
+  referralEnabled     Boolean @default(false)
+  referralBonus       Int     @default(500)   // points to referrer
+  referralFriendBonus Int     @default(0)     // points to invited friend
 
   @@map("loyalty_configs")
 }

@@ -27,8 +27,9 @@ const loyaltyConfigSchema = z.object({
   maxDiscountPct:   z.number().min(0).max(100).optional(),
   minPointsToRedeem: z.number().int().min(0).optional(),
   tiers:            z.array(tierSchema).min(1).optional(),
-  referralEnabled:  z.boolean().optional(),
-  referralBonus:    z.number().int().min(0).optional(),
+  referralEnabled:     z.boolean().optional(),
+  referralBonus:       z.number().int().min(0).optional(),
+  referralFriendBonus: z.number().int().min(0).optional(),
 });
 
 export function computeTier(totalSpent: number, tiers: typeof DEFAULT_TIERS) {
@@ -64,8 +65,9 @@ export default async function loyaltyRoutes(fastify: FastifyInstance) {
     if (parsed.maxDiscountPct !== undefined)   data.maxDiscountPct = parsed.maxDiscountPct;
     if (parsed.minPointsToRedeem !== undefined) data.minPointsToRedeem = parsed.minPointsToRedeem;
     if (parsed.tiers !== undefined)            data.tiers = parsed.tiers;
-    if (parsed.referralEnabled !== undefined)  data.referralEnabled = parsed.referralEnabled;
-    if (parsed.referralBonus !== undefined)    data.referralBonus = parsed.referralBonus;
+    if (parsed.referralEnabled !== undefined)     data.referralEnabled = parsed.referralEnabled;
+    if (parsed.referralBonus !== undefined)       data.referralBonus = parsed.referralBonus;
+    if (parsed.referralFriendBonus !== undefined) data.referralFriendBonus = parsed.referralFriendBonus;
 
     const config = await prisma.loyaltyConfig.upsert({
       where: { tenantId: request.tenantId! },

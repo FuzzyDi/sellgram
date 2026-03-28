@@ -1,0 +1,1 @@
+ALTER TABLE "loyalty_configs" ADD COLUMN IF NOT EXISTS "referralFriendBonus" INTEGER NOT NULL DEFAULT 0;

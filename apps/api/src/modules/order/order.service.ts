@@ -114,25 +114,47 @@ export async function updateOrderStatus(input: {
           });
         }
 
-        // Referral bonus: give bonus to referrer on customer's first completed order
+        // Referral bonuses: on customer's first completed order
         if (loyaltyConfig.referralEnabled && order.customer.referredBy && order.customer.ordersCount === 0) {
-          const referrer = await tx.customer.findFirst({
-            where: { id: order.customer.referredBy, tenantId: input.tenantId },
-          });
-          if (referrer) {
-            const updatedReferrer = await tx.customer.update({
-              where: { id: referrer.id },
-              data: { loyaltyPoints: { increment: loyaltyConfig.referralBonus } },
+          // Bonus to referrer
+          if (loyaltyConfig.referralBonus > 0) {
+            const referrer = await tx.customer.findFirst({
+              where: { id: order.customer.referredBy, tenantId: input.tenantId },
+            });
+            if (referrer) {
+              const updatedReferrer = await tx.customer.update({
+                where: { id: referrer.id },
+                data: { loyaltyPoints: { increment: loyaltyConfig.referralBonus } },
+              });
+              await tx.loyaltyTransaction.create({
+                data: {
+                  customerId: referrer.id,
+                  tenantId: input.tenantId,
+                  type: 'EARN',
+                  points: loyaltyConfig.referralBonus,
+                  balanceAfter: updatedReferrer.loyaltyPoints,
+                  orderId: order.id,
+                  description: `Referral bonus: friend placed first order #${order.orderNumber}`,
+                },
+              });
+            }
+          }
+          // Bonus to invited friend
+          const friendBonus = (loyaltyConfig as any).referralFriendBonus ?? 0;
+          if (friendBonus > 0) {
+            const updatedFriend = await tx.customer.update({
+              where: { id: order.customerId },
+              data: { loyaltyPoints: { increment: friendBonus } },
             });
             await tx.loyaltyTransaction.create({
               data: {
-                customerId: referrer.id,
+                customerId: order.customerId,
                 tenantId: input.tenantId,
                 type: 'EARN',
-                points: loyaltyConfig.referralBonus,
-                balanceAfter: updatedReferrer.loyaltyPoints,
+                points: friendBonus,
+                balanceAfter: updatedFriend.loyaltyPoints,
                 orderId: order.id,
-                description: `Referral bonus: friend placed first order #${order.orderNumber}`,
+                description: `Welcome bonus: joined via referral, order #${order.orderNumber}`,
               },
             });
           }

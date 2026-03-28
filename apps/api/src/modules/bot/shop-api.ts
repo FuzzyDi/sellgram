@@ -255,7 +255,8 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
 
     // Generate referral code on first profile access
     if (!customer.referralCode) {
-      const code = request.customer!.id.slice(-6).toUpperCase();
+      const { randomBytes } = await import('node:crypto');
+      const code = randomBytes(4).toString('hex').toUpperCase(); // e.g. "A3F7B2C1"
       customer = await prisma.customer.update({
         where: { id: request.customer!.id },
         data: { referralCode: code },

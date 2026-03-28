@@ -865,17 +865,37 @@ export default function Settings() {
                 {tr('Реферальная программа включена', 'Referal dasturi yoqilgan')}
               </label>
               {loyalty.referralEnabled && (
-                <div style={{ maxWidth: 200 }}>
-                  <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>
-                    {tr('Бонус рефереру (баллов)', 'Referal bonusi (ball)')}
-                  </label>
-                  <input
-                    type="number"
-                    value={loyalty.referralBonus ?? 500}
-                    min={0}
-                    onChange={(e) => setLoyalty({ ...loyalty, referralBonus: +e.target.value })}
-                    style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 440 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>
+                      {tr('Бонус тому, кто пригласил (баллов)', 'Taklif qiluvchiga bonus (ball)')}
+                    </label>
+                    <input
+                      type="number"
+                      value={loyalty.referralBonus ?? 500}
+                      min={0}
+                      onChange={(e) => setLoyalty({ ...loyalty, referralBonus: +e.target.value })}
+                      style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }}
+                    />
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                      {tr('Начисляется после первого заказа друга', 'Do\'stning birinchi buyurtmasidan keyin')}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>
+                      {tr('Бонус приглашённому (баллов)', 'Taklif qilinganga bonus (ball)')}
+                    </label>
+                    <input
+                      type="number"
+                      value={loyalty.referralFriendBonus ?? 0}
+                      min={0}
+                      onChange={(e) => setLoyalty({ ...loyalty, referralFriendBonus: +e.target.value })}
+                      style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }}
+                    />
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                      {tr('0 = не начислять другу', '0 = do\'stga berilmaydi')}
+                    </div>
+                  </div>
                 </div>
               )}
               <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void saveLoyalty()}>
