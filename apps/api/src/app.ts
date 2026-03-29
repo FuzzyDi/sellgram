@@ -218,6 +218,17 @@ async function main() {
     } catch { reply.status(404).send('Not found'); }
   });
 
+  // Yandex Webmaster verification file (served as-is, no modifications)
+  fastify.get('/yandex_b2b4e2eab113d857.html', { config: { rateLimit: false } }, async (_request, reply) => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const filePath = path.join(process.cwd(), '..', 'landing', 'yandex_b2b4e2eab113d857.html');
+    try {
+      const html = fs.readFileSync(filePath, 'utf-8');
+      reply.header('Cache-Control', 'no-store, no-transform').type('text/html; charset=UTF-8').send(html);
+    } catch { reply.status(404).send('Not found'); }
+  });
+
   // Redirect /admin to admin panel
   fastify.get('/admin', { config: { rateLimit: false } }, async (request, reply) => {
     reply.redirect(config.ADMIN_URL);
