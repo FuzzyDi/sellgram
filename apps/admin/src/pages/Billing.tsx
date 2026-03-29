@@ -61,6 +61,149 @@ function StarsPayButton({ invoiceId, tr, submitting, setSubmitting, showNotice }
   );
 }
 
+function InvoicePayModal({
+  invoice,
+  bankDetails,
+  tr,
+  submitting,
+  setSubmitting,
+  paymentRef,
+  setPaymentRef,
+  onSubmit,
+  onClose,
+  showNotice,
+}: {
+  invoice: any;
+  bankDetails: any;
+  tr: (ru: string, uz: string) => string;
+  submitting: boolean;
+  setSubmitting: (v: boolean) => void;
+  paymentRef: string;
+  setPaymentRef: (v: string) => void;
+  onSubmit: () => void;
+  onClose: () => void;
+  showNotice: (tone: NoticeTone, msg: string) => void;
+}) {
+  const methods: { id: string; label: string }[] = [];
+
+  if (bankDetails && Object.keys(bankDetails).length > 0) {
+    methods.push({ id: 'bank', label: tr('Банк / карта', 'Bank / karta') });
+  }
+  methods.push({ id: 'stars', label: '⭐ Telegram Stars' });
+
+  const [method, setMethod] = React.useState(methods[0]?.id ?? 'stars');
+
+  const bankFields = bankDetails
+    ? Object.entries(bankDetails as Record<string, string>).filter(([, v]) => v)
+    : [];
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(11,20,16,0.55)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}>
+      <div className="sg-card" style={{ width: '100%', maxWidth: 480 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+            {tr('Оплата счёта', "Hisob to'lovi")}
+          </h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#607167', lineHeight: 1, padding: '2px 6px' }}>×</button>
+        </div>
+
+        <div style={{ marginBottom: 14, padding: '10px 12px', background: '#f0faf4', borderRadius: 10, fontSize: 13 }}>
+          <span style={{ fontWeight: 700 }}>{tr('Тариф', 'Tarif')}: </span>{invoice?.plan}
+          {invoice?.amount && (
+            <span style={{ marginLeft: 12 }}>
+              <span style={{ fontWeight: 700 }}>{tr('Сумма', 'Summa')}: </span>
+              {Number(invoice.amount).toLocaleString()} UZS
+            </span>
+          )}
+        </div>
+
+        {/* Method tabs */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
+          {methods.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setMethod(m.id)}
+              style={{
+                flex: 1,
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: method === m.id ? '2px solid #00875a' : '1px solid #dfe7e2',
+                background: method === m.id ? '#f0faf4' : '#fff',
+                color: method === m.id ? '#00875a' : '#607167',
+                fontWeight: method === m.id ? 800 : 600,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {method === 'bank' && (
+          <div>
+            {bankFields.length > 0 && (
+              <div style={{ marginBottom: 14, padding: '10px 12px', background: '#f8f9fa', borderRadius: 10 }}>
+                {bankFields.map(([key, val]) => (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0' }}>
+                    <span style={{ color: '#607167', textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</span>
+                    <span style={{ fontWeight: 700, textAlign: 'right', maxWidth: '60%', wordBreak: 'break-all' }}>{val}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: '#3a4f40' }}>
+              {tr('Номер транзакции / чек', 'Tranzaksiya raqami / chek')}
+            </label>
+            <input
+              className="sg-input"
+              value={paymentRef}
+              onChange={(e) => setPaymentRef(e.target.value)}
+              placeholder={tr('Введите номер транзакции', 'Tranzaksiya raqamini kiriting')}
+              style={{ width: '100%', marginBottom: 14 }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="sg-btn primary"
+                onClick={onSubmit}
+                disabled={submitting || !paymentRef.trim()}
+                style={{ flex: 1 }}
+              >
+                {submitting ? '...' : tr('Отправить', 'Yuborish')}
+              </button>
+              <button className="sg-btn ghost" onClick={onClose} style={{ flex: 1 }}>
+                {tr('Отмена', 'Bekor qilish')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {method === 'stars' && (
+          <div>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#607167' }}>
+              {tr(
+                'Оплата через Telegram Stars. После оплаты подписка активируется автоматически.',
+                "Telegram Stars orqali to'lov. To'lovdan so'ng obuna avtomatik faollashadi."
+              )}
+            </p>
+            <StarsPayButton
+              invoiceId={invoice?.id}
+              tr={tr}
+              submitting={submitting}
+              setSubmitting={setSubmitting}
+              showNotice={showNotice}
+            />
+            <button className="sg-btn ghost" onClick={onClose} style={{ width: '100%', marginTop: 10 }}>
+              {tr('Закрыть', 'Yopish')}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Billing() {
   const { tr, locale } = useAdminI18n();
   const [sub, setSub] = useState<any>(null);
@@ -500,77 +643,18 @@ export default function Billing() {
       )}
 
       {showInvoice && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(11, 20, 16, 0.5)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16, overflowY: 'auto' }}>
-          <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
-            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Оплата тарифа', "Tarif to'lovi")} {planLabel(showInvoice.invoice.plan)}</h3>
-            <p className="sg-subtitle">{tr('Выберите способ оплаты и переведите', "To'lov usulini tanlang va o'tkazing")}</p>
-            <p style={{ margin: '4px 0 0', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-              {tr('Сумма', 'Summa')}: {Number(showInvoice.invoice.amount).toLocaleString()} UZS
-            </p>
-
-            {/* Payment methods */}
-            {(() => {
-              const bd = showInvoice.bankDetails || {};
-              const methods: any[] = bd.paymentMethods || [{ type: 'bank', ...bd }];
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
-                  {methods.map((m: any, i: number) => {
-                    const icons: Record<string, string> = { bank: '🏦', card: '💳', payme: '🔵', click: '🟢' };
-                    const titles: Record<string, string> = { bank: tr('Банковский перевод', "Bank o'tkazmasi"), card: tr('Карта', 'Karta'), payme: 'Payme', click: 'Click' };
-                    return (
-                      <div key={i} className="sg-card soft" style={{ padding: '12px 14px' }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{icons[m.type] || '💰'} {titles[m.type] || m.type}</div>
-                        {m.type === 'bank' && (<>
-                          {m.recipient && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Получатель', 'Qabul qiluvchi')}:</b> {m.recipient}</p>}
-                          {m.bank     && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Банк', 'Bank')}:</b> {m.bank}</p>}
-                          {m.account  && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Счёт', 'Hisob')}:</b> {m.account}</p>}
-                          {m.inn      && <p style={{ margin: '2px 0', fontSize: 13 }}><b>ИНН:</b> {m.inn}</p>}
-                          {m.mfo      && <p style={{ margin: '2px 0', fontSize: 13 }}><b>МФО:</b> {m.mfo}</p>}
-                          {m.note     && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#607167' }}>{m.note}</p>}
-                        </>)}
-                        {m.type === 'card' && (<>
-                          {m.number && <p style={{ margin: '2px 0', fontSize: 15, fontWeight: 800, letterSpacing: 2 }}>{m.number}</p>}
-                          {m.holder && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Владелец', 'Egasi')}:</b> {m.holder}</p>}
-                          {m.bank   && <p style={{ margin: '2px 0', fontSize: 13 }}><b>{tr('Банк', 'Bank')}:</b> {m.bank}</p>}
-                          {m.note   && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#607167' }}>{m.note}</p>}
-                        </>)}
-                        {(m.type === 'payme' || m.type === 'click') && (<>
-                          {m.merchantId && <p style={{ margin: '2px 0', fontSize: 13 }}><b>Merchant ID:</b> {m.merchantId}</p>}
-                          {m.serviceId  && <p style={{ margin: '2px 0', fontSize: 13 }}><b>Service ID:</b> {m.serviceId}</p>}
-                          {m.note       && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#607167' }}>{m.note}</p>}
-                        </>)}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-
-            <label style={{ display: 'grid', gap: 4, marginTop: 14 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#516057' }}>{tr('Номер транзакции / чека', 'Tranzaksiya / chek raqami')}</span>
-              <input value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder={tr('После оплаты введите номер', "To'lovdan keyin raqamni kiriting")} />
-            </label>
-
-            {/* Telegram Stars payment */}
-            <div style={{ margin: '16px 0 0', padding: '12px 14px', background: '#fafaf0', border: '1px solid #e8e4c0', borderRadius: 10 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>⭐ Telegram Stars</div>
-              <p style={{ margin: '0 0 10px', fontSize: 12, color: '#607167' }}>
-                {tr('Оплатите мгновенно через Telegram — счёт придёт в вашего бота', "Telegram orqali darhol to'lang — hisob botingizga keladi")}
-              </p>
-              <StarsPayButton invoiceId={showInvoice.invoice.id} tr={tr} submitting={submitting} setSubmitting={setSubmitting} showNotice={showNotice} />
-            </div>
-
-            <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
-              <button onClick={submitPayment} disabled={submitting || !paymentRef.trim()} className="sg-btn primary" style={{ flex: 1 }}>
-                {submitting ? '...' : tr('Отправить', 'Yuborish')}
-              </button>
-              <Button onClick={() => setShowInvoice(null)} className="sg-btn ghost" style={{ flex: 1 }}>
-                {tr('Позже', 'Keyinroq')}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <InvoicePayModal
+          invoice={showInvoice.invoice}
+          bankDetails={showInvoice.bankDetails}
+          tr={tr}
+          submitting={submitting}
+          setSubmitting={setSubmitting}
+          paymentRef={paymentRef}
+          setPaymentRef={setPaymentRef}
+          onSubmit={submitPayment}
+          onClose={() => setShowInvoice(null)}
+          showNotice={showNotice}
+        />
       )}
     </section>
   );
