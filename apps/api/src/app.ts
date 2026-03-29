@@ -426,6 +426,30 @@ async function main() {
     fastify.log.error(`Scheduled reports runner failed to start: ${err.message}`);
   }
 
+  // Nightly subscription reminders
+  setInterval(async () => {
+    try {
+      const { getSystemSubscriptionReminderSettings, getExpiringTenants, sendReminderToTenant } = await import('./modules/system-admin/service.js');
+      const settings = await getSystemSubscriptionReminderSettings();
+      if (!settings.enabled || !settings.days.length) return;
+      for (const day of settings.days) {
+        const tenants = await getExpiringTenants(day);
+        for (const t of tenants) {
+          if (t.daysLeft === day) {
+            try {
+              await sendReminderToTenant(t.id);
+              fastify.log.info(`Subscription reminder sent to tenant ${t.id} (${day}d left)`);
+            } catch (err: any) {
+              fastify.log.warn(`Failed to send reminder to tenant ${t.id}: ${err.message}`);
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      fastify.log.error(`Subscription reminder job failed: ${err.message}`);
+    }
+  }, 24 * 60 * 60 * 1000);
+
   // Nightly cleanup: hard-delete tenants 30+ days after deletion request
   setInterval(async () => {
     try {
