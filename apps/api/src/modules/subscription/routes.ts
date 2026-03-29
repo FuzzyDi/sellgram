@@ -101,21 +101,16 @@ export default async function subscriptionRoutes(fastify: FastifyInstance) {
       const starsAmount = await getStarsPriceForPlan(invoice.plan as string);
       const planLabel = String(invoice.plan);
 
-      const { sendStarsInvoiceToOwner } = await import('../../bot/bot-manager.js');
-      const sent = await sendStarsInvoiceToOwner({
-        tenantId: request.tenantId!,
-        telegramId: owner.adminTelegramId,
+      const { createStarsInvoiceLink } = await import('../../bot/bot-manager.js');
+      const invoiceLink = await createStarsInvoiceLink({
         invoiceId: id,
+        tenantId: request.tenantId!,
         plan: planLabel,
         planLabel,
         starsAmount,
       });
 
-      if (!sent) {
-        return reply.status(400).send({ success: false, error: 'Could not send invoice via Telegram. Make sure your bot is active.' });
-      }
-
-      return { success: true, starsAmount, message: 'Invoice sent to your Telegram. Please complete payment there.' };
+      return { success: true, starsAmount, invoiceLink };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
     }

@@ -1,7 +1,7 @@
 ﻿import { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
 import prisma from '../../lib/prisma.js';
-import { getBotWebhookHandler } from '../../bot/bot-manager.js';
+import { getBotWebhookHandler, getSystemPayBotHandler } from '../../bot/bot-manager.js';
 
 export default async function botRoutes(fastify: FastifyInstance) {
   fastify.post('/webhook/:storeId', { config: { rateLimit: false } }, async (request, reply) => {
@@ -34,6 +34,13 @@ export default async function botRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ success: false, error: 'Bot not found' });
     }
 
+    return handler(request, reply);
+  });
+
+  // System pay bot webhook (Telegram Stars subscriptions)
+  fastify.post('/webhook/system-pay', { config: { rateLimit: false } }, async (request, reply) => {
+    const handler = getSystemPayBotHandler();
+    if (!handler) return reply.status(404).send({ error: 'System pay bot not configured' });
     return handler(request, reply);
   });
 }

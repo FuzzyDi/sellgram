@@ -22,6 +22,45 @@ const planLimitFallbacks: Record<
   BUSINESS: { maxStores: 10, maxProducts: -1, maxOrdersPerMonth: -1, maxDeliveryZones: -1 },
 };
 
+function StarsPayButton({ invoiceId, tr, submitting, setSubmitting, showNotice }: {
+  invoiceId: string;
+  tr: (ru: string, uz: string) => string;
+  submitting: boolean;
+  setSubmitting: (v: boolean) => void;
+  showNotice: (tone: NoticeTone, msg: string) => void;
+}) {
+  const [invoiceLink, setInvoiceLink] = React.useState<string | null>(null);
+
+  async function handleClick() {
+    if (invoiceLink) { window.open(invoiceLink, '_blank'); return; }
+    setSubmitting(true);
+    try {
+      const res = await adminApi.payWithStars(invoiceId);
+      setInvoiceLink(res.invoiceLink);
+      window.open(res.invoiceLink, '_blank');
+    } catch (e: any) {
+      showNotice('error', e?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button onClick={handleClick} disabled={submitting}
+        style={{ background: '#f5c842', color: '#1a1a1a', border: 'none', borderRadius: 8, padding: '9px 20px', fontWeight: 700, fontSize: 13, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
+        {submitting ? '...' : invoiceLink ? tr('Открыть в Telegram ↗', "Telegramda ochish ↗") : tr('Оплатить ⭐ Stars', "⭐ Stars bilan to'lash")}
+      </button>
+      {invoiceLink && (
+        <p style={{ margin: 0, fontSize: 11, color: '#607167' }}>
+          {tr('Ссылка создана. Если не открылось — ', "Havola yaratildi. Ochilmasa — ")}
+          <a href={invoiceLink} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{tr('нажмите здесь', 'bu yerni bosing')}</a>
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Billing() {
   const { tr, locale } = useAdminI18n();
   const [sub, setSub] = useState<any>(null);
@@ -519,24 +558,7 @@ export default function Billing() {
               <p style={{ margin: '0 0 10px', fontSize: 12, color: '#607167' }}>
                 {tr('Оплатите мгновенно через Telegram — счёт придёт в вашего бота', "Telegram orqali darhol to'lang — hisob botingizga keladi")}
               </p>
-              <button
-                onClick={async () => {
-                  setSubmitting(true);
-                  try {
-                    const res = await adminApi.payWithStars(showInvoice.invoice.id);
-                    showNotice('success', tr(`Счёт на ${res.starsAmount} ⭐ отправлен в Telegram`, `Telegramga ${res.starsAmount} ⭐ hisob yuborildi`));
-                    setShowInvoice(null);
-                  } catch (e: any) {
-                    showNotice('error', e?.message || tr('Ошибка', 'Xatolik'));
-                  } finally {
-                    setSubmitting(false);
-                  }
-                }}
-                disabled={submitting}
-                style={{ background: '#f5c842', color: '#1a1a1a', border: 'none', borderRadius: 8, padding: '9px 20px', fontWeight: 700, fontSize: 13, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}
-              >
-                {submitting ? '...' : tr('Оплатить ⭐ Stars', "⭐ Stars bilan to'lash")}
-              </button>
+              <StarsPayButton invoiceId={showInvoice.invoice.id} tr={tr} submitting={submitting} setSubmitting={setSubmitting} showNotice={showNotice} />
             </div>
 
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>

@@ -41,6 +41,7 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('SellGram <noreply@sellgram.uz>'),
   RESEND_API_KEY: z.string().optional(),
+  SYSTEM_PAY_BOT_TOKEN: z.string().optional(),
   EMAIL_FROM: z.string().default('SellGram <noreply@sellgram.uz>'),
   GA_MEASUREMENT_ID: z.string().optional(),
   YANDEX_METRIKA_ID: z.string().optional(),

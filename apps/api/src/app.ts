@@ -389,6 +389,16 @@ async function main() {
     fastify.log.error(err.stack);
   }
 
+  // Initialize system pay bot (Telegram Stars)
+  try {
+    const { initSystemPayBot } = await import('./bot/bot-manager.js');
+    const webhookUrl = `${config.APP_URL}/webhook/system-pay`;
+    await initSystemPayBot(webhookUrl);
+    fastify.log.info('System pay bot initialized');
+  } catch (err: any) {
+    fastify.log.warn(`System pay bot skipped: ${err.message}`);
+  }
+
   // Background job workers
   try {
     const { createDailyDigestWorker } = await import('./jobs/daily-digest.js');

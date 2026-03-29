@@ -27,6 +27,86 @@ interface Banner {
   linkUrl?: string;
 }
 
+function BannerCarousel({ banners }: { banners: Banner[] }) {
+  const [current, setCurrent] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const goTo = (index: number) => {
+    setCurrent((index + banners.length) % banners.length);
+  };
+
+  const resetTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCurrent((c) => (c + 1) % banners.length);
+    }, 4000);
+  };
+
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    resetTimer();
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [banners.length]);
+
+  const b = banners[current];
+
+  return (
+    <div style={{ padding: '8px 0 4px', position: 'relative' }}>
+      <div
+        onClick={() => b.linkUrl && window.open(b.linkUrl, '_blank')}
+        style={{
+          borderRadius: 12,
+          overflow: 'hidden',
+          cursor: b.linkUrl ? 'pointer' : 'default',
+          position: 'relative',
+        }}
+      >
+        <img
+          key={b.id}
+          src={b.imageUrl}
+          alt={b.title || 'banner'}
+          style={{
+            width: '100%',
+            aspectRatio: '16/6',
+            objectFit: 'cover',
+            display: 'block',
+            animation: 'bannerFadeIn 0.4s ease',
+          }}
+        />
+        {b.title && (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            background: 'linear-gradient(transparent, rgba(0,0,0,0.55))',
+            color: '#fff', fontSize: 13, fontWeight: 600,
+            padding: '16px 12px 8px',
+          }}>
+            {b.title}
+          </div>
+        )}
+      </div>
+      {banners.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+          {banners.map((_, i) => (
+            <div
+              key={i}
+              onClick={() => { goTo(i); resetTimer(); }}
+              style={{
+                width: i === current ? 18 : 6,
+                height: 6,
+                borderRadius: 3,
+                background: i === current ? 'var(--tg-theme-button-color, #2ca5e0)' : 'rgba(0,0,0,0.18)',
+                transition: 'width 0.3s ease, background 0.3s ease',
+                cursor: 'pointer',
+              }}
+            />
+          ))}
+        </div>
+      )}
+      <style>{`@keyframes bannerFadeIn { from { opacity: 0.4 } to { opacity: 1 } }`}</style>
+    </div>
+  );
+}
+
 export default function Catalog() {
   const { tr } = useMiniI18n();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -97,39 +177,7 @@ export default function Catalog() {
           />
         </div>
         {banners.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, padding: '8px 0 4px', overflowX: 'auto', scrollSnapType: 'x mandatory' }}>
-            {banners.map((b) => (
-              <div
-                key={b.id}
-                onClick={() => b.linkUrl && window.open(b.linkUrl, '_blank')}
-                style={{
-                  flexShrink: 0,
-                  width: banners.length === 1 ? '100%' : 'calc(100% - 24px)',
-                  scrollSnapAlign: 'start',
-                  borderRadius: 12,
-                  overflow: 'hidden',
-                  cursor: b.linkUrl ? 'pointer' : 'default',
-                  position: 'relative',
-                }}
-              >
-                <img
-                  src={b.imageUrl}
-                  alt={b.title || 'banner'}
-                  style={{ width: '100%', aspectRatio: '16/6', objectFit: 'cover', display: 'block' }}
-                />
-                {b.title && (
-                  <div style={{
-                    position: 'absolute', bottom: 0, left: 0, right: 0,
-                    background: 'linear-gradient(transparent, rgba(0,0,0,0.5))',
-                    color: '#fff', fontSize: 13, fontWeight: 600,
-                    padding: '16px 12px 8px',
-                  }}>
-                    {b.title}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <BannerCarousel banners={banners} />
         )}
         <div className="anim-fade anim-d2" style={{ display: 'flex', gap: 6, padding: '8px 0 12px', overflowX: 'auto' }}>
           <button className={`chip${!selected ? ' active' : ''}`} onClick={() => setSelected(null)}>{tr('Все', 'Barchasi')}</button>

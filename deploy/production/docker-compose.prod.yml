@@ -105,6 +105,7 @@ services:
       S3_BUCKET: ${S3_BUCKET:-sellgram}
       S3_REGION: us-east-1
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      SYSTEM_PAY_BOT_TOKEN: ${SYSTEM_PAY_BOT_TOKEN:-}
       APP_URL: ${APP_URL:-https://api.sellgram.uz}
       ADMIN_URL: ${ADMIN_URL:-https://app.sellgram.uz}
       MINIAPP_URL: ${MINIAPP_URL:-https://miniapp.sellgram.uz}
