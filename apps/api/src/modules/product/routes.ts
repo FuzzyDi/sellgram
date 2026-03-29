@@ -372,10 +372,11 @@ export default async function productRoutes(fastify: FastifyInstance) {
       // Resize and compress with sharp (if available)
       try {
         const sharp = (await import('sharp')).default;
-        const metadata = await sharp(buffer).metadata();
+        const isAnimated = file.mimetype === 'image/gif' || file.mimetype === 'image/webp';
+        const metadata = await sharp(buffer, { animated: isAnimated }).metadata();
 
         // Resize if wider than 1200px, compress to WebP
-        let pipeline = sharp(buffer);
+        let pipeline = sharp(buffer, { animated: isAnimated });
         if (metadata.width && metadata.width > 1200) {
           pipeline = pipeline.resize(1200, null, { withoutEnlargement: true });
         }

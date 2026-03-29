@@ -61,8 +61,9 @@ export default async function bannerRoutes(fastify: FastifyInstance) {
 
       try {
         const sharp = (await import('sharp')).default;
-        const metadata = await sharp(buffer).metadata();
-        let pipeline = sharp(buffer);
+        const isAnimated = file.mimetype === 'image/gif' || file.mimetype === 'image/webp';
+        const metadata = await sharp(buffer, { animated: isAnimated }).metadata();
+        let pipeline = sharp(buffer, { animated: isAnimated });
         if (metadata.width && metadata.width > 1600) {
           pipeline = pipeline.resize(1600, null, { withoutEnlargement: true });
         }
