@@ -13,6 +13,30 @@ function PlanBadge({ plan }: { plan: string }) {
   return <span style={{ ...c, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{plan}</span>;
 }
 
+function ReminderButton({ tenantId }: { tenantId: string }) {
+  const [state, setState] = useState<'idle' | 'loading' | 'sent' | 'error'>('idle');
+  async function send() {
+    setState('loading');
+    try {
+      await systemApi.sendReminder(tenantId);
+      setState('sent');
+      setTimeout(() => setState('idle'), 3000);
+    } catch {
+      setState('error');
+      setTimeout(() => setState('idle'), 3000);
+    }
+  }
+  const label = state === 'loading' ? '...' : state === 'sent' ? '✓ Отправлено' : state === 'error' ? '✗ Ошибка' : 'Напомнить';
+  const bg = state === 'sent' ? '#dcfce7' : state === 'error' ? '#fee2e2' : '#fef3c7';
+  const color = state === 'sent' ? '#166534' : state === 'error' ? '#991b1b' : '#92400e';
+  return (
+    <button disabled={state === 'loading' || state === 'sent'} onClick={send}
+      style={{ border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: state === 'loading' || state === 'sent' ? 'default' : 'pointer', background: bg, color, transition: 'all 0.2s' }}>
+      {label}
+    </button>
+  );
+}
+
 function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: () => void; onRefresh: () => void }) {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -354,14 +378,14 @@ export default function SysTenants() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-              {['Тенант', 'План', 'Истекает', 'Магазины', 'Заказов/мес', 'Создан'].map((h) => (
+              {['Тенант', 'План', 'Истекает', 'Магазины', 'Заказов/мес', 'Создан', ''].map((h) => (
                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, fontSize: 12, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading && [1,2,3,4,5].map((i) => (
-              <tr key={i}><td colSpan={6} style={{ padding: '10px 14px' }}><div className="sg-skeleton" style={{ height: 14, width: '60%' }} /></td></tr>
+              <tr key={i}><td colSpan={7} style={{ padding: '10px 14px' }}><div className="sg-skeleton" style={{ height: 14, width: '60%' }} /></td></tr>
             ))}
             {!loading && items.map((t: any) => {
               const expiresAt = t.planExpiresAt ? new Date(t.planExpiresAt) : null;
@@ -382,6 +406,11 @@ export default function SysTenants() {
                   <td style={{ padding: '10px 14px' }}>{t.storesCount ?? t._count?.stores ?? '—'}</td>
                   <td style={{ padding: '10px 14px' }}>{t.ordersMonth ?? '—'}</td>
                   <td style={{ padding: '10px 14px', color: '#94a3b8', fontSize: 12 }}>{new Date(t.createdAt).toLocaleDateString('ru')}</td>
+                  <td style={{ padding: '10px 14px' }} onClick={(e) => e.stopPropagation()}>
+                    {expiringSoon && (
+                      <ReminderButton tenantId={t.id} />
+                    )}
+                  </td>
                 </tr>
               );
             })}
