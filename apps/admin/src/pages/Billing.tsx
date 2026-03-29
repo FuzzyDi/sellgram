@@ -22,14 +22,19 @@ const planLimitFallbacks: Record<
   BUSINESS: { maxStores: 10, maxProducts: -1, maxOrdersPerMonth: -1, maxDeliveryZones: -1 },
 };
 
-function StarsPayButton({ invoiceId, tr, submitting, setSubmitting, showNotice }: {
+function StarsPayButton({ invoiceId, prefetched, tr, submitting, setSubmitting, showNotice }: {
   invoiceId: string;
+  prefetched?: { starsAmount: number; invoiceLink: string } | null;
   tr: (ru: string, uz: string) => string;
   submitting: boolean;
   setSubmitting: (v: boolean) => void;
   showNotice: (tone: NoticeTone, msg: string) => void;
 }) {
-  const [invoiceLink, setInvoiceLink] = React.useState<string | null>(null);
+  const [invoiceLink, setInvoiceLink] = React.useState<string | null>(prefetched?.invoiceLink ?? null);
+
+  React.useEffect(() => {
+    if (prefetched?.invoiceLink) setInvoiceLink(prefetched.invoiceLink);
+  }, [prefetched?.invoiceLink]);
 
   async function handleClick() {
     if (invoiceLink) { window.open(invoiceLink, '_blank'); return; }
@@ -107,6 +112,23 @@ function InvoicePayModal({
   }
 
   const [method, setMethod] = React.useState(methods[0]?.id ?? 'stars');
+  const [starsData, setStarsData] = React.useState<{ starsAmount: number; invoiceLink: string } | null>(null);
+  const [starsFetching, setStarsFetching] = React.useState(false);
+
+  async function selectMethod(id: string) {
+    setMethod(id);
+    if (id === 'stars' && !starsData && invoice?.id) {
+      setStarsFetching(true);
+      try {
+        const res = await adminApi.payWithStars(invoice.id);
+        setStarsData(res);
+      } catch (e: any) {
+        showNotice('error', e?.message || 'Ошибка');
+      } finally {
+        setStarsFetching(false);
+      }
+    }
+  }
 
   // Fields for the currently selected non-stars method
   function getMethodFields(methodId: string) {
@@ -129,12 +151,18 @@ function InvoicePayModal({
 
         <div style={{ marginBottom: 14, padding: '10px 12px', background: '#f0faf4', borderRadius: 10, fontSize: 13 }}>
           <span style={{ fontWeight: 700 }}>{tr('Тариф', 'Tarif')}: </span>{invoice?.plan}
-          {invoice?.amount && (
-            <span style={{ marginLeft: 12 }}>
-              <span style={{ fontWeight: 700 }}>{tr('Сумма', 'Summa')}: </span>
-              {Number(invoice.amount).toLocaleString()} UZS
-            </span>
-          )}
+          <span style={{ marginLeft: 12 }}>
+            <span style={{ fontWeight: 700 }}>{tr('Сумма', 'Summa')}: </span>
+            {method === 'stars'
+              ? starsFetching
+                ? '...'
+                : starsData
+                  ? `⭐ ${starsData.starsAmount.toLocaleString()} Stars`
+                  : '—'
+              : invoice?.amount
+                ? `${Number(invoice.amount).toLocaleString()} UZS`
+                : '—'}
+          </span>
         </div>
 
         {/* Method tabs */}
@@ -142,7 +170,7 @@ function InvoicePayModal({
           {methods.map((m) => (
             <button
               key={m.id}
-              onClick={() => setMethod(m.id)}
+              onClick={() => void selectMethod(m.id)}
               style={{
                 flex: 1,
                 padding: '8px 10px',
@@ -212,8 +240,9 @@ function InvoicePayModal({
             </p>
             <StarsPayButton
               invoiceId={invoice?.id}
+              prefetched={starsData}
               tr={tr}
-              submitting={submitting}
+              submitting={submitting || starsFetching}
               setSubmitting={setSubmitting}
               showNotice={showNotice}
             />
