@@ -22,7 +22,7 @@ async function buildBankDetails() {
 
       // Build paymentMethods array from method-prefixed keys
       const methods: Record<string, any>[] = [];
-      for (const type of ['bank', 'card', 'payme', 'click'] as const) {
+      for (const type of ['bank', 'card', 'payme', 'click', 'stars'] as const) {
         const enabledKey = `${type}_enabled`;
         // bank is enabled by default unless explicitly disabled
         const enabled = enabledKey in s ? s[enabledKey] === 'true' : type === 'bank';

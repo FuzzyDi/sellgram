@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { systemApi } from '../../api/system-admin-client';
 
-type MethodType = 'bank' | 'card' | 'payme' | 'click';
+type MethodType = 'bank' | 'card' | 'payme' | 'click' | 'stars';
 
 const METHODS: { type: MethodType; label: string; icon: string; fields: { key: string; label: string; placeholder?: string }[] }[] = [
   {
@@ -47,6 +47,15 @@ const METHODS: { type: MethodType; label: string; icon: string; fields: { key: s
       { key: 'note',       label: 'Примечание',  placeholder: 'Оплата через Click' },
     ],
   },
+  {
+    type: 'stars',
+    label: 'Telegram Stars',
+    icon: '⭐',
+    fields: [
+      { key: 'pro',      label: 'Цена PRO (Stars)',      placeholder: '600' },
+      { key: 'business', label: 'Цена BUSINESS (Stars)', placeholder: '1200' },
+    ],
+  },
 ];
 
 function methodKey(type: MethodType, field: string) {
@@ -80,7 +89,6 @@ export default function SysPayment() {
 
   function isEnabled(type: MethodType) {
     const v = settings[`${type}_enabled`];
-    // bank enabled by default if not set
     if (v === undefined) return type === 'bank';
     return v === 'true';
   }

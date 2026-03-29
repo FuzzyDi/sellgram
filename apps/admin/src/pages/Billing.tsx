@@ -84,18 +84,38 @@ function InvoicePayModal({
   onClose: () => void;
   showNotice: (tone: NoticeTone, msg: string) => void;
 }) {
+  const paymentMethods: { type: string }[] = bankDetails?.paymentMethods ?? [];
   const methods: { id: string; label: string }[] = [];
 
-  if (bankDetails && Object.keys(bankDetails).length > 0) {
-    methods.push({ id: 'bank', label: tr('Банк / карта', 'Bank / karta') });
+  const methodLabels: Record<string, string> = {
+    bank: tr('Банк / перевод', 'Bank / o\'tkazma'),
+    card: tr('Банк. карта', 'Bank kartasi'),
+    payme: 'Payme',
+    click: 'Click',
+    stars: '⭐ Telegram Stars',
+  };
+
+  for (const m of paymentMethods) {
+    if (methodLabels[m.type]) {
+      methods.push({ id: m.type, label: methodLabels[m.type] });
+    }
   }
-  methods.push({ id: 'stars', label: '⭐ Telegram Stars' });
+
+  // Fallback: if no methods configured, show bank
+  if (methods.length === 0 && bankDetails && Object.keys(bankDetails).length > 0) {
+    methods.push({ id: 'bank', label: tr('Банк / перевод', 'Bank / o\'tkazma') });
+  }
 
   const [method, setMethod] = React.useState(methods[0]?.id ?? 'stars');
 
-  const bankFields = bankDetails
-    ? Object.entries(bankDetails as Record<string, string>).filter(([, v]) => v)
-    : [];
+  // Fields for the currently selected non-stars method
+  function getMethodFields(methodId: string) {
+    const methodData = paymentMethods.find((m) => m.type === methodId);
+    if (!methodData) return [];
+    return Object.entries(methodData as Record<string, string>)
+      .filter(([k, v]) => k !== 'type' && v)
+      .map(([k, v]) => [k, v] as [string, string]);
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(11,20,16,0.55)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}>
@@ -141,18 +161,21 @@ function InvoicePayModal({
           ))}
         </div>
 
-        {method === 'bank' && (
+        {method !== 'stars' && (
           <div>
-            {bankFields.length > 0 && (
-              <div style={{ marginBottom: 14, padding: '10px 12px', background: '#f8f9fa', borderRadius: 10 }}>
-                {bankFields.map(([key, val]) => (
-                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0' }}>
-                    <span style={{ color: '#607167', textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</span>
-                    <span style={{ fontWeight: 700, textAlign: 'right', maxWidth: '60%', wordBreak: 'break-all' }}>{val}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            {(() => {
+              const fields = getMethodFields(method);
+              return fields.length > 0 ? (
+                <div style={{ marginBottom: 14, padding: '10px 12px', background: '#f8f9fa', borderRadius: 10 }}>
+                  {fields.map(([key, val]) => (
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0' }}>
+                      <span style={{ color: '#607167', textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</span>
+                      <span style={{ fontWeight: 700, textAlign: 'right', maxWidth: '60%', wordBreak: 'break-all' }}>{val}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null;
+            })()}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: '#3a4f40' }}>
               {tr('Номер транзакции / чек', 'Tranzaksiya raqami / chek')}
             </label>
