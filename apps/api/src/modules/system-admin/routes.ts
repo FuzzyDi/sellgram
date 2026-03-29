@@ -379,10 +379,11 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
   fastify.patch('/billing-settings', { preHandler: [authenticateSystem] }, async (request, reply) => {
     try {
       const body = request.body as Record<string, any>;
-      const allowed = ['bank', 'account', 'recipient', 'inn', 'mfo', 'note', 'email'];
       const patch: Record<string, string> = {};
-      for (const key of allowed) {
-        if (body[key] !== undefined) patch[key] = String(body[key]);
+      for (const key of Object.keys(body)) {
+        if (/^[a-z][a-z0-9_]{0,50}$/.test(key)) {
+          patch[key] = String(body[key]);
+        }
       }
       const data = await updateSystemBillingSettings(patch);
       return { success: true, data };
