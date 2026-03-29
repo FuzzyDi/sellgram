@@ -87,17 +87,6 @@ export default async function subscriptionRoutes(fastify: FastifyInstance) {
       });
       if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
 
-      const tenant = await prisma.tenant.findUnique({
-        where: { id: request.tenantId! },
-        include: { users: { where: { role: 'OWNER' }, take: 1 } },
-      });
-      if (!tenant) return reply.status(404).send({ success: false, error: 'Tenant not found' });
-
-      const owner = tenant.users[0];
-      if (!owner?.adminTelegramId) {
-        return reply.status(400).send({ success: false, error: 'Owner Telegram account not linked. Please use /admin command in your bot first.' });
-      }
-
       const starsAmount = await getStarsPriceForPlan(invoice.plan as string);
       const planLabel = String(invoice.plan);
 
