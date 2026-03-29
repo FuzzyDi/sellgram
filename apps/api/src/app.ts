@@ -123,6 +123,13 @@ async function main() {
 
   // Global error handler: prevent leaking internal errors
   fastify.setErrorHandler((error, request, reply) => {
+    // @fastify/rate-limit passes errorResponseBuilder result as the error object —
+    // it's a plain { success, error, requestId } with no statusCode/message.
+    if (typeof (error as any).success === 'boolean' && typeof (error as any).error === 'string') {
+      const statusCode = (error as any).statusCode || 429;
+      return reply.status(statusCode).send(error);
+    }
+
     const statusCode = error.statusCode || 500;
 
     // Use request.log so the log line automatically includes reqId, method, url
