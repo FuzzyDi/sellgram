@@ -115,19 +115,28 @@ function InvoicePayModal({
   const [starsData, setStarsData] = React.useState<{ starsAmount: number; invoiceLink: string } | null>(null);
   const [starsFetching, setStarsFetching] = React.useState(false);
 
+  async function fetchStars() {
+    if (!invoice?.id || starsFetching) return;
+    setStarsFetching(true);
+    try {
+      const res = await adminApi.payWithStars(invoice.id);
+      setStarsData(res);
+    } catch (e: any) {
+      showNotice('error', e?.message || 'Ошибка');
+    } finally {
+      setStarsFetching(false);
+    }
+  }
+
+  // Auto-fetch when Stars tab is active (including on initial render if it's the default)
+  React.useEffect(() => {
+    if (method === 'stars' && !starsData) {
+      void fetchStars();
+    }
+  }, [method]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function selectMethod(id: string) {
     setMethod(id);
-    if (id === 'stars' && !starsData && invoice?.id) {
-      setStarsFetching(true);
-      try {
-        const res = await adminApi.payWithStars(invoice.id);
-        setStarsData(res);
-      } catch (e: any) {
-        showNotice('error', e?.message || 'Ошибка');
-      } finally {
-        setStarsFetching(false);
-      }
-    }
   }
 
   // Fields for the currently selected non-stars method
