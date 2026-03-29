@@ -210,6 +210,8 @@ export const adminApi = {
   getInvoices: () => request<any>('/subscription/invoices'),
   submitInvoicePayment: (id: string, paymentRef: string) =>
     request<any>(`/subscription/invoices/${id}/pay`, { method: 'PATCH', body: JSON.stringify({ paymentRef }) }),
+  payWithStars: (id: string) =>
+    request<any>(`/subscription/invoices/${id}/pay-stars`, { method: 'POST' }),
 
   uploadProductImage: async (productId: string, file: File) => {
     const formData = new FormData();

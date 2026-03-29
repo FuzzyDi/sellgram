@@ -133,6 +133,42 @@ export async function listTenantInvoices(tenantId: string) {
   });
 }
 
+// Default Stars prices per plan (configurable via billing settings: stars_pro, stars_business)
+const DEFAULT_STARS: Record<string, number> = { PRO: 600, BUSINESS: 1200 };
+
+export async function getStarsPriceForPlan(plan: string): Promise<number> {
+  try {
+    const setting = await prisma.systemSetting.findUnique({ where: { key: 'billing_payment_settings' } });
+    if (setting?.value && typeof setting.value === 'object') {
+      const s = setting.value as Record<string, string>;
+      const key = `stars_${plan.toLowerCase()}`;
+      if (s[key]) return parseInt(s[key], 10) || DEFAULT_STARS[plan] || 600;
+    }
+  } catch {}
+  return DEFAULT_STARS[plan] || 600;
+}
+
+export async function confirmStarsSubscription(invoiceId: string, chargeId: string): Promise<void> {
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, status: 'PENDING' },
+  });
+  if (!invoice) throw new Error('INVOICE_NOT_FOUND');
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  await prisma.$transaction([
+    prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { status: 'PAID', paymentRef: chargeId, paymentNote: 'Telegram Stars (XTR)', confirmedAt: now },
+    }),
+    prisma.tenant.update({
+      where: { id: invoice.tenantId },
+      data: { plan: invoice.plan, planExpiresAt: expiresAt },
+    }),
+  ]);
+}
+
 export async function submitInvoicePayment(input: {
   tenantId: string;
   id: string;

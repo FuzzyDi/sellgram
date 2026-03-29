@@ -513,6 +513,32 @@ export default function Billing() {
                 placeholder={tr('После оплаты введите номер', "To'lovdan keyin raqamni kiriting")} />
             </label>
 
+            {/* Telegram Stars payment */}
+            <div style={{ margin: '16px 0 0', padding: '12px 14px', background: '#fafaf0', border: '1px solid #e8e4c0', borderRadius: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>⭐ Telegram Stars</div>
+              <p style={{ margin: '0 0 10px', fontSize: 12, color: '#607167' }}>
+                {tr('Оплатите мгновенно через Telegram — счёт придёт в вашего бота', "Telegram orqali darhol to'lang — hisob botingizga keladi")}
+              </p>
+              <button
+                onClick={async () => {
+                  setSubmitting(true);
+                  try {
+                    const res = await adminApi.payWithStars(showInvoice.invoice.id);
+                    showNotice('success', tr(`Счёт на ${res.starsAmount} ⭐ отправлен в Telegram`, `Telegramga ${res.starsAmount} ⭐ hisob yuborildi`));
+                    setShowInvoice(null);
+                  } catch (e: any) {
+                    showNotice('error', e?.message || tr('Ошибка', 'Xatolik'));
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+                disabled={submitting}
+                style={{ background: '#f5c842', color: '#1a1a1a', border: 'none', borderRadius: 8, padding: '9px 20px', fontWeight: 700, fontSize: 13, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}
+              >
+                {submitting ? '...' : tr('Оплатить ⭐ Stars', "⭐ Stars bilan to'lash")}
+              </button>
+            </div>
+
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
               <button onClick={submitPayment} disabled={submitting || !paymentRef.trim()} className="sg-btn primary" style={{ flex: 1 }}>
                 {submitting ? '...' : tr('Отправить', 'Yuborish')}

@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import prisma from '../../lib/prisma.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 import {
   subscriptionInvoicePayBodySchema,
@@ -6,6 +7,8 @@ import {
   subscriptionUpgradeSchema,
 } from './dto.js';
 import {
+  confirmStarsSubscription,
+  getStarsPriceForPlan,
   getSubscriptionPlans,
   getTenantSubscription,
   listTenantInvoices,
@@ -72,6 +75,48 @@ export default async function subscriptionRoutes(fastify: FastifyInstance) {
       if (err.message === 'INVOICE_NOT_FOUND') {
         return reply.status(404).send({ success: false, error: 'Invoice not found' });
       }
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  fastify.post('/subscription/invoices/:id/pay-stars', { preHandler: [permissionGuard('manageBilling')] }, async (request, reply) => {
+    try {
+      const { id } = subscriptionInvoicePayParamsSchema.parse(request.params);
+      const invoice = await prisma.invoice.findFirst({
+        where: { id, tenantId: request.tenantId!, status: 'PENDING' },
+      });
+      if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
+
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: request.tenantId! },
+        include: { admins: { where: { role: 'OWNER' }, take: 1 } },
+      });
+      if (!tenant) return reply.status(404).send({ success: false, error: 'Tenant not found' });
+
+      const owner = tenant.admins[0];
+      if (!owner?.adminTelegramId) {
+        return reply.status(400).send({ success: false, error: 'Owner Telegram account not linked. Please use /admin command in your bot first.' });
+      }
+
+      const starsAmount = await getStarsPriceForPlan(invoice.plan as string);
+      const planLabel = String(invoice.plan);
+
+      const { sendStarsInvoiceToOwner } = await import('../../bot/bot-manager.js');
+      const sent = await sendStarsInvoiceToOwner({
+        tenantId: request.tenantId!,
+        telegramId: owner.adminTelegramId,
+        invoiceId: id,
+        plan: planLabel,
+        planLabel,
+        starsAmount,
+      });
+
+      if (!sent) {
+        return reply.status(400).send({ success: false, error: 'Could not send invoice via Telegram. Make sure your bot is active.' });
+      }
+
+      return { success: true, starsAmount, message: 'Invoice sent to your Telegram. Please complete payment there.' };
+    } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
     }
   });

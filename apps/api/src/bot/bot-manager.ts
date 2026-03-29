@@ -524,6 +524,31 @@ export async function registerBot(
     await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u0411\u0430\u043B\u043B\u044B \u043D\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u044B', "Ball qo'shildi") });
   });
 
+  // ── Telegram Stars subscription payment ──────────────────────────────────
+  bot.on('pre_checkout_query', async (ctx) => {
+    const payload = ctx.preCheckoutQuery.invoice_payload;
+    if (payload.startsWith('stars_sub:')) {
+      await ctx.answerPreCheckoutQuery(true);
+    } else {
+      await ctx.answerPreCheckoutQuery(false, { error_message: 'Unknown payment' });
+    }
+  });
+
+  bot.on('message:successful_payment', async (ctx) => {
+    const payment = ctx.message?.successful_payment;
+    if (!payment || !payment.invoice_payload.startsWith('stars_sub:')) return;
+    const parts = payment.invoice_payload.split(':');
+    const invoiceId = parts[1];
+    const chargeId = payment.telegram_payment_charge_id;
+    try {
+      const { confirmStarsSubscription } = await import('../modules/subscription/service.js');
+      await confirmStarsSubscription(invoiceId, chargeId);
+      await ctx.reply('✅ Оплата прошла! Тариф активирован.\n\nTo\'lov amalga oshirildi! Tarif faollashtirildi.').catch(() => {});
+    } catch (err) {
+      console.error('[Stars] Failed to confirm subscription:', err);
+    }
+  });
+
   bot.catch((err) => {
     console.error(`[Bot:${storeId}]`, err.error);
   });
@@ -1113,6 +1138,32 @@ export async function sendMessageToOwner(
   if (!instance) return false;
   try {
     await instance.bot.api.sendMessage(Number(telegramId), message, { parse_mode: 'HTML' as any });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function sendStarsInvoiceToOwner(input: {
+  tenantId: string;
+  telegramId: bigint;
+  invoiceId: string;
+  plan: string;
+  planLabel: string;
+  starsAmount: number;
+}): Promise<boolean> {
+  const instance = Array.from(bots.values()).find((b) => b.tenantId === input.tenantId);
+  if (!instance) return false;
+  try {
+    await instance.bot.api.sendInvoice(
+      Number(input.telegramId),
+      `SellGram ${input.planLabel}`,
+      `Подписка на тариф ${input.planLabel} на 30 дней / ${input.planLabel} tarifiga 30 kunlik obuna`,
+      `stars_sub:${input.invoiceId}:${input.tenantId}:${input.plan}`,
+      '',
+      'XTR',
+      [{ label: `SellGram ${input.planLabel} — 30 дней`, amount: input.starsAmount }],
+    );
     return true;
   } catch {
     return false;
