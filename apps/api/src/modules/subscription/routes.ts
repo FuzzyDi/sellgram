@@ -99,7 +99,7 @@ export default async function subscriptionRoutes(fastify: FastifyInstance) {
         starsAmount,
       });
 
-      return { success: true, starsAmount, invoiceLink };
+      return { success: true, data: { starsAmount, invoiceLink } };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
     }
