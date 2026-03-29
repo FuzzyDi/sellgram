@@ -89,11 +89,11 @@ export default async function subscriptionRoutes(fastify: FastifyInstance) {
 
       const tenant = await prisma.tenant.findUnique({
         where: { id: request.tenantId! },
-        include: { admins: { where: { role: 'OWNER' }, take: 1 } },
+        include: { users: { where: { role: 'OWNER' }, take: 1 } },
       });
       if (!tenant) return reply.status(404).send({ success: false, error: 'Tenant not found' });
 
-      const owner = tenant.admins[0];
+      const owner = tenant.users[0];
       if (!owner?.adminTelegramId) {
         return reply.status(400).send({ success: false, error: 'Owner Telegram account not linked. Please use /admin command in your bot first.' });
       }
