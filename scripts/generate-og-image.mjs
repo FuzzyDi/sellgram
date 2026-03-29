@@ -8,118 +8,116 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Font: DejaVu Sans is pre-installed on Debian and supports Cyrillic
+const FONT = "'DejaVu Sans', 'Liberation Sans', Arial, sans-serif";
+
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0d1f16"/>
-      <stop offset="100%" stop-color="#0f2b1c"/>
+      <stop offset="0%" stop-color="#e8f5ef"/>
+      <stop offset="100%" stop-color="#f0faf4"/>
     </linearGradient>
     <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#00875a"/>
-      <stop offset="100%" stop-color="#00c47a"/>
+      <stop offset="100%" stop-color="#00b376"/>
     </linearGradient>
-    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#1a3326"/>
-      <stop offset="100%" stop-color="#152a1f"/>
+    <linearGradient id="greenText" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#00875a"/>
+      <stop offset="100%" stop-color="#00b376"/>
     </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="18" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
   </defs>
 
   <!-- Background -->
   <rect width="1200" height="630" fill="url(#bg)"/>
 
-  <!-- Glow circles -->
-  <circle cx="200" cy="150" r="280" fill="#00875a" opacity="0.07"/>
-  <circle cx="1050" cy="500" r="220" fill="#00c47a" opacity="0.06"/>
-  <circle cx="600" cy="630" r="300" fill="#007a51" opacity="0.05"/>
+  <!-- Decorative circle top-right -->
+  <circle cx="1100" cy="-60" r="320" fill="#00875a" opacity="0.06"/>
+  <circle cx="80" cy="700" r="260" fill="#00875a" opacity="0.05"/>
 
-  <!-- Grid lines (subtle) -->
-  <g opacity="0.04" stroke="#fff" stroke-width="1">
-    <line x1="0" y1="210" x2="1200" y2="210"/>
-    <line x1="0" y1="420" x2="1200" y2="420"/>
-    <line x1="400" y1="0" x2="400" y2="630"/>
-    <line x1="800" y1="0" x2="800" y2="630"/>
-  </g>
+  <!-- Top accent bar -->
+  <rect x="0" y="0" width="1200" height="6" fill="url(#green)"/>
 
   <!-- Logo badge -->
-  <rect x="72" y="68" width="56" height="56" rx="16" fill="url(#green)"/>
-  <text x="100" y="106" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="22" fill="#fff">SG</text>
+  <rect x="72" y="52" width="52" height="52" rx="14" fill="url(#green)"/>
+  <text x="98" y="88" text-anchor="middle" font-family="${FONT}" font-weight="bold" font-size="20" fill="#fff">SG</text>
 
   <!-- Brand name -->
-  <text x="144" y="105" font-family="Arial,sans-serif" font-weight="900" font-size="28" fill="#fff" letter-spacing="-0.5">SellGram</text>
+  <text x="138" y="88" font-family="${FONT}" font-weight="bold" font-size="26" fill="#0f2820">SellGram</text>
 
-  <!-- Main headline -->
-  <text x="72" y="220" font-family="Arial,sans-serif" font-weight="900" font-size="72" fill="#fff" letter-spacing="-2">Магазин в Telegram</text>
-  <text x="72" y="308" font-family="Arial,sans-serif" font-weight="900" font-size="72" fill="url(#green)" letter-spacing="-2">за 5 минут</text>
+  <!-- Divider -->
+  <rect x="72" y="130" width="60" height="5" rx="3" fill="url(#green)"/>
+
+  <!-- Main headline line 1 -->
+  <text x="72" y="210" font-family="${FONT}" font-weight="bold" font-size="68" fill="#0f2820">Магазин в Telegram</text>
+
+  <!-- Main headline line 2 - green -->
+  <text x="72" y="292" font-family="${FONT}" font-weight="bold" font-size="68" fill="#00875a">за 5 минут</text>
 
   <!-- Subheading -->
-  <text x="72" y="378" font-family="Arial,sans-serif" font-weight="500" font-size="28" fill="#8ab89a">Каталог · Заказы · Payme · Click · Лояльность · Аналитика</text>
+  <text x="72" y="348" font-family="${FONT}" font-size="24" fill="#4a6b56">Каталог · Заказы · Payme · Click · Лояльность</text>
 
-  <!-- Feature cards -->
-  <rect x="72" y="430" width="200" height="88" rx="16" fill="url(#card)" stroke="#2a4a36" stroke-width="1.5"/>
-  <text x="162" y="466" text-anchor="middle" font-family="Arial,sans-serif" font-size="26">🆓</text>
-  <text x="162" y="492" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="15" fill="#fff">Бесплатно</text>
-  <text x="162" y="510" text-anchor="middle" font-family="Arial,sans-serif" font-weight="500" font-size="12" fill="#6a9a7a">навсегда</text>
+  <!-- Feature pills -->
+  <rect x="72" y="390" width="168" height="44" rx="22" fill="#00875a"/>
+  <text x="156" y="418" text-anchor="middle" font-family="${FONT}" font-weight="bold" font-size="16" fill="#fff">Бесплатно навсегда</text>
 
-  <rect x="290" y="430" width="200" height="88" rx="16" fill="url(#card)" stroke="#2a4a36" stroke-width="1.5"/>
-  <text x="390" y="466" text-anchor="middle" font-family="Arial,sans-serif" font-size="26">⚡</text>
-  <text x="390" y="492" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="15" fill="#fff">5 минут</text>
-  <text x="390" y="510" text-anchor="middle" font-family="Arial,sans-serif" font-weight="500" font-size="12" fill="#6a9a7a">до запуска</text>
+  <rect x="256" y="390" width="148" height="44" rx="22" fill="#fff" stroke="#c8e0d4" stroke-width="2"/>
+  <text x="330" y="418" text-anchor="middle" font-family="${FONT}" font-weight="bold" font-size="16" fill="#0f2820">5 мин до запуска</text>
 
-  <rect x="508" y="430" width="200" height="88" rx="16" fill="url(#card)" stroke="#2a4a36" stroke-width="1.5"/>
-  <text x="608" y="466" text-anchor="middle" font-family="Arial,sans-serif" font-size="26">📦</text>
-  <text x="608" y="492" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="15" fill="#fff">Без кода</text>
-  <text x="608" y="510" text-anchor="middle" font-family="Arial,sans-serif" font-weight="500" font-size="12" fill="#6a9a7a">не нужен сервер</text>
+  <rect x="420" y="390" width="130" height="44" rx="22" fill="#fff" stroke="#c8e0d4" stroke-width="2"/>
+  <text x="485" y="418" text-anchor="middle" font-family="${FONT}" font-weight="bold" font-size="16" fill="#0f2820">Без кода</text>
 
-  <!-- Phone mockup (right side) -->
-  <rect x="820" y="60" width="310" height="510" rx="36" fill="#1a3326" stroke="#2d5040" stroke-width="2"/>
-  <rect x="830" y="70" width="290" height="490" rx="28" fill="#0f2820"/>
-  <!-- Phone notch -->
-  <rect x="930" y="66" width="80" height="16" rx="8" fill="#1a3326"/>
+  <!-- URL bottom left -->
+  <text x="72" y="590" font-family="${FONT}" font-weight="bold" font-size="20" fill="#00875a">sellgram.uz</text>
 
-  <!-- Screen content -->
-  <!-- Store header -->
-  <rect x="842" y="100" width="266" height="60" rx="12" fill="#1d3a2c"/>
-  <rect x="854" y="112" width="36" height="36" rx="10" fill="url(#green)"/>
-  <text x="872" y="134" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="13" fill="#fff">SG</text>
-  <text x="902" y="127" font-family="Arial,sans-serif" font-weight="700" font-size="14" fill="#fff">Мой магазин</text>
-  <text x="902" y="145" font-family="Arial,sans-serif" font-weight="400" font-size="11" fill="#6a9a7a">📦 142 товара</text>
+  <!-- Phone mockup -->
+  <rect x="780" y="40" width="340" height="556" rx="40" fill="#fff" stroke="#d0e8da" stroke-width="2.5"/>
+  <rect x="792" y="52" width="316" height="532" rx="30" fill="#f4faf7"/>
+  <!-- Notch -->
+  <rect x="900" y="40" width="100" height="18" rx="9" fill="#fff"/>
 
-  <!-- Product cards -->
-  <rect x="842" y="172" width="126" height="130" rx="12" fill="#1d3a2c"/>
-  <rect x="842" y="172" width="126" height="80" rx="12" fill="#254535"/>
-  <text x="905" y="222" text-anchor="middle" font-family="Arial,sans-serif" font-size="32">👟</text>
-  <text x="855" y="268" font-family="Arial,sans-serif" font-weight="700" font-size="12" fill="#fff">Кроссовки</text>
-  <text x="855" y="285" font-family="Arial,sans-serif" font-weight="800" font-size="13" fill="#00c47a">299 000 сум</text>
+  <!-- Phone screen: header bar -->
+  <rect x="792" y="82" width="316" height="56" rx="0" fill="#fff"/>
+  <rect x="804" y="94" width="32" height="32" rx="9" fill="url(#green)"/>
+  <text x="820" y="115" text-anchor="middle" font-family="${FONT}" font-weight="bold" font-size="12" fill="#fff">SG</text>
+  <text x="846" y="107" font-family="${FONT}" font-weight="bold" font-size="14" fill="#0f2820">Мой магазин</text>
+  <text x="846" y="124" font-family="${FONT}" font-size="11" fill="#5a8a6a">142 товара</text>
+  <!-- Cart icon top right -->
+  <text x="1086" y="116" text-anchor="end" font-family="${FONT}" font-size="20" fill="#00875a">◉</text>
 
-  <rect x="982" y="172" width="126" height="130" rx="12" fill="#1d3a2c"/>
-  <rect x="982" y="172" width="126" height="80" rx="12" fill="#254535"/>
-  <text x="1045" y="222" text-anchor="middle" font-family="Arial,sans-serif" font-size="32">👗</text>
-  <text x="995" y="268" font-family="Arial,sans-serif" font-weight="700" font-size="12" fill="#fff">Платье</text>
-  <text x="995" y="285" font-family="Arial,sans-serif" font-weight="800" font-size="13" fill="#00c47a">189 000 сум</text>
+  <!-- Divider -->
+  <rect x="792" y="138" width="316" height="1" fill="#e0ede6"/>
 
-  <rect x="842" y="314" width="126" height="130" rx="12" fill="#1d3a2c"/>
-  <rect x="842" y="314" width="126" height="80" rx="12" fill="#254535"/>
-  <text x="905" y="364" text-anchor="middle" font-family="Arial,sans-serif" font-size="32">🎂</text>
-  <text x="855" y="410" font-family="Arial,sans-serif" font-weight="700" font-size="12" fill="#fff">Торт</text>
-  <text x="855" y="427" font-family="Arial,sans-serif" font-weight="800" font-size="13" fill="#00c47a">120 000 сум</text>
+  <!-- Product card 1 -->
+  <rect x="800" y="148" width="144" height="150" rx="14" fill="#fff" stroke="#e0ede6" stroke-width="1.5"/>
+  <rect x="800" y="148" width="144" height="92" rx="14" fill="#e8f5ef"/>
+  <text x="872" y="208" text-anchor="middle" font-family="${FONT}" font-size="38">👟</text>
+  <text x="814" y="258" font-family="${FONT}" font-weight="bold" font-size="13" fill="#0f2820">Кроссовки</text>
+  <text x="814" y="278" font-family="${FONT}" font-weight="bold" font-size="13" fill="#00875a">299 000 сум</text>
 
-  <rect x="982" y="314" width="126" height="130" rx="12" fill="#1d3a2c"/>
-  <rect x="982" y="314" width="126" height="80" rx="12" fill="#254535"/>
-  <text x="1045" y="364" text-anchor="middle" font-family="Arial,sans-serif" font-size="32">💐</text>
-  <text x="995" y="410" font-family="Arial,sans-serif" font-weight="700" font-size="12" fill="#fff">Цветы</text>
-  <text x="995" y="427" font-family="Arial,sans-serif" font-weight="800" font-size="13" fill="#00c47a">89 000 сум</text>
+  <!-- Product card 2 -->
+  <rect x="956" y="148" width="144" height="150" rx="14" fill="#fff" stroke="#e0ede6" stroke-width="1.5"/>
+  <rect x="956" y="148" width="144" height="92" rx="14" fill="#e8f5ef"/>
+  <text x="1028" y="208" text-anchor="middle" font-family="${FONT}" font-size="38">👗</text>
+  <text x="970" y="258" font-family="${FONT}" font-weight="bold" font-size="13" fill="#0f2820">Платье</text>
+  <text x="970" y="278" font-family="${FONT}" font-weight="bold" font-size="13" fill="#00875a">189 000 сум</text>
+
+  <!-- Product card 3 -->
+  <rect x="800" y="310" width="144" height="150" rx="14" fill="#fff" stroke="#e0ede6" stroke-width="1.5"/>
+  <rect x="800" y="310" width="144" height="92" rx="14" fill="#e8f5ef"/>
+  <text x="872" y="370" text-anchor="middle" font-family="${FONT}" font-size="38">🎂</text>
+  <text x="814" y="420" font-family="${FONT}" font-weight="bold" font-size="13" fill="#0f2820">Торт</text>
+  <text x="814" y="440" font-family="${FONT}" font-weight="bold" font-size="13" fill="#00875a">120 000 сум</text>
+
+  <!-- Product card 4 -->
+  <rect x="956" y="310" width="144" height="150" rx="14" fill="#fff" stroke="#e0ede6" stroke-width="1.5"/>
+  <rect x="956" y="310" width="144" height="92" rx="14" fill="#e8f5ef"/>
+  <text x="1028" y="370" text-anchor="middle" font-family="${FONT}" font-size="38">💐</text>
+  <text x="970" y="420" font-family="${FONT}" font-weight="bold" font-size="13" fill="#0f2820">Цветы</text>
+  <text x="970" y="440" font-family="${FONT}" font-weight="bold" font-size="13" fill="#00875a">89 000 сум</text>
 
   <!-- Cart button -->
-  <rect x="842" y="456" width="266" height="44" rx="14" fill="url(#green)"/>
-  <text x="975" y="483" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="16" fill="#fff">🛒 В корзину</text>
-
-  <!-- Domain badge bottom right -->
-  <rect x="820" y="590" width="360" height="30" rx="0" fill="transparent"/>
-  <text x="1130" y="614" text-anchor="end" font-family="Arial,sans-serif" font-weight="700" font-size="18" fill="#3a6a50">sellgram.uz</text>
+  <rect x="800" y="474" width="300" height="46" rx="14" fill="url(#green)"/>
+  <text x="950" y="503" text-anchor="middle" font-family="${FONT}" font-weight="bold" font-size="17" fill="#fff">В корзину</text>
 </svg>`;
 
 const outputPath = join(__dirname, '../apps/landing/screenshots/og-image.png');
