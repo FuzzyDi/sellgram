@@ -194,6 +194,17 @@ export async function register(input: RegisterInput) {
     return sendEmail({ to: user.email, ...tpl });
   }).catch(() => {});
 
+  // Monitor notification — fire and forget
+  import('../../modules/system-admin/service.js').then(({ sendMonitorNotification }) => {
+    return sendMonitorNotification(
+      `🆕 <b>Новый клиент зарегистрировался</b>\n\n` +
+      `👤 ${user.name}\n` +
+      `📧 ${user.email}\n` +
+      `🏪 ${tenant.name} (<code>${tenant.slug}</code>)\n\n` +
+      `🕐 ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' })}`
+    );
+  }).catch(() => {});
+
   return {
     accessToken,
     refreshToken,

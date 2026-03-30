@@ -167,6 +167,17 @@ export async function confirmStarsSubscription(invoiceId: string, chargeId: stri
       data: { plan: invoice.plan, planExpiresAt: expiresAt },
     }),
   ]);
+
+  // Monitor notification — fire and forget
+  import('../system-admin/service.js').then(({ sendMonitorNotification }) => {
+    return sendMonitorNotification(
+      `⭐ <b>Инвойс оплачен (Telegram Stars)</b>\n\n` +
+      `🏪 Tenant: <code>${invoice.tenantId}</code>\n` +
+      `📋 Plan: <b>${invoice.plan}</b>\n` +
+      `💵 Сумма: ${Number(invoice.amount)} XTR\n\n` +
+      `🕐 ${now.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' })}`
+    );
+  }).catch(() => {});
 }
 
 export async function submitInvoicePayment(input: {

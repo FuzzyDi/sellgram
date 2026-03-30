@@ -154,6 +154,16 @@ export async function updateMonitorSettings(input: Partial<MonitorSettings>): Pr
   return next;
 }
 
+export async function sendMonitorNotification(text: string): Promise<void> {
+  const { botToken, chatId } = await getMonitorSettings();
+  if (!botToken || !chatId) return;
+  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+  });
+}
+
 export async function loginSystemAdmin(input: { email: string; password: string }) {
   const admin = await prisma.systemAdmin.findUnique({ where: { email: input.email } });
   if (!admin?.isActive) {
@@ -614,6 +624,15 @@ export async function confirmSystemInvoice(input: { id: string; confirmedBy: str
       confirmedBy: input.confirmedBy,
     },
   });
+
+  // Monitor notification — fire and forget
+  sendMonitorNotification(
+    `💰 <b>Инвойс подтверждён</b>\n\n` +
+    `🏪 Tenant: <code>${invoice.tenantId}</code>\n` +
+    `📋 Plan: <b>${invoice.plan}</b>\n` +
+    `💵 Сумма: ${Number(invoice.amount).toLocaleString('ru')} UZS\n\n` +
+    `🕐 ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' })}`
+  ).catch(() => {});
 
   // Email notification to tenant owner — fire and forget
   import('../../lib/mailer.js').then(async ({ sendEmail, tplInvoiceConfirmed }) => {
