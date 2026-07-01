@@ -15,7 +15,6 @@ miniapp.sellgram.uz  → Telegram Mini App (магазин для покупат
 api.sellgram.uz      → API Backend (Fastify + Prisma + Grammy)
                        Порт: 4000
 
-admin.sellgram.uz    → Редирект на app.sellgram.uz
 ```
 
 ## Шаг 1: DNS записи в Cloudflare
@@ -26,7 +25,6 @@ admin.sellgram.uz    → Редирект на app.sellgram.uz
 # Создайте DNS роуты для tunnel
 cloudflared tunnel route dns sbg-local sellgram.uz
 cloudflared tunnel route dns sbg-local app.sellgram.uz
-cloudflared tunnel route dns sbg-local admin.sellgram.uz
 cloudflared tunnel route dns sbg-local miniapp.sellgram.uz
 cloudflared tunnel route dns sbg-local api.sellgram.uz
 ```
@@ -36,7 +34,6 @@ cloudflared tunnel route dns sbg-local api.sellgram.uz
 |-------|---------|------------------------------------------|-------|
 | CNAME | @       | 171cfcbf-...cfunnel.com                  | ✅    |
 | CNAME | app     | 171cfcbf-...cfunnel.com                  | ✅    |
-| CNAME | admin   | 171cfcbf-...cfunnel.com                  | ✅    |
 | CNAME | miniapp | 171cfcbf-...cfunnel.com                  | ✅    |
 | CNAME | api     | 171cfcbf-...cfunnel.com                  | ✅    |
 
@@ -45,7 +42,7 @@ cloudflared tunnel route dns sbg-local api.sellgram.uz
 Скопируйте `.cloudflared/config.yml` в `C:\Users\Администратор\.cloudflared\config.yml`
 
 ```powershell
-Copy-Item C:\Projects\shopbot\.cloudflared\config.yml C:\Users\Администратор\.cloudflared\config.yml -Force
+Copy-Item C:\Projects\sellgram\.cloudflared\config.yml C:\Users\Администратор\.cloudflared\config.yml -Force
 ```
 
 ## Шаг 3: Перезапуск tunnel
@@ -73,7 +70,7 @@ Invoke-RestMethod -Method PATCH -Uri "http://localhost:4000/api/admin/stores/$ST
 ## Шаг 5: Перезапуск
 
 ```powershell
-cd C:\Projects\shopbot
+cd C:\Projects\sellgram
 pnpm dev
 ```
 

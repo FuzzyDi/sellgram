@@ -111,7 +111,7 @@ What it does:
 - updates placeholder secrets in `.env.prod`
 - prepares `nginx.prod.conf` from the selected SSL mode
 - builds containers
-- starts Postgres, Redis, MinIO, `prisma-init`, API, admin, miniapp, nginx
+- starts Postgres, Redis, MinIO, `prisma-init`, API, control API, admin, miniapp, nginx
 
 ## 6. Verify
 Check status:
@@ -124,7 +124,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 Health endpoint:
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8088/health
 ```
 
 Expected response:
@@ -136,7 +136,7 @@ Expected response:
 If `SSL_MODE` is `self-signed` or `letsencrypt`, also test:
 
 ```bash
-curl -k https://localhost:8443/health
+curl -k https://localhost:8448/health
 ```
 
 ## 7. Telegram Webhook
@@ -195,13 +195,15 @@ Logs:
 cd /opt/sellgram/deploy/production
 docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f
 docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f api
+docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f control-api
 docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f nginx
 ```
 
-Restart API:
+Restart API services:
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.prod restart api
+docker compose -f docker-compose.prod.yml --env-file .env.prod restart control-api
 ```
 
 Rebuild after update:
@@ -209,6 +211,7 @@ Rebuild after update:
 ```bash
 cd /opt/sellgram/deploy/production
 docker compose -f docker-compose.prod.yml --env-file .env.prod build api admin miniapp
+docker compose -f docker-compose.prod.yml --env-file .env.prod build control-api
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ```
 

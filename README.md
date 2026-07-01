@@ -4,6 +4,7 @@ SellGram is a Telegram-first commerce platform for running a store inside Telegr
 
 The repository is a `pnpm` monorepo with:
 - `apps/api` - Fastify API, Telegram bot integration, background jobs
+- `apps/control-api` - control-plane API for system administration and diagnostics
 - `apps/admin` - React admin panel
 - `apps/miniapp` - Telegram Mini App storefront
 - `packages/shared` - shared types and constants
@@ -24,6 +25,12 @@ The repository is a `pnpm` monorepo with:
 - Vite
 - Tailwind CSS
 - MinIO
+
+## SBGCloud Direction
+
+SellGram is evolving into SBGCloud. The existing SellGram Commerce functionality remains the Telegram/MiniApp commerce module, while SBGCloud will provide cloud backoffice, POS sync, device management, catalog, loyalty, analytics, and billing.
+
+Local POS Core is a separate offline-first runtime. It must be able to sell locally without depending on cloud availability.
 
 ## Requirements
 
@@ -69,6 +76,7 @@ More details are in [docs/PLATFORM_BOOTSTRAP.md](docs/PLATFORM_BOOTSTRAP.md).
 ## Local URLs
 
 - API: `http://localhost:4000`
+- Control API: `http://localhost:4100`
 - Admin: `http://localhost:5173`
 - Mini App: `http://localhost:5174`
 - MinIO Console: `http://localhost:9001`
@@ -115,6 +123,7 @@ sellgram/
 |-- apps/
 |   |-- admin/
 |   |-- api/
+|   |-- control-api/
 |   `-- miniapp/
 |-- packages/
 |   |-- prisma/

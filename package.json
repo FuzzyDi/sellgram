@@ -8,6 +8,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "arcus:bridge": "node scripts/arcus-bridge.js",
     "db:migrate": "pnpm --filter @sellgram/prisma run migrate",
     "db:seed": "pnpm --filter @sellgram/prisma run seed",
     "db:generate": "pnpm --filter @sellgram/prisma run generate",
@@ -21,11 +22,5 @@
   "devDependencies": {
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "react": "$react",
-      "react-dom": "$react-dom"
-    }
   }
 }

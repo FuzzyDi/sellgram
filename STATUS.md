@@ -10,7 +10,6 @@
 | app.sellgram.uz | Admin panel | 80/443 |
 | miniapp.sellgram.uz | Telegram Mini App | 80/443 |
 | api.sellgram.uz | API backend | 80/443 |
-| admin.sellgram.uz | Redirect to `app.sellgram.uz` | 80/443 |
 
 ## Stack
 - API: Fastify + Prisma + Grammy + PostgreSQL + Redis + MinIO

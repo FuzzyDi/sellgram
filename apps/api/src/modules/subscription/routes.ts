@@ -128,15 +128,4 @@ export default async function subscriptionRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Данные оплаты сохранены. Ожидайте подтверждения.' };
   });
 
-  fastify.get('/subscription/admin/invoices', async () => {
-    return { success: false, error: 'Use /api/system/invoices/pending' };
-  });
-
-  fastify.patch('/subscription/admin/invoices/:id/confirm', async (_request, reply) => {
-    return reply.status(403).send({ success: false, error: 'Use /api/system/invoices/:id/confirm' });
-  });
-
-  fastify.patch('/subscription/admin/invoices/:id/reject', async (_request, reply) => {
-    return reply.status(403).send({ success: false, error: 'Use /api/system/invoices/:id/reject' });
-  });
 }

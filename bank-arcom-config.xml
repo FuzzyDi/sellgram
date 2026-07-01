@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<moduleConfig xsi:schemaLocation="http://crystals.ru/cash/settings ../../module-config.xsd"
+	settingsGroup="bank" visible="true" description="ARCOM group"
+	xmlns="http://crystals.ru/cash/settings" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+	<property key="provider" value="arcom" />
+	<property key="serviceClass" value="ru.crystals.pos.bank.arcom.BankArcomServiceImpl" />
+
+    <property key="responseTimeout" value="180000"/>
+	<property key="dailyLog" value="true" />
+	<property key="printNegativeSlip" value="false" />
+
+	<property key="processing" value="banks/arcom/" />
+
+	<property key="firstFiscalPrinterTerminalID" value=""/>
+	<property key="secondFiscalPrinterTerminalID" value=""/>
+
+	<property key="innerSlipCount" value="2"/>
+	<property key="showCardTypeSelectDialog" value="false"/>
+</moduleConfig>

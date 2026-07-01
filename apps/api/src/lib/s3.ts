@@ -2,7 +2,6 @@ import { Client as MinioClient } from 'minio';
 import { getConfig } from '../config/index.js';
 
 let s3Client: MinioClient;
-const LEGACY_S3_BUCKETS = ['sellgram', 'shopbot'] as const;
 
 export function getS3(): MinioClient {
   if (!s3Client) {
@@ -45,9 +44,8 @@ export function resolveBucketAndObjectPath(rawPath: string): { bucket: string; o
   const normalized = rawPath.replace(/^\/+/, '');
   const segments = normalized.split('/').filter(Boolean);
   const defaultBucket = getConfig().S3_BUCKET;
-  const bucketCandidates = Array.from(new Set([defaultBucket, ...LEGACY_S3_BUCKETS]));
   const maybeBucket = segments[0];
-  const explicitBucket = bucketCandidates.includes(maybeBucket as typeof bucketCandidates[number]) ? maybeBucket : null;
+  const explicitBucket = maybeBucket === defaultBucket ? maybeBucket : null;
 
   return {
     bucket: explicitBucket ?? defaultBucket,

@@ -7,10 +7,10 @@ export default defineConfig({
     port: 5173,
     allowedHosts: [
       'app.sellgram.uz',
-      'admin.sellgram.uz',
       'localhost',
     ],
     proxy: {
+      '/api/system': 'http://localhost:4100',
       '/api': 'http://localhost:4000',
       '/uploads': 'http://localhost:4000',
     },

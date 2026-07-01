@@ -76,7 +76,6 @@ async function main() {
       'https://app.sellgram.uz',
       'https://miniapp.sellgram.uz',
       'https://api.sellgram.uz',
-      'https://admin.sellgram.uz',
     ],
     credentials: true,
   });
@@ -204,7 +203,6 @@ async function main() {
   const analyticsRoutes = (await import('./modules/analytics/routes.js')).default;
   const subscriptionRoutes = (await import('./modules/subscription/routes.js')).default;
   const broadcastRoutes = (await import('./modules/broadcast/routes.js')).default;
-  const systemAdminRoutes = (await import('./modules/system-admin/routes.js')).default;
 
   await fastify.register(
     async (app) => {
@@ -227,7 +225,10 @@ async function main() {
   // ── Shop API (/api/shop/*) for Mini App ───────────────────
   const shopApiRoutes = (await import('./modules/bot/shop-api.js')).default;
   await fastify.register(shopApiRoutes, { prefix: '/api' });
-  await fastify.register(systemAdminRoutes, { prefix: '/api/system' });
+
+  // POS sync skeleton for future SBGCloud device/cloud integration.
+  const posSyncRoutes = (await import('./modules/pos-sync/routes.js')).default;
+  await fastify.register(posSyncRoutes, { prefix: '/api/pos/v1' });
 
   // ── Image proxy (MinIO → public) ────────────────────────
   fastify.get('/uploads/*', { config: { rateLimit: false } }, async (request, reply) => {
@@ -237,9 +238,7 @@ async function main() {
       const { getConfig } = await import('./config/index.js');
       const cfg = getConfig();
       const resolved = resolveBucketAndObjectPath(rawPath);
-      const tryBuckets = rawPath === resolved.objectPath
-        ? Array.from(new Set([cfg.S3_BUCKET, resolved.bucket, 'sellgram', 'shopbot']))
-        : [resolved.bucket];
+      const tryBuckets = [resolved.bucket];
 
       let stream: any = null;
       let lastErr: unknown = null;
