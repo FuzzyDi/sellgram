@@ -33,8 +33,17 @@ const activateSchema = z.object({
   activationCode: z.string().min(1),
 });
 
+// Moderate baseline for device polling endpoints — generous enough that
+// several devices behind one shop's shared IP won't trip it, but explicit
+// rather than relying only on the global default (see app.ts rateLimit
+// registration).
+const POS_DEFAULT_RATE_LIMIT = { max: 60, timeWindow: '1 minute' };
+
 export default async function posSyncRoutes(fastify: FastifyInstance) {
-  fastify.post('/pos/v1/activate', async (request, reply) => {
+  // activationCode is short and typed in by hand at the till — without a
+  // tight limit it's brute-forceable. 5/minute/IP, tighter than every other
+  // endpoint here.
+  fastify.post('/pos/v1/activate', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = activateSchema.safeParse(request.body);
     if (!body.success) {
       return reply.status(400).send({ success: false, error: 'activationCode is required' });
@@ -91,7 +100,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post('/pos/v1/heartbeat', async (request, reply) => {
+  fastify.post('/pos/v1/heartbeat', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveDevice(request.headers.authorization);
     if (!device) return unauthorized(reply);
 
@@ -101,7 +110,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     return { success: true, data: { serverTime: now.toISOString() } };
   });
 
-  fastify.get('/pos/v1/catalog/snapshot', async (request, reply) => {
+  fastify.get('/pos/v1/catalog/snapshot', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveDevice(request.headers.authorization);
     if (!device) return unauthorized(reply);
 
@@ -131,7 +140,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.get('/pos/v1/settings', async (request, reply) => {
+  fastify.get('/pos/v1/settings', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveDevice(request.headers.authorization);
     if (!device) return unauthorized(reply);
 
@@ -149,15 +158,23 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.post('/pos/v1/sale-events', async (_request, reply) => {
+  fastify.post('/pos/v1/sale-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
     return notImplemented(reply, 'sale event ingestion');
   });
 
-  fastify.post('/pos/v1/fiscal-events', async (_request, reply) => {
+  fastify.post('/pos/v1/fiscal-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
     return notImplemented(reply, 'fiscal event ingestion');
   });
 
-  fastify.post('/pos/v1/shift-events', async (_request, reply) => {
+  fastify.post('/pos/v1/shift-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
     return notImplemented(reply, 'shift event ingestion');
+  });
+
+  fastify.get('/pos/v1/commands', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
+    return notImplemented(reply, 'cloud command polling');
+  });
+
+  fastify.post('/pos/v1/commands/:id/ack', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
+    return notImplemented(reply, 'cloud command acknowledgement');
   });
 }
