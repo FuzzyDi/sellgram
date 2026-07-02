@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
     category: { findMany: vi.fn() },
     product: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), count: vi.fn() },
     store: { findUnique: vi.fn().mockResolvedValue({ botUsername: null }) },
+    tenant: { findUnique: vi.fn().mockResolvedValue({ plan: 'FREE', planExpiresAt: null }) },
     cartItem: { findMany: vi.fn() },
     productVariant: { findUnique: vi.fn() },
     deliveryZone: { findMany: vi.fn() },
@@ -137,7 +138,7 @@ describe('shop.service', () => {
   });
 
   it('returns loyalty payload', async () => {
-    mocks.prisma.customer.findUnique.mockResolvedValue({ loyaltyPoints: 125 });
+    mocks.prisma.customer.findUnique.mockResolvedValue({ loyaltyPoints: 125, totalSpent: 0 });
     mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({
       pointValue: 100,
       unitAmount: 1000,
@@ -149,8 +150,14 @@ describe('shop.service', () => {
 
     expect(result).toEqual({
       balance: 125,
-      config: { pointValue: 100, unitAmount: 1000, isEnabled: true },
+      config: { pointValue: 100, unitAmount: 1000, pointsPerUnit: undefined, isEnabled: true },
       transactions: [{ id: 'lt-1' }],
+      tier: {
+        current: { name: 'Bronze', nameUz: 'Bronza', minSpend: 0, multiplier: 1, color: '#cd7f32' },
+        next: { name: 'Silver', nameUz: 'Kumush', minSpend: 500000, multiplier: 1.5, color: '#9e9e9e' },
+        totalSpent: 0,
+        progressPct: 0,
+      },
     });
   });
 });

@@ -20,7 +20,9 @@ const mocks = vi.hoisted(() => ({
 function makeTx(overrides: Record<string, any> = {}) {
   return {
     $executeRaw: vi.fn().mockResolvedValue(1),
-    product: { findMany: vi.fn().mockResolvedValue([]) },
+    product: { findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({ stockQty: 0 }) },
+    productVariant: { update: vi.fn().mockResolvedValue({ stockQty: 0 }) },
+    stockMovement: { create: vi.fn().mockResolvedValue({}) },
     order: { findFirst: vi.fn(), create: vi.fn() },
     customer: { findUnique: vi.fn(), update: vi.fn().mockResolvedValue({}) },
     loyaltyConfig: { findUnique: vi.fn() },

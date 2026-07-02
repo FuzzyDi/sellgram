@@ -7,10 +7,17 @@ const mocks = vi.hoisted(() => ({
     product: { count: vi.fn() },
     order: { count: vi.fn() },
     deliveryZone: { count: vi.fn() },
+    systemSetting: { findMany: vi.fn().mockResolvedValue([]) },
+  },
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    setex: vi.fn(),
+    del: vi.fn(),
   },
 }));
 
 vi.mock('../lib/prisma.js', () => ({ default: mocks.prisma }));
+vi.mock('../lib/redis.js', () => ({ getRedis: () => mocks.redis, default: () => mocks.redis }));
 
 import { planGuard } from './plan-guard.js';
 
@@ -87,9 +94,9 @@ describe('planGuard', () => {
   });
 
   it('maxOrdersPerMonth uses UTC start-of-month date', async () => {
-    // FREE: maxOrdersPerMonth = 50, currently 49 — should pass
+    // FREE: maxOrdersPerMonth = 100, currently 99 — should pass
     mocks.prisma.tenant.findUnique.mockResolvedValue({ plan: 'FREE' });
-    mocks.prisma.order.count.mockResolvedValue(49);
+    mocks.prisma.order.count.mockResolvedValue(99);
     const reply = makeReply();
     await planGuard('maxOrdersPerMonth')(makeRequest('t-1'), reply);
 
@@ -103,9 +110,9 @@ describe('planGuard', () => {
   });
 
   it('returns 402 when maxOrdersPerMonth is reached', async () => {
-    // FREE: maxOrdersPerMonth = 50
+    // FREE: maxOrdersPerMonth = 100
     mocks.prisma.tenant.findUnique.mockResolvedValue({ plan: 'FREE' });
-    mocks.prisma.order.count.mockResolvedValue(50);
+    mocks.prisma.order.count.mockResolvedValue(100);
     const reply = makeReply();
     await planGuard('maxOrdersPerMonth')(makeRequest('t-1'), reply);
     expect(reply._status).toBe(402);

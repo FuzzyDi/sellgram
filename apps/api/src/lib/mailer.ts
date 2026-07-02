@@ -133,9 +133,9 @@ export function tplInvoiceConfirmed(opts: {
         `Salom, <strong>${opts.name}</strong>! To'lovingiz qabul qilindi va qayta ishlandi.`,
       ))}
       ${kvTable([
-        [bilingual('Тариф / Tarif'), `<span style="color:#059669;font-weight:800;">${planLabel}</span>`],
-        [bilingual('Сумма / Summa'), `${(opts.amount / 1000).toFixed(0)} 000 UZS`],
-        [bilingual('Активен до / Amal qilish muddati'), expires],
+        [bilingual('Тариф', 'Tarif'), `<span style="color:#059669;font-weight:800;">${planLabel}</span>`],
+        [bilingual('Сумма', 'Summa'), `${(opts.amount / 1000).toFixed(0)} 000 UZS`],
+        [bilingual('Активен до', 'Amal qilish muddati'), expires],
       ])}
       ${btn('Перейти в панель / Panelga o\'tish', opts.adminUrl)}
     `),

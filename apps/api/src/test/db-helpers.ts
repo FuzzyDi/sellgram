@@ -10,6 +10,11 @@ export const testPrisma = new PrismaClient({
  * Call in beforeEach to get a clean DB for each test.
  */
 export async function cleanDb() {
+  // order_items/purchase_order_items -> products is ON DELETE RESTRICT (intentional —
+  // see 20260702145924_revert_order_product_restrict), so they must be cleared before
+  // the Tenant delete cascades into Product, same as the production hard-delete job in app.ts.
+  await testPrisma.orderItem.deleteMany();
+  await testPrisma.purchaseOrderItem.deleteMany();
   // Cascade: Tenant -> User, Store, Product, Customer, Order, etc.
   await testPrisma.tenant.deleteMany();
   await testPrisma.systemAdmin.deleteMany();
