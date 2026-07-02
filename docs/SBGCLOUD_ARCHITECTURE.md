@@ -56,6 +56,8 @@ These are hard boundaries, not style preferences:
 - **SBGCloud is not the fiscal cash register.** It must never be the system
   of record for "did this sale get fiscalized" at the moment of sale — that
   question is answered locally, on the device, in real time.
+- **SBGCloud must not call fiscal module directly.**
+- **SBGCloud must not print receipts directly.**
 - SBGCloud must not perform local sale processing, fiscal receipt issuance,
   receipt printing, or any other action that a till needs to complete a sale
   in front of a customer.
@@ -210,21 +212,27 @@ The following models describe *intent only* — none of them exist in
 start writing to tables that don't exist. They are listed here so the
 eventual schema design has a single point of reference.
 
-| Model | Purpose |
-|---|---|
-| `PosDevice` | Identity of a physical till/tablet: which tenant/store it belongs to, its device type, current app version, and activation state. |
-| `DeviceActivation` | The pairing/activation lifecycle for a `PosDevice` — activation code issuance, redemption, expiry, revocation. |
-| `ProductUzProfile` | Uzbekistan-specific fiscal/retail attributes attached to a `Product` (tax category, unit of measurement, fiscal product code) without modifying the core `Product` model used by Sellgram Commerce. |
-| `Barcode` | One or more scannable codes (EAN-13/UPC/etc.) resolving to a `Product`/`ProductVariant`, for till-side scan lookup. |
-| `CatalogSnapshot` | A versioned, immutable export of the catalog (products, prices, barcodes) that a device downloads to operate offline; each snapshot is a point-in-time pull target, not a live feed. |
-| `PosSettings` | Device- or store-scoped POS configuration: tax rules, receipt template, allowed tenders, and similar operational settings. |
-| `SaleEvent` | An append-only record of a completed local sale as reported by a device — the cloud-side mirror of something that already happened locally, ingested idempotently by event id. |
-| `FiscalReceipt` | The fiscalization outcome for a `SaleEvent` (including the explicit "unknown" state from §10), never the trigger for fiscalization itself. |
-| `ShiftProjection` | A read-side projection of cashier shift state (opened/closed, totals) built from shift events, for reporting/reconciliation. |
-| `StockLedgerEntry` | An append-only stock movement record originating from POS sales, kept separate from (but eventually reconciled against) the existing `StockMovement` table used by Sellgram Commerce. |
-| `SyncCursor` | Per-device bookkeeping of "what has this device already pulled/pushed", so catalog/settings sync and event ingestion can resume correctly after a gap. |
-| `CloudCommand` | A narrow, non-blocking channel for SBGCloud to signal a device (e.g. "re-activate", "refresh settings") — explicitly not a channel for anything that could gate a local sale (§9). |
-| `DeviceHeartbeat` | Time-series liveness/health pings from a device, feeding monitoring (§3) and offline/online detection. |
+`PosDevice`, `DeviceActivation`, `CatalogSnapshot`, `SyncCursor` and
+`StockLedgerEntry` are the exception — they already exist (POS Sync first
+wave), so their "Key fields" column below is taken directly from
+`packages/prisma/schema.prisma`, not hypothetical. Everything else in this
+table is still intent-only.
+
+| Model | Purpose | Key fields | Written by | Read by | Risks |
+|---|---|---|---|---|---|
+| `PosDevice` | Identity of a physical till/tablet: which tenant/store it belongs to, its device type, current app version, and activation state. | `id`, `tenantId`, `storeId`, `name`, `deviceType`, `status` (PENDING/ACTIVE/SUSPENDED/REVOKED), `apiKeyHash`/`apiKeyPrefix`, `lastSeenAt` | store-admin `POST /pos-devices` (create); POS Sync `/activate` (confirms, sets credential); `/heartbeat` (`lastSeenAt`) | POS Sync device auth (`resolveDevice`, lookup by `apiKeyHash`) | Leaked `apiKeyHash` input (raw key) = device impersonation; a caller must check `status === ACTIVE`, not just "hash matches" |
+| `DeviceActivation` | The pairing/activation lifecycle for a `PosDevice` — activation code issuance, redemption, expiry, revocation. | `id`, `deviceId`, `activationCode` (unique), `status` (PENDING/CONFIRMED/EXPIRED), `expiresAt`, `confirmedAt` | store-admin `POST /pos-devices` (create, PENDING); POS Sync `/activate` (confirm or mark EXPIRED) | POS Sync `/activate` (lookup by code) | Short, hand-typed code is brute-forceable without a tight rate limit (mitigated — `/activate` is capped at 5/min/IP in `routes.ts`) |
+| `ProductUzProfile` | Uzbekistan-specific fiscal/retail attributes attached to a `Product` (tax category, unit of measurement, fiscal product code) without modifying the core `Product` model used by Sellgram Commerce. | *(future)* `productId`, tax/fiscal category code, unit of measurement | *(future)* store-admin catalog editing / import tooling | *(future)* catalog snapshot generation, Local POS Core fiscal flow | Modeling this ahead of a confirmed fiscal partner/spec risks guessing wrong — see §13 step 7 |
+| `Barcode` | One or more scannable codes (EAN-13/UPC/etc.) resolving to a `Product`/`ProductVariant`, for till-side scan lookup. | *(future)* `productId`/`variantId`, `code`, `codeType` | *(future)* store-admin catalog editing / import tooling | *(future)* catalog snapshot generation, Local POS Core scan lookup | Duplicate/conflicting codes across products in the same tenant need a uniqueness rule before this ships |
+| `CatalogSnapshot` | A versioned, immutable export of the catalog (products, prices, barcodes) that a device downloads to operate offline; each snapshot is a point-in-time pull target, not a live feed. | `id`, `tenantId`, `storeId`, `version` (Int), `payload` (Json), `createdAt` | store-admin `POST /pos-devices/catalog-snapshot` (manual trigger only — no auto-generation on product/category change yet) | POS Sync `GET /catalog/snapshot` (always latest version for the device's store) | `payload` has no size cap/pagination yet; snapshot is only as fresh as the last manual trigger |
+| `PosSettings` | Device- or store-scoped POS configuration: tax rules, receipt template, allowed tenders, and similar operational settings. | *(future)* `storeId`/`deviceId` scope, tax rules, receipt template, allowed tenders | *(future)* store-admin settings UI | *(future)* POS Sync `GET /settings` | Today `/settings` returns hardcoded `currency`/`timezone` constants, not this model — don't assume it's backed by real config yet |
+| `SaleEvent` | An append-only record of a completed local sale as reported by a device — the cloud-side mirror of something that already happened locally, ingested idempotently by event id. | *(future)* event id, `deviceId`, `tenantId`, `storeId`, line items, totals, `occurredAt` | *(future)* POS Sync `POST /sale-events` (currently 501) | *(future)* analytics, `StockLedgerEntry` reconciliation, `ShiftProjection` | Must be idempotent by event id (§11); ingestion design (batching, ordering) not started |
+| `FiscalReceipt` | The fiscalization outcome for a `SaleEvent` (including the explicit "unknown" state from §10), never the trigger for fiscalization itself. | *(future)* `saleEventId`, status (incl. UNKNOWN), fiscal reference, timestamps | *(future)* POS Sync `POST /fiscal-events` (currently 501) | *(future)* reporting/reconciliation | Must never be generated by SBGCloud itself (§10); "unknown" must not be silently treated as success or failure |
+| `ShiftProjection` | A read-side projection of cashier shift state (opened/closed, totals) built from shift events, for reporting/reconciliation. | *(future)* `deviceId`/`storeId`, shift open/close timestamps, totals | *(future)* derived from POS Sync `POST /shift-events` (currently 501) | *(future)* reporting/reconciliation | Projection logic not designed yet; must tolerate out-of-order shift events from a reconnecting device |
+| `StockLedgerEntry` | An append-only stock movement record originating from POS sales, kept separate from (but eventually reconciled against) the existing `StockMovement` table used by Sellgram Commerce. | `id`, `tenantId`, `productId`, `variantId`, `delta`, `reason` (POS_SALE/POS_ADJUSTMENT/RESTOCK/OTHER), `sourceType`, `sourceId`, `createdAt` | *(future)* POS Sync `POST /sale-events` ingestion — table exists (first wave) but nothing writes to it yet | *(future)* stock reconciliation against `StockMovement` | Reconciliation strategy against `StockMovement` is explicitly not yet defined — see §13 step 4 |
+| `SyncCursor` | Per-device bookkeeping of "what has this device already pulled/pushed", so catalog/settings sync and event ingestion can resume correctly after a gap. | `id`, `deviceId` (unique), `lastCatalogVersion`, `lastSyncAt` | POS Sync `/activate` (seeds at 0); `GET /catalog/snapshot` (updates on every pull) | *(future)* delta sync / stale-device detection | Currently write-only — nothing reads it back yet; delta sync via `?since=` is explicitly out of scope this sprint |
+| `CloudCommand` | A narrow, non-blocking channel for SBGCloud to signal a device (e.g. "re-activate", "refresh settings") — explicitly not a channel for anything that could gate a local sale (§9). | *(future)* `deviceId`, command type, payload, status, `createdAt`/`ackedAt` | *(future)* system-admin/tenant admin action | *(future)* POS Sync `GET /commands` (currently 501), acked via `POST /commands/:id/ack` (currently 501) | Must stay strictly non-blocking — never a channel for anything that could gate a local sale (§9) |
+| `DeviceHeartbeat` | Time-series liveness/health pings from a device, feeding monitoring (§3) and offline/online detection. | *(future)* `deviceId`, timestamp, app version, status | *(future)* POS Sync `POST /heartbeat` | *(future)* monitoring dashboards | No history is kept today — `/heartbeat` only updates `PosDevice.lastSeenAt` directly, no time-series table yet |
 
 ## 13. Migration roadmap
 

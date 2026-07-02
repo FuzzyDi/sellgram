@@ -249,10 +249,12 @@ describe('pos-sync.routes', () => {
   });
 
   describe('still-stubbed endpoints', () => {
-    const cases: Array<{ method: 'POST'; url: string }> = [
+    const cases: Array<{ method: 'GET' | 'POST'; url: string }> = [
       { method: 'POST', url: '/api/pos/v1/sale-events' },
       { method: 'POST', url: '/api/pos/v1/fiscal-events' },
       { method: 'POST', url: '/api/pos/v1/shift-events' },
+      { method: 'GET', url: '/api/pos/v1/commands' },
+      { method: 'POST', url: '/api/pos/v1/commands/cmd-1/ack' },
     ];
 
     for (const { method, url } of cases) {
