@@ -1,17 +1,19 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { createHash, randomBytes } from 'crypto';
+import { z } from 'zod';
+import prisma from '../../lib/prisma.js';
+import { resolveDevice } from './device-auth.js';
 
 /**
- * POS Sync API skeleton — see docs/SBGCLOUD_ARCHITECTURE.md.
+ * POS Sync API — see docs/SBGCLOUD_ARCHITECTURE.md.
  *
- * None of the backing models (PosDevice, SaleEvent, FiscalReceipt, ...) exist
- * yet, so every endpoint here is a stub that returns 501 Not Implemented.
- * This module exists so the route surface, prefix and naming are settled
- * ahead of the real implementation — it must not gain any business logic,
- * database access, or auth requirements beyond what's needed to keep that
- * contract additive and non-breaking for Sellgram Commerce.
+ * First wave only: device activation, heartbeat, catalog snapshot (manual,
+ * admin-triggered — see admin-routes.ts) and settings. Sale/fiscal/shift
+ * ingestion are intentionally still stubs (501) — pending a confirmed fiscal
+ * integration partner for Uzbekistan.
  *
- * Do not wire this up to Order/Product/prisma directly from here — POS sale
- * data is intentionally kept out of the existing commerce domain model
+ * Do not wire Order/prisma.order access into this module — POS sale data is
+ * kept out of the existing commerce domain model on purpose
  * (docs/SBGCLOUD_ARCHITECTURE.md §2, §12).
  */
 
@@ -23,21 +25,128 @@ function notImplemented(reply: FastifyReply, feature: string) {
   });
 }
 
+function unauthorized(reply: FastifyReply) {
+  return reply.status(401).send({ success: false, error: 'Invalid or missing device key' });
+}
+
+const activateSchema = z.object({
+  activationCode: z.string().min(1),
+});
+
 export default async function posSyncRoutes(fastify: FastifyInstance) {
-  fastify.post('/pos/v1/activate', async (_request, reply) => {
-    return notImplemented(reply, 'device activation');
+  fastify.post('/pos/v1/activate', async (request, reply) => {
+    const body = activateSchema.safeParse(request.body);
+    if (!body.success) {
+      return reply.status(400).send({ success: false, error: 'activationCode is required' });
+    }
+
+    const activation = await prisma.deviceActivation.findUnique({
+      where: { activationCode: body.data.activationCode },
+      include: { device: true },
+    });
+    if (!activation) {
+      return reply.status(404).send({ success: false, error: 'Invalid activation code' });
+    }
+
+    if (activation.status === 'PENDING' && activation.expiresAt < new Date()) {
+      await prisma.deviceActivation.update({ where: { id: activation.id }, data: { status: 'EXPIRED' } });
+      return reply.status(400).send({ success: false, error: 'Activation code has expired' });
+    }
+
+    if (activation.status !== 'PENDING') {
+      return reply.status(400).send({ success: false, error: 'Activation code already used or invalid' });
+    }
+
+    const raw = 'pos_' + randomBytes(32).toString('hex');
+    const apiKeyHash = createHash('sha256').update(raw).digest('hex');
+    const apiKeyPrefix = raw.slice(0, 12);
+
+    const now = new Date();
+    const [device] = await prisma.$transaction([
+      prisma.posDevice.update({
+        where: { id: activation.deviceId },
+        data: { status: 'ACTIVE', apiKeyHash, apiKeyPrefix },
+        select: { id: true, tenantId: true, storeId: true, name: true },
+      }),
+      prisma.deviceActivation.update({
+        where: { id: activation.id },
+        data: { status: 'CONFIRMED', confirmedAt: now },
+      }),
+      prisma.syncCursor.upsert({
+        where: { deviceId: activation.deviceId },
+        create: { deviceId: activation.deviceId, lastCatalogVersion: 0 },
+        update: {},
+      }),
+    ]);
+
+    return reply.status(201).send({
+      success: true,
+      data: {
+        deviceId: device.id,
+        tenantId: device.tenantId,
+        storeId: device.storeId,
+        name: device.name,
+        apiKey: raw,
+      },
+    });
   });
 
-  fastify.post('/pos/v1/heartbeat', async (_request, reply) => {
-    return notImplemented(reply, 'device heartbeat');
+  fastify.post('/pos/v1/heartbeat', async (request, reply) => {
+    const device = await resolveDevice(request.headers.authorization);
+    if (!device) return unauthorized(reply);
+
+    const now = new Date();
+    await prisma.posDevice.update({ where: { id: device.id }, data: { lastSeenAt: now } });
+
+    return { success: true, data: { serverTime: now.toISOString() } };
   });
 
-  fastify.get('/pos/v1/catalog/snapshot', async (_request, reply) => {
-    return notImplemented(reply, 'catalog snapshot');
+  fastify.get('/pos/v1/catalog/snapshot', async (request, reply) => {
+    const device = await resolveDevice(request.headers.authorization);
+    if (!device) return unauthorized(reply);
+
+    // Delta sync (query.since) is out of scope for this sprint — always
+    // return the latest snapshot for the device's store.
+    const snapshot = await prisma.catalogSnapshot.findFirst({
+      where: { tenantId: device.tenantId, storeId: device.storeId },
+      orderBy: { version: 'desc' },
+    });
+    if (!snapshot) {
+      return reply.status(404).send({ success: false, error: 'No catalog snapshot available yet' });
+    }
+
+    await prisma.syncCursor.upsert({
+      where: { deviceId: device.id },
+      create: { deviceId: device.id, lastCatalogVersion: snapshot.version, lastSyncAt: new Date() },
+      update: { lastCatalogVersion: snapshot.version, lastSyncAt: new Date() },
+    });
+
+    return {
+      success: true,
+      data: {
+        version: snapshot.version,
+        payload: snapshot.payload,
+        createdAt: snapshot.createdAt,
+      },
+    };
   });
 
-  fastify.get('/pos/v1/settings', async (_request, reply) => {
-    return notImplemented(reply, 'POS settings');
+  fastify.get('/pos/v1/settings', async (request, reply) => {
+    const device = await resolveDevice(request.headers.authorization);
+    if (!device) return unauthorized(reply);
+
+    // Minimal, honest set: there is no per-store currency/timezone field in
+    // the current schema (Sellgram Commerce is single-currency, single-TZ
+    // today — see Product.currency default and TZ in .env.example). Do not
+    // invent per-store settings storage here; revisit once PosSettings
+    // (docs/SBGCLOUD_ARCHITECTURE.md §12) actually exists.
+    return {
+      success: true,
+      data: {
+        currency: 'UZS',
+        timezone: 'Asia/Tashkent',
+      },
+    };
   });
 
   fastify.post('/pos/v1/sale-events', async (_request, reply) => {
