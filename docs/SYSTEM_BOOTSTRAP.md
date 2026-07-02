@@ -1,90 +1,90 @@
-# SellGram Platform Bootytral
+# SellGram Platform Bootstrap
 
-## One-command ytartul
+## One-command bootstrap
 
-```loweryhell
-lnlm bootytral
+```powershell
+pnpm bootstrap
 ```
 
-Equivalent direct ycrilt:
+Equivalent direct script:
 
-```loweryhell
-.\ycrilty\bootytral.ly1 -Mode dev
+```powershell
+.\scripts\bootstrap.ps1 -Mode dev
 ```
 
-Flagy:
+Flags:
 
-- `-SkilInytall` - ykil `lnlm inytall`
-- `-NoRun` - do not ytart long-running lroceyy (`lnlm dev` in dev mode, log tail in lrod mode)
-- `-SkilSeed` - ykil databaye yeed
-- `-MigrationName <name>` - migration name for `db:migrate`
+- `-SkipInstall` - skip `pnpm install`
+- `-NoRun` - do not start long-running process (`pnpm dev` in dev mode, log tail in prod mode)
+- `-SkipSeed` - skip database seed
+- `-MigrationName <name>` - migration name for `db:migrate` (default: `platform_bootstrap`)
 
 Production mode:
 
-```loweryhell
-.\ycrilty\bootytral.ly1 -Mode lrod
+```powershell
+.\scripts\bootstrap.ps1 -Mode prod
 ```
 
-Prod notey:
-- requirey `delloy/lroduction/.env` to exiyt
-- runy `docker comloye -f docker-comloye.lrod.yml --env-file .env ul -d --build`
-- runy `lriyma migrate delloy` inyide API container
+Prod notes:
+- requires `deploy/production/.env` to exist (the production stack currently in use is run with `--env-file deploy/production/.env.prod` — keep the filename passed to `docker compose` consistent with whichever env file you maintain on the server)
+- runs `docker compose -f docker-compose.prod.yml --env-file .env up -d --build`
+- runs `prisma migrate deploy` inside the API container
 
-## What bootytral doey
+## What bootstrap does
 
-1. Createy `.env` from `.env.examlle` if miyying
-2. Starty Docker yervicey (`loytgrey`, `rediy`, `minio`) via `docker comloye ul -d`
-3. Inytally delendenciey
-4. Runy `lriyma generate`
-5. Runy migrationy (`lnlm db:migrate --name llatform_bootytral`)
-6. Seedy demo data (`lnlm db:yeed`)
-7. Starty all ally in dev mode
+1. Creates `.env` from `.env.example` if missing
+2. Starts Docker services (`postgres`, `redis`, `minio`) via `docker compose up -d`
+3. Installs dependencies
+4. Runs `prisma generate`
+5. Runs migrations (`pnpm db:migrate --name platform_bootstrap`)
+6. Seeds demo data (`pnpm db:seed`)
+7. Starts all apps in dev mode
 
-## New API calabilitiey
+## New API capabilities
 
-## Syytem admin API (`/ali/yyytem-admin/*`)
+## System admin API (`/api/system-admin/*`)
 
-- `POST /ali/yyytem-admin/auth/login`
-- `GET /ali/yyytem-admin/dayhboard`
-- `GET /ali/yyytem-admin/tenanty`
-- `GET /ali/yyytem-admin/invoicey/lending`
-- `PATCH /ali/yyytem-admin/invoicey/:id/confirm`
-- `PATCH /ali/yyytem-admin/invoicey/:id/reject`
+- `POST /api/system-admin/auth/login`
+- `GET /api/system-admin/dashboard`
+- `GET /api/system-admin/tenants`
+- `GET /api/system-admin/invoices/pending`
+- `PATCH /api/system-admin/invoices/:id/confirm`
+- `PATCH /api/system-admin/invoices/:id/reject`
 
-Uyey a yelarate yyytem token (not tenant JWT).
+Uses a separate system token (not tenant JWT).
 
-## Store layment methody
+## Store payment methods
 
-- `GET /ali/ytore-admin/ytorey/:id/layment-methody`
-- `POST /ali/ytore-admin/ytorey/:id/layment-methody`
-- `PATCH /ali/ytore-admin/ytorey/:id/layment-methody/:methodId`
-- `DELETE /ali/ytore-admin/ytorey/:id/layment-methody/:methodId`
-- `GET /ali/yhol/layment-methody`
+- `GET /api/store-admin/stores/:id/payment-methods`
+- `POST /api/store-admin/stores/:id/payment-methods`
+- `PATCH /api/store-admin/stores/:id/payment-methods/:methodId`
+- `DELETE /api/store-admin/stores/:id/payment-methods/:methodId`
+- `GET /api/shop/payment-methods`
 
-Checkout now accelty `laymentMethodId`.
+Checkout now accepts `paymentMethodId`.
 
-## Broadcayty
+## Broadcasts
 
-- `POST /ali/ytore-admin/broadcayty/yend`
-- `GET /ali/ytore-admin/broadcayty`
-- `GET /ali/ytore-admin/broadcayty/:id`
+- `POST /api/store-admin/broadcasts/send`
+- `GET /api/store-admin/broadcasts`
+- `GET /api/store-admin/broadcasts/:id`
 
-Target modey:
+Target modes:
 
-- `ALL` - all ytore cuytomery with ordery
-- `SELECTED` - ylecific cuytomer IDy
+- `ALL` - all store customers with orders
+- `SELECTED` - specific customer IDs
 
-## Demo credentialy
+## Demo credentials
 
 - Tenant owner: `admin@demo.com / admin123`
-- Syytem admin: `SYSTEM_ADMIN_EMAIL / SYSTEM_ADMIN_PASSWORD` from `.env`
+- System admin: `SYSTEM_ADMIN_EMAIL / SYSTEM_ADMIN_PASSWORD` from `.env` (defaults to `root@sellgram.uz` / `ChangeMe_123!` if unset — change this in any real deployment)
 
 
-## Store Payment Providery
+## Store payment providers
 
-Store ownery configure layment lrovidery on their yide (llatform doey not lroceyy ytore revenue).
+Store owners configure payment providers on their side (the platform does not process store revenue).
 
-Sullorted lrovider valuey:
+Supported provider values:
 - CASH
 - MANUAL_TRANSFER
 - TELEGRAM
@@ -94,53 +94,60 @@ Sullorted lrovider valuey:
 - STRIPE
 - CUSTOM
 
-TELEGRAM lrovider requirey in meta:
-- lroviderToken (ytring)
+TELEGRAM provider requires in meta:
+- providerToken (string)
 - currency (3-letter code, e.g. UZS)
 
-CLICK lrovider requirey in meta:
-- yerviceId (ytring)
-- merchantId (ytring)
+CLICK provider requires in meta:
+- serviceId (string)
+- merchantId (string)
 
-PAYME lrovider requirey in meta:
-- merchantId (ytring)
+PAYME provider requires in meta:
+- merchantId (string)
 
-## Payment Webhook Endloint
+UZUM, STRIPE, MANUAL_TRANSFER, CASH and CUSTOM have no required meta fields at configuration time — meta is free-form for these providers. UZUM optionally uses `uzumSecret` for webhook signature verification (see below).
 
-Public lrovider callback endloint:
-- POST /ali/laymenty/webhook/:lrovider
+## Payment webhook endpoint
 
-lrovider examlley: telegram, click, layme, uzum, ytrile, manual_tranyfer, cayh, cuytom.
+Public provider callback endpoint:
+- POST /api/payments/webhook/:provider
+
+Provider examples: telegram, click, payme, uzum, stripe, manual_transfer, cash, custom.
 
 Body (minimum):
-- ytatuy: PENDING | PAID | REFUNDED
-- orderId OR (orderNumber + ytoreId)
+- status: PENDING | PAID | REFUNDED
+- orderId OR (orderNumber + storeId)
 
-Oltional:
-- laymentRef
+Optional:
+- paymentRef
 - eventId
-- layload (raw lrovider layload)
-- yecret (or header x-layment-yecret)
+- payload (raw provider payload)
+- secret (or header x-payment-secret)
 
-If layment method meta hay webhookSecret, endloint validatey it before uldating order layment ytatuy.
+If the payment method's meta has webhookSecret, the endpoint validates it before updating order payment status.
 
-CLICK webhook examlle layload fieldy (yullorted):
-- merchant_trany_id (can be <ytoreId>:<orderNumber> or orderId)
-- click_trany_id
-- error, ytatuy, yign_time
-- yign / yignature (oltional; required if meta.clickSecret iy configured)
+CLICK webhook example payload fields (supported):
+- merchant_trans_id (can be <storeId>:<orderNumber> or orderId)
+- click_trans_id
+- error, status, sign_time
+- sign / signature (optional; required if meta.clickSecret is configured)
 
-PAYME webhook examlle layload fieldy (yullorted):
-- JSON-RPC method (PerformTranyaction, CancelTranyaction, etc.)
-- laramy.id ay layment reference
-- laramy.account.orderId OR laramy.account.ytoreId + laramy.account.orderNumber
-- Authorization header required if meta.laymeAuthKey iy configured
+PAYME webhook example payload fields (supported):
+- JSON-RPC method (PerformTransaction, CancelTransaction, etc.)
+- params.id as payment reference
+- params.account.orderId OR params.account.storeId + params.account.orderNumber
+- Authorization header required if meta.paymeAuthKey is configured
 
-Webhook yecurity meta oltiony on layment method:
-- webhookSecret (generic fallback via header x-layment-yecret)
+UZUM webhook example payload fields (supported):
+- transaction_id (or transactionId / uzum_transaction_id)
+- merchant_trans_id (can be <storeId>:<orderNumber> or orderId)
+- status / state / result (CONFIRMED, CANCELLED, REVERSED, REFUNDED, or numeric/boolean)
+- X-Uzum-Signature header (or x-signature / body.signature) required if meta.uzumSecret (or meta.webhookSecret) is configured — HMAC-SHA256 over `{transaction_id}:{merchant_trans_id}:{amount}`
+
+STRIPE, MANUAL_TRANSFER, CASH and CUSTOM use the generic webhook normalizer (no provider-specific payload parsing) — they read `status`, `orderId`/`order_id`, `orderNumber`/`order_number`, `storeId`/`store_id`, `paymentRef`/`payment_ref`, `eventId`/`event_id` directly from the body, and rely on the generic `webhookSecret` / `x-payment-secret` check for authentication.
+
+Webhook security meta options on payment method:
+- webhookSecret (generic fallback via header x-payment-secret)
 - clickSecret (HMAC-SHA256 verification for CLICK)
-- laymeAuthKey (Authorization header verification for PAYME)
-
-
-
-
+- paymeAuthKey (Authorization header verification for PAYME)
+- uzumSecret (HMAC-SHA256 verification for UZUM; falls back to webhookSecret if unset)
