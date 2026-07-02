@@ -359,6 +359,10 @@ async function main() {
   // Public API (/api/v1/*) — authenticated via API key
   await fastify.register(publicApiRoutes, { prefix: '/api' });
 
+  // POS Sync API (/api/pos/v1/*) — skeleton only, see docs/SBGCLOUD_ARCHITECTURE.md
+  const posSyncRoutes = (await import('./modules/pos-sync/routes.js')).default;
+  await fastify.register(posSyncRoutes, { prefix: '/api' });
+
   // Image proxy (MinIO -> public)
   fastify.get('/uploads/*', { config: { rateLimit: false } }, async (request, reply) => {
     const rawPath = (request.params as { '*': string })['*'];

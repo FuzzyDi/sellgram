@@ -13,6 +13,16 @@
 - `packages/shared` — Types, constants, utils
 - `packages/prisma` — Prisma schema, migrations, seed
 
+## SBGCloud Direction
+
+SellGram is evolving into **SBGCloud**. Existing SellGram Commerce remains
+the Telegram/Mini App commerce module — unchanged, still the product in this
+repository today. SBGCloud will additionally provide a cloud backoffice,
+POS sync, device management, catalog, loyalty and analytics shared across
+channels. Local POS Core (in-store point-of-sale) is a separate,
+offline-first runtime — not part of this repository. See
+`docs/SBGCLOUD_ARCHITECTURE.md` for the full direction and boundaries.
+
 ## Quick Start
 
 ```bash
