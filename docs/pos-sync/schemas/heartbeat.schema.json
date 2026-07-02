@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "heartbeat.schema.json",
+  "title": "POS Sync API — POST /api/pos/v1/heartbeat",
+  "definitions": {
+    "FiscalHeartbeat": {
+      "type": "object",
+      "required": ["status", "terminalId", "unsentCount", "zRemaining"],
+      "properties": {
+        "status": { "type": "string", "enum": ["OK", "WARNING", "ERROR", "UNKNOWN"] },
+        "terminalId": { "type": "string" },
+        "unsentCount": { "type": "integer", "minimum": 0 },
+        "zRemaining": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "PrinterHeartbeat": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["OK", "ERROR", "UNKNOWN"] }
+      },
+      "additionalProperties": false
+    },
+    "NetworkHeartbeat": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["ONLINE", "OFFLINE"] }
+      },
+      "additionalProperties": false
+    },
+    "HeartbeatRequest": {
+      "type": "object",
+      "required": [
+        "deviceId", "localTime", "appVersion", "localCoreVersion",
+        "shiftState", "unsyncedEvents", "fiscal", "printer", "network"
+      ],
+      "properties": {
+        "deviceId": { "type": "string" },
+        "localTime": { "type": "string", "format": "date-time" },
+        "appVersion": { "type": "string" },
+        "localCoreVersion": { "type": "string" },
+        "shiftState": { "type": "string", "enum": ["CLOSED", "OPEN", "CLOSING", "ERROR"] },
+        "unsyncedEvents": { "type": "integer", "minimum": 0 },
+        "fiscal": { "$ref": "#/definitions/FiscalHeartbeat" },
+        "printer": { "$ref": "#/definitions/PrinterHeartbeat" },
+        "network": { "$ref": "#/definitions/NetworkHeartbeat" }
+      },
+      "additionalProperties": false
+    },
+    "HeartbeatResponseData": {
+      "type": "object",
+      "required": ["serverTime", "licenseStatus", "catalogVersion", "settingsVersion", "hasCommands"],
+      "properties": {
+        "serverTime": { "type": "string", "format": "date-time" },
+        "licenseStatus": { "type": "string", "enum": ["ACTIVE", "GRACE_PERIOD", "EXPIRED", "BLOCKED"] },
+        "catalogVersion": { "type": "integer", "minimum": 0 },
+        "settingsVersion": { "type": "integer", "minimum": 0 },
+        "hasCommands": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "HeartbeatResponse": {
+      "type": "object",
+      "required": ["success", "data"],
+      "properties": {
+        "success": { "const": true },
+        "data": { "$ref": "#/definitions/HeartbeatResponseData" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

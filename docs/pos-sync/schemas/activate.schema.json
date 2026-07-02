@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "activate.schema.json",
+  "title": "POS Sync API — POST /api/pos/v1/activate",
+  "definitions": {
+    "ActivateRequest": {
+      "type": "object",
+      "required": ["activationCode", "deviceFingerprint", "deviceName", "deviceType", "appVersion"],
+      "properties": {
+        "activationCode": { "type": "string", "minLength": 1 },
+        "deviceFingerprint": { "type": "string", "minLength": 1 },
+        "deviceName": { "type": "string", "minLength": 1 },
+        "deviceType": { "type": "string", "enum": ["WINDOWS", "ANDROID", "LANDI", "WEB"] },
+        "appVersion": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "ActivateResponse": {
+      "type": "object",
+      "required": [
+        "success", "tenantId", "storeId", "deviceId",
+        "accessToken", "refreshToken", "catalogVersion", "settingsVersion"
+      ],
+      "properties": {
+        "success": { "const": true },
+        "tenantId": { "type": "string" },
+        "storeId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "accessToken": { "type": "string" },
+        "refreshToken": { "type": "string" },
+        "catalogVersion": { "type": "integer", "minimum": 0 },
+        "settingsVersion": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

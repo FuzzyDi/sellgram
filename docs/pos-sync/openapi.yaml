@@ -1,0 +1,254 @@
+openapi: 3.0.3
+info:
+  title: POS Sync API
+  version: "1.0.0"
+  description: >
+    Contract between SBGCloud (this repository) and SBG Lite POS (a separate
+    repository, local offline-first till software). See
+    ../POS_SYNC_API.md for the full narrative contract this file mirrors —
+    that document is the source of truth; this file is a machine-readable
+    restatement of the same endpoints for client/server code generation.
+    Nothing in this file has been used to change the current server
+    implementation (apps/api/src/modules/pos-sync/routes.ts) — see
+    POS_SYNC_API.md §21 for the gap between this contract and that code.
+servers:
+  - url: /api/pos/v1
+
+tags:
+  - name: activation
+  - name: sync
+  - name: events
+  - name: commands
+
+paths:
+  /activate:
+    post:
+      tags: [activation]
+      summary: Exchange a one-time activation code for a device credential
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/activate.schema.json#/definitions/ActivateRequest'
+      responses:
+        '201':
+          description: Device activated
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/activate.schema.json#/definitions/ActivateResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+
+  /heartbeat:
+    post:
+      tags: [sync]
+      summary: Liveness/health signal from an active device
+      security: [{ deviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/heartbeat.schema.json#/definitions/HeartbeatRequest'
+      responses:
+        '200':
+          description: Heartbeat acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/heartbeat.schema.json#/definitions/HeartbeatResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+
+  /catalog/snapshot:
+    get:
+      tags: [sync]
+      summary: Latest (or delta, future) catalog snapshot for the device's store
+      security: [{ deviceBearer: [] }]
+      parameters:
+        - name: storeId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: sinceVersion
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Snapshot
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog-snapshot.schema.json#/definitions/CatalogSnapshotEnvelope'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /settings:
+    get:
+      tags: [sync]
+      summary: Store/device settings snapshot
+      security: [{ deviceBearer: [] }]
+      responses:
+        '200':
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/settings.schema.json#/definitions/SettingsEnvelope'
+        '401':
+          $ref: '#/components/responses/Error'
+
+  /sale-events:
+    post:
+      tags: [events]
+      summary: Ingest a sale lifecycle event (idempotent)
+      security: [{ deviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/sale-event.schema.json#/definitions/SaleEvent'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '501':
+          $ref: '#/components/responses/Error'
+
+  /fiscal-events:
+    post:
+      tags: [events]
+      summary: Ingest a fiscal-module-level event (idempotent)
+      security: [{ deviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/fiscal-event.schema.json#/definitions/FiscalEvent'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '501':
+          $ref: '#/components/responses/Error'
+
+  /shift-events:
+    post:
+      tags: [events]
+      summary: Ingest a cashier shift event (idempotent)
+      security: [{ deviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/shift-event.schema.json#/definitions/ShiftEvent'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '501':
+          $ref: '#/components/responses/Error'
+
+  /stock-events:
+    post:
+      tags: [events]
+      summary: >
+        Proposed — non-sale stock movement (adjustment/restock). Not yet
+        implemented even as a stub. See POS_SYNC_API.md §14.
+      security: [{ deviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/stock-event.schema.json#/definitions/StockEvent'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /commands:
+    get:
+      tags: [commands]
+      summary: Poll for pending cloud commands targeting this device
+      security: [{ deviceBearer: [] }]
+      responses:
+        '200':
+          description: Pending commands
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/cloud-command.schema.json#/definitions/CommandListEnvelope'
+        '401':
+          $ref: '#/components/responses/Error'
+        '501':
+          $ref: '#/components/responses/Error'
+
+  /commands/{id}/ack:
+    post:
+      tags: [commands]
+      summary: Acknowledge a delivered command (idempotent by id)
+      security: [{ deviceBearer: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/cloud-command.schema.json#/definitions/CommandAckRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Error'
+        '501':
+          $ref: '#/components/responses/Error'
+
+components:
+  securitySchemes:
+    deviceBearer:
+      type: http
+      scheme: bearer
+      description: Device access token issued by POST /activate.
+  responses:
+    Success:
+      description: Generic success envelope
+      content:
+        application/json:
+          schema:
+            $ref: './schemas/envelope.schema.json#/definitions/SuccessEnvelope'
+    Error:
+      description: Generic error envelope
+      content:
+        application/json:
+          schema:
+            $ref: './schemas/envelope.schema.json#/definitions/ErrorEnvelope'

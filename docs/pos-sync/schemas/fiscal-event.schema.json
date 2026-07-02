@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "fiscal-event.schema.json",
+  "title": "POS Sync API — POST /api/pos/v1/fiscal-events",
+  "definitions": {
+    "FiscalEvent": {
+      "type": "object",
+      "required": ["deviceId", "storeId", "localId", "eventType", "idempotencyKey", "occurredAt"],
+      "properties": {
+        "deviceId": { "type": "string" },
+        "storeId": { "type": "string" },
+        "localId": { "type": "string", "description": "e.g. FISC-000001" },
+        "localSaleId": { "type": "string", "description": "Optional correlation to a sale event, when applicable." },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "FISCAL_STARTED", "FISCAL_SUCCESS", "FISCAL_FAILED",
+            "FISCAL_UNKNOWN", "FISCAL_RECOVERED", "Z_REPORT_CLOSED"
+          ]
+        },
+        "idempotencyKey": { "type": "string", "pattern": "^[^:]+:fiscal:[^:]+:[A-Z_]+$" },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "details": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

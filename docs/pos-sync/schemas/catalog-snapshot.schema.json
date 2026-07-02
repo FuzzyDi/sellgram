@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "catalog-snapshot.schema.json",
+  "title": "POS Sync API — GET /api/pos/v1/catalog/snapshot",
+  "definitions": {
+    "CatalogSnapshotData": {
+      "type": "object",
+      "required": ["version", "checksum", "full", "categories", "products", "barcodes", "uzProfiles"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "checksum": { "type": "string" },
+        "full": { "type": "boolean" },
+        "categories": { "type": "array", "items": { "type": "object" } },
+        "products": { "type": "array", "items": { "type": "object" } },
+        "barcodes": { "type": "array", "items": { "type": "object" } },
+        "uzProfiles": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    "CatalogSnapshotEnvelope": {
+      "type": "object",
+      "required": ["success", "data"],
+      "properties": {
+        "success": { "const": true },
+        "data": { "$ref": "#/definitions/CatalogSnapshotData" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

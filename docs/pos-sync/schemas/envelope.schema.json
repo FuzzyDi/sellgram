@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "envelope.schema.json",
+  "title": "POS Sync API — common response envelope",
+  "definitions": {
+    "SuccessEnvelope": {
+      "type": "object",
+      "required": ["success", "data", "requestId"],
+      "properties": {
+        "success": { "const": true },
+        "data": { "type": "object" },
+        "requestId": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "ErrorEnvelope": {
+      "type": "object",
+      "required": ["success", "error", "requestId"],
+      "properties": {
+        "success": { "const": false },
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": { "type": "string" },
+            "message": { "type": "string" },
+            "details": { "type": "object" }
+          },
+          "additionalProperties": false
+        },
+        "requestId": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "shift-event.schema.json",
+  "title": "POS Sync API — POST /api/pos/v1/shift-events",
+  "definitions": {
+    "ShiftEvent": {
+      "type": "object",
+      "required": ["deviceId", "storeId", "localShiftId", "eventType", "idempotencyKey", "occurredAt"],
+      "properties": {
+        "deviceId": { "type": "string" },
+        "storeId": { "type": "string" },
+        "localShiftId": { "type": "string", "description": "e.g. SHIFT-000001" },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "SHIFT_OPENED", "SHIFT_CLOSED", "X_REPORT_PRINTED",
+            "Z_REPORT_CLOSED", "CASH_IN", "CASH_OUT"
+          ]
+        },
+        "idempotencyKey": { "type": "string", "pattern": "^[^:]+:shift:[^:]+:[A-Z_]+$" },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "amount": { "type": "number", "description": "Relevant for CASH_IN/CASH_OUT." },
+        "totals": { "type": "object", "description": "Relevant for SHIFT_CLOSED/Z_REPORT_CLOSED." }
+      },
+      "additionalProperties": false
+    }
+  }
+}
