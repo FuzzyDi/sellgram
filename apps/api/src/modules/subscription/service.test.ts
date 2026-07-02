@@ -8,12 +8,19 @@ const mocks = vi.hoisted(() => ({
     order: { count: vi.fn() },
     deliveryZone: { count: vi.fn() },
     invoice: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+    systemSetting: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: vi.fn(),
+  },
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    setex: vi.fn(),
+    del: vi.fn(),
   },
   getConfig: vi.fn(),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
+vi.mock('../../lib/redis.js', () => ({ getRedis: () => mocks.redis, default: () => mocks.redis }));
 vi.mock('../../config/index.js', () => ({ getConfig: mocks.getConfig }));
 
 import {

@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   prisma: {
-    product: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+    product: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     category: { findFirst: vi.fn() },
     productVariant: { findFirst: vi.fn(), update: vi.fn() },
     productImage: { count: vi.fn(), create: vi.fn(), findFirst: vi.fn(), delete: vi.fn() },
+    stockMovement: { create: vi.fn().mockResolvedValue({}) },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
@@ -181,7 +182,8 @@ describe('product.routes', () => {
 
   describe('PATCH /products/:id/stock', () => {
     it('updates product stock directly', async () => {
-      mocks.prisma.product.updateMany.mockResolvedValue({ count: 1 });
+      mocks.prisma.product.findFirst.mockResolvedValue({ id: 'p-1', stockQty: 5 });
+      mocks.prisma.product.update.mockResolvedValue({ id: 'p-1', stockQty: 50 });
       const app = await buildApp();
       const response = await app.inject({
         method: 'PATCH',
@@ -189,9 +191,9 @@ describe('product.routes', () => {
         payload: { qty: 50 },
       });
       expect(response.statusCode).toBe(200);
-      expect(mocks.prisma.product.updateMany).toHaveBeenCalledWith(
+      expect(mocks.prisma.product.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ tenantId: 'tenant-1' }),
+          where: { id: 'p-1' },
           data: { stockQty: 50 },
         })
       );

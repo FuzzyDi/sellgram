@@ -48,7 +48,7 @@ describe('shop-auth', () => {
     mocks.prisma.store.findUnique.mockResolvedValue({ id: 's-1', isActive: true, tenantId: 't-1', botToken: 'enc' });
     mocks.decrypt.mockReturnValue('plain-token');
     mocks.validateInitData.mockReturnValue({ id: 123, username: 'u' });
-    mocks.prisma.customer.upsert.mockResolvedValue({ id: 'c-1' });
+    mocks.prisma.customer.upsert.mockResolvedValue({ id: 'c-1', createdAt: new Date('2020-01-01T00:00:00Z') });
 
     await telegramShopAuth(request, reply as any);
 

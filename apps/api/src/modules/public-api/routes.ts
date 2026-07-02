@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { createHash } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+import { updateOrderStatus } from '../order/order.service.js';
 
 async function resolveApiKey(authHeader: string | undefined): Promise<{ tenantId: string } | null> {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -38,7 +39,7 @@ export default async function publicApiRoutes(fastify: FastifyInstance) {
     const limit = Math.min(100, Math.max(1, parseInt(qs.limit) || 20));
     const skip = (page - 1) * limit;
 
-    const where: any = { tenantId, isArchived: false };
+    const where: any = { tenantId, isActive: true };
     if (qs.categoryId) where.categoryId = qs.categoryId;
     if (qs.search) {
       where.OR = [
@@ -60,14 +61,13 @@ export default async function publicApiRoutes(fastify: FastifyInstance) {
           sku: true,
           description: true,
           price: true,
-          comparePrice: true,
-          qty: true,
-          isVisible: true,
+          stockQty: true,
+          isActive: true,
           categoryId: true,
           category: { select: { id: true, name: true } },
           images: true,
           variants: {
-            select: { id: true, name: true, price: true, qty: true, sku: true },
+            select: { id: true, name: true, price: true, stockQty: true, sku: true },
           },
           createdAt: true,
           updatedAt: true,
@@ -82,10 +82,10 @@ export default async function publicApiRoutes(fastify: FastifyInstance) {
     const tenantId = (request as any).apiTenantId as string;
     const { id } = request.params as { id: string };
     const product = await prisma.product.findFirst({
-      where: { id, tenantId, isArchived: false },
+      where: { id, tenantId, isActive: true },
       include: {
         category: { select: { id: true, name: true } },
-        variants: { select: { id: true, name: true, price: true, qty: true, sku: true } },
+        variants: { select: { id: true, name: true, price: true, stockQty: true, sku: true } },
       },
     });
     if (!product) return reply.status(404).send({ success: false, error: 'Not found' });
@@ -125,8 +125,7 @@ export default async function publicApiRoutes(fastify: FastifyInstance) {
           deliveryPrice: true,
           paymentMethod: true,
           paymentStatus: true,
-          customerName: true,
-          customerPhone: true,
+          customer: { select: { firstName: true, lastName: true, phone: true } },
           deliveryAddress: true,
           note: true,
           createdAt: true,
@@ -180,9 +179,22 @@ export default async function publicApiRoutes(fastify: FastifyInstance) {
     const existing = await prisma.order.findFirst({ where: { id, tenantId }, select: { id: true } });
     if (!existing) return reply.status(404).send({ success: false, error: 'Not found' });
 
-    const updated = await prisma.order.update({
+    try {
+      await updateOrderStatus({
+        orderId: id,
+        tenantId,
+        actorUserId: 'api',
+        status: body.data.status,
+      });
+    } catch (err: any) {
+      if (typeof err?.message === 'string' && err.message.startsWith('BAD_TRANSITION:')) {
+        return reply.status(400).send({ success: false, error: 'Invalid status transition' });
+      }
+      throw err;
+    }
+
+    const updated = await prisma.order.findUniqueOrThrow({
       where: { id },
-      data: { status: body.data.status },
       select: { id: true, orderNumber: true, status: true, updatedAt: true },
     });
     return { success: true, data: updated };

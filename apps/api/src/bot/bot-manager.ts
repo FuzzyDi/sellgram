@@ -422,7 +422,7 @@ export async function registerBot(
 
     const order = await prisma.order.findFirst({
       where: { id: orderId, tenantId },
-      include: { items: true, customer: true },
+      select: { id: true, status: true, trackingNumber: true },
     });
     if (!order) {
       await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u0417\u0430\u043A\u0430\u0437 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D', 'Buyurtma topilmadi') });
@@ -435,53 +435,31 @@ export async function registerBot(
       return;
     }
 
-    const updateData: any = { status: newStatus };
-    if (newStatus === 'SHIPPED') updateData.trackingNumber = order.trackingNumber || `TRK-${Date.now()}`;
-    if (newStatus === 'CANCELLED') updateData.cancelReason = '\u041E\u0442\u043C\u0435\u043D\u0435\u043D\u043E \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u043E\u043C';
-
-    // Wrap stock check + decrement + status update in a single transaction so concurrent
-    // admin clicks cannot both decrement stock or double-confirm the order.
-    let txError: string | null = null;
-    await prisma.$transaction(async (tx: any) => {
-      // Re-check current status inside the transaction to guard against double-confirm.
-      const fresh = await tx.order.findUnique({ where: { id: order.id }, select: { status: true } });
-      if (!fresh || fresh.status !== order.status) {
-        txError = 'STALE';
-        throw new Error('STALE');
-      }
-
-      if (newStatus === 'CONFIRMED' || newStatus === 'PREPARING') {
-        for (const item of order.items) {
-          const product = await tx.product.findUnique({ where: { id: item.productId } });
-          if (!product || product.stockQty < item.qty) {
-            txError = `STOCK:${item.name}`;
-            throw new Error(txError);
-          }
-        }
-      }
-
-      if (newStatus === 'CONFIRMED') {
-        for (const item of order.items) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { stockQty: { decrement: item.qty } },
-          });
-        }
-      }
-
-      await tx.order.update({ where: { id: order.id }, data: updateData });
-    });
-
-    // TypeScript doesn't track mutations inside async callbacks, so we cast to
-    // re-inform the type checker that txError may have been set inside the transaction.
-    const txErrMsg = txError as string | null;
-    if (txErrMsg) {
-      if (txErrMsg === 'STALE') {
+    // Delegate to the same transition logic used by the store-admin HTTP route
+    // (order.service.ts::updateOrderStatus) so stock decrement/restore, loyalty
+    // points, and the optimistic-concurrency guard live in exactly one place \u2014
+    // stock was already reserved at checkout, so this must never decrement again.
+    try {
+      await updateOrderStatus({
+        orderId: order.id,
+        tenantId,
+        actorUserId: `telegram:${ctx.from.id}`,
+        status: newStatus,
+        trackingNumber: newStatus === 'SHIPPED' ? (order.trackingNumber || `TRK-${Date.now()}`) : undefined,
+        cancelReason: newStatus === 'CANCELLED' ? '\u041E\u0442\u043C\u0435\u043D\u0435\u043D\u043E \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u043E\u043C' : undefined,
+      });
+    } catch (err: any) {
+      const msg = typeof err?.message === 'string' ? err.message : '';
+      if (msg === 'ORDER_CONCURRENT_MODIFICATION' || msg === 'ORDER_NOT_FOUND') {
         await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u0423\u0436\u0435 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D\u043E', 'Allaqachon qayta ishlangan') });
         return;
       }
-      if (txErrMsg.startsWith('STOCK:')) {
-        const itemName = txErrMsg.slice(6);
+      if (msg.startsWith('BAD_TRANSITION:')) {
+        await ctx.answerCallbackQuery({ text: tCtx(ctx, '\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0439 \u043F\u0435\u0440\u0435\u0445\u043E\u0434 \u0441\u0442\u0430\u0442\u0443\u0441\u0430', "Noto'g'ri status o'tishi") });
+        return;
+      }
+      if (msg.startsWith('INSUFFICIENT_STOCK:')) {
+        const itemName = msg.slice('INSUFFICIENT_STOCK:'.length);
         await ctx.answerCallbackQuery({ text: tCtx(ctx, `\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u043E\u0441\u0442\u0430\u0442\u043A\u0430: ${itemName}`, `${itemName} uchun qoldiq yetarli emas`) });
         return;
       }
@@ -726,7 +704,7 @@ async function downgradeExpiredPlans(): Promise<void> {
   }
 
   if (expired.length > 0) {
-    fastify.log.info(`Downgraded ${expired.length} expired tenant(s) to FREE`);
+    console.log(`[BotManager] Downgraded ${expired.length} expired tenant(s) to FREE`);
   }
 }
 

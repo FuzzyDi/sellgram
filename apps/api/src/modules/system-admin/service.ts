@@ -1077,7 +1077,7 @@ export async function sendReminderToTenant(tenantId: string): Promise<{ sent: bo
   if (admin?.adminTelegramId) {
     const expires = tenant.planExpiresAt?.toLocaleDateString('ru-RU') ?? '—';
     const message = `⚠️ <b>Напоминание о продлении</b>\n\nТариф <b>${tenant.plan}</b> для магазина «${tenant.name}» истекает через <b>${daysLeft} дн.</b> (${expires}).\n\nПродлите подписку в панели управления: Тарифы → Выбрать тариф → Оплатить.`;
-    const { sendMessageToOwner } = await import('../../../bot/bot-manager.js');
+    const { sendMessageToOwner } = await import('../../bot/bot-manager.js');
     telegramSent = await sendMessageToOwner(tenantId, admin.adminTelegramId, message);
   }
 
@@ -1087,8 +1087,8 @@ export async function sendReminderToTenant(tenantId: string): Promise<{ sent: bo
     select: { email: true, name: true },
   });
   if (owner && tenant.planExpiresAt) {
-    const { sendEmail, tplPlanExpiring } = await import('../../../lib/mailer.js');
-    const { getConfig } = await import('../../../config/index.js');
+    const { sendEmail, tplPlanExpiring } = await import('../../lib/mailer.js');
+    const { getConfig } = await import('../../config/index.js');
     const { ADMIN_URL } = getConfig();
     const tpl = tplPlanExpiring({ name: owner.name, plan: tenant.plan, daysLeft, expiresAt: tenant.planExpiresAt, adminUrl: ADMIN_URL });
     sendEmail({ to: owner.email, ...tpl }).catch(() => {});

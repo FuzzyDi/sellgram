@@ -459,7 +459,15 @@ async function main() {
         select: { id: true },
       });
       for (const t of stale) {
-        await prisma.tenant.delete({ where: { id: t.id } });
+        // order_items/purchase_order_items -> products is ON DELETE RESTRICT (by design —
+        // a product hard-delete must never silently wipe order history). Tenant cascades
+        // straight to Product, so historical line items for this tenant must be removed
+        // explicitly first, or the delete below fails with a FK violation.
+        await prisma.$transaction([
+          prisma.orderItem.deleteMany({ where: { order: { tenantId: t.id } } }),
+          prisma.purchaseOrderItem.deleteMany({ where: { purchaseOrder: { tenantId: t.id } } }),
+          prisma.tenant.delete({ where: { id: t.id } }),
+        ]);
         fastify.log.info(`Hard-deleted tenant ${t.id} (30-day retention expired)`);
       }
     } catch (err: any) {
@@ -482,61 +490,6 @@ async function main() {
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
-
-  // Idempotent schema bootstrap (ensures suppliers table & supplierId column always exist)
-  try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "suppliers" (
-        "id" TEXT NOT NULL,
-        "tenantId" TEXT NOT NULL,
-        "name" TEXT NOT NULL,
-        "contactName" TEXT,
-        "phone" TEXT,
-        "email" TEXT,
-        "address" TEXT,
-        "note" TEXT,
-        "isActive" BOOLEAN NOT NULL DEFAULT true,
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT "suppliers_pkey" PRIMARY KEY ("id")
-      );
-    `);
-    await prisma.$executeRawUnsafe(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename='suppliers' AND indexname='suppliers_tenantId_idx') THEN
-          CREATE INDEX "suppliers_tenantId_idx" ON "suppliers"("tenantId");
-        END IF;
-      END $$;
-    `);
-    await prisma.$executeRawUnsafe(`
-      DO $$ BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.table_constraints
-          WHERE constraint_name='suppliers_tenantId_fkey'
-        ) THEN
-          ALTER TABLE "suppliers" ADD CONSTRAINT "suppliers_tenantId_fkey"
-            FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-        END IF;
-      END $$;
-    `);
-    await prisma.$executeRawUnsafe(`
-      ALTER TABLE "purchase_orders" ADD COLUMN IF NOT EXISTS "supplierId" TEXT;
-    `);
-    await prisma.$executeRawUnsafe(`
-      DO $$ BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.table_constraints
-          WHERE constraint_name='purchase_orders_supplierId_fkey'
-        ) THEN
-          ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_supplierId_fkey"
-            FOREIGN KEY ("supplierId") REFERENCES "suppliers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-        END IF;
-      END $$;
-    `);
-    fastify.log.info('Schema bootstrap: suppliers table verified');
-  } catch (err: any) {
-    fastify.log.error(`Schema bootstrap failed: ${err.message}`);
-  }
 
   // Start
   try {

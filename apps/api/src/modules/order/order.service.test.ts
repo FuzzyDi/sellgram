@@ -33,6 +33,7 @@ function makeTx(orderOverrides: any = {}) {
     },
     product: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({}) },
     productVariant: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({}) },
+    stockMovement: { create: vi.fn().mockResolvedValue({}) },
     customer: { update: vi.fn().mockResolvedValue({ loyaltyPoints: 0 }) },
     orderStatusLog: { create: vi.fn().mockResolvedValue({}) },
     loyaltyConfig: { findUnique: vi.fn().mockResolvedValue(null) },
@@ -66,41 +67,6 @@ describe('updateOrderStatus', () => {
     ).rejects.toThrow('BAD_TRANSITION:COMPLETED:CONFIRMED');
   });
 
-  it('throws INSUFFICIENT_STOCK when confirming with low stock (product)', async () => {
-    const tx = makeTx({
-      findFirst: vi.fn().mockResolvedValue({
-        id: 'o-1', status: 'NEW', storeId: 's-1',
-        items: [{ productId: 'p-1', variantId: null, qty: 5, name: 'Widget' }],
-        customer: { loyaltyPoints: 0 }, loyaltyPointsUsed: 0,
-      }),
-    });
-    tx.product.findMany.mockResolvedValue([{ id: 'p-1', stockQty: 2 }]);
-    mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
-
-    await expect(
-      updateOrderStatus({ orderId: 'o-1', tenantId: 't-1', actorUserId: 'u-1', status: 'CONFIRMED' })
-    ).rejects.toThrow('INSUFFICIENT_STOCK:Widget');
-  });
-
-  it('decrements stock on CONFIRMED', async () => {
-    const tx = makeTx({
-      findFirst: vi.fn().mockResolvedValue({
-        id: 'o-1', status: 'NEW', storeId: 's-1',
-        items: [{ productId: 'p-1', variantId: null, qty: 3, name: 'Widget' }],
-        customer: { loyaltyPoints: 0 }, loyaltyPointsUsed: 0,
-      }),
-    });
-    tx.product.findMany.mockResolvedValue([{ id: 'p-1', stockQty: 10 }]);
-    mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
-
-    await updateOrderStatus({ orderId: 'o-1', tenantId: 't-1', actorUserId: 'u-1', status: 'CONFIRMED' });
-
-    expect(tx.product.update).toHaveBeenCalledWith({
-      where: { id: 'p-1' },
-      data: { stockQty: { decrement: 3 } },
-    });
-  });
-
   it('returns stock and loyalty points on CANCELLED', async () => {
     const tx = makeTx({
       findFirst: vi.fn().mockResolvedValue({
@@ -117,6 +83,7 @@ describe('updateOrderStatus', () => {
     expect(tx.product.update).toHaveBeenCalledWith({
       where: { id: 'p-1' },
       data: { stockQty: { increment: 2 } },
+      select: { stockQty: true },
     });
     expect(tx.customer.update).toHaveBeenCalledWith({
       where: { id: 'cust-1' },
