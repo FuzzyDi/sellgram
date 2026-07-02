@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "stock-event.schema.json",
+  "title": "POS Sync API — POST /api/pos/v1/stock-events (proposed, not yet implemented — see POS_SYNC_API.md §14/§21)",
+  "definitions": {
+    "StockEvent": {
+      "type": "object",
+      "required": ["deviceId", "storeId", "productId", "delta", "reason", "idempotencyKey", "occurredAt"],
+      "properties": {
+        "deviceId": { "type": "string" },
+        "storeId": { "type": "string" },
+        "productId": { "type": "string" },
+        "variantId": { "type": ["string", "null"] },
+        "delta": { "type": "integer", "description": "Signed quantity change." },
+        "reason": {
+          "type": "string",
+          "enum": ["POS_ADJUSTMENT", "RESTOCK", "OTHER"],
+          "description": "POS_SALE is deliberately excluded — it is only ever derived from sale events, never accepted directly here. Matches StockLedgerReason in packages/prisma/schema.prisma minus POS_SALE."
+        },
+        "idempotencyKey": { "type": "string", "pattern": "^[^:]+:stock:[^:]+:[A-Z_]+$" },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

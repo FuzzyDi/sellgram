@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "settings.schema.json",
+  "title": "POS Sync API — GET /api/pos/v1/settings",
+  "definitions": {
+    "SettingsBody": {
+      "type": "object",
+      "required": [
+        "taxProfile", "paymentMethods", "receiptTemplate", "printerProfile",
+        "fiscalProfile", "offlineLimits", "roundingRules", "featureFlags"
+      ],
+      "properties": {
+        "taxProfile": { "type": "object" },
+        "paymentMethods": { "type": "array", "items": { "type": "object" } },
+        "receiptTemplate": { "type": "object" },
+        "printerProfile": { "type": "object" },
+        "fiscalProfile": { "type": "object" },
+        "offlineLimits": { "type": "object" },
+        "roundingRules": { "type": "object" },
+        "featureFlags": { "type": "object" }
+      },
+      "additionalProperties": false,
+      "description": "Nested shapes are intentionally unconstrained — see POS_SYNC_API.md §10; they depend on a fiscal integration partner not yet confirmed."
+    },
+    "SettingsData": {
+      "type": "object",
+      "required": ["version", "checksum", "settings"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "checksum": { "type": "string" },
+        "settings": { "$ref": "#/definitions/SettingsBody" }
+      },
+      "additionalProperties": false
+    },
+    "SettingsEnvelope": {
+      "type": "object",
+      "required": ["success", "data"],
+      "properties": {
+        "success": { "const": true },
+        "data": { "$ref": "#/definitions/SettingsData" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

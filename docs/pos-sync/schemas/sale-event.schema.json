@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "sale-event.schema.json",
+  "title": "POS Sync API — POST /api/pos/v1/sale-events",
+  "definitions": {
+    "SaleEvent": {
+      "type": "object",
+      "required": [
+        "deviceId", "storeId", "localSaleId", "localShiftId", "eventType",
+        "status", "receiptNumber", "idempotencyKey", "occurredAt",
+        "items", "payments", "totals", "fiscal", "print"
+      ],
+      "properties": {
+        "deviceId": { "type": "string" },
+        "storeId": { "type": "string" },
+        "localSaleId": { "type": "string" },
+        "localShiftId": { "type": "string" },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "SALE_CREATED", "SALE_PAID", "SALE_FISCALIZED", "SALE_COMPLETED",
+            "SALE_CANCELLED", "SALE_REFUNDED", "SALE_FISCAL_UNKNOWN"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["FISCALIZED", "FISCAL_UNKNOWN", "COMPLETED", "CANCELLED", "REFUNDED"]
+        },
+        "receiptNumber": { "type": "integer" },
+        "idempotencyKey": { "type": "string", "pattern": "^[^:]+:sale:[^:]+:[A-Z_]+$" },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "items": { "type": "array", "items": { "type": "object" } },
+        "payments": { "type": "array", "items": { "type": "object" } },
+        "totals": { "type": "object" },
+        "fiscal": { "type": "object" },
+        "print": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

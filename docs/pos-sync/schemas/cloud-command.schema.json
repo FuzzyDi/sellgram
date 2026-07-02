@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "cloud-command.schema.json",
+  "title": "POS Sync API — GET /api/pos/v1/commands, POST /api/pos/v1/commands/:id/ack",
+  "definitions": {
+    "AllowedCommandType": {
+      "type": "string",
+      "enum": [
+        "REFRESH_CATALOG", "REFRESH_SETTINGS", "PING",
+        "UPLOAD_DIAGNOSTICS", "DISABLE_DEVICE", "SHOW_MESSAGE"
+      ]
+    },
+    "ForbiddenCommandType": {
+      "type": "string",
+      "enum": ["FORCE_SALE", "FORCE_REFUND", "FORCE_FISCAL_OPERATION", "FORCE_Z_REPORT"],
+      "description": "Must never appear in a real response — listed here only so validators/tests can assert these are rejected. See POS_SYNC_API.md §15."
+    },
+    "Command": {
+      "type": "object",
+      "required": ["id", "type", "createdAt"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "$ref": "#/definitions/AllowedCommandType" },
+        "payload": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "CommandListData": {
+      "type": "object",
+      "required": ["commands"],
+      "properties": {
+        "commands": { "type": "array", "items": { "$ref": "#/definitions/Command" } }
+      },
+      "additionalProperties": false
+    },
+    "CommandListEnvelope": {
+      "type": "object",
+      "required": ["success", "data"],
+      "properties": {
+        "success": { "const": true },
+        "data": { "$ref": "#/definitions/CommandListData" }
+      },
+      "additionalProperties": false
+    },
+    "CommandAckRequest": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["ACKED", "FAILED"] },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
