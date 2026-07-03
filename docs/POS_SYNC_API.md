@@ -621,10 +621,9 @@ mutually exclusive, and must dedupe each independently by its own
 POS_SALE`), so a device does not additionally report stock movement for a
 normal sale.
 
-This section instead specifies the endpoint needed for stock movements
-**that do not originate from a sale** — a cashier-initiated stock count
-correction or manual restock at the till. This endpoint is a **proposal in
-this contract, not yet implemented even as a stub** (see §21):
+This section instead specifies the endpoint for stock movements **that do
+not originate from a sale** — a cashier-initiated stock count correction
+or manual restock at the till:
 
 ```
 POST /api/pos/v1/stock-events
@@ -632,7 +631,7 @@ POST /api/pos/v1/stock-events
 
 Authenticated. Idempotent (§5, `aggregateType: stock`).
 
-**Required fields (proposed):**
+**Required fields:**
 
 ```json
 {
@@ -652,8 +651,33 @@ Authenticated. Idempotent (§5, `aggregateType: stock`).
 (`packages/prisma/schema.prisma`: `POS_SALE | POS_ADJUSTMENT | RESTOCK |
 OTHER`) — this endpoint only ever produces `POS_ADJUSTMENT`, `RESTOCK`, or
 `OTHER`; `POS_SALE` rows are exclusively derived from sale events (§11),
-never accepted directly from this endpoint, to keep "a sale happened" as
-the single source of truth for that reason code.
+never accepted directly from this endpoint (rejected as
+`VALIDATION_ERROR`), to keep "a sale happened" as the single source of
+truth for that reason code.
+
+**Response (`201` — same envelope and replay semantics as §11):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "eventId": "string",
+    "warnings": [
+      { "index": 0, "code": "UNKNOWN_PRODUCT", "message": "string", "productId": "string" }
+    ]
+  },
+  "requestId": "string"
+}
+```
+
+The §18 accept-don't-reject principle applies here exactly as it does to
+sale events: a stock event referencing a `productId` unknown to Cloud is
+still stored (the correction already happened at the till) and answered
+`201` — it just derives no `StockLedgerEntry` row and carries an
+`UNKNOWN_PRODUCT` warning (`index` is always `0`; a stock event has
+exactly one item — the field is kept for shape-consistency with §11
+warnings). A known product derives one `StockLedgerEntry` row with the
+signed `delta` exactly as sent, `sourceType: "StockEvent"`.
 
 ## 15. Cloud commands
 
@@ -927,10 +951,10 @@ gap list, not a criticism — first wave was scoped deliberately narrow
 (no fiscal partner confirmed yet), and this contract is the target to close
 the gap against, not a description of what already exists. The rows marked
 **Closed** below are the exception: `POST /activate`, `POST /heartbeat`,
-`GET /catalog/snapshot`, `GET /settings` and `POST /sale-events` have since
-been brought in line with this contract (see §7–§11) — every other row
-still describes real, unclosed gaps (fiscal/shift ingestion, stock-events,
-cloud commands).
+`GET /catalog/snapshot`, `GET /settings`, `POST /sale-events` and `POST
+/stock-events` have since been brought in line with this contract (see
+§7–§11, §14) — every other row still describes real, unclosed gaps
+(fiscal/shift ingestion, cloud commands).
 
 | Area | This contract | Current code | Gap |
 |---|---|---|---|
@@ -943,9 +967,9 @@ cloud commands).
 | `GET /settings` response | Versioned, structured (`taxProfile`, `paymentMethods`, `receiptTemplate`, `printerProfile`, `fiscalProfile`, `offlineLimits`, `roundingRules`, `featureFlags`) | **Closed** — backed by the new `PosSettings` model (store-scoped, `version` + `payload Json`), written via `PUT /store-admin/pos-devices/settings`; unconfigured stores get empty eight-key defaults at version 1 | No gap in shape. Nested shapes are whatever the admin stored — unconstrained by design pending a fiscal partner (§10). The old `currency`/`timezone` placeholder response is gone (not part of the contract body). `settingsVersion` in `/activate` and `/heartbeat` now reports the real `PosSettings.version`. |
 | Sale events | Full event-type vocabulary, idempotent ingestion, `StockLedgerEntry` derivation | **Closed** — `SaleEvent` model (append-only, unique `idempotencyKey` + payload hash), full §5 semantics (identical replay → stored result; different payload → 409), `SALE_COMPLETED` derives `StockLedgerEntry` rows, per-item warnings per §11/§18 | No gap in ingestion. Stock *reconciliation* strategy vs Sellgram Commerce's `StockMovement` is still undefined (`docs/SBGCLOUD_ARCHITECTURE.md` §13 step 4 flags it as a prerequisite for real-fleet enablement). Refund/cancel stock effects intentionally unspecified — only `SALE_COMPLETED` derives stock. |
 | Fiscal/shift events | Full event-type vocabularies, idempotent ingestion | `501 NOT_IMPLEMENTED` stubs | `FiscalReceipt`/`ShiftProjection` models do not exist yet — roadmap step 5, pending a confirmed fiscal integration partner. |
-| Stock movement events | `POST /stock-events` (proposed, §14) | Does not exist in any form, not even a stub | Genuinely new endpoint surfaced by writing this contract — not previously stubbed at all. |
+| Stock movement events | `POST /stock-events` (§14) | **Closed** — `StockEvent` model (append-only, no FK on `productId` on purpose) + full §5 idempotency; known product derives a signed-delta `StockLedgerEntry` (`sourceType: 'StockEvent'`); unknown product stored with an `UNKNOWN_PRODUCT` warning, no ledger row | No gap. `POS_SALE` is rejected at the API — that reason code stays exclusive to sale-event derivation. |
 | Cloud commands | `GET /commands`, `POST /commands/:id/ack` with typed command list | `501 NOT_IMPLEMENTED` stubs (endpoints exist, no logic) | `CloudCommand` model does not exist yet. Allowed/forbidden command type enforcement not implemented. |
-| Idempotency | Required on every critical event, enforced Cloud-side | **Partially closed** — full §5 semantics implemented for sale-events (unique key, payload-hash reuse detection, stored-result replay, concurrent-race handling) | Fiscal/shift (and the proposed stock-events) endpoints will reuse the same pattern when implemented — until then idempotency exists only on the sale-events surface. |
+| Idempotency | Required on every critical event, enforced Cloud-side | **Partially closed** — full §5 semantics implemented for sale-events and stock-events (unique key, payload-hash reuse detection, stored-result replay, concurrent-race handling, shared helper) | Fiscal/shift endpoints will reuse the same pattern when implemented — until then idempotency exists only on the sale/stock surfaces. |
 | Rate limiting | 5/min on activate, moderate baseline elsewhere | **Already matches** — implemented exactly as described in §19 | No gap. |
 | Base path | `/api/pos/v1` | **Already matches** | No gap. |
 

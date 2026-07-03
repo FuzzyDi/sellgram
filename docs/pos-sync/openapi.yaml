@@ -178,9 +178,7 @@ paths:
   /stock-events:
     post:
       tags: [events]
-      summary: >
-        Proposed — non-sale stock movement (adjustment/restock). Not yet
-        implemented even as a stub. See POS_SYNC_API.md §14.
+      summary: Ingest a non-sale stock movement (adjustment/restock, idempotent)
       security: [{ deviceBearer: [] }]
       requestBody:
         required: true
@@ -189,8 +187,14 @@ paths:
             schema:
               $ref: './schemas/stock-event.schema.json#/definitions/StockEvent'
       responses:
-        '200':
-          $ref: '#/components/responses/Success'
+        '201':
+          description: Event ingested (or identical replay of an already-ingested event)
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/stock-event.schema.json#/definitions/StockEventResponse'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
         '409':

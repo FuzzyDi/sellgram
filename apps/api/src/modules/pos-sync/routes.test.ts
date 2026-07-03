@@ -10,8 +10,9 @@ const mocks = vi.hoisted(() => ({
     posSettings: { findUnique: vi.fn().mockResolvedValue(null) },
     tenant: { findUnique: vi.fn().mockResolvedValue({ planExpiresAt: null, blockedAt: null }) },
     saleEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
-    product: { findMany: vi.fn().mockResolvedValue([]) },
-    stockLedgerEntry: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    stockEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
+    product: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
+    stockLedgerEntry: { createMany: vi.fn().mockResolvedValue({ count: 0 }), create: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn(),
   },
 }));
@@ -739,6 +740,216 @@ describe('pos-sync.routes', () => {
         method: 'POST',
         url: '/api/pos/v1/sale-events',
         payload: validSaleEvent,
+      });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+  });
+
+  describe('POST /api/pos/v1/stock-events', () => {
+    const validStockEvent = {
+      deviceId: 'dev-1',
+      storeId: 's-1',
+      productId: 'p-1',
+      variantId: null,
+      delta: 10,
+      reason: 'RESTOCK',
+      idempotencyKey: 'dev-1:stock:STK-000001:RESTOCK',
+      occurredAt: '2026-07-04T11:00:00+05:00',
+      note: 'manual restock at the till',
+    };
+
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      mocks.prisma.stockEvent.findUnique.mockResolvedValue(null);
+      mocks.prisma.stockEvent.create.mockResolvedValue({ id: 'stk-1' });
+      mocks.prisma.product.findFirst.mockResolvedValue({ id: 'p-1' });
+      mocks.prisma.stockLedgerEntry.create.mockResolvedValue({});
+      mocks.prisma.$transaction.mockImplementation(async (fn: any) => fn(mocks.prisma));
+    });
+
+    it('ingests a RESTOCK event and derives a positive-delta ledger entry', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validStockEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(typeof body.requestId).toBe('string');
+      expect(body.data.eventId).toBe('stk-1');
+      expect(body.data.warnings).toEqual([]);
+      expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          productId: 'p-1', delta: 10, reason: 'RESTOCK',
+          sourceType: 'StockEvent', sourceId: 'stk-1',
+        }),
+      });
+      await app.close();
+    });
+
+    it('ingests a negative POS_ADJUSTMENT and keeps the signed delta', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: {
+          ...validStockEvent,
+          delta: -3,
+          reason: 'POS_ADJUSTMENT',
+          idempotencyKey: 'dev-1:stock:STK-000002:POS_ADJUSTMENT',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ delta: -3, reason: 'POS_ADJUSTMENT' }),
+      });
+      await app.close();
+    });
+
+    it('stores an unknown-product event with a warning and derives no ledger row', async () => {
+      mocks.prisma.product.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { ...validStockEvent, productId: 'p-ghost' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.warnings).toEqual([
+        expect.objectContaining({ index: 0, code: 'UNKNOWN_PRODUCT', productId: 'p-ghost' }),
+      ]);
+      expect(mocks.prisma.stockEvent.create).toHaveBeenCalled();
+      expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('rejects reason POS_SALE with 400 VALIDATION_ERROR', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { ...validStockEvent, reason: 'POS_SALE', idempotencyKey: 'dev-1:stock:STK-000003:POS_SALE' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      expect(mocks.prisma.stockEvent.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('replays an identical duplicate with the stored result and no side effects', async () => {
+      const app = await buildApp();
+      await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validStockEvent,
+      });
+      const storedHash = mocks.prisma.stockEvent.create.mock.calls[0][0].data.payloadHash;
+
+      vi.clearAllMocks();
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      mocks.prisma.stockEvent.findUnique.mockResolvedValue({
+        id: 'stk-1', payloadHash: storedHash, warnings: [],
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validStockEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data).toEqual({ eventId: 'stk-1', warnings: [] });
+      expect(mocks.prisma.stockEvent.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('rejects a reused idempotencyKey with a different payload as 409', async () => {
+      mocks.prisma.stockEvent.findUnique.mockResolvedValue({
+        id: 'stk-1', payloadHash: 'a-different-hash', warnings: [],
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validStockEvent,
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe('IDEMPOTENCY_KEY_REUSED');
+      expect(mocks.prisma.stockEvent.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when body deviceId does not match the authenticated device', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { ...validStockEvent, deviceId: 'dev-other' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it("returns 400 VALIDATION_ERROR when body storeId does not match the device's store", async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { ...validStockEvent, storeId: 's-other' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when a required field is missing', async () => {
+      const { productId: _omit, ...payload } = validStockEvent;
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 401 without an Authorization header', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        payload: validStockEvent,
       });
       expect(response.statusCode).toBe(401);
       await app.close();

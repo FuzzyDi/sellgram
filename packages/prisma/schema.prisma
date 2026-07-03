@@ -135,6 +135,7 @@ model Tenant {
   stockLedgerEntries StockLedgerEntry[]
   posSettings        PosSettings[]
   saleEvents         SaleEvent[]
+  stockEvents        StockEvent[]
 
   @@map("tenants")
 }
@@ -219,6 +220,7 @@ model Store {
   catalogSnapshots CatalogSnapshot[]
   posSettings      PosSettings?
   saleEvents       SaleEvent[]
+  stockEvents      StockEvent[]
 
   @@index([tenantId])
   @@map("stores")
@@ -958,6 +960,7 @@ model PosDevice {
   activations DeviceActivation[]
   syncCursor  SyncCursor?
   saleEvents  SaleEvent[]
+  stockEvents StockEvent[]
 
   @@index([tenantId, storeId])
   @@map("pos_devices")
@@ -1041,6 +1044,38 @@ model SaleEvent {
   @@index([tenantId, storeId, localSaleId])
   @@index([tenantId, occurredAt])
   @@map("sale_events")
+}
+
+// Non-sale stock movement reported by a till (docs/POS_SYNC_API.md §14) —
+// cashier stock-count correction or manual restock. Append-only, same §5
+// idempotency semantics as SaleEvent. productId deliberately has NO foreign
+// key: the event must survive referencing a product unknown to Cloud
+// (§18 accept-don't-reject) — the derived StockLedgerEntry row (which does
+// FK to Product) is simply skipped in that case, with a stored warning.
+model StockEvent {
+  id             String            @id @default(cuid())
+  tenantId       String
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId        String
+  store          Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  deviceId       String
+  device         PosDevice         @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  productId      String
+  variantId      String?
+  delta          Int
+  // Shares StockLedgerReason with the ledger, but the API layer only
+  // accepts POS_ADJUSTMENT/RESTOCK/OTHER — POS_SALE rows are exclusively
+  // derived from sale events (§14).
+  reason         StockLedgerReason
+  idempotencyKey String            @unique
+  payloadHash    String
+  occurredAt     DateTime
+  note           String?
+  warnings       Json
+  createdAt      DateTime          @default(now())
+
+  @@index([tenantId, storeId, productId])
+  @@map("stock_events")
 }
 
 // Store-scoped POS operational settings (docs/POS_SYNC_API.md §10).
