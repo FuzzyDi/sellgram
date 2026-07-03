@@ -11,8 +11,18 @@ const mocks = vi.hoisted(() => ({
     tenant: { findUnique: vi.fn().mockResolvedValue({ planExpiresAt: null, blockedAt: null }) },
     saleEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     stockEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
-    product: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
+    product: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue({ stockQty: 0 }),
+    },
+    productVariant: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue({ stockQty: 0 }),
+    },
     stockLedgerEntry: { createMany: vi.fn().mockResolvedValue({ count: 0 }), create: vi.fn().mockResolvedValue({}) },
+    stockMovement: { create: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn(),
   },
 }));
@@ -533,11 +543,15 @@ describe('pos-sync.routes', () => {
       mocks.prisma.saleEvent.findUnique.mockResolvedValue(null);
       mocks.prisma.saleEvent.create.mockResolvedValue({ id: 'evt-1' });
       mocks.prisma.product.findMany.mockResolvedValue([{ id: 'p-1' }, { id: 'p-2' }]);
-      mocks.prisma.stockLedgerEntry.createMany.mockResolvedValue({ count: 2 });
+      mocks.prisma.productVariant.findMany.mockResolvedValue([{ id: 'v-1', productId: 'p-2' }]);
+      mocks.prisma.product.update.mockResolvedValue({ stockQty: 8 });
+      mocks.prisma.productVariant.update.mockResolvedValue({ stockQty: 4 });
+      mocks.prisma.stockLedgerEntry.create.mockResolvedValue({});
+      mocks.prisma.stockMovement.create.mockResolvedValue({});
       mocks.prisma.$transaction.mockImplementation(async (fn: any) => fn(mocks.prisma));
     });
 
-    it('ingests a SALE_COMPLETED event and derives stock ledger entries', async () => {
+    it('ingests a SALE_COMPLETED event, derives stock ledger entries and moves live stockQty', async () => {
       const app = await buildApp();
       const response = await app.inject({
         method: 'POST',
@@ -559,11 +573,31 @@ describe('pos-sync.routes', () => {
           }),
         })
       );
-      expect(mocks.prisma.stockLedgerEntry.createMany).toHaveBeenCalledWith({
-        data: [
-          expect.objectContaining({ productId: 'p-1', delta: -2, reason: 'POS_SALE', sourceType: 'SaleEvent', sourceId: 'evt-1' }),
-          expect.objectContaining({ productId: 'p-2', variantId: 'v-1', delta: -1, reason: 'POS_SALE', sourceId: 'evt-1' }),
-        ],
+
+      // p-1 (no variant): product.stockQty moved, ledger + movement written
+      expect(mocks.prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'p-1' },
+        data: { stockQty: { increment: -2 } },
+        select: { stockQty: true },
+      });
+      expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ productId: 'p-1', variantId: null, delta: -2, reason: 'POS_SALE', sourceType: 'SaleEvent', sourceId: 'evt-1' }),
+      });
+      expect(mocks.prisma.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ productId: 'p-1', delta: -2, qtyBefore: 10, qtyAfter: 8 }),
+      });
+
+      // p-2/v-1 (variant): productVariant.stockQty moved instead
+      expect(mocks.prisma.productVariant.update).toHaveBeenCalledWith({
+        where: { id: 'v-1' },
+        data: { stockQty: { increment: -1 } },
+        select: { stockQty: true },
+      });
+      expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ productId: 'p-2', variantId: 'v-1', delta: -1, reason: 'POS_SALE', sourceId: 'evt-1' }),
+      });
+      expect(mocks.prisma.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ productId: 'p-2', variantId: 'v-1', delta: -1, qtyBefore: 5, qtyAfter: 4 }),
       });
       await app.close();
     });
@@ -583,7 +617,8 @@ describe('pos-sync.routes', () => {
 
       expect(response.statusCode).toBe(201);
       expect(mocks.prisma.product.findMany).not.toHaveBeenCalled();
-      expect(mocks.prisma.stockLedgerEntry.createMany).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockMovement.create).not.toHaveBeenCalled();
       await app.close();
     });
 
@@ -609,8 +644,9 @@ describe('pos-sync.routes', () => {
       expect(body.data.warnings).toEqual([
         expect.objectContaining({ index: 1, code: 'UNKNOWN_PRODUCT', productId: 'p-ghost' }),
       ]);
-      expect(mocks.prisma.stockLedgerEntry.createMany).toHaveBeenCalledWith({
-        data: [expect.objectContaining({ productId: 'p-1', delta: -2 })],
+      expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledTimes(1);
+      expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ productId: 'p-1', delta: -2 }),
       });
       await app.close();
     });
@@ -633,7 +669,32 @@ describe('pos-sync.routes', () => {
       expect(response.json().data.warnings).toEqual([
         expect.objectContaining({ index: 0, code: 'INVALID_QUANTITY' }),
       ]);
-      expect(mocks.prisma.stockLedgerEntry.createMany).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockMovement.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('flags a variantId that does not belong to productId with UNKNOWN_VARIANT and skips its ledger row', async () => {
+      mocks.prisma.product.findMany.mockResolvedValue([{ id: 'p-1' }]);
+      mocks.prisma.productVariant.findMany.mockResolvedValue([{ id: 'v-other', productId: 'p-other' }]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: {
+          ...validSaleEvent,
+          items: [{ productId: 'p-1', variantId: 'v-other', quantity: 1 }],
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.warnings).toEqual([
+        expect.objectContaining({ index: 0, code: 'UNKNOWN_VARIANT', productId: 'p-1' }),
+      ]);
+      expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockMovement.create).not.toHaveBeenCalled();
       await app.close();
     });
 
@@ -667,7 +728,8 @@ describe('pos-sync.routes', () => {
       expect(response.statusCode).toBe(201);
       expect(response.json().data).toEqual({ eventId: 'evt-1', warnings: [] });
       expect(mocks.prisma.saleEvent.create).not.toHaveBeenCalled();
-      expect(mocks.prisma.stockLedgerEntry.createMany).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockMovement.create).not.toHaveBeenCalled();
       await app.close();
     });
 
@@ -766,11 +828,15 @@ describe('pos-sync.routes', () => {
       mocks.prisma.stockEvent.findUnique.mockResolvedValue(null);
       mocks.prisma.stockEvent.create.mockResolvedValue({ id: 'stk-1' });
       mocks.prisma.product.findFirst.mockResolvedValue({ id: 'p-1' });
+      mocks.prisma.productVariant.findUnique.mockResolvedValue(null);
+      mocks.prisma.product.update.mockResolvedValue({ stockQty: 20 });
+      mocks.prisma.productVariant.update.mockResolvedValue({ stockQty: 20 });
       mocks.prisma.stockLedgerEntry.create.mockResolvedValue({});
+      mocks.prisma.stockMovement.create.mockResolvedValue({});
       mocks.prisma.$transaction.mockImplementation(async (fn: any) => fn(mocks.prisma));
     });
 
-    it('ingests a RESTOCK event and derives a positive-delta ledger entry', async () => {
+    it('ingests a RESTOCK event, derives a positive-delta ledger entry, and moves live stockQty', async () => {
       const app = await buildApp();
       const response = await app.inject({
         method: 'POST',
@@ -784,16 +850,26 @@ describe('pos-sync.routes', () => {
       expect(typeof body.requestId).toBe('string');
       expect(body.data.eventId).toBe('stk-1');
       expect(body.data.warnings).toEqual([]);
+      expect(mocks.prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'p-1' },
+        data: { stockQty: { increment: 10 } },
+        select: { stockQty: true },
+      });
       expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           productId: 'p-1', delta: 10, reason: 'RESTOCK',
           sourceType: 'StockEvent', sourceId: 'stk-1',
         }),
       });
+      expect(mocks.prisma.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ productId: 'p-1', delta: 10, qtyBefore: 10, qtyAfter: 20 }),
+      });
       await app.close();
     });
 
     it('ingests a negative POS_ADJUSTMENT and keeps the signed delta', async () => {
+      mocks.prisma.product.update.mockResolvedValue({ stockQty: 7 });
+
       const app = await buildApp();
       const response = await app.inject({
         method: 'POST',
@@ -810,6 +886,9 @@ describe('pos-sync.routes', () => {
       expect(response.statusCode).toBe(201);
       expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ delta: -3, reason: 'POS_ADJUSTMENT' }),
+      });
+      expect(mocks.prisma.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ delta: -3, qtyBefore: 10, qtyAfter: 7 }),
       });
       await app.close();
     });
@@ -831,6 +910,27 @@ describe('pos-sync.routes', () => {
       ]);
       expect(mocks.prisma.stockEvent.create).toHaveBeenCalled();
       expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockMovement.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('stores an unknown-variant event with a warning and derives no ledger row', async () => {
+      mocks.prisma.productVariant.findUnique.mockResolvedValue({ id: 'v-other', productId: 'p-other' });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { ...validStockEvent, variantId: 'v-other' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.warnings).toEqual([
+        expect.objectContaining({ index: 0, code: 'UNKNOWN_VARIANT', productId: 'p-1' }),
+      ]);
+      expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockMovement.create).not.toHaveBeenCalled();
       await app.close();
     });
 

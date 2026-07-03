@@ -28,7 +28,7 @@
       "required": ["index", "code", "message"],
       "properties": {
         "index": { "type": "integer", "const": 0, "description": "Always 0 — a stock event has exactly one item; kept for shape-consistency with sale-event warnings." },
-        "code": { "type": "string", "enum": ["UNKNOWN_PRODUCT"] },
+        "code": { "type": "string", "enum": ["UNKNOWN_PRODUCT", "UNKNOWN_VARIANT"] },
         "message": { "type": "string" },
         "productId": { "type": "string" }
       },

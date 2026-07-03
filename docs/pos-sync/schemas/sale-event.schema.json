@@ -42,7 +42,7 @@
       "required": ["index", "code", "message"],
       "properties": {
         "index": { "type": "integer", "minimum": 0 },
-        "code": { "type": "string", "enum": ["UNKNOWN_PRODUCT", "MISSING_PRODUCT_REFERENCE", "INVALID_QUANTITY"] },
+        "code": { "type": "string", "enum": ["UNKNOWN_PRODUCT", "MISSING_PRODUCT_REFERENCE", "INVALID_QUANTITY", "UNKNOWN_VARIANT"] },
         "message": { "type": "string" },
         "productId": { "type": "string" }
       },

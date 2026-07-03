@@ -117,6 +117,66 @@ function respondForExistingEvent(
   return sendSuccess(reply, 201, { eventId: existing.id, warnings: existing.warnings }, request);
 }
 
+type StockApplication = { productId: string; variantId: string | null; delta: number };
+
+// Stock reconciliation strategy (docs/SBGCLOUD_ARCHITECTURE.md §13 step 4):
+// POS and the online store share one physical warehouse, so a derived
+// StockLedgerEntry must also move the live stockQty the storefront reads —
+// same atomic increment + StockMovement audit pattern already used by
+// checkout/order/admin-adjust (see e.g. checkout.service.ts). No async
+// reconciliation job: event ingestion is already idempotent (unique
+// idempotencyKey), so "apply exactly once" holds by construction. The
+// result is allowed to go negative — a POS sale reflects something that
+// already happened at the till, possibly against a stale offline catalog
+// (§9/§18); clamping to zero would hide a real oversell.
+async function applyStockDelta(
+  tx: any,
+  input: StockApplication & {
+    tenantId: string;
+    reason: 'POS_SALE' | 'POS_ADJUSTMENT' | 'RESTOCK' | 'OTHER';
+    sourceType: string;
+    sourceId: string;
+    note: string;
+  }
+) {
+  const updated = input.variantId
+    ? await tx.productVariant.update({
+        where: { id: input.variantId },
+        data: { stockQty: { increment: input.delta } },
+        select: { stockQty: true },
+      })
+    : await tx.product.update({
+        where: { id: input.productId },
+        data: { stockQty: { increment: input.delta } },
+        select: { stockQty: true },
+      });
+  const qtyAfter = updated.stockQty;
+  const qtyBefore = qtyAfter - input.delta;
+
+  await tx.stockLedgerEntry.create({
+    data: {
+      tenantId: input.tenantId,
+      productId: input.productId,
+      variantId: input.variantId,
+      delta: input.delta,
+      reason: input.reason,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+    },
+  });
+  await tx.stockMovement.create({
+    data: {
+      tenantId: input.tenantId,
+      productId: input.productId,
+      variantId: input.variantId,
+      delta: input.delta,
+      qtyBefore,
+      qtyAfter,
+      note: input.note,
+    },
+  });
+}
+
 // Mirrors docs/pos-sync/schemas/stock-event.schema.json (§14) — non-sale
 // stock movements only. POS_SALE is deliberately absent from the enum:
 // sale-derived ledger rows come exclusively from sale events.
@@ -486,14 +546,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       (body.data.status === 'COMPLETED' || body.data.status === 'FISCALIZED');
 
     const warnings: SaleWarning[] = [];
-    const ledgerRows: Array<{
-      tenantId: string;
-      productId: string;
-      variantId: string | null;
-      delta: number;
-      reason: 'POS_SALE';
-      sourceType: string;
-    }> = [];
+    const applications: StockApplication[] = [];
 
     if (derivesStock) {
       const referencedIds = [...new Set(body.data.items.map((i) => i.productId).filter((id): id is string => !!id))];
@@ -504,6 +557,17 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           })
         : [];
       const knownIds = new Set(known.map((p) => p.id));
+
+      const referencedVariantIds = [
+        ...new Set(body.data.items.map((i) => i.variantId).filter((id): id is string => !!id)),
+      ];
+      const knownVariants = referencedVariantIds.length
+        ? await prisma.productVariant.findMany({
+            where: { id: { in: referencedVariantIds } },
+            select: { id: true, productId: true },
+          })
+        : [];
+      const variantProductId = new Map(knownVariants.map((v) => [v.id, v.productId]));
 
       body.data.items.forEach((item, index) => {
         if (!item.productId) {
@@ -534,13 +598,19 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           });
           return;
         }
-        ledgerRows.push({
-          tenantId: device.tenantId,
+        if (item.variantId && variantProductId.get(item.variantId) !== item.productId) {
+          warnings.push({
+            index,
+            code: 'UNKNOWN_VARIANT',
+            message: 'variantId does not belong to productId — no stock ledger entry derived',
+            productId: item.productId,
+          });
+          return;
+        }
+        applications.push({
           productId: item.productId,
           variantId: item.variantId ?? null,
           delta: -item.quantity,
-          reason: 'POS_SALE',
-          sourceType: 'SaleEvent',
         });
       });
     }
@@ -572,9 +642,14 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           },
           select: { id: true },
         });
-        if (ledgerRows.length) {
-          await tx.stockLedgerEntry.createMany({
-            data: ledgerRows.map((row) => ({ ...row, sourceId: created.id })),
+        for (const app of applications) {
+          await applyStockDelta(tx, {
+            tenantId: device.tenantId,
+            ...app,
+            reason: 'POS_SALE',
+            sourceType: 'SaleEvent',
+            sourceId: created.id,
+            note: `POS sale ${body.data.localSaleId}`,
           });
         }
         return created;
@@ -628,21 +703,36 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     if (existing) return respondForExistingEvent(reply, request, existing, payloadHash);
 
     // §18 accept-don't-reject: the correction already happened at the
-    // till. An unknown product keeps the event (stored below) but derives
-    // no ledger row — StockLedgerEntry has a real FK to Product.
+    // till. An unknown product/variant keeps the event (stored below) but
+    // derives no ledger row / stockQty change.
     const product = await prisma.product.findFirst({
       where: { id: body.data.productId, tenantId: device.tenantId },
       select: { id: true },
     });
+    const variant = product && body.data.variantId
+      ? await prisma.productVariant.findUnique({
+          where: { id: body.data.variantId },
+          select: { id: true, productId: true },
+        })
+      : null;
+    const variantMismatch = product && body.data.variantId && variant?.productId !== body.data.productId;
+    const applies = product && !variantMismatch;
 
     const warnings: SaleWarning[] = [];
+    // index kept for shape-consistency with sale-event warnings — a
+    // stock event always has exactly one item.
     if (!product) {
-      // index kept for shape-consistency with sale-event warnings — a
-      // stock event always has exactly one item.
       warnings.push({
         index: 0,
         code: 'UNKNOWN_PRODUCT',
         message: 'productId is unknown to Cloud — no stock ledger entry derived',
+        productId: body.data.productId,
+      });
+    } else if (variantMismatch) {
+      warnings.push({
+        index: 0,
+        code: 'UNKNOWN_VARIANT',
+        message: 'variantId does not belong to productId — no stock ledger entry derived',
         productId: body.data.productId,
       });
     }
@@ -667,17 +757,16 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           },
           select: { id: true },
         });
-        if (product) {
-          await tx.stockLedgerEntry.create({
-            data: {
-              tenantId: device.tenantId,
-              productId: body.data.productId,
-              variantId: body.data.variantId ?? null,
-              delta: body.data.delta,
-              reason: body.data.reason,
-              sourceType: 'StockEvent',
-              sourceId: created.id,
-            },
+        if (applies) {
+          await applyStockDelta(tx, {
+            tenantId: device.tenantId,
+            productId: body.data.productId,
+            variantId: body.data.variantId ?? null,
+            delta: body.data.delta,
+            reason: body.data.reason,
+            sourceType: 'StockEvent',
+            sourceId: created.id,
+            note: body.data.note ?? `POS ${body.data.reason.toLowerCase()}`,
           });
         }
         return created;
