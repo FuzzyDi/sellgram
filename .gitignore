@@ -6,3 +6,4 @@ dist/
 coverage/
 .DS_Store
 deploy/production/.monitor/
+deploy/production/.env.prod
