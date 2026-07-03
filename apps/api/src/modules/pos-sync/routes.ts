@@ -1,8 +1,9 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, randomBytes } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { resolveDevice } from './device-auth.js';
+import { sendError, sendSuccess } from './envelope.js';
 
 /**
  * POS Sync API — see docs/SBGCLOUD_ARCHITECTURE.md.
@@ -25,12 +26,16 @@ function notImplemented(reply: FastifyReply, feature: string) {
   });
 }
 
-function unauthorized(reply: FastifyReply) {
-  return reply.status(401).send({ success: false, error: 'Invalid or missing device key' });
+function unauthorized(reply: FastifyReply, request: FastifyRequest) {
+  return sendError(reply, 401, 'UNAUTHORIZED', 'Invalid or missing device key', request);
 }
 
 const activateSchema = z.object({
   activationCode: z.string().min(1),
+  deviceFingerprint: z.string().min(1),
+  deviceName: z.string().min(1),
+  deviceType: z.enum(['WINDOWS', 'ANDROID', 'LANDI', 'WEB']),
+  appVersion: z.string().min(1),
 });
 
 // Moderate baseline for device polling endpoints — generous enough that
@@ -46,7 +51,9 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   fastify.post('/pos/v1/activate', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = activateSchema.safeParse(request.body);
     if (!body.success) {
-      return reply.status(400).send({ success: false, error: 'activationCode is required' });
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid activation request', request, {
+        issues: body.error.issues,
+      });
     }
 
     const activation = await prisma.deviceActivation.findUnique({
@@ -54,28 +61,67 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       include: { device: true },
     });
     if (!activation) {
-      return reply.status(404).send({ success: false, error: 'Invalid activation code' });
+      return sendError(reply, 404, 'INVALID_ACTIVATION_CODE', 'Invalid activation code', request);
     }
 
     if (activation.status === 'PENDING' && activation.expiresAt < new Date()) {
       await prisma.deviceActivation.update({ where: { id: activation.id }, data: { status: 'EXPIRED' } });
-      return reply.status(400).send({ success: false, error: 'Activation code has expired' });
+      return sendError(reply, 400, 'ACTIVATION_CODE_EXPIRED', 'Activation code has expired', request);
     }
 
     if (activation.status !== 'PENDING') {
-      return reply.status(400).send({ success: false, error: 'Activation code already used or invalid' });
+      return sendError(
+        reply,
+        400,
+        'ACTIVATION_CODE_ALREADY_USED',
+        'Activation code already used or invalid',
+        request
+      );
     }
 
-    const raw = 'pos_' + randomBytes(32).toString('hex');
-    const apiKeyHash = createHash('sha256').update(raw).digest('hex');
-    const apiKeyPrefix = raw.slice(0, 12);
+    // Anomaly signal only (docs/POS_SYNC_API.md §7) — this activation code
+    // is being redeemed by a device fingerprint that already holds a
+    // different active credential. Not blocked: the contract doesn't call
+    // for rejection, just fleet-visibility flagging.
+    const fingerprintCollision = await prisma.posDevice.findFirst({
+      where: {
+        deviceFingerprint: body.data.deviceFingerprint,
+        status: 'ACTIVE',
+        id: { not: activation.deviceId },
+      },
+      select: { id: true },
+    });
+    if (fingerprintCollision) {
+      request.log.warn(
+        { deviceFingerprint: body.data.deviceFingerprint, existingDeviceId: fingerprintCollision.id, deviceId: activation.deviceId },
+        'pos-sync: activation code redeemed by a device fingerprint already tied to another active device'
+      );
+    }
+
+    const rawAccessToken = 'pos_' + randomBytes(32).toString('hex');
+    const apiKeyHash = createHash('sha256').update(rawAccessToken).digest('hex');
+    const apiKeyPrefix = rawAccessToken.slice(0, 12);
+
+    const rawRefreshToken = 'posr_' + randomBytes(32).toString('hex');
+    const refreshTokenHash = createHash('sha256').update(rawRefreshToken).digest('hex');
+    const refreshTokenPrefix = rawRefreshToken.slice(0, 12);
 
     const now = new Date();
     const [device] = await prisma.$transaction([
       prisma.posDevice.update({
         where: { id: activation.deviceId },
-        data: { status: 'ACTIVE', apiKeyHash, apiKeyPrefix },
-        select: { id: true, tenantId: true, storeId: true, name: true },
+        data: {
+          status: 'ACTIVE',
+          apiKeyHash,
+          apiKeyPrefix,
+          refreshTokenHash,
+          refreshTokenPrefix,
+          deviceFingerprint: body.data.deviceFingerprint,
+          reportedDeviceName: body.data.deviceName,
+          reportedDeviceType: body.data.deviceType,
+          appVersion: body.data.appVersion,
+        },
+        select: { id: true, tenantId: true, storeId: true },
       }),
       prisma.deviceActivation.update({
         where: { id: activation.id },
@@ -88,21 +134,33 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       }),
     ]);
 
-    return reply.status(201).send({
-      success: true,
-      data: {
-        deviceId: device.id,
+    const latestSnapshot = await prisma.catalogSnapshot.findFirst({
+      where: { tenantId: device.tenantId, storeId: device.storeId },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+
+    return sendSuccess(
+      reply,
+      201,
+      {
         tenantId: device.tenantId,
         storeId: device.storeId,
-        name: device.name,
-        apiKey: raw,
+        deviceId: device.id,
+        accessToken: rawAccessToken,
+        refreshToken: rawRefreshToken,
+        catalogVersion: latestSnapshot?.version ?? 0,
+        // No PosSettings model yet (docs/SBGCLOUD_ARCHITECTURE.md §12) —
+        // stable placeholder, same honesty precedent as GET /settings below.
+        settingsVersion: 1,
       },
-    });
+      request
+    );
   });
 
   fastify.post('/pos/v1/heartbeat', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply);
+    if (!device) return unauthorized(reply, request);
 
     const now = new Date();
     await prisma.posDevice.update({ where: { id: device.id }, data: { lastSeenAt: now } });
@@ -112,7 +170,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
 
   fastify.get('/pos/v1/catalog/snapshot', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply);
+    if (!device) return unauthorized(reply, request);
 
     // Delta sync (query.since) is out of scope for this sprint — always
     // return the latest snapshot for the device's store.
@@ -142,7 +200,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
 
   fastify.get('/pos/v1/settings', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply);
+    if (!device) return unauthorized(reply, request);
 
     // Minimal, honest set: there is no per-store currency/timezone field in
     // the current schema (Sellgram Commerce is single-currency, single-TZ

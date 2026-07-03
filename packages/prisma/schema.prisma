@@ -930,6 +930,18 @@ model PosDevice {
   // the raw key is shown once at activation time and never stored.
   apiKeyHash   String?         @unique
   apiKeyPrefix String?
+  // Minted alongside apiKeyHash at activation (docs/POS_SYNC_API.md §7),
+  // but there is no refresh-verification endpoint yet — accessToken
+  // (apiKeyHash) is treated as long-lived in practice until one exists.
+  refreshTokenHash   String?   @unique
+  refreshTokenPrefix String?
+  // Device-reported at activation, kept separate from the admin-set
+  // name/deviceType above (which stay authoritative for fleet display) —
+  // deviceFingerprint is used only for the reactivation-anomaly check.
+  deviceFingerprint  String?
+  reportedDeviceName String?
+  reportedDeviceType String?
+  appVersion         String?
   lastSeenAt   DateTime?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt

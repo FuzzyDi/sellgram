@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     deviceActivation: { findUnique: vi.fn(), update: vi.fn() },
-    posDevice: { update: vi.fn(), findUnique: vi.fn() },
+    posDevice: { update: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
     syncCursor: { upsert: vi.fn().mockResolvedValue({}) },
-    catalogSnapshot: { findFirst: vi.fn() },
+    catalogSnapshot: { findFirst: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
   },
 }));
@@ -26,8 +26,16 @@ describe('pos-sync.routes', () => {
     vi.clearAllMocks();
   });
 
+  const validActivatePayload = {
+    activationCode: 'ABCD-1234',
+    deviceFingerprint: 'fp-1',
+    deviceName: 'POS-1',
+    deviceType: 'ANDROID',
+    appVersion: '0.1.0',
+  };
+
   describe('POST /api/pos/v1/activate', () => {
-    it('confirms a pending, non-expired activation and returns a device api key', async () => {
+    it('confirms a pending, non-expired activation and returns device tokens', async () => {
       mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
         id: 'act-1',
         deviceId: 'dev-1',
@@ -36,7 +44,47 @@ describe('pos-sync.routes', () => {
         device: { id: 'dev-1' },
       });
       mocks.prisma.$transaction.mockResolvedValue([
-        { id: 'dev-1', tenantId: 't-1', storeId: 's-1', name: 'Front till' },
+        { id: 'dev-1', tenantId: 't-1', storeId: 's-1' },
+        {},
+        {},
+      ]);
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ version: 2 });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/activate',
+        payload: validActivatePayload,
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(typeof body.requestId).toBe('string');
+      expect(body.data.deviceId).toBe('dev-1');
+      expect(body.data.tenantId).toBe('t-1');
+      expect(body.data.storeId).toBe('s-1');
+      expect(typeof body.data.accessToken).toBe('string');
+      expect(body.data.accessToken.startsWith('pos_')).toBe(true);
+      expect(typeof body.data.refreshToken).toBe('string');
+      expect(body.data.refreshToken.startsWith('posr_')).toBe(true);
+      expect(body.data.accessToken).not.toBe(body.data.refreshToken);
+      expect(body.data.catalogVersion).toBe(2);
+      expect(body.data.settingsVersion).toBe(1);
+      await app.close();
+    });
+
+    it('logs, but does not block, when the device fingerprint already belongs to another active device', async () => {
+      mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
+        id: 'act-1',
+        deviceId: 'dev-1',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() + 60_000),
+        device: { id: 'dev-1' },
+      });
+      mocks.prisma.posDevice.findFirst.mockResolvedValueOnce({ id: 'dev-other' });
+      mocks.prisma.$transaction.mockResolvedValue([
+        { id: 'dev-1', tenantId: 't-1', storeId: 's-1' },
         {},
         {},
       ]);
@@ -45,35 +93,30 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/activate',
-        payload: { activationCode: 'ABCD-1234' },
+        payload: validActivatePayload,
       });
 
       expect(response.statusCode).toBe(201);
-      const body = response.json();
-      expect(body.success).toBe(true);
-      expect(body.data.deviceId).toBe('dev-1');
-      expect(body.data.tenantId).toBe('t-1');
-      expect(typeof body.data.apiKey).toBe('string');
-      expect(body.data.apiKey.startsWith('pos_')).toBe(true);
       await app.close();
     });
 
-    it('returns 404 for an unknown activation code', async () => {
+    it('returns 404 INVALID_ACTIVATION_CODE for an unknown activation code', async () => {
       mocks.prisma.deviceActivation.findUnique.mockResolvedValue(null);
 
       const app = await buildApp();
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/activate',
-        payload: { activationCode: 'NOPE-0000' },
+        payload: { ...validActivatePayload, activationCode: 'NOPE-0000' },
       });
 
       expect(response.statusCode).toBe(404);
+      expect(response.json().error.code).toBe('INVALID_ACTIVATION_CODE');
       expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
       await app.close();
     });
 
-    it('marks an expired pending activation as EXPIRED and returns 400', async () => {
+    it('marks an expired pending activation as EXPIRED and returns 400 ACTIVATION_CODE_EXPIRED', async () => {
       mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
         id: 'act-2',
         deviceId: 'dev-2',
@@ -85,10 +128,11 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/activate',
-        payload: { activationCode: 'EXPI-RED0' },
+        payload: { ...validActivatePayload, activationCode: 'EXPI-RED0' },
       });
 
       expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('ACTIVATION_CODE_EXPIRED');
       expect(mocks.prisma.deviceActivation.update).toHaveBeenCalledWith({
         where: { id: 'act-2' },
         data: { status: 'EXPIRED' },
@@ -97,7 +141,7 @@ describe('pos-sync.routes', () => {
       await app.close();
     });
 
-    it('returns 400 for an already-confirmed activation code', async () => {
+    it('returns 400 ACTIVATION_CODE_ALREADY_USED for an already-confirmed activation code', async () => {
       mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
         id: 'act-3',
         deviceId: 'dev-3',
@@ -109,18 +153,29 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/activate',
-        payload: { activationCode: 'USED-CODE' },
+        payload: { ...validActivatePayload, activationCode: 'USED-CODE' },
       });
 
       expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('ACTIVATION_CODE_ALREADY_USED');
       expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
       await app.close();
     });
 
-    it('returns 400 when activationCode is missing', async () => {
+    it('returns 400 VALIDATION_ERROR when activationCode is missing', async () => {
       const app = await buildApp();
       const response = await app.inject({ method: 'POST', url: '/api/pos/v1/activate', payload: {} });
       expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when deviceFingerprint is missing', async () => {
+      const { deviceFingerprint: _omit, ...payload } = validActivatePayload;
+      const app = await buildApp();
+      const response = await app.inject({ method: 'POST', url: '/api/pos/v1/activate', payload });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
     });
   });
