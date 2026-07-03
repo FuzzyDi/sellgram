@@ -2,16 +2,18 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, randomBytes } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+import { getLicenseStatus } from '../../lib/billing.js';
 import { resolveDevice } from './device-auth.js';
 import { sendError, sendSuccess } from './envelope.js';
 
 /**
  * POS Sync API — see docs/SBGCLOUD_ARCHITECTURE.md.
  *
- * First wave only: device activation, heartbeat, catalog snapshot (manual,
- * admin-triggered — see admin-routes.ts) and settings. Sale/fiscal/shift
- * ingestion are intentionally still stubs (501) — pending a confirmed fiscal
- * integration partner for Uzbekistan.
+ * Implemented: device activation, heartbeat, catalog snapshot (manual,
+ * admin-triggered — see admin-routes.ts), settings, and idempotent sale
+ * event ingestion (roadmap step 4). Fiscal/shift ingestion and cloud
+ * commands are intentionally still stubs (501) — roadmap steps 5-6,
+ * pending a confirmed fiscal integration partner for Uzbekistan.
  *
  * Do not wire Order/prisma.order access into this module — POS sale data is
  * kept out of the existing commerce domain model on purpose
@@ -36,6 +38,78 @@ const activateSchema = z.object({
   deviceName: z.string().min(1),
   deviceType: z.enum(['WINDOWS', 'ANDROID', 'LANDI', 'WEB']),
   appVersion: z.string().min(1),
+});
+
+const catalogQuerySchema = z.object({
+  storeId: z.string().min(1),
+  // Accepted but inert in v1 — delta sync is out of scope, `full` is
+  // always true (docs/POS_SYNC_API.md §9).
+  sinceVersion: z.coerce.number().int().min(0).optional(),
+});
+
+// v1 checksum semantics (docs/POS_SYNC_API.md §9/§10): opaque — a device
+// compares checksums across fetches to detect torn downloads or identical
+// content; it does not independently re-derive the hash (no
+// canonicalization is specified yet). Postgres jsonb key-order
+// normalization keeps this stable per stored row.
+function checksumOf(obj: unknown): string {
+  return createHash('sha256').update(JSON.stringify(obj)).digest('hex');
+}
+
+// Mirrors docs/pos-sync/schemas/sale-event.schema.json. Item internals are
+// loosely typed on purpose (§11: "product/variant reference, quantity,
+// price at time of sale" — shape not pinned down further); productId/
+// variantId/quantity are the only fields stock derivation reads.
+const saleItemSchema = z
+  .object({
+    productId: z.string().min(1).optional(),
+    variantId: z.string().min(1).optional(),
+    quantity: z.number().optional(),
+  })
+  .passthrough();
+
+const saleEventSchema = z.object({
+  deviceId: z.string().min(1),
+  storeId: z.string().min(1),
+  localSaleId: z.string().min(1),
+  localShiftId: z.string().min(1),
+  eventType: z.enum([
+    'SALE_CREATED',
+    'SALE_PAID',
+    'SALE_FISCALIZED',
+    'SALE_COMPLETED',
+    'SALE_CANCELLED',
+    'SALE_REFUNDED',
+    'SALE_FISCAL_UNKNOWN',
+  ]),
+  status: z.enum(['FISCALIZED', 'FISCAL_UNKNOWN', 'COMPLETED', 'CANCELLED', 'REFUNDED']),
+  receiptNumber: z.number().int(),
+  idempotencyKey: z.string().regex(/^[^:]+:sale:[^:]+:[A-Z_]+$/),
+  occurredAt: z.string().min(1),
+  items: z.array(saleItemSchema),
+  payments: z.array(z.record(z.unknown())),
+  totals: z.record(z.unknown()),
+  fiscal: z.record(z.unknown()),
+  print: z.record(z.unknown()),
+});
+
+type SaleWarning = { index: number; code: string; message: string; productId?: string };
+
+const heartbeatSchema = z.object({
+  deviceId: z.string().min(1),
+  localTime: z.string().min(1),
+  appVersion: z.string().min(1),
+  localCoreVersion: z.string().min(1),
+  shiftState: z.enum(['CLOSED', 'OPEN', 'CLOSING', 'ERROR']),
+  unsyncedEvents: z.number().int().min(0),
+  fiscal: z.object({
+    status: z.enum(['OK', 'WARNING', 'ERROR', 'UNKNOWN']),
+    terminalId: z.string(),
+    unsentCount: z.number().int().min(0),
+    zRemaining: z.number().int().min(0),
+  }),
+  printer: z.object({ status: z.enum(['OK', 'ERROR', 'UNKNOWN']) }),
+  network: z.object({ status: z.enum(['ONLINE', 'OFFLINE']) }),
 });
 
 // Moderate baseline for device polling endpoints — generous enough that
@@ -134,11 +208,17 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       }),
     ]);
 
-    const latestSnapshot = await prisma.catalogSnapshot.findFirst({
-      where: { tenantId: device.tenantId, storeId: device.storeId },
-      orderBy: { version: 'desc' },
-      select: { version: true },
-    });
+    const [latestSnapshot, storeSettings] = await Promise.all([
+      prisma.catalogSnapshot.findFirst({
+        where: { tenantId: device.tenantId, storeId: device.storeId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      }),
+      prisma.posSettings.findUnique({
+        where: { storeId: device.storeId },
+        select: { version: true },
+      }),
+    ]);
 
     return sendSuccess(
       reply,
@@ -150,9 +230,9 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         accessToken: rawAccessToken,
         refreshToken: rawRefreshToken,
         catalogVersion: latestSnapshot?.version ?? 0,
-        // No PosSettings model yet (docs/SBGCLOUD_ARCHITECTURE.md §12) —
-        // stable placeholder, same honesty precedent as GET /settings below.
-        settingsVersion: 1,
+        // A store with no PosSettings row still serves defaults as
+        // version 1 (see GET /settings below).
+        settingsVersion: storeSettings?.version ?? 1,
       },
       request
     );
@@ -162,24 +242,100 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     const device = await resolveDevice(request.headers.authorization);
     if (!device) return unauthorized(reply, request);
 
-    const now = new Date();
-    await prisma.posDevice.update({ where: { id: device.id }, data: { lastSeenAt: now } });
+    const body = heartbeatSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid heartbeat request', request, {
+        issues: body.error.issues,
+      });
+    }
 
-    return { success: true, data: { serverTime: now.toISOString() } };
+    // §8: Cloud derives device identity from the token, never the body —
+    // a mismatching deviceId is a client bug, not a silent override.
+    if (body.data.deviceId !== device.id) {
+      return sendError(
+        reply,
+        400,
+        'VALIDATION_ERROR',
+        'deviceId does not match the authenticated device',
+        request
+      );
+    }
+
+    // Fleet-visibility signal only, log-only (mirrors the fingerprint
+    // anomaly check in /activate) — no admin endpoint reads per-device
+    // shift/fiscal/printer/network state yet, so nothing is persisted here.
+    if (body.data.fiscal.status === 'ERROR' || body.data.printer.status === 'ERROR') {
+      request.log.warn(
+        { deviceId: device.id, fiscal: body.data.fiscal, printer: body.data.printer },
+        'pos-sync: heartbeat reported a degraded fiscal or printer status'
+      );
+    }
+
+    const now = new Date();
+    const [, tenant, latestSnapshot, storeSettings] = await Promise.all([
+      prisma.posDevice.update({ where: { id: device.id }, data: { lastSeenAt: now } }),
+      prisma.tenant.findUnique({
+        where: { id: device.tenantId },
+        select: { planExpiresAt: true, blockedAt: true },
+      }),
+      prisma.catalogSnapshot.findFirst({
+        where: { tenantId: device.tenantId, storeId: device.storeId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      }),
+      prisma.posSettings.findUnique({
+        where: { storeId: device.storeId },
+        select: { version: true },
+      }),
+    ]);
+
+    return sendSuccess(
+      reply,
+      200,
+      {
+        serverTime: now.toISOString(),
+        licenseStatus: getLicenseStatus(tenant ?? { planExpiresAt: null, blockedAt: null }),
+        catalogVersion: latestSnapshot?.version ?? 0,
+        settingsVersion: storeSettings?.version ?? 1,
+        // Honest placeholder: no CloudCommand model yet
+        // (docs/SBGCLOUD_ARCHITECTURE.md §12).
+        hasCommands: false,
+      },
+      request
+    );
   });
 
   fastify.get('/pos/v1/catalog/snapshot', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveDevice(request.headers.authorization);
     if (!device) return unauthorized(reply, request);
 
-    // Delta sync (query.since) is out of scope for this sprint — always
-    // return the latest snapshot for the device's store.
+    const query = catalogQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'storeId query parameter is required', request, {
+        issues: query.error.issues,
+      });
+    }
+    // §9: a device requesting another store's catalog is a validation
+    // error, never a silent redirect to its own store.
+    if (query.data.storeId !== device.storeId) {
+      return sendError(
+        reply,
+        400,
+        'VALIDATION_ERROR',
+        "storeId does not match the authenticated device's store",
+        request
+      );
+    }
+
+    // sinceVersion is accepted but has no effect in v1 — delta sync is out
+    // of scope (§9: `full` is always true), so the latest full snapshot is
+    // always returned.
     const snapshot = await prisma.catalogSnapshot.findFirst({
       where: { tenantId: device.tenantId, storeId: device.storeId },
       orderBy: { version: 'desc' },
     });
     if (!snapshot) {
-      return reply.status(404).send({ success: false, error: 'No catalog snapshot available yet' });
+      return sendError(reply, 404, 'NO_SNAPSHOT_AVAILABLE', 'No catalog snapshot available yet', request);
     }
 
     await prisma.syncCursor.upsert({
@@ -188,36 +344,230 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       update: { lastCatalogVersion: snapshot.version, lastSyncAt: new Date() },
     });
 
-    return {
-      success: true,
-      data: {
-        version: snapshot.version,
-        payload: snapshot.payload,
-        createdAt: snapshot.createdAt,
-      },
+    // Legacy snapshots (built before categories were added to the payload)
+    // stored only { products } — serve missing arrays as empty rather than
+    // failing or forcing a rebuild.
+    const payload = (snapshot.payload ?? {}) as Record<string, unknown[]>;
+    const body = {
+      categories: payload.categories ?? [],
+      products: payload.products ?? [],
+      barcodes: payload.barcodes ?? [],
+      uzProfiles: payload.uzProfiles ?? [],
     };
+
+    return sendSuccess(
+      reply,
+      200,
+      {
+        version: snapshot.version,
+        checksum: checksumOf(body),
+        full: true,
+        ...body,
+      },
+      request
+    );
   });
 
   fastify.get('/pos/v1/settings', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveDevice(request.headers.authorization);
     if (!device) return unauthorized(reply, request);
 
-    // Minimal, honest set: there is no per-store currency/timezone field in
-    // the current schema (Sellgram Commerce is single-currency, single-TZ
-    // today — see Product.currency default and TZ in .env.example). Do not
-    // invent per-store settings storage here; revisit once PosSettings
-    // (docs/SBGCLOUD_ARCHITECTURE.md §12) actually exists.
-    return {
-      success: true,
-      data: {
-        currency: 'UZS',
-        timezone: 'Asia/Tashkent',
+    const stored = await prisma.posSettings.findUnique({
+      where: { storeId: device.storeId },
+      select: { version: true, payload: true },
+    });
+
+    // A store that has never configured POS settings still gets a valid,
+    // parseable eight-key document (§10) — empty defaults, version 1.
+    const settings = stored
+      ? (stored.payload as Record<string, unknown>)
+      : {
+          taxProfile: {},
+          paymentMethods: [],
+          receiptTemplate: {},
+          printerProfile: {},
+          fiscalProfile: {},
+          offlineLimits: {},
+          roundingRules: {},
+          featureFlags: {},
+        };
+
+    return sendSuccess(
+      reply,
+      200,
+      {
+        version: stored?.version ?? 1,
+        checksum: checksumOf(settings),
+        settings,
       },
-    };
+      request
+    );
   });
 
-  fastify.post('/pos/v1/sale-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
-    return notImplemented(reply, 'sale event ingestion');
+  fastify.post('/pos/v1/sale-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveDevice(request.headers.authorization);
+    if (!device) return unauthorized(reply, request);
+
+    const body = saleEventSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid sale event', request, {
+        issues: body.error.issues,
+      });
+    }
+
+    // Same rule as heartbeat (§8): identity comes from the token, never
+    // the body — a mismatch is a client bug, not a silent override.
+    if (body.data.deviceId !== device.id) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'deviceId does not match the authenticated device', request);
+    }
+    if (body.data.storeId !== device.storeId) {
+      return sendError(
+        reply,
+        400,
+        'VALIDATION_ERROR',
+        "storeId does not match the authenticated device's store",
+        request
+      );
+    }
+
+    const payloadHash = checksumOf(body.data);
+
+    const findExisting = () =>
+      prisma.saleEvent.findUnique({
+        where: { idempotencyKey: body.data.idempotencyKey },
+        select: { id: true, payloadHash: true, warnings: true },
+      });
+    const respondForExisting = (existing: NonNullable<Awaited<ReturnType<typeof findExisting>>>) => {
+      if (existing.payloadHash !== payloadHash) {
+        // §5: same key, different payload — a client bug; never guess
+        // which version is "correct".
+        return sendError(
+          reply,
+          409,
+          'IDEMPOTENCY_KEY_REUSED',
+          'idempotencyKey was already used with a different payload',
+          request
+        );
+      }
+      // §5: identical replay — same status, same body, no side effects.
+      return sendSuccess(reply, 201, { eventId: existing.id, warnings: existing.warnings }, request);
+    };
+
+    const existing = await findExisting();
+    if (existing) return respondForExisting(existing);
+
+    // §11: only SALE_COMPLETED with a completed/fiscalized status derives
+    // stock. Refund/cancel stock effects are intentionally unspecified in
+    // the contract — do not speculate here.
+    const derivesStock =
+      body.data.eventType === 'SALE_COMPLETED' &&
+      (body.data.status === 'COMPLETED' || body.data.status === 'FISCALIZED');
+
+    const warnings: SaleWarning[] = [];
+    const ledgerRows: Array<{
+      tenantId: string;
+      productId: string;
+      variantId: string | null;
+      delta: number;
+      reason: 'POS_SALE';
+      sourceType: string;
+    }> = [];
+
+    if (derivesStock) {
+      const referencedIds = [...new Set(body.data.items.map((i) => i.productId).filter((id): id is string => !!id))];
+      const known = referencedIds.length
+        ? await prisma.product.findMany({
+            where: { id: { in: referencedIds }, tenantId: device.tenantId },
+            select: { id: true },
+          })
+        : [];
+      const knownIds = new Set(known.map((p) => p.id));
+
+      body.data.items.forEach((item, index) => {
+        if (!item.productId) {
+          warnings.push({
+            index,
+            code: 'MISSING_PRODUCT_REFERENCE',
+            message: 'Line item has no productId — no stock ledger entry derived',
+          });
+          return;
+        }
+        if (!knownIds.has(item.productId)) {
+          // §18: the sale already happened at the till — accept and store
+          // it, flag the line item for reconciliation instead of rejecting.
+          warnings.push({
+            index,
+            code: 'UNKNOWN_PRODUCT',
+            message: 'productId is unknown to Cloud — no stock ledger entry derived',
+            productId: item.productId,
+          });
+          return;
+        }
+        if (typeof item.quantity !== 'number' || !Number.isInteger(item.quantity) || item.quantity <= 0) {
+          warnings.push({
+            index,
+            code: 'INVALID_QUANTITY',
+            message: 'quantity must be a positive integer — no stock ledger entry derived',
+            productId: item.productId,
+          });
+          return;
+        }
+        ledgerRows.push({
+          tenantId: device.tenantId,
+          productId: item.productId,
+          variantId: item.variantId ?? null,
+          delta: -item.quantity,
+          reason: 'POS_SALE',
+          sourceType: 'SaleEvent',
+        });
+      });
+    }
+
+    let event;
+    try {
+      event = await prisma.$transaction(async (tx) => {
+        const created = await tx.saleEvent.create({
+          data: {
+            tenantId: device.tenantId,
+            storeId: device.storeId,
+            deviceId: device.id,
+            localSaleId: body.data.localSaleId,
+            localShiftId: body.data.localShiftId,
+            eventType: body.data.eventType,
+            status: body.data.status,
+            receiptNumber: body.data.receiptNumber,
+            idempotencyKey: body.data.idempotencyKey,
+            payloadHash,
+            occurredAt: new Date(body.data.occurredAt),
+            payload: {
+              items: body.data.items,
+              payments: body.data.payments,
+              totals: body.data.totals,
+              fiscal: body.data.fiscal,
+              print: body.data.print,
+            } as any,
+            warnings: warnings as any,
+          },
+          select: { id: true },
+        });
+        if (ledgerRows.length) {
+          await tx.stockLedgerEntry.createMany({
+            data: ledgerRows.map((row) => ({ ...row, sourceId: created.id })),
+          });
+        }
+        return created;
+      });
+    } catch (err: any) {
+      // Concurrent duplicate lost the unique-idempotencyKey race — resolve
+      // it exactly like a replay that arrived a moment later.
+      if (err?.code === 'P2002') {
+        const winner = await findExisting();
+        if (winner) return respondForExisting(winner);
+      }
+      throw err;
+    }
+
+    return sendSuccess(reply, 201, { eventId: event.id, warnings }, request);
   });
 
   fastify.post('/pos/v1/fiscal-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {

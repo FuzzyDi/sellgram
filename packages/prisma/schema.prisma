@@ -105,6 +105,11 @@ model Tenant {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
+  // Set/cleared only by system-admin block/unblock (service.ts
+  // blockSystemTenant/unblockSystemTenant) — a distinct signal from
+  // deletedAt (soft-delete) or plan expiry, consumed by POS Sync's
+  // heartbeat licenseStatus (apps/api/src/lib/billing.ts getLicenseStatus).
+  blockedAt     DateTime?
 
   users              User[]
   stores             Store[]
@@ -128,6 +133,8 @@ model Tenant {
   posDevices         PosDevice[]
   catalogSnapshots   CatalogSnapshot[]
   stockLedgerEntries StockLedgerEntry[]
+  posSettings        PosSettings[]
+  saleEvents         SaleEvent[]
 
   @@map("tenants")
 }
@@ -210,6 +217,8 @@ model Store {
   broadcasts       BroadcastCampaign[]
   posDevices       PosDevice[]
   catalogSnapshots CatalogSnapshot[]
+  posSettings      PosSettings?
+  saleEvents       SaleEvent[]
 
   @@index([tenantId])
   @@map("stores")
@@ -948,6 +957,7 @@ model PosDevice {
 
   activations DeviceActivation[]
   syncCursor  SyncCursor?
+  saleEvents  SaleEvent[]
 
   @@index([tenantId, storeId])
   @@map("pos_devices")
@@ -979,6 +989,78 @@ model CatalogSnapshot {
 
   @@index([tenantId, storeId, version])
   @@map("catalog_snapshots")
+}
+
+enum SaleEventType {
+  SALE_CREATED
+  SALE_PAID
+  SALE_FISCALIZED
+  SALE_COMPLETED
+  SALE_CANCELLED
+  SALE_REFUNDED
+  SALE_FISCAL_UNKNOWN
+}
+
+enum SaleEventStatus {
+  FISCALIZED
+  FISCAL_UNKNOWN
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+// Append-only cloud-side mirror of sales that already completed locally
+// (docs/POS_SYNC_API.md §5/§11). Never mutated — corrections arrive as new
+// events (SALE_CANCELLED, SALE_REFUNDED, FISCAL_RECOVERED), never edits.
+// payloadHash + the unique idempotencyKey implement §5: an identical replay
+// returns the stored result; a different payload under the same key is a
+// client bug rejected with 409 IDEMPOTENCY_KEY_REUSED.
+model SaleEvent {
+  id             String          @id @default(cuid())
+  tenantId       String
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId        String
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  deviceId       String
+  device         PosDevice       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  localSaleId    String
+  localShiftId   String
+  eventType      SaleEventType
+  status         SaleEventStatus
+  receiptNumber  Int
+  idempotencyKey String          @unique
+  payloadHash    String
+  occurredAt     DateTime
+  payload        Json
+  // Per-item ingest warnings (UNKNOWN_PRODUCT etc, docs/POS_SYNC_API.md
+  // §11/§18) — stored, not recomputed, so a §5 replay returns the exact
+  // same body the first attempt got.
+  warnings       Json
+  createdAt      DateTime        @default(now())
+
+  @@index([tenantId, storeId, localSaleId])
+  @@index([tenantId, occurredAt])
+  @@map("sale_events")
+}
+
+// Store-scoped POS operational settings (docs/POS_SYNC_API.md §10).
+// payload is the eight-key settings body (taxProfile, paymentMethods, ...)
+// with intentionally unconstrained internals — the nested shapes depend on
+// the eventual Uzbekistan fiscal integration partner and are not modeled
+// as columns on purpose. version bumps on every store-admin write.
+model PosSettings {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId   String   @unique
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  version   Int      @default(1)
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("pos_settings")
 }
 
 model SyncCursor {

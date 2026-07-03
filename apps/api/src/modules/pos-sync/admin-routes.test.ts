@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
     posDevice: { create: vi.fn() },
     deviceActivation: { create: vi.fn() },
     product: { findMany: vi.fn().mockResolvedValue([]) },
+    category: { findMany: vi.fn().mockResolvedValue([]) },
     catalogSnapshot: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
+    posSettings: { upsert: vi.fn() },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
@@ -34,6 +36,7 @@ describe('pos-sync.admin-routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.prisma.product.findMany.mockResolvedValue([]);
+    mocks.prisma.category.findMany.mockResolvedValue([]);
     mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue(null);
   });
 
@@ -98,6 +101,9 @@ describe('pos-sync.admin-routes', () => {
       mocks.prisma.product.findMany.mockResolvedValue([
         { id: 'p-1', name: 'Widget', sku: 'W1', price: 10000, currency: 'UZS', stockQty: 5, categoryId: null, variants: [] },
       ]);
+      mocks.prisma.category.findMany.mockResolvedValue([
+        { id: 'c-1', name: 'Widgets', slug: 'widgets', sortOrder: 0, parentId: null },
+      ]);
       mocks.prisma.catalogSnapshot.create.mockResolvedValue({ id: 'snap-1', version: 1, createdAt: new Date() });
 
       const app = await buildApp();
@@ -115,7 +121,12 @@ describe('pos-sync.admin-routes', () => {
             tenantId: 'tenant-1',
             storeId: 'store-1',
             version: 1,
-            payload: { products: [expect.objectContaining({ id: 'p-1', name: 'Widget' })] },
+            payload: {
+              categories: [expect.objectContaining({ id: 'c-1', name: 'Widgets' })],
+              products: [expect.objectContaining({ id: 'p-1', name: 'Widget' })],
+              barcodes: [],
+              uzProfiles: [],
+            },
           }),
         })
       );
@@ -151,6 +162,74 @@ describe('pos-sync.admin-routes', () => {
 
       expect(response.statusCode).toBe(404);
       expect(mocks.prisma.catalogSnapshot.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  describe('PUT /pos-devices/settings', () => {
+    const validSettings = {
+      taxProfile: { vat: 12 },
+      paymentMethods: [{ code: 'cash' }],
+      receiptTemplate: {},
+      printerProfile: {},
+      fiscalProfile: {},
+      offlineLimits: { maxOfflineHours: 24 },
+      roundingRules: {},
+      featureFlags: {},
+    };
+
+    it('upserts the store settings document and returns the version', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.posSettings.upsert.mockResolvedValue({
+        storeId: 'store-1', version: 2, updatedAt: new Date(),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/pos-devices/settings',
+        payload: { storeId: 'store-1', settings: validSettings },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.version).toBe(2);
+      expect(mocks.prisma.posSettings.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { storeId: 'store-1' },
+          create: expect.objectContaining({ tenantId: 'tenant-1', storeId: 'store-1', version: 1, payload: validSettings }),
+          update: expect.objectContaining({ version: { increment: 1 }, payload: validSettings }),
+        })
+      );
+      await app.close();
+    });
+
+    it('returns 400 when a settings key is missing', async () => {
+      const { featureFlags: _omit, ...incomplete } = validSettings;
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/pos-devices/settings',
+        payload: { storeId: 'store-1', settings: incomplete },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.posSettings.upsert).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 404 when the store does not belong to the tenant', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/pos-devices/settings',
+        payload: { storeId: 'store-foreign', settings: validSettings },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.posSettings.upsert).not.toHaveBeenCalled();
       await app.close();
     });
   });

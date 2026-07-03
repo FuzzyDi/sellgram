@@ -19,3 +19,22 @@ export function getEffectivePlan(plan: string | null | undefined, planExpiresAt:
 export function planDowngradeThreshold(): Date {
   return new Date(Date.now() - GRACE_MS);
 }
+
+export type LicenseStatus = 'ACTIVE' | 'GRACE_PERIOD' | 'EXPIRED' | 'BLOCKED';
+
+/**
+ * POS Sync heartbeat licenseStatus (docs/POS_SYNC_API.md §8). BLOCKED takes
+ * priority over plan expiry — it's an explicit system-admin action
+ * (blockSystemTenant/unblockSystemTenant), not derived from billing dates.
+ */
+export function getLicenseStatus(tenant: {
+  planExpiresAt: Date | null | undefined;
+  blockedAt: Date | null | undefined;
+}): LicenseStatus {
+  if (tenant.blockedAt) return 'BLOCKED';
+  if (!tenant.planExpiresAt) return 'ACTIVE';
+  const now = Date.now();
+  if (now <= tenant.planExpiresAt.getTime()) return 'ACTIVE';
+  if (now <= tenant.planExpiresAt.getTime() + GRACE_MS) return 'GRACE_PERIOD';
+  return 'EXPIRED';
+}
