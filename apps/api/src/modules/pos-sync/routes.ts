@@ -11,9 +11,9 @@ import { sendError, sendSuccess } from './envelope.js';
  *
  * Implemented: device activation, heartbeat, catalog snapshot (manual,
  * admin-triggered — see admin-routes.ts), settings, and idempotent sale
- * event ingestion (roadmap step 4). Fiscal/shift ingestion and cloud
- * commands are intentionally still stubs (501) — roadmap steps 5-6,
- * pending a confirmed fiscal integration partner for Uzbekistan.
+ * and stock event ingestion (roadmap step 4 + §14). Fiscal/shift ingestion
+ * and cloud commands are intentionally still stubs (501) — roadmap steps
+ * 5-6, pending a confirmed fiscal integration partner for Uzbekistan.
  *
  * Do not wire Order/prisma.order access into this module — POS sale data is
  * kept out of the existing commerce domain model on purpose
@@ -94,6 +94,43 @@ const saleEventSchema = z.object({
 });
 
 type SaleWarning = { index: number; code: string; message: string; productId?: string };
+
+// Shared §5 semantics for every idempotent event endpoint: an identical
+// replay gets the stored result back (same 201, same body, no side
+// effects); the same key with a different payload is a client bug → 409.
+// Branches on data, never on reply.send()'s return value.
+function respondForExistingEvent(
+  reply: FastifyReply,
+  request: FastifyRequest,
+  existing: { id: string; payloadHash: string; warnings: unknown },
+  payloadHash: string
+) {
+  if (existing.payloadHash !== payloadHash) {
+    return sendError(
+      reply,
+      409,
+      'IDEMPOTENCY_KEY_REUSED',
+      'idempotencyKey was already used with a different payload',
+      request
+    );
+  }
+  return sendSuccess(reply, 201, { eventId: existing.id, warnings: existing.warnings }, request);
+}
+
+// Mirrors docs/pos-sync/schemas/stock-event.schema.json (§14) — non-sale
+// stock movements only. POS_SALE is deliberately absent from the enum:
+// sale-derived ledger rows come exclusively from sale events.
+const stockEventSchema = z.object({
+  deviceId: z.string().min(1),
+  storeId: z.string().min(1),
+  productId: z.string().min(1),
+  variantId: z.string().min(1).nullable().optional(),
+  delta: z.number().int(),
+  reason: z.enum(['POS_ADJUSTMENT', 'RESTOCK', 'OTHER']),
+  idempotencyKey: z.string().regex(/^[^:]+:stock:[^:]+:[A-Z_]+$/),
+  occurredAt: z.string().min(1),
+  note: z.string().optional(),
+});
 
 const heartbeatSchema = z.object({
   deviceId: z.string().min(1),
@@ -437,24 +474,9 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         where: { idempotencyKey: body.data.idempotencyKey },
         select: { id: true, payloadHash: true, warnings: true },
       });
-    const respondForExisting = (existing: NonNullable<Awaited<ReturnType<typeof findExisting>>>) => {
-      if (existing.payloadHash !== payloadHash) {
-        // §5: same key, different payload — a client bug; never guess
-        // which version is "correct".
-        return sendError(
-          reply,
-          409,
-          'IDEMPOTENCY_KEY_REUSED',
-          'idempotencyKey was already used with a different payload',
-          request
-        );
-      }
-      // §5: identical replay — same status, same body, no side effects.
-      return sendSuccess(reply, 201, { eventId: existing.id, warnings: existing.warnings }, request);
-    };
 
     const existing = await findExisting();
-    if (existing) return respondForExisting(existing);
+    if (existing) return respondForExistingEvent(reply, request, existing, payloadHash);
 
     // §11: only SALE_COMPLETED with a completed/fiscalized status derives
     // stock. Refund/cancel stock effects are intentionally unspecified in
@@ -562,7 +584,108 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       // it exactly like a replay that arrived a moment later.
       if (err?.code === 'P2002') {
         const winner = await findExisting();
-        if (winner) return respondForExisting(winner);
+        if (winner) return respondForExistingEvent(reply, request, winner, payloadHash);
+      }
+      throw err;
+    }
+
+    return sendSuccess(reply, 201, { eventId: event.id, warnings }, request);
+  });
+
+  fastify.post('/pos/v1/stock-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveDevice(request.headers.authorization);
+    if (!device) return unauthorized(reply, request);
+
+    const body = stockEventSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid stock event', request, {
+        issues: body.error.issues,
+      });
+    }
+
+    if (body.data.deviceId !== device.id) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'deviceId does not match the authenticated device', request);
+    }
+    if (body.data.storeId !== device.storeId) {
+      return sendError(
+        reply,
+        400,
+        'VALIDATION_ERROR',
+        "storeId does not match the authenticated device's store",
+        request
+      );
+    }
+
+    const payloadHash = checksumOf(body.data);
+
+    const findExisting = () =>
+      prisma.stockEvent.findUnique({
+        where: { idempotencyKey: body.data.idempotencyKey },
+        select: { id: true, payloadHash: true, warnings: true },
+      });
+
+    const existing = await findExisting();
+    if (existing) return respondForExistingEvent(reply, request, existing, payloadHash);
+
+    // §18 accept-don't-reject: the correction already happened at the
+    // till. An unknown product keeps the event (stored below) but derives
+    // no ledger row — StockLedgerEntry has a real FK to Product.
+    const product = await prisma.product.findFirst({
+      where: { id: body.data.productId, tenantId: device.tenantId },
+      select: { id: true },
+    });
+
+    const warnings: SaleWarning[] = [];
+    if (!product) {
+      // index kept for shape-consistency with sale-event warnings — a
+      // stock event always has exactly one item.
+      warnings.push({
+        index: 0,
+        code: 'UNKNOWN_PRODUCT',
+        message: 'productId is unknown to Cloud — no stock ledger entry derived',
+        productId: body.data.productId,
+      });
+    }
+
+    let event;
+    try {
+      event = await prisma.$transaction(async (tx) => {
+        const created = await tx.stockEvent.create({
+          data: {
+            tenantId: device.tenantId,
+            storeId: device.storeId,
+            deviceId: device.id,
+            productId: body.data.productId,
+            variantId: body.data.variantId ?? null,
+            delta: body.data.delta,
+            reason: body.data.reason,
+            idempotencyKey: body.data.idempotencyKey,
+            payloadHash,
+            occurredAt: new Date(body.data.occurredAt),
+            note: body.data.note ?? null,
+            warnings: warnings as any,
+          },
+          select: { id: true },
+        });
+        if (product) {
+          await tx.stockLedgerEntry.create({
+            data: {
+              tenantId: device.tenantId,
+              productId: body.data.productId,
+              variantId: body.data.variantId ?? null,
+              delta: body.data.delta,
+              reason: body.data.reason,
+              sourceType: 'StockEvent',
+              sourceId: created.id,
+            },
+          });
+        }
+        return created;
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        const winner = await findExisting();
+        if (winner) return respondForExistingEvent(reply, request, winner, payloadHash);
       }
       throw err;
     }
