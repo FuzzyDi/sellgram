@@ -151,9 +151,20 @@ describe('order.service integration', () => {
 
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    expect((rejected[0] as PromiseRejectedResult).reason.message).toBe(
-      'ORDER_CONCURRENT_MODIFICATION'
+    // The loser fails through one of two branches depending on timing:
+    // read-before-winner-commits → the optimistic updateMany guard matches
+    // 0 rows (ORDER_CONCURRENT_MODIFICATION); read-after → it already sees
+    // COMPLETED and fails canTransition (BAD_TRANSITION). Both prove the
+    // single-winner invariant this test exists for — asserting only the
+    // first made the test flaky under CI timing.
+    expect((rejected[0] as PromiseRejectedResult).reason.message).toMatch(
+      /^(ORDER_CONCURRENT_MODIFICATION|BAD_TRANSITION:COMPLETED:COMPLETED)$/
     );
+
+    const statusLogs = await testPrisma.orderStatusLog.findMany({ where: { orderId: order.id } });
+    expect(statusLogs).toHaveLength(1);
+    const finalOrder = await testPrisma.order.findUnique({ where: { id: order.id } });
+    expect(finalOrder!.status).toBe('COMPLETED');
   });
 
   it('awards loyalty points exactly once despite concurrent COMPLETED race', async () => {
