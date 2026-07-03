@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "stock-event.schema.json",
-  "title": "POS Sync API — POST /api/pos/v1/stock-events (proposed, not yet implemented — see POS_SYNC_API.md §14/§21)",
+  "title": "POS Sync API — POST /api/pos/v1/stock-events",
   "definitions": {
     "StockEvent": {
       "type": "object",
@@ -20,6 +20,35 @@
         "idempotencyKey": { "type": "string", "pattern": "^[^:]+:stock:[^:]+:[A-Z_]+$" },
         "occurredAt": { "type": "string", "format": "date-time" },
         "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "StockEventWarning": {
+      "type": "object",
+      "required": ["index", "code", "message"],
+      "properties": {
+        "index": { "type": "integer", "const": 0, "description": "Always 0 — a stock event has exactly one item; kept for shape-consistency with sale-event warnings." },
+        "code": { "type": "string", "enum": ["UNKNOWN_PRODUCT"] },
+        "message": { "type": "string" },
+        "productId": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "StockEventResponse": {
+      "type": "object",
+      "required": ["success", "data", "requestId"],
+      "properties": {
+        "success": { "const": true },
+        "data": {
+          "type": "object",
+          "required": ["eventId", "warnings"],
+          "properties": {
+            "eventId": { "type": "string" },
+            "warnings": { "type": "array", "items": { "$ref": "#/definitions/StockEventWarning" } }
+          },
+          "additionalProperties": false
+        },
+        "requestId": { "type": "string" }
       },
       "additionalProperties": false
     }
