@@ -39,6 +39,16 @@ step "Build: $SERVICES"
 $COMPOSE build $SERVICES
 log "Build complete"
 
+# prisma-init shares the api Dockerfile/context but is a separate compose
+# service/image — it is NOT rebuilt just because "api" was in $SERVICES.
+# Skipping this step left prisma-init on a stale image (old migrations
+# baked in), so `migrate deploy` silently saw fewer migrations than the
+# repo actually has and reported "no pending" even when new ones existed.
+# Always rebuild it so migrations are applied from the current checkout.
+step "Build: prisma-init (always, regardless of \$SERVICES)"
+$COMPOSE build prisma-init
+log "Build complete"
+
 step "Apply DB migrations"
 $COMPOSE run --rm prisma-init
 log "Migrations applied"
