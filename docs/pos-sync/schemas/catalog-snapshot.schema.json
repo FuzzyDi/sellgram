@@ -19,10 +19,11 @@
     },
     "CatalogSnapshotEnvelope": {
       "type": "object",
-      "required": ["success", "data"],
+      "required": ["success", "data", "requestId"],
       "properties": {
         "success": { "const": true },
-        "data": { "$ref": "#/definitions/CatalogSnapshotData" }
+        "data": { "$ref": "#/definitions/CatalogSnapshotData" },
+        "requestId": { "type": "string" }
       },
       "additionalProperties": false
     }

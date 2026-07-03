@@ -34,10 +34,11 @@
     },
     "SettingsEnvelope": {
       "type": "object",
-      "required": ["success", "data"],
+      "required": ["success", "data", "requestId"],
       "properties": {
         "success": { "const": true },
-        "data": { "$ref": "#/definitions/SettingsData" }
+        "data": { "$ref": "#/definitions/SettingsData" },
+        "requestId": { "type": "string" }
       },
       "additionalProperties": false
     }

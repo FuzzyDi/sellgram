@@ -830,6 +830,7 @@ export async function getSystemTenantDetail(id: string) {
 export async function blockSystemTenant(input: { id: string; changedBy: string }) {
   const tenant = await prisma.tenant.findUnique({ where: { id: input.id } });
   if (!tenant) throw new Error('TENANT_NOT_FOUND');
+  await prisma.tenant.update({ where: { id: input.id }, data: { blockedAt: new Date() } });
   await prisma.store.updateMany({ where: { tenantId: input.id }, data: { isActive: false } });
   await prisma.user.updateMany({ where: { tenantId: input.id }, data: { isActive: false } });
   await logSystemAction({
@@ -843,6 +844,7 @@ export async function blockSystemTenant(input: { id: string; changedBy: string }
 export async function unblockSystemTenant(input: { id: string; changedBy: string }) {
   const tenant = await prisma.tenant.findUnique({ where: { id: input.id } });
   if (!tenant) throw new Error('TENANT_NOT_FOUND');
+  await prisma.tenant.update({ where: { id: input.id }, data: { blockedAt: null } });
   await prisma.store.updateMany({ where: { tenantId: input.id }, data: { isActive: true } });
   await prisma.user.updateMany({ where: { tenantId: input.id, role: { in: ['OWNER', 'MANAGER'] } }, data: { isActive: true } });
   await logSystemAction({

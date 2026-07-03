@@ -325,7 +325,8 @@ cross-referencing the token.
     "catalogVersion": 1,
     "settingsVersion": 1,
     "hasCommands": false
-  }
+  },
+  "requestId": "string"
 }
 ```
 
@@ -333,7 +334,13 @@ cross-referencing the token.
   `localTime`) — purely informational, Cloud must never reject a request
   for clock skew in v1.
 - `licenseStatus` reflects the tenant's subscription/billing state (see
-  §16 for exactly what `BLOCKED` may and may not restrict).
+  §16 for exactly what `BLOCKED` may and may not restrict). `BLOCKED` is
+  driven by an explicit system-admin action (`Tenant.blockedAt`, set/cleared
+  by block/unblock in the system-admin module) — it is independent of
+  `GRACE_PERIOD`/`EXPIRED`, which are derived purely from `planExpiresAt`
+  and the same 3-day grace window `getEffectivePlan()` already uses
+  elsewhere for billing. There is currently no automatic non-payment path
+  that sets `BLOCKED` — only manual system-admin action does.
 - `catalogVersion`/`settingsVersion` let the device decide, cheaply and on
   every heartbeat, whether it needs to pull a fresh snapshot — without
   requiring a full catalog/settings fetch just to check.
@@ -365,15 +372,25 @@ error, not silently redirected). `sinceVersion` optional.
     "products": [],
     "barcodes": [],
     "uzProfiles": []
-  }
+  },
+  "requestId": "string"
 }
 ```
+
+A request with no snapshot built yet for the store is `404` with
+`error.code = "NO_SNAPSHOT_AVAILABLE"` — the store admin must trigger
+`POST /store-admin/pos-devices/catalog-snapshot` first.
 
 - `version` — the version of *this* response, for the device to store as
   its new baseline.
 - `checksum` — a content hash of the snapshot payload, so a device can
   verify it received a snapshot intact (e.g. after a truncated/interrupted
   download) without re-parsing the whole thing to detect corruption.
+  **v1 semantics: opaque.** A device compares checksums across fetches
+  (same checksum ⇒ identical content, changed checksum ⇒ re-pull applied) —
+  it does not independently re-derive the hash, because the exact
+  canonicalization (key order, whitespace) is not specified yet. Server-side
+  it is currently sha256 over the JSON serialization of the four arrays.
 - `full` — `true` means this response is a complete replacement snapshot;
   a future, non-v1 capability might set this `false` to mean "this is a
   delta from `sinceVersion`" — **delta sync is out of scope for this
@@ -413,9 +430,17 @@ store.
       "roundingRules": {},
       "featureFlags": {}
     }
-  }
+  },
+  "requestId": "string"
 }
 ```
+
+A store whose admin has never configured POS settings still gets a valid
+document: the empty eight-key body above, `version: 1`. The settings
+document is written by the store admin via
+`PUT /store-admin/pos-devices/settings`; every write bumps `version`, which
+is what heartbeat's `settingsVersion` reports (§8). `checksum` has the same
+v1 opaque semantics as the catalog snapshot's (§9).
 
 Each nested object's internal shape is intentionally not fixed by this
 document yet — `taxProfile`, `receiptTemplate`, `printerProfile`,
@@ -502,6 +527,34 @@ per sale ever arrives.
 A `SALE_COMPLETED` event (status `COMPLETED` or `FISCALIZED`) is the trigger
 for Cloud to derive `StockLedgerEntry` rows (`reason: POS_SALE`, one per
 line item) — see §14.
+
+**Response (`201` — both for a first-seen event and for an identical
+replay, which returns the same body per §5):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "eventId": "string",
+    "warnings": [
+      { "index": 0, "code": "UNKNOWN_PRODUCT", "message": "string", "productId": "string" }
+    ]
+  },
+  "requestId": "string"
+}
+```
+
+- `eventId` — Cloud's id for the stored event (informational; a device
+  keys its own bookkeeping on `localSaleId`/`idempotencyKey`, never on
+  this).
+- `warnings` — per-line-item ingest warnings (the §18 "flag the specific
+  line item" mechanism; this is the shape §18 refers to). The event is
+  accepted and stored regardless — a warned item just produced no
+  `StockLedgerEntry` row. Codes: `UNKNOWN_PRODUCT` (item's `productId`
+  unknown to Cloud), `MISSING_PRODUCT_REFERENCE` (item has no `productId`
+  at all), `INVALID_QUANTITY` (`quantity` missing or not a positive
+  integer). Warnings are computed once at first ingest and replayed
+  verbatim on duplicate delivery.
 
 ## 12. Fiscal events
 
@@ -734,12 +787,11 @@ without side effects (it is a pull, not a dequeue-on-read).
   a conflict at the business level, a dedupe at the transport level.
 - **Event references an unknown product.** The sale already happened
   locally and is not undoable — Cloud must still accept and store the sale
-  event (reject nothing that already happened at the till), but should flag
-  the specific line item for reconciliation (e.g.
-  `error` is *not* returned for the whole request; instead the accepted
-  response should surface a per-item warning, exact shape not yet
-  specified in this document) rather than silently dropping stock-ledger
-  effects for that item.
+  event (reject nothing that already happened at the till), but flags the
+  specific line item for reconciliation: `error` is *not* returned for the
+  whole request; the accepted `201` response carries a per-item `warnings`
+  array (shape defined in §11 — `{ index, code, message, productId? }`)
+  rather than silently dropping stock-ledger effects for that item.
 - **Event references an old catalog version.** Same principle — accept the
   sale (it happened against whatever catalog the device had at the time),
   do not require the event to reference the *current* `catalogVersion`.
@@ -873,24 +925,27 @@ without side effects (it is a pull, not a dequeue-on-read).
 document and diverges from it in several concrete ways. This section is a
 gap list, not a criticism — first wave was scoped deliberately narrow
 (no fiscal partner confirmed yet), and this contract is the target to close
-the gap against, not a description of what already exists. The `POST
-/activate` rows below are the one exception: that endpoint has since been
-brought in line with this contract (see §7) — every other row still
-describes real, unclosed gaps.
+the gap against, not a description of what already exists. The rows marked
+**Closed** below are the exception: `POST /activate`, `POST /heartbeat`,
+`GET /catalog/snapshot`, `GET /settings` and `POST /sale-events` have since
+been brought in line with this contract (see §7–§11) — every other row
+still describes real, unclosed gaps (fiscal/shift ingestion, stock-events,
+cloud commands).
 
 | Area | This contract | Current code | Gap |
 |---|---|---|---|
 | `POST /activate` request | `activationCode`, `deviceFingerprint`, `deviceName`, `deviceType`, `appVersion` | **Closed** — all five fields accepted; `deviceName`/`deviceType` stored as `reportedDeviceName`/`reportedDeviceType`, separate from the admin-set `name`/`deviceType` | No gap. Fingerprint collision with another active device is logged, not rejected (§7). |
 | `POST /activate` response | `accessToken` + `refreshToken`, `catalogVersion`, `settingsVersion` | **Closed** — both tokens minted (hash-only, same pattern as before), `catalogVersion`/`settingsVersion` returned | No gap in shape. `refreshToken` is stored but unconsumed — still no `token/refresh` endpoint in code or in this contract, so `accessToken` remains long-lived in practice (§4). `settingsVersion` is a stable placeholder (`1`) pending `PosSettings` existing. |
-| `POST /heartbeat` request | Rich payload: `shiftState`, `unsyncedEvents`, `fiscal{}`, `printer{}`, `network{}` | Request body ignored entirely | None of this is read, validated, or stored. |
-| `POST /heartbeat` response | `licenseStatus`, `catalogVersion`, `settingsVersion`, `hasCommands` | `{ serverTime }` only | No `licenseStatus` concept wired to `PosDevice`/`Tenant` (a *conceptually* adjacent mechanism, `getEffectivePlan()`'s grace-period logic in `apps/api/src/lib/billing.ts`, exists for tenant billing but is not connected to POS devices). No version/command hints returned. |
-| `GET /catalog/snapshot` request | `storeId`, `sinceVersion` query params | Ignored — always the authenticated device's own store, always latest version | `sinceVersion`/delta sync explicitly out of scope per existing code comment — matches this contract's "`full` is always `true` in v1" stance, so this specific gap is intentional, not accidental. |
-| `GET /catalog/snapshot` response | Top-level `categories`/`products`/`barcodes`/`uzProfiles`, `checksum`, `full` | `{ version, payload: { products }, createdAt }` | Response shape needs restructuring; no checksum; no categories/barcodes/uzProfiles (barcodes/uzProfiles have no backing model yet — see `docs/SBGCLOUD_ARCHITECTURE.md` §12). |
-| `GET /settings` response | Versioned, structured (`taxProfile`, `paymentMethods`, `receiptTemplate`, `printerProfile`, `fiscalProfile`, `offlineLimits`, `roundingRules`, `featureFlags`) | Hardcoded `{ currency: 'UZS', timezone: 'Asia/Tashkent' }` | `PosSettings` model does not exist yet (`docs/SBGCLOUD_ARCHITECTURE.md` §12, still future) — current response is an honest placeholder, not a partial implementation of this shape. |
-| Sale/fiscal/shift events | Full event-type vocabularies, idempotent ingestion, `StockLedgerEntry` derivation | `501 NOT_IMPLEMENTED` stubs | Entire feature area unimplemented. `SaleEvent`/`FiscalReceipt`/`ShiftProjection` models do not exist yet. `StockLedgerEntry` table exists (first wave) but nothing writes to it. |
+| `POST /heartbeat` request | Rich payload: `shiftState`, `unsyncedEvents`, `fiscal{}`, `printer{}`, `network{}` | **Closed** — full payload validated; mismatched `deviceId` rejected as `VALIDATION_ERROR`; degraded `fiscal`/`printer` status logged | No gap in validation. Payload fields (`shiftState`, `unsyncedEvents`, etc.) are validated and log-inspected but not persisted — no admin fleet-monitoring endpoint reads them yet, so there's nowhere to store them usefully. |
+| `POST /heartbeat` response | `licenseStatus`, `catalogVersion`, `settingsVersion`, `hasCommands` | **Closed** — `licenseStatus` derived via `getLicenseStatus()` (`apps/api/src/lib/billing.ts`) from `Tenant.planExpiresAt`/`Tenant.blockedAt`; `catalogVersion` from the latest snapshot | No gap in shape. `settingsVersion` (`1`) and `hasCommands` (`false`) are stable placeholders pending `PosSettings`/`CloudCommand` existing. `BLOCKED` only ever comes from explicit system-admin block/unblock — no automatic non-payment path sets it beyond what `EXPIRED` already covers. |
+| `GET /catalog/snapshot` request | `storeId`, `sinceVersion` query params | **Closed** — `storeId` required and must match the device's own store (else `VALIDATION_ERROR`); `sinceVersion` accepted but inert | No gap. `sinceVersion` being inert matches this contract's own v1 stance (`full` is always `true`, delta sync out of scope). |
+| `GET /catalog/snapshot` response | Top-level `categories`/`products`/`barcodes`/`uzProfiles`, `checksum`, `full` | **Closed** — contract shape served; snapshot builder now stores categories alongside products; legacy `{ products }`-only snapshots served with empty arrays for the missing keys | No gap in shape. `barcodes`/`uzProfiles` are always `[]` pending the `Barcode`/`ProductUzProfile` models (§12). `checksum` is opaque in v1 (§9). |
+| `GET /settings` response | Versioned, structured (`taxProfile`, `paymentMethods`, `receiptTemplate`, `printerProfile`, `fiscalProfile`, `offlineLimits`, `roundingRules`, `featureFlags`) | **Closed** — backed by the new `PosSettings` model (store-scoped, `version` + `payload Json`), written via `PUT /store-admin/pos-devices/settings`; unconfigured stores get empty eight-key defaults at version 1 | No gap in shape. Nested shapes are whatever the admin stored — unconstrained by design pending a fiscal partner (§10). The old `currency`/`timezone` placeholder response is gone (not part of the contract body). `settingsVersion` in `/activate` and `/heartbeat` now reports the real `PosSettings.version`. |
+| Sale events | Full event-type vocabulary, idempotent ingestion, `StockLedgerEntry` derivation | **Closed** — `SaleEvent` model (append-only, unique `idempotencyKey` + payload hash), full §5 semantics (identical replay → stored result; different payload → 409), `SALE_COMPLETED` derives `StockLedgerEntry` rows, per-item warnings per §11/§18 | No gap in ingestion. Stock *reconciliation* strategy vs Sellgram Commerce's `StockMovement` is still undefined (`docs/SBGCLOUD_ARCHITECTURE.md` §13 step 4 flags it as a prerequisite for real-fleet enablement). Refund/cancel stock effects intentionally unspecified — only `SALE_COMPLETED` derives stock. |
+| Fiscal/shift events | Full event-type vocabularies, idempotent ingestion | `501 NOT_IMPLEMENTED` stubs | `FiscalReceipt`/`ShiftProjection` models do not exist yet — roadmap step 5, pending a confirmed fiscal integration partner. |
 | Stock movement events | `POST /stock-events` (proposed, §14) | Does not exist in any form, not even a stub | Genuinely new endpoint surfaced by writing this contract — not previously stubbed at all. |
 | Cloud commands | `GET /commands`, `POST /commands/:id/ack` with typed command list | `501 NOT_IMPLEMENTED` stubs (endpoints exist, no logic) | `CloudCommand` model does not exist yet. Allowed/forbidden command type enforcement not implemented. |
-| Idempotency | Required on every critical event, enforced Cloud-side | Not applicable yet — no event endpoint accepts a body beyond 501 | No `idempotencyKey` handling exists anywhere in the codebase yet. |
+| Idempotency | Required on every critical event, enforced Cloud-side | **Partially closed** — full §5 semantics implemented for sale-events (unique key, payload-hash reuse detection, stored-result replay, concurrent-race handling) | Fiscal/shift (and the proposed stock-events) endpoints will reuse the same pattern when implemented — until then idempotency exists only on the sale-events surface. |
 | Rate limiting | 5/min on activate, moderate baseline elsewhere | **Already matches** — implemented exactly as described in §19 | No gap. |
 | Base path | `/api/pos/v1` | **Already matches** | No gap. |
 

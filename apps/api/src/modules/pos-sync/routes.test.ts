@@ -4,9 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     deviceActivation: { findUnique: vi.fn(), update: vi.fn() },
-    posDevice: { update: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
+    posDevice: { update: vi.fn().mockResolvedValue({}), findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
     syncCursor: { upsert: vi.fn().mockResolvedValue({}) },
     catalogSnapshot: { findFirst: vi.fn().mockResolvedValue(null) },
+    posSettings: { findUnique: vi.fn().mockResolvedValue(null) },
+    tenant: { findUnique: vi.fn().mockResolvedValue({ planExpiresAt: null, blockedAt: null }) },
+    saleEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
+    product: { findMany: vi.fn().mockResolvedValue([]) },
+    stockLedgerEntry: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
     $transaction: vi.fn(),
   },
 }));
@@ -180,24 +185,101 @@ describe('pos-sync.routes', () => {
     });
   });
 
+  const validHeartbeatPayload = {
+    deviceId: 'dev-1',
+    localTime: '2026-07-03T10:00:00+05:00',
+    appVersion: '0.1.0',
+    localCoreVersion: '0.1.0',
+    shiftState: 'OPEN',
+    unsyncedEvents: 0,
+    fiscal: { status: 'OK', terminalId: 'term-1', unsentCount: 0, zRemaining: 10 },
+    printer: { status: 'OK' },
+    network: { status: 'ONLINE' },
+  };
+
   describe('POST /api/pos/v1/heartbeat', () => {
-    it('updates lastSeenAt for a valid device key', async () => {
+    it('updates lastSeenAt and returns license/version info for a valid device key', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
       });
-      mocks.prisma.posDevice.update.mockResolvedValue({});
+      mocks.prisma.tenant.findUnique.mockResolvedValue({ planExpiresAt: null, blockedAt: null });
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ version: 4 });
+      mocks.prisma.posSettings.findUnique.mockResolvedValueOnce({ version: 7 });
 
       const app = await buildApp();
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/heartbeat',
         headers: { authorization: 'Bearer pos_validkey' },
+        payload: validHeartbeatPayload,
       });
 
       expect(response.statusCode).toBe(200);
       expect(mocks.prisma.posDevice.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'dev-1' } })
       );
+      const body = response.json();
+      expect(typeof body.requestId).toBe('string');
+      expect(body.data.licenseStatus).toBe('ACTIVE');
+      expect(body.data.catalogVersion).toBe(4);
+      expect(body.data.settingsVersion).toBe(7);
+      expect(body.data.hasCommands).toBe(false);
+      await app.close();
+    });
+
+    it('reflects a BLOCKED tenant in licenseStatus', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      mocks.prisma.tenant.findUnique.mockResolvedValue({ planExpiresAt: null, blockedAt: new Date() });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/heartbeat',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validHeartbeatPayload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.licenseStatus).toBe('BLOCKED');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when body deviceId does not match the authenticated device', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/heartbeat',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { ...validHeartbeatPayload, deviceId: 'dev-other' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when a required field is missing', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      const { fiscal: _omit, ...payload } = validHeartbeatPayload;
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/heartbeat',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
     });
 
@@ -224,12 +306,69 @@ describe('pos-sync.routes', () => {
   });
 
   describe('GET /api/pos/v1/catalog/snapshot', () => {
-    it('returns the latest snapshot for the device store', async () => {
+    it('returns the latest snapshot in the contract shape for the device store', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
       });
       mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({
-        version: 3, payload: { products: [] }, createdAt: new Date(),
+        version: 3,
+        payload: {
+          categories: [{ id: 'c-1', name: 'Drinks' }],
+          products: [{ id: 'p-1', name: 'Cola' }],
+          barcodes: [],
+          uzProfiles: [],
+        },
+        createdAt: new Date(),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
+        headers: { authorization: 'Bearer pos_validkey' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(typeof body.requestId).toBe('string');
+      expect(body.data.version).toBe(3);
+      expect(typeof body.data.checksum).toBe('string');
+      expect(body.data.full).toBe(true);
+      expect(body.data.categories).toEqual([{ id: 'c-1', name: 'Drinks' }]);
+      expect(body.data.products).toEqual([{ id: 'p-1', name: 'Cola' }]);
+      expect(body.data.barcodes).toEqual([]);
+      expect(body.data.uzProfiles).toEqual([]);
+      expect(mocks.prisma.syncCursor.upsert).toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('serves legacy { products }-only snapshots with empty arrays for the missing keys', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({
+        version: 1, payload: { products: [{ id: 'p-1' }] }, createdAt: new Date(),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
+        headers: { authorization: 'Bearer pos_validkey' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.products).toEqual([{ id: 'p-1' }]);
+      expect(body.data.categories).toEqual([]);
+      expect(body.data.barcodes).toEqual([]);
+      expect(body.data.uzProfiles).toEqual([]);
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when storeId is missing', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
       });
 
       const app = await buildApp();
@@ -239,13 +378,30 @@ describe('pos-sync.routes', () => {
         headers: { authorization: 'Bearer pos_validkey' },
       });
 
-      expect(response.statusCode).toBe(200);
-      expect(response.json().data.version).toBe(3);
-      expect(mocks.prisma.syncCursor.upsert).toHaveBeenCalled();
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
     });
 
-    it('returns 404 when no snapshot exists yet', async () => {
+    it("returns 400 VALIDATION_ERROR when storeId is not the device's own store", async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/snapshot?storeId=s-other',
+        headers: { authorization: 'Bearer pos_validkey' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      expect(mocks.prisma.catalogSnapshot.findFirst).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 404 NO_SNAPSHOT_AVAILABLE when no snapshot exists yet', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
       });
@@ -254,11 +410,12 @@ describe('pos-sync.routes', () => {
       const app = await buildApp();
       const response = await app.inject({
         method: 'GET',
-        url: '/api/pos/v1/catalog/snapshot',
+        url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
         headers: { authorization: 'Bearer pos_validkey' },
       });
 
       expect(response.statusCode).toBe(404);
+      expect(response.json().error.code).toBe('NO_SNAPSHOT_AVAILABLE');
       await app.close();
     });
 
@@ -268,7 +425,7 @@ describe('pos-sync.routes', () => {
       const app = await buildApp();
       const response = await app.inject({
         method: 'GET',
-        url: '/api/pos/v1/catalog/snapshot',
+        url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
         headers: { authorization: 'Bearer bad' },
       });
 
@@ -278,10 +435,21 @@ describe('pos-sync.routes', () => {
   });
 
   describe('GET /api/pos/v1/settings', () => {
-    it('returns minimal store settings for a valid device', async () => {
+    it('serves the stored PosSettings document with version and checksum', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
       });
+      const payload = {
+        taxProfile: { vat: 12 },
+        paymentMethods: [{ code: 'cash' }],
+        receiptTemplate: {},
+        printerProfile: {},
+        fiscalProfile: {},
+        offlineLimits: {},
+        roundingRules: {},
+        featureFlags: {},
+      };
+      mocks.prisma.posSettings.findUnique.mockResolvedValue({ version: 4, payload });
 
       const app = await buildApp();
       const response = await app.inject({
@@ -291,7 +459,40 @@ describe('pos-sync.routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().data).toEqual({ currency: 'UZS', timezone: 'Asia/Tashkent' });
+      const body = response.json();
+      expect(typeof body.requestId).toBe('string');
+      expect(body.data.version).toBe(4);
+      expect(typeof body.data.checksum).toBe('string');
+      expect(body.data.settings).toEqual(payload);
+      await app.close();
+    });
+
+    it('serves empty eight-key defaults as version 1 when no PosSettings row exists', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/settings',
+        headers: { authorization: 'Bearer pos_validkey' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.version).toBe(1);
+      expect(body.data.settings).toEqual({
+        taxProfile: {},
+        paymentMethods: [],
+        receiptTemplate: {},
+        printerProfile: {},
+        fiscalProfile: {},
+        offlineLimits: {},
+        roundingRules: {},
+        featureFlags: {},
+      });
       await app.close();
     });
 
@@ -303,9 +504,249 @@ describe('pos-sync.routes', () => {
     });
   });
 
+  describe('POST /api/pos/v1/sale-events', () => {
+    const validSaleEvent = {
+      deviceId: 'dev-1',
+      storeId: 's-1',
+      localSaleId: 'SALE-000001',
+      localShiftId: 'SHIFT-000001',
+      eventType: 'SALE_COMPLETED',
+      status: 'COMPLETED',
+      receiptNumber: 42,
+      idempotencyKey: 'dev-1:sale:SALE-000001:SALE_COMPLETED',
+      occurredAt: '2026-07-04T10:00:00+05:00',
+      items: [
+        { productId: 'p-1', quantity: 2, price: 10000 },
+        { productId: 'p-2', variantId: 'v-1', quantity: 1, price: 5000 },
+      ],
+      payments: [{ method: 'cash', amount: 25000 }],
+      totals: { total: 25000 },
+      fiscal: { status: 'OK' },
+      print: { status: 'OK' },
+    };
+
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      mocks.prisma.saleEvent.findUnique.mockResolvedValue(null);
+      mocks.prisma.saleEvent.create.mockResolvedValue({ id: 'evt-1' });
+      mocks.prisma.product.findMany.mockResolvedValue([{ id: 'p-1' }, { id: 'p-2' }]);
+      mocks.prisma.stockLedgerEntry.createMany.mockResolvedValue({ count: 2 });
+      mocks.prisma.$transaction.mockImplementation(async (fn: any) => fn(mocks.prisma));
+    });
+
+    it('ingests a SALE_COMPLETED event and derives stock ledger entries', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validSaleEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(typeof body.requestId).toBe('string');
+      expect(body.data.eventId).toBe('evt-1');
+      expect(body.data.warnings).toEqual([]);
+      expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            idempotencyKey: validSaleEvent.idempotencyKey,
+            eventType: 'SALE_COMPLETED',
+          }),
+        })
+      );
+      expect(mocks.prisma.stockLedgerEntry.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ productId: 'p-1', delta: -2, reason: 'POS_SALE', sourceType: 'SaleEvent', sourceId: 'evt-1' }),
+          expect.objectContaining({ productId: 'p-2', variantId: 'v-1', delta: -1, reason: 'POS_SALE', sourceId: 'evt-1' }),
+        ],
+      });
+      await app.close();
+    });
+
+    it('does not derive stock for a non-completing event type', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: {
+          ...validSaleEvent,
+          eventType: 'SALE_PAID',
+          idempotencyKey: 'dev-1:sale:SALE-000001:SALE_PAID',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.product.findMany).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockLedgerEntry.createMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('accepts an unknown product with an UNKNOWN_PRODUCT warning and skips its ledger row', async () => {
+      mocks.prisma.product.findMany.mockResolvedValue([{ id: 'p-1' }]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: {
+          ...validSaleEvent,
+          items: [
+            { productId: 'p-1', quantity: 2 },
+            { productId: 'p-ghost', quantity: 1 },
+          ],
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.data.warnings).toEqual([
+        expect.objectContaining({ index: 1, code: 'UNKNOWN_PRODUCT', productId: 'p-ghost' }),
+      ]);
+      expect(mocks.prisma.stockLedgerEntry.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ productId: 'p-1', delta: -2 })],
+      });
+      await app.close();
+    });
+
+    it('flags a non-integer quantity with INVALID_QUANTITY and skips its ledger row', async () => {
+      mocks.prisma.product.findMany.mockResolvedValue([{ id: 'p-1' }]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: {
+          ...validSaleEvent,
+          items: [{ productId: 'p-1', quantity: 1.5 }],
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.warnings).toEqual([
+        expect.objectContaining({ index: 0, code: 'INVALID_QUANTITY' }),
+      ]);
+      expect(mocks.prisma.stockLedgerEntry.createMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('replays an identical duplicate with the stored result and no side effects', async () => {
+      // First deliver the event for real to learn the exact payloadHash the
+      // handler computes, then replay against a stored row with that hash.
+      const app = await buildApp();
+      await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validSaleEvent,
+      });
+      const storedHash = mocks.prisma.saleEvent.create.mock.calls[0][0].data.payloadHash;
+
+      vi.clearAllMocks();
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      mocks.prisma.saleEvent.findUnique.mockResolvedValue({
+        id: 'evt-1', payloadHash: storedHash, warnings: [],
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validSaleEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data).toEqual({ eventId: 'evt-1', warnings: [] });
+      expect(mocks.prisma.saleEvent.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.stockLedgerEntry.createMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('rejects a reused idempotencyKey with a different payload as 409', async () => {
+      mocks.prisma.saleEvent.findUnique.mockResolvedValue({
+        id: 'evt-1', payloadHash: 'a-different-hash', warnings: [],
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validSaleEvent,
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe('IDEMPOTENCY_KEY_REUSED');
+      expect(mocks.prisma.saleEvent.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when body deviceId does not match the authenticated device', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { ...validSaleEvent, deviceId: 'dev-other' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it("returns 400 VALIDATION_ERROR when body storeId does not match the device's store", async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { ...validSaleEvent, storeId: 's-other' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when a required field is missing', async () => {
+      const { idempotencyKey: _omit, ...payload } = validSaleEvent;
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 401 without an Authorization header', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        payload: validSaleEvent,
+      });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+  });
+
   describe('still-stubbed endpoints', () => {
     const cases: Array<{ method: 'GET' | 'POST'; url: string }> = [
-      { method: 'POST', url: '/api/pos/v1/sale-events' },
       { method: 'POST', url: '/api/pos/v1/fiscal-events' },
       { method: 'POST', url: '/api/pos/v1/shift-events' },
       { method: 'GET', url: '/api/pos/v1/commands' },

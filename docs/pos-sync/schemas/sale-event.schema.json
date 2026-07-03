@@ -36,6 +36,36 @@
         "print": { "type": "object" }
       },
       "additionalProperties": false
+    },
+    "SaleEventWarning": {
+      "type": "object",
+      "required": ["index", "code", "message"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "code": { "type": "string", "enum": ["UNKNOWN_PRODUCT", "MISSING_PRODUCT_REFERENCE", "INVALID_QUANTITY"] },
+        "message": { "type": "string" },
+        "productId": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "description": "Per-line-item ingest warning (POS_SYNC_API.md §11/§18) — the event is accepted regardless; a warned item just produced no stock ledger entry."
+    },
+    "SaleEventResponse": {
+      "type": "object",
+      "required": ["success", "data", "requestId"],
+      "properties": {
+        "success": { "const": true },
+        "data": {
+          "type": "object",
+          "required": ["eventId", "warnings"],
+          "properties": {
+            "eventId": { "type": "string" },
+            "warnings": { "type": "array", "items": { "$ref": "#/definitions/SaleEventWarning" } }
+          },
+          "additionalProperties": false
+        },
+        "requestId": { "type": "string" }
+      },
+      "additionalProperties": false
     }
   }
 }

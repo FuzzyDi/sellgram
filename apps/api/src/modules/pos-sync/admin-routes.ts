@@ -27,6 +27,24 @@ const catalogSnapshotSchema = z.object({
   storeId: z.string().min(1),
 });
 
+// The eight-key settings body from docs/POS_SYNC_API.md §10. Internals are
+// intentionally unconstrained (they depend on a fiscal integration partner
+// not yet confirmed) — only the top-level keys and their object/array kind
+// are enforced here.
+const posSettingsSchema = z.object({
+  storeId: z.string().min(1),
+  settings: z.object({
+    taxProfile: z.record(z.unknown()),
+    paymentMethods: z.array(z.unknown()),
+    receiptTemplate: z.record(z.unknown()),
+    printerProfile: z.record(z.unknown()),
+    fiscalProfile: z.record(z.unknown()),
+    offlineLimits: z.record(z.unknown()),
+    roundingRules: z.record(z.unknown()),
+    featureFlags: z.record(z.unknown()),
+  }),
+});
+
 /**
  * Store-admin endpoints for POS device onboarding. Registered under
  * /api/store-admin — see docs/SBGCLOUD_ARCHITECTURE.md for the boundary
@@ -122,6 +140,12 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         orderBy: { createdAt: 'asc' },
       });
 
+      const categories = await prisma.category.findMany({
+        where: { tenantId, isActive: true },
+        select: { id: true, name: true, slug: true, sortOrder: true, parentId: true },
+        orderBy: { sortOrder: 'asc' },
+      });
+
       const last = await prisma.catalogSnapshot.findFirst({
         where: { tenantId, storeId: store.id },
         orderBy: { version: 'desc' },
@@ -134,12 +158,50 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           tenantId,
           storeId: store.id,
           version,
-          payload: { products } as any,
+          // barcodes/uzProfiles have no backing model yet (Barcode/
+          // ProductUzProfile, docs/SBGCLOUD_ARCHITECTURE.md §12) — stored
+          // empty so the payload shape matches docs/POS_SYNC_API.md §9.
+          payload: { categories, products, barcodes: [], uzProfiles: [] } as any,
         },
         select: { id: true, version: true, createdAt: true },
       });
 
       return reply.status(201).send({ success: true, data: snapshot });
+    }
+  );
+
+  // Upsert the store's POS settings document (docs/POS_SYNC_API.md §10).
+  // Devices pull it via GET /pos/v1/settings; version bumps on every write
+  // so heartbeat's settingsVersion tells devices when to re-pull.
+  fastify.put(
+    '/pos-devices/settings',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const body = posSettingsSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: body.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const settings = await prisma.posSettings.upsert({
+        where: { storeId: store.id },
+        create: {
+          tenantId,
+          storeId: store.id,
+          version: 1,
+          payload: body.data.settings as any,
+        },
+        update: {
+          version: { increment: 1 },
+          payload: body.data.settings as any,
+        },
+        select: { storeId: true, version: true, updatedAt: true },
+      });
+
+      return reply.status(200).send({ success: true, data: settings });
     }
   );
 }
