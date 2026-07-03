@@ -528,6 +528,22 @@ A `SALE_COMPLETED` event (status `COMPLETED` or `FISCALIZED`) is the trigger
 for Cloud to derive `StockLedgerEntry` rows (`reason: POS_SALE`, one per
 line item) — see §14.
 
+**Stock reconciliation (resolved — `docs/SBGCLOUD_ARCHITECTURE.md` §13 step
+4).** POS and the online storefront draw from **one shared physical
+warehouse**, so each derived `StockLedgerEntry` also atomically moves the
+live `Product`/`ProductVariant.stockQty` the storefront reads, and writes a
+`StockMovement` audit row alongside it (the same table/pattern already
+used for order placement, order cancellation, and manual admin stock
+adjustment — so `GET /store-admin/stock-movements` shows POS sales and
+online orders in one unified timeline). This happens synchronously inside
+the same transaction as the sale event — no separate async reconciliation
+job, because event ingestion is already idempotent (§5), so "apply exactly
+once" holds by construction. **The result is allowed to go negative and is
+never clamped to zero** — a POS sale reflects something that already
+happened at the till, possibly against a stale offline catalog snapshot
+(§9, §18); a negative number is the honest signal that an oversell
+occurred, not something to hide.
+
 **Response (`201` — both for a first-seen event and for an identical
 replay, which returns the same body per §5):**
 
@@ -553,7 +569,8 @@ replay, which returns the same body per §5):**
   `StockLedgerEntry` row. Codes: `UNKNOWN_PRODUCT` (item's `productId`
   unknown to Cloud), `MISSING_PRODUCT_REFERENCE` (item has no `productId`
   at all), `INVALID_QUANTITY` (`quantity` missing or not a positive
-  integer). Warnings are computed once at first ingest and replayed
+  integer), `UNKNOWN_VARIANT` (item's `variantId` doesn't belong to its
+  `productId`). Warnings are computed once at first ingest and replayed
   verbatim on duplicate delivery.
 
 ## 12. Fiscal events
@@ -671,13 +688,17 @@ truth for that reason code.
 ```
 
 The §18 accept-don't-reject principle applies here exactly as it does to
-sale events: a stock event referencing a `productId` unknown to Cloud is
+sale events: a stock event referencing a `productId` (or a `variantId` not
+belonging to that `productId` — `UNKNOWN_VARIANT`) unknown to Cloud is
 still stored (the correction already happened at the till) and answered
-`201` — it just derives no `StockLedgerEntry` row and carries an
-`UNKNOWN_PRODUCT` warning (`index` is always `0`; a stock event has
-exactly one item — the field is kept for shape-consistency with §11
-warnings). A known product derives one `StockLedgerEntry` row with the
-signed `delta` exactly as sent, `sourceType: "StockEvent"`.
+`201` — it just derives no `StockLedgerEntry` row and carries a warning
+(`index` is always `0`; a stock event has exactly one item — the field is
+kept for shape-consistency with §11 warnings). A known product/variant
+derives one `StockLedgerEntry` row with the signed `delta` exactly as
+sent, `sourceType: "StockEvent"` — and, per the reconciliation strategy in
+§11, also atomically moves the live `Product`/`ProductVariant.stockQty`
+and writes a `StockMovement` row (not clamped — the same "shared warehouse,
+allow negative" rule applies here too).
 
 ## 15. Cloud commands
 
@@ -965,7 +986,7 @@ the gap against, not a description of what already exists. The rows marked
 | `GET /catalog/snapshot` request | `storeId`, `sinceVersion` query params | **Closed** — `storeId` required and must match the device's own store (else `VALIDATION_ERROR`); `sinceVersion` accepted but inert | No gap. `sinceVersion` being inert matches this contract's own v1 stance (`full` is always `true`, delta sync out of scope). |
 | `GET /catalog/snapshot` response | Top-level `categories`/`products`/`barcodes`/`uzProfiles`, `checksum`, `full` | **Closed** — contract shape served; snapshot builder now stores categories alongside products; legacy `{ products }`-only snapshots served with empty arrays for the missing keys | No gap in shape. `barcodes`/`uzProfiles` are always `[]` pending the `Barcode`/`ProductUzProfile` models (§12). `checksum` is opaque in v1 (§9). |
 | `GET /settings` response | Versioned, structured (`taxProfile`, `paymentMethods`, `receiptTemplate`, `printerProfile`, `fiscalProfile`, `offlineLimits`, `roundingRules`, `featureFlags`) | **Closed** — backed by the new `PosSettings` model (store-scoped, `version` + `payload Json`), written via `PUT /store-admin/pos-devices/settings`; unconfigured stores get empty eight-key defaults at version 1 | No gap in shape. Nested shapes are whatever the admin stored — unconstrained by design pending a fiscal partner (§10). The old `currency`/`timezone` placeholder response is gone (not part of the contract body). `settingsVersion` in `/activate` and `/heartbeat` now reports the real `PosSettings.version`. |
-| Sale events | Full event-type vocabulary, idempotent ingestion, `StockLedgerEntry` derivation | **Closed** — `SaleEvent` model (append-only, unique `idempotencyKey` + payload hash), full §5 semantics (identical replay → stored result; different payload → 409), `SALE_COMPLETED` derives `StockLedgerEntry` rows, per-item warnings per §11/§18 | No gap in ingestion. Stock *reconciliation* strategy vs Sellgram Commerce's `StockMovement` is still undefined (`docs/SBGCLOUD_ARCHITECTURE.md` §13 step 4 flags it as a prerequisite for real-fleet enablement). Refund/cancel stock effects intentionally unspecified — only `SALE_COMPLETED` derives stock. |
+| Sale events | Full event-type vocabulary, idempotent ingestion, `StockLedgerEntry` derivation | **Closed** — `SaleEvent` model (append-only, unique `idempotencyKey` + payload hash), full §5 semantics (identical replay → stored result; different payload → 409), `SALE_COMPLETED` derives `StockLedgerEntry` rows, per-item warnings per §11/§18 | No gap in ingestion. Stock *reconciliation* strategy vs Sellgram Commerce's `StockMovement` is now resolved — see §11 (shared warehouse, synchronous atomic `stockQty` update, negative never clamped). Refund/cancel stock effects intentionally unspecified — only `SALE_COMPLETED` derives stock. |
 | Fiscal/shift events | Full event-type vocabularies, idempotent ingestion | `501 NOT_IMPLEMENTED` stubs | `FiscalReceipt`/`ShiftProjection` models do not exist yet — roadmap step 5, pending a confirmed fiscal integration partner. |
 | Stock movement events | `POST /stock-events` (§14) | **Closed** — `StockEvent` model (append-only, no FK on `productId` on purpose) + full §5 idempotency; known product derives a signed-delta `StockLedgerEntry` (`sourceType: 'StockEvent'`); unknown product stored with an `UNKNOWN_PRODUCT` warning, no ledger row | No gap. `POS_SALE` is rejected at the API — that reason code stays exclusive to sale-event derivation. |
 | Cloud commands | `GET /commands`, `POST /commands/:id/ack` with typed command list | `501 NOT_IMPLEMENTED` stubs (endpoints exist, no logic) | `CloudCommand` model does not exist yet. Allowed/forbidden command type enforcement not implemented. |
