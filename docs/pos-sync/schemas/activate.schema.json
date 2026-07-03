@@ -17,19 +17,27 @@
     },
     "ActivateResponse": {
       "type": "object",
-      "required": [
-        "success", "tenantId", "storeId", "deviceId",
-        "accessToken", "refreshToken", "catalogVersion", "settingsVersion"
-      ],
+      "required": ["success", "data", "requestId"],
       "properties": {
         "success": { "const": true },
-        "tenantId": { "type": "string" },
-        "storeId": { "type": "string" },
-        "deviceId": { "type": "string" },
-        "accessToken": { "type": "string" },
-        "refreshToken": { "type": "string" },
-        "catalogVersion": { "type": "integer", "minimum": 0 },
-        "settingsVersion": { "type": "integer", "minimum": 0 }
+        "data": {
+          "type": "object",
+          "required": [
+            "tenantId", "storeId", "deviceId",
+            "accessToken", "refreshToken", "catalogVersion", "settingsVersion"
+          ],
+          "properties": {
+            "tenantId": { "type": "string" },
+            "storeId": { "type": "string" },
+            "deviceId": { "type": "string" },
+            "accessToken": { "type": "string" },
+            "refreshToken": { "type": "string" },
+            "catalogVersion": { "type": "integer", "minimum": 0 },
+            "settingsVersion": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "requestId": { "type": "string" }
       },
       "additionalProperties": false
     }

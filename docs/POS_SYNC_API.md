@@ -229,20 +229,38 @@ hard — see §19.
 ```json
 {
   "success": true,
-  "tenantId": "string",
-  "storeId": "string",
-  "deviceId": "string",
-  "accessToken": "string",
-  "refreshToken": "string",
-  "catalogVersion": 1,
-  "settingsVersion": 1
+  "data": {
+    "tenantId": "string",
+    "storeId": "string",
+    "deviceId": "string",
+    "accessToken": "string",
+    "refreshToken": "string",
+    "catalogVersion": 1,
+    "settingsVersion": 1
+  },
+  "requestId": "string"
 }
 ```
+
+(This was shown flat, without the `data` wrapper, in an earlier draft of
+this document — that contradicted §6's general envelope rule. The nested
+form above is authoritative and matches the implementation.)
 
 Returning `catalogVersion`/`settingsVersion` here lets a freshly activated
 device decide immediately whether it already has a usable snapshot cached
 from a previous activation (re-activation case) or must pull one before its
-first sale.
+first sale. `refreshToken` is minted and stored (hash-only, same pattern as
+`accessToken`) but nothing consumes it yet — no `token/refresh` endpoint is
+specified in this document, so `accessToken` is still long-lived in
+practice (see §4).
+
+`deviceName`/`deviceType` in the request are stored separately
+(`reportedDeviceName`/`reportedDeviceType` on `PosDevice`) from the
+admin-set `name`/`deviceType` created via `POST /store-admin/pos-devices` —
+the admin's values remain authoritative for fleet display; the
+device-reported values (plus `appVersion` and `deviceFingerprint`) are
+informational/anomaly-detection only. `deviceFingerprint` collision with
+another `ACTIVE` device is logged as a warning, not rejected.
 
 **Failure modes:**
 
@@ -855,14 +873,15 @@ without side effects (it is a pull, not a dequeue-on-read).
 document and diverges from it in several concrete ways. This section is a
 gap list, not a criticism — first wave was scoped deliberately narrow
 (no fiscal partner confirmed yet), and this contract is the target to close
-the gap against, not a description of what already exists. **Nothing in
-this document has been used to change that file** — see the constraints at
-the top of this document's originating request.
+the gap against, not a description of what already exists. The `POST
+/activate` rows below are the one exception: that endpoint has since been
+brought in line with this contract (see §7) — every other row still
+describes real, unclosed gaps.
 
 | Area | This contract | Current code | Gap |
 |---|---|---|---|
-| `POST /activate` request | `activationCode`, `deviceFingerprint`, `deviceName`, `deviceType`, `appVersion` | `activationCode` only | Device-supplied fingerprint/name/type/version not accepted at all. `deviceName`/`deviceType` are currently set by the *admin* at device-creation time (`POST /store-admin/pos-devices`), not by the device at activation — this is a different flow than the contract implies and needs reconciling, not just field-adding. |
-| `POST /activate` response | `accessToken` + `refreshToken`, `catalogVersion`, `settingsVersion` | single `apiKey` (long-lived, hash-only, no expiry), no version fields | No access/refresh token model exists — `PosDevice.apiKeyHash`/`apiKeyPrefix` is a single static credential. No `refresh` endpoint exists in code *or* in this contract yet (see Open Questions). `catalogVersion`/`settingsVersion` not returned. |
+| `POST /activate` request | `activationCode`, `deviceFingerprint`, `deviceName`, `deviceType`, `appVersion` | **Closed** — all five fields accepted; `deviceName`/`deviceType` stored as `reportedDeviceName`/`reportedDeviceType`, separate from the admin-set `name`/`deviceType` | No gap. Fingerprint collision with another active device is logged, not rejected (§7). |
+| `POST /activate` response | `accessToken` + `refreshToken`, `catalogVersion`, `settingsVersion` | **Closed** — both tokens minted (hash-only, same pattern as before), `catalogVersion`/`settingsVersion` returned | No gap in shape. `refreshToken` is stored but unconsumed — still no `token/refresh` endpoint in code or in this contract, so `accessToken` remains long-lived in practice (§4). `settingsVersion` is a stable placeholder (`1`) pending `PosSettings` existing. |
 | `POST /heartbeat` request | Rich payload: `shiftState`, `unsyncedEvents`, `fiscal{}`, `printer{}`, `network{}` | Request body ignored entirely | None of this is read, validated, or stored. |
 | `POST /heartbeat` response | `licenseStatus`, `catalogVersion`, `settingsVersion`, `hasCommands` | `{ serverTime }` only | No `licenseStatus` concept wired to `PosDevice`/`Tenant` (a *conceptually* adjacent mechanism, `getEffectivePlan()`'s grace-period logic in `apps/api/src/lib/billing.ts`, exists for tenant billing but is not connected to POS devices). No version/command hints returned. |
 | `GET /catalog/snapshot` request | `storeId`, `sinceVersion` query params | Ignored — always the authenticated device's own store, always latest version | `sinceVersion`/delta sync explicitly out of scope per existing code comment — matches this contract's "`full` is always `true` in v1" stance, so this specific gap is intentional, not accidental. |
