@@ -1,28 +1,47 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "shift-event.schema.json",
-  "title": "POS Sync API — POST /api/pos/v1/shift-events",
+  "title": "POS Sync API — POST /api/pos/v1/shift-events (real SBG Lite POS Android contract, fiscal/shift/commands v1, 2026-07-04)",
   "definitions": {
     "ShiftEvent": {
       "type": "object",
-      "required": ["deviceId", "storeId", "localShiftId", "eventType", "idempotencyKey", "occurredAt"],
+      "required": [
+        "eventId", "eventType", "aggregateType", "aggregateId", "idempotencyKey",
+        "schemaVersion", "shiftNumber", "shiftState", "zReportStatus",
+        "rawDaemonResponse", "rawShiftPayload"
+      ],
       "properties": {
-        "deviceId": { "type": "string" },
-        "storeId": { "type": "string" },
-        "localShiftId": { "type": "string", "description": "e.g. SHIFT-000001" },
-        "eventType": {
+        "eventId": { "type": "string" },
+        "eventType": { "type": "string", "enum": ["SHIFT_OPENED", "SHIFT_CLOSED"] },
+        "aggregateType": { "type": "string", "description": "Observed value: \"SHIFT\"." },
+        "aggregateId": { "type": "string" },
+        "idempotencyKey": { "type": "string" },
+        "schemaVersion": { "type": "integer" },
+        "shiftNumber": { "type": "integer" },
+        "shiftState": {
           "type": "string",
-          "enum": [
-            "SHIFT_OPENED", "SHIFT_CLOSED", "X_REPORT_PRINTED",
-            "Z_REPORT_CLOSED", "CASH_IN", "CASH_OUT"
-          ]
+          "description": "Free-form, not a closed enum — observed: OPEN, CLOSED_WITH_Z."
         },
-        "idempotencyKey": { "type": "string", "pattern": "^[^:]+:shift:[^:]+:[A-Z_]+$" },
-        "occurredAt": { "type": "string", "format": "date-time" },
-        "amount": { "type": "number", "description": "Relevant for CASH_IN/CASH_OUT." },
-        "totals": { "type": "object", "description": "Relevant for SHIFT_CLOSED/Z_REPORT_CLOSED." }
+        "openedAtMs": { "type": ["integer", "null"], "description": "Epoch milliseconds." },
+        "closedAtMs": { "type": ["integer", "null"], "description": "Epoch milliseconds." },
+        "zReportStatus": {
+          "type": "string",
+          "description": "Free-form, not a closed enum — observed: NOT_STARTED, CLOSED."
+        },
+        "rawDaemonResponse": { "type": "object", "description": "Stored as-is, JSONB." },
+        "rawShiftPayload": { "type": "object", "description": "Stored as-is, JSONB." }
       },
-      "additionalProperties": false
+      "additionalProperties": true
+    },
+    "ShiftEventAckResponse": {
+      "type": "object",
+      "required": ["success", "requestId"],
+      "properties": {
+        "success": { "const": true },
+        "requestId": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "description": "Same flat ack shape as fiscal-event.schema.json's FiscalEventAckResponse — see POS_SYNC_API.md §13."
     }
   }
 }

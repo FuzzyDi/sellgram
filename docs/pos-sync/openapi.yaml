@@ -136,7 +136,11 @@ paths:
   /fiscal-events:
     post:
       tags: [events]
-      summary: Ingest a fiscal-module-level event (idempotent)
+      summary: >
+        Ingest a fiscal-module receipt lifecycle event, per the real SBG
+        Lite POS Android contract (idempotent by eventId). Response is
+        deliberately flat, not the general envelope — see
+        POS_SYNC_API.md §12.
       security: [{ deviceBearer: [] }]
       requestBody:
         required: true
@@ -145,19 +149,30 @@ paths:
             schema:
               $ref: './schemas/fiscal-event.schema.json#/definitions/FiscalEvent'
       responses:
+        '201':
+          description: Event ingested
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/fiscal-event.schema.json#/definitions/FiscalEventAckResponse'
         '200':
-          $ref: '#/components/responses/Success'
+          description: Identical eventId replay — idempotent no-op
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/fiscal-event.schema.json#/definitions/FiscalEventAckResponse'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: '#/components/responses/Error'
-        '409':
-          $ref: '#/components/responses/Error'
-        '501':
           $ref: '#/components/responses/Error'
 
   /shift-events:
     post:
       tags: [events]
-      summary: Ingest a cashier shift event (idempotent)
+      summary: >
+        Ingest a cashier shift lifecycle event, per the real SBG Lite POS
+        Android contract (idempotent by eventId). Same flat response as
+        /fiscal-events — see POS_SYNC_API.md §13.
       security: [{ deviceBearer: [] }]
       requestBody:
         required: true
@@ -166,13 +181,21 @@ paths:
             schema:
               $ref: './schemas/shift-event.schema.json#/definitions/ShiftEvent'
       responses:
+        '201':
+          description: Event ingested
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/shift-event.schema.json#/definitions/ShiftEventAckResponse'
         '200':
-          $ref: '#/components/responses/Success'
+          description: Identical eventId replay — idempotent no-op
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/shift-event.schema.json#/definitions/ShiftEventAckResponse'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
-          $ref: '#/components/responses/Error'
-        '409':
-          $ref: '#/components/responses/Error'
-        '501':
           $ref: '#/components/responses/Error'
 
   /stock-events:
@@ -203,24 +226,27 @@ paths:
   /commands:
     get:
       tags: [commands]
-      summary: Poll for pending cloud commands targeting this device
+      summary: >
+        Poll for pending cloud commands targeting this device. Response is
+        the real contract's literal flat shape — no `data`, no
+        `requestId` — see POS_SYNC_API.md §15.
       security: [{ deviceBearer: [] }]
       responses:
         '200':
-          description: Pending commands
+          description: Pending commands (possibly empty)
           content:
             application/json:
               schema:
-                $ref: './schemas/cloud-command.schema.json#/definitions/CommandListEnvelope'
+                $ref: './schemas/cloud-command.schema.json#/definitions/CommandListResponse'
         '401':
-          $ref: '#/components/responses/Error'
-        '501':
           $ref: '#/components/responses/Error'
 
   /commands/{id}/ack:
     post:
       tags: [commands]
-      summary: Acknowledge a delivered command (idempotent by id)
+      summary: >
+        Acknowledge a delivered command. Tenant/device isolation enforced
+        — acking a command belonging to a different device is 404.
       security: [{ deviceBearer: [] }]
       parameters:
         - name: id
@@ -235,10 +261,16 @@ paths:
               $ref: './schemas/cloud-command.schema.json#/definitions/CommandAckRequest'
       responses:
         '200':
-          $ref: '#/components/responses/Success'
+          description: Command acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/cloud-command.schema.json#/definitions/CommandAckResponse'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
-        '501':
+        '404':
           $ref: '#/components/responses/Error'
 
 components:

@@ -23,6 +23,13 @@ const mocks = vi.hoisted(() => ({
     },
     stockLedgerEntry: { createMany: vi.fn().mockResolvedValue({ count: 0 }), create: vi.fn().mockResolvedValue({}) },
     stockMovement: { create: vi.fn().mockResolvedValue({}) },
+    fiscalEvent: { create: vi.fn().mockResolvedValue({}) },
+    shiftEvent: { create: vi.fn().mockResolvedValue({}) },
+    cloudCommand: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue({}),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -1056,23 +1063,363 @@ describe('pos-sync.routes', () => {
     });
   });
 
-  describe('still-stubbed endpoints', () => {
-    const cases: Array<{ method: 'GET' | 'POST'; url: string }> = [
-      { method: 'POST', url: '/api/pos/v1/fiscal-events' },
-      { method: 'POST', url: '/api/pos/v1/shift-events' },
-      { method: 'GET', url: '/api/pos/v1/commands' },
-      { method: 'POST', url: '/api/pos/v1/commands/cmd-1/ack' },
-    ];
+  describe('POST /api/pos/v1/fiscal-events', () => {
+    const validFiscalEvent = {
+      eventId: 'fisc-evt-1',
+      eventType: 'FISCAL_SUCCESS',
+      aggregateType: 'FISCAL_RECEIPT',
+      aggregateId: 'sale-1720100000000',
+      schemaVersion: 1,
+      shiftNumber: 1,
+      localReceiptId: 'sale-1720100000000',
+      daemonJournalId: 'journal-id-from-daemon',
+      idempotencyKey: 'sale-1720100000000',
+      receiptNumber: '20260704-0001-0001',
+      receiptType: 'SALE',
+      totalAmount: 12500,
+      currency: 'UZS',
+      payments: [{ method: 'CASH', amount: 12500, status: 'PAID', externalPaymentId: null }],
+      items: [{ name: 'Marked water', barcode: '0123456789012', qty: 1000, price: 12500 }],
+      createdAtMs: 1720100000000,
+      fiscalizedAtMs: 1720100005000,
+      fiscalStatus: 'SUCCESS',
+      printStatus: 'DEMON_PRINTED',
+      fiscalReceiptNumber: 1,
+      fiscalSign: 'fiscalReceiptId-or-journalId',
+      fiscalQr: null,
+      ofdStatus: null,
+      rawDaemonResponse: { ok: true },
+      rawFiscalPayload: {},
+    };
 
-    for (const { method, url } of cases) {
-      it(`${method} ${url} still returns 501 Not Implemented`, async () => {
-        const app = await buildApp();
-        const response = await app.inject({ method, url });
-
-        expect(response.statusCode).toBe(501);
-        expect(response.json()).toMatchObject({ success: false, error: 'NOT_IMPLEMENTED' });
-        await app.close();
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
       });
-    }
+      mocks.prisma.fiscalEvent.create.mockResolvedValue({});
+    });
+
+    it('ingests a FISCAL_SUCCESS event with the simplified ack envelope', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validFiscalEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body).toEqual({ success: true, requestId: expect.any(String) });
+      expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: 't-1', storeId: 's-1', deviceId: 'dev-1',
+          eventId: 'fisc-evt-1', eventType: 'FISCAL_SUCCESS',
+          receiptNumber: '20260704-0001-0001',
+          fiscalReceiptNumber: '1',
+        }),
+      });
+      await app.close();
+    });
+
+    it('normalizes a numeric fiscalReceiptNumber/receiptNumber to string', async () => {
+      const app = await buildApp();
+      await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { ...validFiscalEvent, receiptNumber: 42, fiscalReceiptNumber: 'refund-fiscal-receipt-id' },
+      });
+
+      expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ receiptNumber: '42', fiscalReceiptNumber: 'refund-fiscal-receipt-id' }),
+      });
+      await app.close();
+    });
+
+    it('never rewrites a stored FISCAL_UNKNOWN into a success — replays it idempotently instead', async () => {
+      mocks.prisma.fiscalEvent.create.mockRejectedValue(Object.assign(new Error('unique violation'), { code: 'P2002' }));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: {
+          ...validFiscalEvent,
+          eventId: 'fisc-evt-unknown',
+          eventType: 'FISCAL_UNKNOWN',
+          fiscalStatus: 'UNKNOWN',
+          errorCode: 'DAEMON_FISCAL_ERROR',
+          errorMessage: 'timeout or daemon error',
+        },
+      });
+
+      // A retried delivery of the same eventId is acked, not turned into a
+      // second write and never mutated into a different status.
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ success: true, requestId: expect.any(String) });
+      expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledTimes(1);
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when a required field is missing', async () => {
+      const { idempotencyKey: _omit, ...payload } = validFiscalEvent;
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 401 without an Authorization header', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        payload: validFiscalEvent,
+      });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+  });
+
+  describe('POST /api/pos/v1/shift-events', () => {
+    const validShiftEvent = {
+      eventId: 'shift-evt-1',
+      eventType: 'SHIFT_OPENED',
+      aggregateType: 'SHIFT',
+      aggregateId: 'shift-1720100000000',
+      idempotencyKey: 'shift-1720100000000',
+      schemaVersion: 1,
+      shiftNumber: 1,
+      shiftState: 'OPEN',
+      openedAtMs: 1720100000000,
+      closedAtMs: null,
+      zReportStatus: 'NOT_STARTED',
+      rawDaemonResponse: {},
+      rawShiftPayload: {},
+    };
+
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      mocks.prisma.shiftEvent.create.mockResolvedValue({});
+    });
+
+    it('ingests a SHIFT_OPENED event with the simplified ack envelope', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/shift-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validShiftEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toEqual({ success: true, requestId: expect.any(String) });
+      expect(mocks.prisma.shiftEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ eventId: 'shift-evt-1', eventType: 'SHIFT_OPENED', shiftState: 'OPEN' }),
+      });
+      await app.close();
+    });
+
+    it('replays a duplicate eventId idempotently instead of erroring', async () => {
+      mocks.prisma.shiftEvent.create.mockRejectedValue(Object.assign(new Error('unique violation'), { code: 'P2002' }));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/shift-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: validShiftEvent,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ success: true, requestId: expect.any(String) });
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when a required field is missing', async () => {
+      const { zReportStatus: _omit, ...payload } = validShiftEvent;
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/shift-events',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 401 without an Authorization header', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/shift-events',
+        payload: validShiftEvent,
+      });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+  });
+
+  describe('GET /api/pos/v1/commands', () => {
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+    });
+
+    it('returns the literal { success, commands } shape with pending commands', async () => {
+      const createdAt = new Date('2026-07-04T10:00:00.000Z');
+      mocks.prisma.cloudCommand.findMany.mockResolvedValue([
+        { id: 'cmd-1', type: 'PING', payload: {}, createdAt },
+        { id: 'cmd-2', type: 'SHOW_MESSAGE', payload: { title: 'Message', text: 'Text for cashier' }, createdAt },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/commands',
+        headers: { authorization: 'Bearer pos_validkey' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        success: true,
+        commands: [
+          { id: 'cmd-1', type: 'PING', payload: {}, createdAtMs: createdAt.getTime() },
+          { id: 'cmd-2', type: 'SHOW_MESSAGE', payload: { title: 'Message', text: 'Text for cashier' }, createdAtMs: createdAt.getTime() },
+        ],
+      });
+      // No `data` wrapper and no `requestId` — this endpoint intentionally
+      // does not use the general envelope (see routes.ts comment).
+      expect(response.json().data).toBeUndefined();
+      expect(response.json().requestId).toBeUndefined();
+      await app.close();
+    });
+
+    it('returns an empty list when there are no pending commands', async () => {
+      mocks.prisma.cloudCommand.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/commands',
+        headers: { authorization: 'Bearer pos_validkey' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ success: true, commands: [] });
+      await app.close();
+    });
+
+    it('scopes the query to the authenticated device/tenant', async () => {
+      mocks.prisma.cloudCommand.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/commands',
+        headers: { authorization: 'Bearer pos_validkey' },
+      });
+
+      expect(mocks.prisma.cloudCommand.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { deviceId: 'dev-1', tenantId: 't-1', status: 'PENDING' } })
+      );
+      await app.close();
+    });
+
+    it('returns 401 without an Authorization header', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/api/pos/v1/commands' });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+  });
+
+  describe('POST /api/pos/v1/commands/:id/ack', () => {
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+      });
+      mocks.prisma.cloudCommand.findFirst.mockResolvedValue({ id: 'cmd-1' });
+      mocks.prisma.cloudCommand.update.mockResolvedValue({});
+    });
+
+    it('acks a command belonging to the authenticated device', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/commands/cmd-1/ack',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { status: 'DONE', message: null, processedAtMs: 1720100005000 },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ success: true, requestId: expect.any(String) });
+      expect(mocks.prisma.cloudCommand.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'cmd-1', deviceId: 'dev-1', tenantId: 't-1' } })
+      );
+      expect(mocks.prisma.cloudCommand.update).toHaveBeenCalledWith({
+        where: { id: 'cmd-1' },
+        data: expect.objectContaining({ status: 'ACKED', ackStatus: 'DONE', ackMessage: null }),
+      });
+      await app.close();
+    });
+
+    it("returns 404 when the command does not belong to this device (tenant/device isolation)", async () => {
+      mocks.prisma.cloudCommand.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/commands/cmd-other-device/ack',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { status: 'DONE' },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.cloudCommand.update).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR for an invalid status', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/commands/cmd-1/ack',
+        headers: { authorization: 'Bearer pos_validkey' },
+        payload: { status: 'BOGUS' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 401 without an Authorization header', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/commands/cmd-1/ack',
+        payload: { status: 'DONE' },
+      });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
   });
 });

@@ -136,6 +136,9 @@ model Tenant {
   posSettings        PosSettings[]
   saleEvents         SaleEvent[]
   stockEvents        StockEvent[]
+  fiscalEvents       FiscalEvent[]
+  shiftEvents        ShiftEvent[]
+  cloudCommands      CloudCommand[]
 
   @@map("tenants")
 }
@@ -221,6 +224,8 @@ model Store {
   posSettings      PosSettings?
   saleEvents       SaleEvent[]
   stockEvents      StockEvent[]
+  fiscalEvents     FiscalEvent[]
+  shiftEvents      ShiftEvent[]
 
   @@index([tenantId])
   @@map("stores")
@@ -961,6 +966,9 @@ model PosDevice {
   syncCursor  SyncCursor?
   saleEvents  SaleEvent[]
   stockEvents StockEvent[]
+  fiscalEvents FiscalEvent[]
+  shiftEvents  ShiftEvent[]
+  cloudCommands CloudCommand[]
 
   @@index([tenantId, storeId])
   @@map("pos_devices")
@@ -1076,6 +1084,162 @@ model StockEvent {
 
   @@index([tenantId, storeId, productId])
   @@map("stock_events")
+}
+
+enum FiscalEventType {
+  FISCAL_STARTED
+  FISCAL_SUCCESS
+  FISCAL_FAILED
+  FISCAL_UNKNOWN
+}
+
+enum FiscalReceiptType {
+  SALE
+  REFUND
+}
+
+// Cloud-side mirror of a fiscal-module receipt lifecycle, per the real SBG
+// Lite POS Android contract (fiscal/shift/commands v1, 2026-07-04) — not
+// the earlier speculative shape in docs/pos-sync/schemas/fiscal-event
+// .schema.json §12 (superseded, see doc update). Append-only: a device
+// reports FISCAL_STARTED, then later FISCAL_SUCCESS/FAILED/UNKNOWN for the
+// same aggregateId as new rows, never edits of the prior one — an
+// already-stored FISCAL_UNKNOWN/FAILED is never rewritten into a success.
+// Same tenantId/storeId denormalization pattern as SaleEvent/StockEvent
+// even though both are derivable via device — kept for query/index parity.
+// Status-shaped fields (fiscalStatus/printStatus/ofdStatus) are plain
+// strings, not Prisma enums — the source contract does not give an
+// exhaustive value list and firmware may add values without a migration.
+// receiptNumber/originalReceiptNumber/fiscalReceiptNumber are String
+// because the real contract sends either an Int or a String for these
+// depending on receipt type (see doc §2.2 vs §2.3) — normalized to string.
+model FiscalEvent {
+  id             String            @id @default(cuid())
+  tenantId       String
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId        String
+  store          Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  deviceId       String
+  device         PosDevice         @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  eventId        String
+  eventType      FiscalEventType
+  aggregateType  String
+  aggregateId    String
+  idempotencyKey String
+  schemaVersion  Int
+  shiftNumber    Int
+  localReceiptId String
+  daemonJournalId String?
+  receiptNumber  String?
+  receiptType    FiscalReceiptType?
+  originalLocalReceiptId String?
+  originalReceiptNumber  String?
+  totalAmount    Int
+  currency       String
+  payments       Json
+  items          Json
+  createdAtMs    DateTime
+  fiscalizedAtMs DateTime?
+  fiscalStatus   String
+  printStatus    String
+  fiscalReceiptNumber String?
+  fiscalSign     String?
+  fiscalQr       String?
+  ofdStatus      String?
+  errorCode      String?
+  errorMessage   String?
+  rawDaemonResponse Json
+  rawFiscalPayload  Json?
+  payloadHash    String
+  createdAt      DateTime          @default(now())
+
+  @@unique([deviceId, eventId])
+  @@index([deviceId, localReceiptId])
+  @@index([deviceId, receiptNumber])
+  @@index([deviceId, receiptType, idempotencyKey])
+  @@index([deviceId, shiftNumber])
+  @@map("fiscal_events")
+}
+
+enum ShiftEventType {
+  SHIFT_OPENED
+  SHIFT_CLOSED
+}
+
+// Cloud-side mirror of a till shift lifecycle, per the real SBG Lite POS
+// Android contract §3. Same append-only / eventId-keyed idempotency model
+// as FiscalEvent — see that model's comment.
+model ShiftEvent {
+  id             String         @id @default(cuid())
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId        String
+  store          Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  deviceId       String
+  device         PosDevice      @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  eventId        String
+  eventType      ShiftEventType
+  aggregateType  String
+  aggregateId    String
+  idempotencyKey String
+  schemaVersion  Int
+  shiftNumber    Int
+  shiftState     String
+  openedAtMs     DateTime?
+  closedAtMs     DateTime?
+  zReportStatus  String
+  rawDaemonResponse Json
+  rawShiftPayload   Json
+  payloadHash    String
+  createdAt      DateTime       @default(now())
+
+  @@unique([deviceId, eventId])
+  @@index([deviceId, shiftNumber])
+  @@map("shift_events")
+}
+
+enum CloudCommandType {
+  PING
+  REFRESH_CATALOG
+  REFRESH_SETTINGS
+  SHOW_MESSAGE
+}
+
+enum CloudCommandStatus {
+  PENDING
+  ACKED
+}
+
+enum CloudCommandAckStatus {
+  DONE
+  FAILED
+  IGNORED
+  RETRY_LATER
+}
+
+// A narrow, non-blocking channel for Cloud to signal a device (§6 of the
+// real contract) — never a channel for anything that could create a
+// receipt/payment/refund/fiscal operation or gate a local sale (§9 of
+// docs/SBGCLOUD_ARCHITECTURE.md). Nothing in this codebase creates
+// CloudCommand rows yet (no admin UI wired up) — GET /commands will
+// legitimately return an empty list until that exists; this is the
+// polling/ack surface only.
+model CloudCommand {
+  id         String                  @id @default(cuid())
+  tenantId   String
+  tenant     Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deviceId   String
+  device     PosDevice               @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  type       CloudCommandType
+  payload    Json
+  status     CloudCommandStatus      @default(PENDING)
+  createdAt  DateTime                @default(now())
+  ackedAt    DateTime?
+  ackStatus  CloudCommandAckStatus?
+  ackMessage String?
+
+  @@index([deviceId, status])
+  @@map("cloud_commands")
 }
 
 // Store-scoped POS operational settings (docs/POS_SYNC_API.md §10).

@@ -1,56 +1,57 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "cloud-command.schema.json",
-  "title": "POS Sync API — GET /api/pos/v1/commands, POST /api/pos/v1/commands/:id/ack",
+  "title": "POS Sync API — GET /api/pos/v1/commands, POST /api/pos/v1/commands/:id/ack (real SBG Lite POS Android contract §6, 2026-07-04)",
   "definitions": {
     "AllowedCommandType": {
       "type": "string",
-      "enum": [
-        "REFRESH_CATALOG", "REFRESH_SETTINGS", "PING",
-        "UPLOAD_DIAGNOSTICS", "DISABLE_DEVICE", "SHOW_MESSAGE"
-      ]
+      "enum": ["PING", "REFRESH_CATALOG", "REFRESH_SETTINGS", "SHOW_MESSAGE"]
     },
     "ForbiddenCommandType": {
       "type": "string",
-      "enum": ["FORCE_SALE", "FORCE_REFUND", "FORCE_FISCAL_OPERATION", "FORCE_Z_REPORT"],
-      "description": "Must never appear in a real response — listed here only so validators/tests can assert these are rejected. See POS_SYNC_API.md §15."
+      "enum": ["FORCE_SALE", "FORCE_REFUND", "FORCE_FISCAL_OPERATION", "OPEN_SHIFT", "CLOSE_SHIFT"],
+      "description": "Must never appear in a real response — listed here only so validators/tests can assert these are rejected. See POS_SYNC_API.md §15. Not exhaustive: any command type that would create a receipt/payment/refund/fiscal operation is forbidden by principle, not just by this enumerated list."
     },
     "Command": {
       "type": "object",
-      "required": ["id", "type", "createdAt"],
+      "required": ["id", "type", "createdAtMs"],
       "properties": {
         "id": { "type": "string" },
         "type": { "$ref": "#/definitions/AllowedCommandType" },
         "payload": { "type": "object" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAtMs": { "type": "integer", "description": "Epoch milliseconds." }
       },
       "additionalProperties": false
     },
-    "CommandListData": {
+    "CommandListResponse": {
       "type": "object",
-      "required": ["commands"],
-      "properties": {
-        "commands": { "type": "array", "items": { "$ref": "#/definitions/Command" } }
-      },
-      "additionalProperties": false
-    },
-    "CommandListEnvelope": {
-      "type": "object",
-      "required": ["success", "data"],
+      "required": ["success", "commands"],
       "properties": {
         "success": { "const": true },
-        "data": { "$ref": "#/definitions/CommandListData" }
+        "commands": { "type": "array", "items": { "$ref": "#/definitions/Command" } }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Deliberately flat — no `data` wrapper, no `requestId` — matching the real contract's GET /commands response exactly (POS_SYNC_API.md §15), unlike every other pos-sync success response in this repo."
     },
     "CommandAckRequest": {
       "type": "object",
       "required": ["status"],
       "properties": {
-        "status": { "type": "string", "enum": ["ACKED", "FAILED"] },
-        "message": { "type": "string" }
+        "status": { "type": "string", "enum": ["DONE", "FAILED", "IGNORED", "RETRY_LATER"] },
+        "message": { "type": ["string", "null"] },
+        "processedAtMs": { "type": "integer", "description": "Epoch milliseconds. Accepted, not persisted as its own column — see schema.prisma CloudCommand." }
       },
-      "additionalProperties": false
+      "additionalProperties": true
+    },
+    "CommandAckResponse": {
+      "type": "object",
+      "required": ["success", "requestId"],
+      "properties": {
+        "success": { "const": true },
+        "requestId": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "description": "Not specified by the source contract for this endpoint — this Cloud's own choice, same flat ack shape as fiscal/shift events."
     }
   }
 }

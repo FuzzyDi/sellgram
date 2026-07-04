@@ -4,7 +4,7 @@ import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { getLicenseStatus } from '../../lib/billing.js';
 import { resolveDevice } from './device-auth.js';
-import { sendError, sendSuccess } from './envelope.js';
+import { sendAck, sendError, sendSuccess } from './envelope.js';
 
 /**
  * POS Sync API — see docs/SBGCLOUD_ARCHITECTURE.md.
@@ -208,6 +208,88 @@ const heartbeatSchema = z.object({
   printer: z.object({ status: z.enum(['OK', 'ERROR', 'UNKNOWN']) }),
   network: z.object({ status: z.enum(['ONLINE', 'OFFLINE']) }),
 });
+
+// Fiscal/shift/commands v1 — the real SBG Lite POS Android contract
+// (fiscal/shift/commands v1, 2026-07-04), snapshotted verbatim from a real
+// LANDI M20SE terminal exchange, not the earlier speculative shape in
+// docs/pos-sync/schemas/{fiscal,shift,cloud-command}.schema.json §12/§13
+// (those docs are updated to match this implementation).
+//
+// OPEN QUESTION carried over from the source contract: the real doc
+// specifies `X-Device-Code: <deviceCode>` as the auth header for these
+// three endpoints — a different mechanism from the `Authorization: Bearer
+// <accessToken>` used by every other endpoint in this file (§4, resolved
+// via resolveDevice()). Deliberately NOT introducing a second auth scheme
+// here: these three endpoints authenticate identically to
+// activate/heartbeat/sale-events/stock-events, via resolveDevice(). If the
+// real Android client integration requires literal X-Device-Code support,
+// that needs a follow-up decision (e.g. resolveDevice() accepting both
+// headers) — not a silent protocol fork.
+//
+// rawDaemonResponse/rawFiscalPayload/rawShiftPayload are stored as-is
+// (z.record(z.unknown())) — only the top-level envelope shape is
+// validated, never their contents, since the source contract explicitly
+// says these may expand without a contract change.
+const fiscalEventSchema = z.object({
+  eventId: z.string().min(1),
+  eventType: z.enum(['FISCAL_STARTED', 'FISCAL_SUCCESS', 'FISCAL_FAILED', 'FISCAL_UNKNOWN']),
+  aggregateType: z.string().min(1),
+  aggregateId: z.string().min(1),
+  schemaVersion: z.number().int(),
+  shiftNumber: z.number().int(),
+  localReceiptId: z.string().min(1),
+  daemonJournalId: z.string().nullable().optional(),
+  idempotencyKey: z.string().min(1),
+  // The real contract sends receiptNumber/originalReceiptNumber/
+  // fiscalReceiptNumber as either an Int (sale) or a String (refund) —
+  // normalized to string for storage.
+  receiptNumber: z.union([z.string(), z.number()]).nullable().optional(),
+  receiptType: z.enum(['SALE', 'REFUND']).nullable().optional(),
+  originalLocalReceiptId: z.string().nullable().optional(),
+  originalReceiptNumber: z.union([z.string(), z.number()]).nullable().optional(),
+  totalAmount: z.number(),
+  currency: z.string().min(1),
+  payments: z.array(z.record(z.unknown())),
+  items: z.array(z.record(z.unknown())),
+  createdAtMs: z.number(),
+  fiscalizedAtMs: z.number().nullable().optional(),
+  fiscalStatus: z.string().min(1),
+  printStatus: z.string().min(1),
+  fiscalReceiptNumber: z.union([z.string(), z.number()]).nullable().optional(),
+  fiscalSign: z.string().nullable().optional(),
+  fiscalQr: z.string().nullable().optional(),
+  ofdStatus: z.string().nullable().optional(),
+  errorCode: z.string().nullable().optional(),
+  errorMessage: z.string().nullable().optional(),
+  rawDaemonResponse: z.record(z.unknown()),
+  rawFiscalPayload: z.record(z.unknown()).nullable().optional(),
+});
+
+const shiftEventSchema = z.object({
+  eventId: z.string().min(1),
+  eventType: z.enum(['SHIFT_OPENED', 'SHIFT_CLOSED']),
+  aggregateType: z.string().min(1),
+  aggregateId: z.string().min(1),
+  idempotencyKey: z.string().min(1),
+  schemaVersion: z.number().int(),
+  shiftNumber: z.number().int(),
+  shiftState: z.string().min(1),
+  openedAtMs: z.number().nullable().optional(),
+  closedAtMs: z.number().nullable().optional(),
+  zReportStatus: z.string().min(1),
+  rawDaemonResponse: z.record(z.unknown()),
+  rawShiftPayload: z.record(z.unknown()),
+});
+
+const commandAckSchema = z.object({
+  status: z.enum(['DONE', 'FAILED', 'IGNORED', 'RETRY_LATER']),
+  message: z.string().nullable().optional(),
+  processedAtMs: z.number().optional(),
+});
+
+function toStringOrNull(value: string | number | null | undefined): string | null {
+  return value === null || value === undefined ? null : String(value);
+}
 
 // Moderate baseline for device polling endpoints — generous enough that
 // several devices behind one shop's shared IP won't trip it, but explicit
@@ -782,19 +864,175 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     return sendSuccess(reply, 201, { eventId: event.id, warnings }, request);
   });
 
-  fastify.post('/pos/v1/fiscal-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
-    return notImplemented(reply, 'fiscal event ingestion');
+  fastify.post('/pos/v1/fiscal-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveDevice(request.headers.authorization);
+    if (!device) return unauthorized(reply, request);
+
+    const body = fiscalEventSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid fiscal event', request, {
+        issues: body.error.issues,
+      });
+    }
+
+    const payloadHash = checksumOf(body.data);
+    try {
+      await prisma.fiscalEvent.create({
+        data: {
+          tenantId: device.tenantId,
+          storeId: device.storeId,
+          deviceId: device.id,
+          eventId: body.data.eventId,
+          eventType: body.data.eventType,
+          aggregateType: body.data.aggregateType,
+          aggregateId: body.data.aggregateId,
+          idempotencyKey: body.data.idempotencyKey,
+          schemaVersion: body.data.schemaVersion,
+          shiftNumber: body.data.shiftNumber,
+          localReceiptId: body.data.localReceiptId,
+          daemonJournalId: body.data.daemonJournalId ?? null,
+          receiptNumber: toStringOrNull(body.data.receiptNumber),
+          receiptType: body.data.receiptType ?? null,
+          originalLocalReceiptId: body.data.originalLocalReceiptId ?? null,
+          originalReceiptNumber: toStringOrNull(body.data.originalReceiptNumber),
+          totalAmount: body.data.totalAmount,
+          currency: body.data.currency,
+          payments: body.data.payments as any,
+          items: body.data.items as any,
+          createdAtMs: new Date(body.data.createdAtMs),
+          fiscalizedAtMs: body.data.fiscalizedAtMs != null ? new Date(body.data.fiscalizedAtMs) : null,
+          fiscalStatus: body.data.fiscalStatus,
+          printStatus: body.data.printStatus,
+          fiscalReceiptNumber: toStringOrNull(body.data.fiscalReceiptNumber),
+          fiscalSign: body.data.fiscalSign ?? null,
+          fiscalQr: body.data.fiscalQr ?? null,
+          ofdStatus: body.data.ofdStatus ?? null,
+          errorCode: body.data.errorCode ?? null,
+          errorMessage: body.data.errorMessage ?? null,
+          rawDaemonResponse: body.data.rawDaemonResponse as any,
+          rawFiscalPayload: (body.data.rawFiscalPayload ?? null) as any,
+          payloadHash,
+        },
+      });
+    } catch (err: any) {
+      // §5-equivalent idempotency: eventId is the sole delivery-uniqueness
+      // key per the source contract — a retry of the exact same delivery
+      // hits the (deviceId, eventId) unique constraint. No 409 here: the
+      // source contract doesn't define a conflict response for this pair
+      // of endpoints, and a device only ever retries with the same body
+      // (durable outbox, §7), so silently no-op-ing the duplicate is safe.
+      if (err?.code === 'P2002') {
+        return sendAck(reply, 200, request);
+      }
+      throw err;
+    }
+
+    return sendAck(reply, 201, request);
   });
 
-  fastify.post('/pos/v1/shift-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
-    return notImplemented(reply, 'shift event ingestion');
+  fastify.post('/pos/v1/shift-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveDevice(request.headers.authorization);
+    if (!device) return unauthorized(reply, request);
+
+    const body = shiftEventSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid shift event', request, {
+        issues: body.error.issues,
+      });
+    }
+
+    const payloadHash = checksumOf(body.data);
+    try {
+      await prisma.shiftEvent.create({
+        data: {
+          tenantId: device.tenantId,
+          storeId: device.storeId,
+          deviceId: device.id,
+          eventId: body.data.eventId,
+          eventType: body.data.eventType,
+          aggregateType: body.data.aggregateType,
+          aggregateId: body.data.aggregateId,
+          idempotencyKey: body.data.idempotencyKey,
+          schemaVersion: body.data.schemaVersion,
+          shiftNumber: body.data.shiftNumber,
+          shiftState: body.data.shiftState,
+          openedAtMs: body.data.openedAtMs != null ? new Date(body.data.openedAtMs) : null,
+          closedAtMs: body.data.closedAtMs != null ? new Date(body.data.closedAtMs) : null,
+          zReportStatus: body.data.zReportStatus,
+          rawDaemonResponse: body.data.rawDaemonResponse as any,
+          rawShiftPayload: body.data.rawShiftPayload as any,
+          payloadHash,
+        },
+      });
+    } catch (err: any) {
+      // Same eventId-keyed idempotent-replay handling as fiscal-events.
+      if (err?.code === 'P2002') {
+        return sendAck(reply, 200, request);
+      }
+      throw err;
+    }
+
+    return sendAck(reply, 201, request);
   });
 
-  fastify.get('/pos/v1/commands', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
-    return notImplemented(reply, 'cloud command polling');
+  // Response shape here is the real contract's literal
+  // { success: true, commands: [...] } — deliberately NOT the general
+  // envelope (no `data` wrapper, no `requestId`) to match what the real
+  // Android client parses byte-for-byte (docs/POS_SYNC_API.md §15).
+  fastify.get('/pos/v1/commands', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveDevice(request.headers.authorization);
+    if (!device) return unauthorized(reply, request);
+
+    const pending = await prisma.cloudCommand.findMany({
+      where: { deviceId: device.id, tenantId: device.tenantId, status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, type: true, payload: true, createdAt: true },
+    });
+
+    return reply.status(200).send({
+      success: true,
+      commands: pending.map((c) => ({
+        id: c.id,
+        type: c.type,
+        payload: c.payload,
+        createdAtMs: c.createdAt.getTime(),
+      })),
+    });
   });
 
-  fastify.post('/pos/v1/commands/:id/ack', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (_request, reply) => {
-    return notImplemented(reply, 'cloud command acknowledgement');
+  fastify.post('/pos/v1/commands/:id/ack', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveDevice(request.headers.authorization);
+    if (!device) return unauthorized(reply, request);
+
+    const body = commandAckSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid command ack', request, {
+        issues: body.error.issues,
+      });
+    }
+
+    const { id } = request.params as { id: string };
+    // Tenant/device isolation: a device may only ack its own command — a
+    // command that exists but belongs to a different device must not leak
+    // as "found", so this is 404, not 403.
+    const command = await prisma.cloudCommand.findFirst({
+      where: { id, deviceId: device.id, tenantId: device.tenantId },
+      select: { id: true },
+    });
+    if (!command) {
+      return sendError(reply, 404, 'COMMAND_NOT_FOUND', 'No such command for this device', request);
+    }
+
+    await prisma.cloudCommand.update({
+      where: { id: command.id },
+      data: {
+        status: 'ACKED',
+        ackedAt: new Date(),
+        ackStatus: body.data.status,
+        ackMessage: body.data.message ?? null,
+      },
+    });
+
+    return sendAck(reply, 200, request);
   });
 }
