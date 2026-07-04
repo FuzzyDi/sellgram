@@ -43,6 +43,12 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '409':
+          description: deviceCode already assigned to another active device in this tenant (DEVICE_CODE_ALREADY_IN_USE)
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/envelope.schema.json#/definitions/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/Error'
 

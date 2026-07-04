@@ -37,15 +37,17 @@ function normalizeHeader(value: string | string[] | undefined): string | null {
   return value ?? null;
 }
 
-// Dual-header auth, decided jointly with the SBG Lite POS Android team
-// (resolves the auth-mismatch open question that used to sit on
-// fiscal/shift/commands below — see docs/POS_SYNC_API.md §4/§22):
-// X-Device-Code is a PUBLIC identifier (not a secret, safe to log);
-// Authorization: Bearer <accessToken> remains the SOLE real auth factor,
-// unchanged. Every authenticated endpoint except /activate (which
-// predates having a device to check the header against) now requires
-// both — a present-but-mismatching X-Device-Code is treated as
-// suspicious (mismatched credentials) and logged, not silently ignored.
+// Dual-header auth, confirmed production flow with the SBG Lite POS
+// Android team (docs/POS_SYNC_API.md §4/§22): X-Device-Code is a PUBLIC
+// identifier (not a secret, safe to log); Authorization: Bearer
+// <accessToken> remains the SOLE real auth factor, unchanged. Every
+// authenticated endpoint except /activate (which predates having a
+// device to check the header against) requires both — checked as a PAIR,
+// not as two independent facts: the accessToken must have been issued
+// FOR the deviceCode presented alongside it. A present-but-mismatching
+// X-Device-Code (valid token, wrong/foreign code) is a potential security
+// incident — logged, not silently ignored — and is a 401, not a 400,
+// since the token itself is valid; it's the pairing that's wrong.
 async function resolveAuthenticatedDevice(request: FastifyRequest, reply: FastifyReply) {
   const deviceCode = normalizeHeader(request.headers['x-device-code']);
   if (!deviceCode) {
@@ -61,8 +63,8 @@ async function resolveAuthenticatedDevice(request: FastifyRequest, reply: Fastif
 
   if (device.deviceCode !== deviceCode) {
     request.log.warn(
-      { deviceId: device.id, providedDeviceCode: deviceCode },
-      'pos-sync: X-Device-Code header does not match the authenticated device — mismatched credentials'
+      { deviceId: device.id, providedDeviceCode: deviceCode, expectedDeviceCode: device.deviceCode },
+      'pos-sync: X-Device-Code does not match the device this accessToken was issued for — mismatched credentials'
     );
     sendError(reply, 401, 'UNAUTHORIZED', 'X-Device-Code does not match the authenticated device', request);
     return null;
@@ -77,11 +79,10 @@ const activateSchema = z.object({
   deviceName: z.string().min(1),
   deviceType: z.enum(['WINDOWS', 'ANDROID', 'LANDI', 'WEB']),
   appVersion: z.string().min(1),
-  // Public device identifier accepted the same way as deviceFingerprint —
-  // optional for now: origin (device-generated vs Cloud-issued) is an
-  // open question (§22), and making it required could brick activation
-  // for a real client that doesn't send it yet.
-  deviceCode: z.string().min(1).optional(),
+  // Public device identifier, sent the same way as deviceFingerprint —
+  // confirmed production flow with the Android team (§22): required, not
+  // optional, matching deviceFingerprint's treatment exactly.
+  deviceCode: z.string().min(1),
 });
 
 const catalogQuerySchema = z.object({
@@ -389,6 +390,35 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       );
     }
 
+    // Unlike deviceFingerprint above, deviceCode is security/money-sensitive
+    // (it's half of the auth pair every other endpoint checks — §4/§22) —
+    // a collision with a DIFFERENT active device in the same tenant is
+    // blocked, not just logged. tenantId-scoped: two tenants may both use
+    // a dev-style value like "POS-1" without conflict (matches the
+    // @@unique([tenantId, deviceCode]) constraint).
+    const deviceCodeCollision = await prisma.posDevice.findFirst({
+      where: {
+        tenantId: activation.device.tenantId,
+        deviceCode: body.data.deviceCode,
+        status: 'ACTIVE',
+        id: { not: activation.deviceId },
+      },
+      select: { id: true, deviceCode: true },
+    });
+    if (deviceCodeCollision) {
+      request.log.warn(
+        { deviceCode: body.data.deviceCode, existingDeviceId: deviceCodeCollision.id, deviceId: activation.deviceId },
+        'pos-sync: activation rejected — deviceCode already assigned to another active device in this tenant'
+      );
+      return sendError(
+        reply,
+        409,
+        'DEVICE_CODE_ALREADY_IN_USE',
+        'deviceCode is already assigned to another active device in this tenant',
+        request
+      );
+    }
+
     const rawAccessToken = 'pos_' + randomBytes(32).toString('hex');
     const apiKeyHash = createHash('sha256').update(rawAccessToken).digest('hex');
     const apiKeyPrefix = rawAccessToken.slice(0, 12);
@@ -398,33 +428,50 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     const refreshTokenPrefix = rawRefreshToken.slice(0, 12);
 
     const now = new Date();
-    const [device] = await prisma.$transaction([
-      prisma.posDevice.update({
-        where: { id: activation.deviceId },
-        data: {
-          status: 'ACTIVE',
-          apiKeyHash,
-          apiKeyPrefix,
-          refreshTokenHash,
-          refreshTokenPrefix,
-          deviceFingerprint: body.data.deviceFingerprint,
-          reportedDeviceName: body.data.deviceName,
-          reportedDeviceType: body.data.deviceType,
-          appVersion: body.data.appVersion,
-          deviceCode: body.data.deviceCode ?? null,
-        },
-        select: { id: true, tenantId: true, storeId: true },
-      }),
-      prisma.deviceActivation.update({
-        where: { id: activation.id },
-        data: { status: 'CONFIRMED', confirmedAt: now },
-      }),
-      prisma.syncCursor.upsert({
-        where: { deviceId: activation.deviceId },
-        create: { deviceId: activation.deviceId, lastCatalogVersion: 0 },
-        update: {},
-      }),
-    ]);
+    let device;
+    try {
+      [device] = await prisma.$transaction([
+        prisma.posDevice.update({
+          where: { id: activation.deviceId },
+          data: {
+            status: 'ACTIVE',
+            apiKeyHash,
+            apiKeyPrefix,
+            refreshTokenHash,
+            refreshTokenPrefix,
+            deviceFingerprint: body.data.deviceFingerprint,
+            reportedDeviceName: body.data.deviceName,
+            reportedDeviceType: body.data.deviceType,
+            appVersion: body.data.appVersion,
+            deviceCode: body.data.deviceCode,
+          },
+          select: { id: true, tenantId: true, storeId: true, deviceCode: true },
+        }),
+        prisma.deviceActivation.update({
+          where: { id: activation.id },
+          data: { status: 'CONFIRMED', confirmedAt: now },
+        }),
+        prisma.syncCursor.upsert({
+          where: { deviceId: activation.deviceId },
+          create: { deviceId: activation.deviceId, lastCatalogVersion: 0 },
+          update: {},
+        }),
+      ]);
+    } catch (err: any) {
+      // Race-condition backstop for the pre-check above (@@unique([tenantId,
+      // deviceCode]) is the real guarantee) — two concurrent activations
+      // both passing the pre-check is unlikely but not impossible.
+      if (err?.code === 'P2002') {
+        return sendError(
+          reply,
+          409,
+          'DEVICE_CODE_ALREADY_IN_USE',
+          'deviceCode is already assigned to another active device in this tenant',
+          request
+        );
+      }
+      throw err;
+    }
 
     const [latestSnapshot, storeSettings] = await Promise.all([
       prisma.catalogSnapshot.findFirst({
@@ -447,6 +494,10 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         deviceId: device.id,
         accessToken: rawAccessToken,
         refreshToken: rawRefreshToken,
+        // Canonical value actually persisted — echoed back so the device
+        // knows the final value to send as X-Device-Code on every
+        // subsequent call, in case Cloud ever normalizes it (§22).
+        deviceCode: device.deviceCode,
         catalogVersion: latestSnapshot?.version ?? 0,
         // A store with no PosSettings row still serves defaults as
         // version 1 (see GET /settings below).

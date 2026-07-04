@@ -57,6 +57,7 @@ describe('pos-sync.routes', () => {
     deviceName: 'POS-1',
     deviceType: 'ANDROID',
     appVersion: '0.1.0',
+    deviceCode: 'code-1',
   };
 
   describe('POST /api/pos/v1/activate', () => {
@@ -69,7 +70,7 @@ describe('pos-sync.routes', () => {
         device: { id: 'dev-1' },
       });
       mocks.prisma.$transaction.mockResolvedValue([
-        { id: 'dev-1', tenantId: 't-1', storeId: 's-1' },
+        { id: 'dev-1', tenantId: 't-1', storeId: 's-1', deviceCode: 'code-1' },
         {},
         {},
       ]);
@@ -94,6 +95,7 @@ describe('pos-sync.routes', () => {
       expect(typeof body.data.refreshToken).toBe('string');
       expect(body.data.refreshToken.startsWith('posr_')).toBe(true);
       expect(body.data.accessToken).not.toBe(body.data.refreshToken);
+      expect(body.data.deviceCode).toBe('code-1');
       expect(body.data.catalogVersion).toBe(2);
       expect(body.data.settingsVersion).toBe(1);
       await app.close();
@@ -105,11 +107,13 @@ describe('pos-sync.routes', () => {
         deviceId: 'dev-1',
         status: 'PENDING',
         expiresAt: new Date(Date.now() + 60_000),
-        device: { id: 'dev-1' },
+        device: { id: 'dev-1', tenantId: 't-1' },
       });
+      // First findFirst call is the fingerprint check (collision found);
+      // the second is the deviceCode check (no collision, default null).
       mocks.prisma.posDevice.findFirst.mockResolvedValueOnce({ id: 'dev-other' });
       mocks.prisma.$transaction.mockResolvedValue([
-        { id: 'dev-1', tenantId: 't-1', storeId: 's-1' },
+        { id: 'dev-1', tenantId: 't-1', storeId: 's-1', deviceCode: 'code-1' },
         {},
         {},
       ]);
@@ -122,6 +126,85 @@ describe('pos-sync.routes', () => {
       });
 
       expect(response.statusCode).toBe(201);
+      await app.close();
+    });
+
+    it('rejects activation with 409 DEVICE_CODE_ALREADY_IN_USE when another active device in the same tenant already holds this deviceCode', async () => {
+      mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
+        id: 'act-1',
+        deviceId: 'dev-1',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() + 60_000),
+        device: { id: 'dev-1', tenantId: 't-1' },
+      });
+      // First call: fingerprint check, no collision. Second call:
+      // deviceCode check, collision with a genuinely different device.
+      mocks.prisma.posDevice.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'dev-other', deviceCode: 'code-1' });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/activate',
+        payload: validActivatePayload,
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe('DEVICE_CODE_ALREADY_IN_USE');
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('does not block re-activation when the deviceCode collision check correctly excludes the device being activated', async () => {
+      mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
+        id: 'act-1',
+        deviceId: 'dev-1',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() + 60_000),
+        device: { id: 'dev-1', tenantId: 't-1' },
+      });
+      // Both findFirst calls resolve null — in a real DB, the deviceCode
+      // check's `id: { not: activation.deviceId }` clause means the
+      // device's own (about-to-be-overwritten) row is never a collision
+      // with itself, even if it already happened to hold this deviceCode.
+      mocks.prisma.posDevice.findFirst.mockResolvedValue(null);
+      mocks.prisma.$transaction.mockResolvedValue([
+        { id: 'dev-1', tenantId: 't-1', storeId: 's-1', deviceCode: 'code-1' },
+        {},
+        {},
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/activate',
+        payload: validActivatePayload,
+      });
+
+      expect(response.statusCode).toBe(201);
+      // The second findFirst call is the deviceCode check — assert it
+      // excludes the device currently being activated.
+      expect(mocks.prisma.posDevice.findFirst).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: 't-1',
+            deviceCode: 'code-1',
+            status: 'ACTIVE',
+            id: { not: 'dev-1' },
+          }),
+        })
+      );
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when deviceCode is missing', async () => {
+      const { deviceCode: _omit, ...payload } = validActivatePayload;
+      const app = await buildApp();
+      const response = await app.inject({ method: 'POST', url: '/api/pos/v1/activate', payload });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
     });
 
@@ -249,8 +332,12 @@ describe('pos-sync.routes', () => {
 
       expect(response.statusCode).toBe(401);
       expect(response.json().error.code).toBe('UNAUTHORIZED');
-      const warnLine = lines.find((l) => l.includes('X-Device-Code') || l.includes('mismatched credentials'));
+      const warnLine = lines.find((l) => l.includes('mismatched credentials'));
       expect(warnLine).toBeTruthy();
+      // Both the request's (wrong) deviceCode and the resolved device's
+      // real one must be present — not just "something mismatched".
+      expect(warnLine).toContain('wrong-code');
+      expect(warnLine).toContain('code-1');
       await app.close();
     });
 
