@@ -958,6 +958,16 @@ model PosDevice {
   reportedDeviceName String?
   reportedDeviceType String?
   appVersion         String?
+  // PUBLIC device identifier (not a secret — safe to log), accepted from
+  // the device at /activate the same way as deviceFingerprint. Required,
+  // alongside Authorization: Bearer, on every other authenticated pos-sync
+  // endpoint (docs/POS_SYNC_API.md §4/§22) — Bearer remains the sole real
+  // auth factor; this is a defense-in-depth mismatch check only.
+  // OPEN QUESTION (§22): whether Android generates this itself (like
+  // deviceFingerprint) or Cloud should issue it is not yet confirmed by
+  // the Android team — nullable so existing, not-yet-migrated devices
+  // don't break; this is an assumption, not a settled design.
+  deviceCode   String?
   lastSeenAt   DateTime?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt

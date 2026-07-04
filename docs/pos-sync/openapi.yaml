@@ -50,7 +50,7 @@ paths:
     post:
       tags: [sync]
       summary: Liveness/health signal from an active device
-      security: [{ deviceBearer: [] }]
+      security: [{ deviceBearer: [], deviceCode: [] }]
       requestBody:
         required: true
         content:
@@ -64,6 +64,8 @@ paths:
             application/json:
               schema:
                 $ref: './schemas/heartbeat.schema.json#/definitions/HeartbeatResponse'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
 
@@ -71,7 +73,7 @@ paths:
     get:
       tags: [sync]
       summary: Latest (or delta, future) catalog snapshot for the device's store
-      security: [{ deviceBearer: [] }]
+      security: [{ deviceBearer: [], deviceCode: [] }]
       parameters:
         - name: storeId
           in: query
@@ -88,6 +90,8 @@ paths:
             application/json:
               schema:
                 $ref: './schemas/catalog-snapshot.schema.json#/definitions/CatalogSnapshotEnvelope'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
         '404':
@@ -97,7 +101,7 @@ paths:
     get:
       tags: [sync]
       summary: Store/device settings snapshot
-      security: [{ deviceBearer: [] }]
+      security: [{ deviceBearer: [], deviceCode: [] }]
       responses:
         '200':
           description: Settings
@@ -105,6 +109,8 @@ paths:
             application/json:
               schema:
                 $ref: './schemas/settings.schema.json#/definitions/SettingsEnvelope'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
 
@@ -112,7 +118,7 @@ paths:
     post:
       tags: [events]
       summary: Ingest a sale lifecycle event (idempotent)
-      security: [{ deviceBearer: [] }]
+      security: [{ deviceBearer: [], deviceCode: [] }]
       requestBody:
         required: true
         content:
@@ -141,7 +147,7 @@ paths:
         Lite POS Android contract (idempotent by eventId). Response is
         deliberately flat, not the general envelope — see
         POS_SYNC_API.md §12.
-      security: [{ deviceBearer: [] }]
+      security: [{ deviceBearer: [], deviceCode: [] }]
       requestBody:
         required: true
         content:
@@ -173,7 +179,7 @@ paths:
         Ingest a cashier shift lifecycle event, per the real SBG Lite POS
         Android contract (idempotent by eventId). Same flat response as
         /fiscal-events — see POS_SYNC_API.md §13.
-      security: [{ deviceBearer: [] }]
+      security: [{ deviceBearer: [], deviceCode: [] }]
       requestBody:
         required: true
         content:
@@ -202,7 +208,7 @@ paths:
     post:
       tags: [events]
       summary: Ingest a non-sale stock movement (adjustment/restock, idempotent)
-      security: [{ deviceBearer: [] }]
+      security: [{ deviceBearer: [], deviceCode: [] }]
       requestBody:
         required: true
         content:
@@ -230,7 +236,7 @@ paths:
         Poll for pending cloud commands targeting this device. Response is
         the real contract's literal flat shape — no `data`, no
         `requestId` — see POS_SYNC_API.md §15.
-      security: [{ deviceBearer: [] }]
+      security: [{ deviceBearer: [], deviceCode: [] }]
       responses:
         '200':
           description: Pending commands (possibly empty)
@@ -238,6 +244,8 @@ paths:
             application/json:
               schema:
                 $ref: './schemas/cloud-command.schema.json#/definitions/CommandListResponse'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
 
@@ -247,7 +255,7 @@ paths:
       summary: >
         Acknowledge a delivered command. Tenant/device isolation enforced
         — acking a command belonging to a different device is 404.
-      security: [{ deviceBearer: [] }]
+      security: [{ deviceBearer: [], deviceCode: [] }]
       parameters:
         - name: id
           in: path
@@ -278,7 +286,19 @@ components:
     deviceBearer:
       type: http
       scheme: bearer
-      description: Device access token issued by POST /activate.
+      description: >
+        Device access token issued by POST /activate — the sole real
+        authentication factor (POS_SYNC_API.md §4).
+    deviceCode:
+      type: apiKey
+      in: header
+      name: X-Device-Code
+      description: >
+        Public, non-secret device identifier — required alongside
+        deviceBearer (never in place of it) on every authenticated
+        endpoint except /activate. Checked for a match against the device
+        resolved via deviceBearer; a mismatch is 401, a missing header is
+        400. See POS_SYNC_API.md §4/§22.
   responses:
     Success:
       description: Generic success envelope

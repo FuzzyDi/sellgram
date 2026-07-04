@@ -32,12 +32,56 @@ function unauthorized(reply: FastifyReply, request: FastifyRequest) {
   return sendError(reply, 401, 'UNAUTHORIZED', 'Invalid or missing device key', request);
 }
 
+function normalizeHeader(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+// Dual-header auth, decided jointly with the SBG Lite POS Android team
+// (resolves the auth-mismatch open question that used to sit on
+// fiscal/shift/commands below — see docs/POS_SYNC_API.md §4/§22):
+// X-Device-Code is a PUBLIC identifier (not a secret, safe to log);
+// Authorization: Bearer <accessToken> remains the SOLE real auth factor,
+// unchanged. Every authenticated endpoint except /activate (which
+// predates having a device to check the header against) now requires
+// both — a present-but-mismatching X-Device-Code is treated as
+// suspicious (mismatched credentials) and logged, not silently ignored.
+async function resolveAuthenticatedDevice(request: FastifyRequest, reply: FastifyReply) {
+  const deviceCode = normalizeHeader(request.headers['x-device-code']);
+  if (!deviceCode) {
+    sendError(reply, 400, 'VALIDATION_ERROR', 'X-Device-Code header is required', request);
+    return null;
+  }
+
+  const device = await resolveDevice(request.headers.authorization);
+  if (!device) {
+    unauthorized(reply, request);
+    return null;
+  }
+
+  if (device.deviceCode !== deviceCode) {
+    request.log.warn(
+      { deviceId: device.id, providedDeviceCode: deviceCode },
+      'pos-sync: X-Device-Code header does not match the authenticated device — mismatched credentials'
+    );
+    sendError(reply, 401, 'UNAUTHORIZED', 'X-Device-Code does not match the authenticated device', request);
+    return null;
+  }
+
+  return device;
+}
+
 const activateSchema = z.object({
   activationCode: z.string().min(1),
   deviceFingerprint: z.string().min(1),
   deviceName: z.string().min(1),
   deviceType: z.enum(['WINDOWS', 'ANDROID', 'LANDI', 'WEB']),
   appVersion: z.string().min(1),
+  // Public device identifier accepted the same way as deviceFingerprint —
+  // optional for now: origin (device-generated vs Cloud-issued) is an
+  // open question (§22), and making it required could brick activation
+  // for a real client that doesn't send it yet.
+  deviceCode: z.string().min(1).optional(),
 });
 
 const catalogQuerySchema = z.object({
@@ -215,16 +259,10 @@ const heartbeatSchema = z.object({
 // docs/pos-sync/schemas/{fiscal,shift,cloud-command}.schema.json §12/§13
 // (those docs are updated to match this implementation).
 //
-// OPEN QUESTION carried over from the source contract: the real doc
-// specifies `X-Device-Code: <deviceCode>` as the auth header for these
-// three endpoints — a different mechanism from the `Authorization: Bearer
-// <accessToken>` used by every other endpoint in this file (§4, resolved
-// via resolveDevice()). Deliberately NOT introducing a second auth scheme
-// here: these three endpoints authenticate identically to
-// activate/heartbeat/sale-events/stock-events, via resolveDevice(). If the
-// real Android client integration requires literal X-Device-Code support,
-// that needs a follow-up decision (e.g. resolveDevice() accepting both
-// headers) — not a silent protocol fork.
+// RESOLVED (was an open question): the real doc's `X-Device-Code`
+// header and this file's `Authorization: Bearer` are not alternatives —
+// both are now required on every authenticated endpoint (including these
+// three), via resolveAuthenticatedDevice() above. See §4/§22.
 //
 // rawDaemonResponse/rawFiscalPayload/rawShiftPayload are stored as-is
 // (z.record(z.unknown())) — only the top-level envelope shape is
@@ -373,6 +411,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           reportedDeviceName: body.data.deviceName,
           reportedDeviceType: body.data.deviceType,
           appVersion: body.data.appVersion,
+          deviceCode: body.data.deviceCode ?? null,
         },
         select: { id: true, tenantId: true, storeId: true },
       }),
@@ -418,8 +457,8 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/pos/v1/heartbeat', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
-    const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply, request);
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
 
     const body = heartbeatSchema.safeParse(request.body);
     if (!body.success) {
@@ -485,8 +524,8 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/pos/v1/catalog/snapshot', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
-    const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply, request);
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
 
     const query = catalogQuerySchema.safeParse(request.query);
     if (!query.success) {
@@ -548,8 +587,8 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/pos/v1/settings', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
-    const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply, request);
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
 
     const stored = await prisma.posSettings.findUnique({
       where: { storeId: device.storeId },
@@ -584,8 +623,8 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/pos/v1/sale-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
-    const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply, request);
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
 
     const body = saleEventSchema.safeParse(request.body);
     if (!body.success) {
@@ -750,8 +789,8 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/pos/v1/stock-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
-    const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply, request);
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
 
     const body = stockEventSchema.safeParse(request.body);
     if (!body.success) {
@@ -865,8 +904,8 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/pos/v1/fiscal-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
-    const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply, request);
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
 
     const body = fiscalEventSchema.safeParse(request.body);
     if (!body.success) {
@@ -931,8 +970,8 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/pos/v1/shift-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
-    const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply, request);
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
 
     const body = shiftEventSchema.safeParse(request.body);
     if (!body.success) {
@@ -980,8 +1019,8 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   // envelope (no `data` wrapper, no `requestId`) to match what the real
   // Android client parses byte-for-byte (docs/POS_SYNC_API.md §15).
   fastify.get('/pos/v1/commands', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
-    const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply, request);
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
 
     const pending = await prisma.cloudCommand.findMany({
       where: { deviceId: device.id, tenantId: device.tenantId, status: 'PENDING' },
@@ -1001,8 +1040,8 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/pos/v1/commands/:id/ack', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
-    const device = await resolveDevice(request.headers.authorization);
-    if (!device) return unauthorized(reply, request);
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
 
     const body = commandAckSchema.safeParse(request.body);
     if (!body.success) {
