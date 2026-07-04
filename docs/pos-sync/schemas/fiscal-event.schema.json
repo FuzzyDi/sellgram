@@ -1,28 +1,76 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "fiscal-event.schema.json",
-  "title": "POS Sync API — POST /api/pos/v1/fiscal-events",
+  "title": "POS Sync API — POST /api/pos/v1/fiscal-events (real SBG Lite POS Android contract, fiscal/shift/commands v1, 2026-07-04)",
   "definitions": {
     "FiscalEvent": {
       "type": "object",
-      "required": ["deviceId", "storeId", "localId", "eventType", "idempotencyKey", "occurredAt"],
+      "required": [
+        "eventId", "eventType", "aggregateType", "aggregateId", "schemaVersion",
+        "shiftNumber", "localReceiptId", "idempotencyKey", "totalAmount",
+        "currency", "payments", "items", "createdAtMs", "fiscalStatus",
+        "printStatus", "rawDaemonResponse"
+      ],
       "properties": {
-        "deviceId": { "type": "string" },
-        "storeId": { "type": "string" },
-        "localId": { "type": "string", "description": "e.g. FISC-000001" },
-        "localSaleId": { "type": "string", "description": "Optional correlation to a sale event, when applicable." },
+        "eventId": { "type": "string" },
         "eventType": {
           "type": "string",
-          "enum": [
-            "FISCAL_STARTED", "FISCAL_SUCCESS", "FISCAL_FAILED",
-            "FISCAL_UNKNOWN", "FISCAL_RECOVERED", "Z_REPORT_CLOSED"
-          ]
+          "enum": ["FISCAL_STARTED", "FISCAL_SUCCESS", "FISCAL_FAILED", "FISCAL_UNKNOWN"]
         },
-        "idempotencyKey": { "type": "string", "pattern": "^[^:]+:fiscal:[^:]+:[A-Z_]+$" },
-        "occurredAt": { "type": "string", "format": "date-time" },
-        "details": { "type": "object" }
+        "aggregateType": { "type": "string", "description": "Observed value: \"FISCAL_RECEIPT\"." },
+        "aggregateId": { "type": "string" },
+        "schemaVersion": { "type": "integer" },
+        "shiftNumber": { "type": "integer" },
+        "localReceiptId": { "type": "string" },
+        "daemonJournalId": { "type": ["string", "null"] },
+        "idempotencyKey": { "type": "string" },
+        "receiptNumber": {
+          "type": ["string", "integer", "null"],
+          "description": "Sent as a string for sales, sometimes as an integer for refunds in the source data — normalized to string on ingest."
+        },
+        "receiptType": { "type": ["string", "null"], "enum": ["SALE", "REFUND", null] },
+        "originalLocalReceiptId": { "type": ["string", "null"], "description": "Refund only." },
+        "originalReceiptNumber": { "type": ["string", "integer", "null"], "description": "Refund only." },
+        "totalAmount": { "type": "integer" },
+        "currency": { "type": "string" },
+        "payments": { "type": "array", "items": { "type": "object" } },
+        "items": { "type": "array", "items": { "type": "object" } },
+        "createdAtMs": { "type": "integer", "description": "Epoch milliseconds." },
+        "fiscalizedAtMs": { "type": ["integer", "null"], "description": "Epoch milliseconds." },
+        "fiscalStatus": {
+          "type": "string",
+          "description": "Free-form, not a closed enum — observed: IN_PROGRESS, SUCCESS, UNKNOWN. May gain new values without a contract change."
+        },
+        "printStatus": {
+          "type": "string",
+          "description": "Free-form, not a closed enum — observed: NOT_STARTED, DEMON_PRINTED."
+        },
+        "fiscalReceiptNumber": { "type": ["string", "integer", "null"] },
+        "fiscalSign": { "type": ["string", "null"] },
+        "fiscalQr": { "type": ["string", "null"], "description": "Reserved — not required in v1." },
+        "ofdStatus": { "type": ["string", "null"], "description": "Reserved — OFD sync lives in the daemon, not required in v1." },
+        "errorCode": { "type": ["string", "null"] },
+        "errorMessage": { "type": ["string", "null"] },
+        "rawDaemonResponse": {
+          "type": "object",
+          "description": "Stored as-is, JSONB — never validated beyond \"is this an object\". May expand without a contract change."
+        },
+        "rawFiscalPayload": {
+          "type": ["object", "null"],
+          "description": "Stored as-is, same rule as rawDaemonResponse."
+        }
       },
-      "additionalProperties": false
+      "additionalProperties": true
+    },
+    "FiscalEventAckResponse": {
+      "type": "object",
+      "required": ["success", "requestId"],
+      "properties": {
+        "success": { "const": true },
+        "requestId": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "description": "Deliberately flatter than envelope.schema.json's SuccessEnvelope — no `data` — matching the real contract's \"Ожидаемый ответ Cloud\" exactly (POS_SYNC_API.md §12)."
     }
   }
 }

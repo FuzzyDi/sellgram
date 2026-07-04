@@ -95,7 +95,7 @@ Convention for all authenticated endpoints in this document: `Authorization:
 Bearer <accessToken>` header. A missing or invalid token is always `401`
 with `error.code = "UNAUTHORIZED"` (see §6).
 
-**Open design point (see §22 gap list and Open Questions):** this document
+**Open design point (see §22, Open Questions):** this document
 specifies that activation returns both an `accessToken` and a
 `refreshToken`, implying short-lived access tokens with a refresh flow —
 but does not yet specify a `POST /api/pos/v1/token/refresh` endpoint. Until
@@ -575,60 +575,84 @@ replay, which returns the same body per §5):**
 
 ## 12. Fiscal events
 
+**Superseded by the real SBG Lite POS Android contract** (fiscal/shift/
+commands v1, fixed 2026-07-04, snapshotted from a real LANDI M20SE
+terminal exchange including real fiscal-module APDU) — this section
+previously described a speculative shape (`FISCAL_RECOVERED`,
+`Z_REPORT_CLOSED` as fiscal event types, `localId`/`details`) that was
+never implemented against a real device. It is replaced below with what
+Android POS actually sends.
+
 ```
 POST /api/pos/v1/fiscal-events
+Authorization: Bearer <accessToken>
 ```
 
-Authenticated. Idempotent (§5).
+Authenticated the same way as every other endpoint in this document (§4,
+`resolveDevice()`). **Open question**: the source Android contract
+specifies `X-Device-Code: <deviceCode>` instead — see the note at the top
+of the implementation (`apps/api/src/modules/pos-sync/routes.ts`) and
+§21. Not resolved by silently supporting both; needs an explicit decision
+before the real Android client can authenticate against this Cloud.
 
-**Event types:**
+Idempotent, but not via the `deviceId:fiscal:localId:eventType` pattern
+used elsewhere in this document — see §21's amended idempotency rules for
+this endpoint: `eventId` (client-generated, per-delivery) is the sole
+dedup key; `idempotencyKey`, `aggregateType`, `aggregateId` are stored for
+correlation/reporting, not as the dedup mechanism.
 
+**Response** (deliberately flatter than the §6 general envelope — no
+`data`, matching the source contract exactly):
+
+```json
+{ "success": true, "requestId": "cloud-request-id" }
 ```
-FISCAL_STARTED
-FISCAL_SUCCESS
-FISCAL_FAILED
-FISCAL_UNKNOWN
-FISCAL_RECOVERED
-Z_REPORT_CLOSED
-```
 
-Fiscal events are reported **in addition to**, not instead of, the `fiscal`
-block already embedded in sale events (§11) — a sale event's `fiscal` field
-is "what we knew about fiscalization at the moment this sale event was
-emitted"; a standalone fiscal event is for fiscal-module-level occurrences
-that don't map 1:1 to a single sale (e.g. `FISCAL_RECOVERED` after a device
-reboot reconciles a batch of previously `FISCAL_UNKNOWN` receipts, or
-`Z_REPORT_CLOSED` which closes out an entire shift's fiscal totals, not one
-sale). `FISCAL_UNKNOWN` here (as its own event, decoupled from any one
-sale) covers fiscal-module-level ambiguity (e.g. the module itself is
-unreachable/unresponsive) as opposed to a single sale's fiscalization
-outcome being unknown.
+**Event types:** `FISCAL_STARTED`, `FISCAL_SUCCESS`, `FISCAL_FAILED`,
+`FISCAL_UNKNOWN`. Every event carries the full receipt snapshot at the
+time it was emitted (`items`, `payments`, `totalAmount`, `currency`,
+`receiptType: SALE|REFUND`, and — for a refund — `originalLocalReceiptId`/
+`originalReceiptNumber` pointing back at the sale being refunded).
+`fiscalStatus`/`printStatus`/`ofdStatus` are free-form strings, not a
+closed enum — the real fiscal module and daemon can introduce new values
+without a contract change. `rawDaemonResponse`/`rawFiscalPayload` are
+stored byte-for-byte as JSON, never normalized or validated beyond "is
+this an object" — everything Cloud needs to search/report on
+(`fiscalSign`, `fiscalReceiptNumber`, `receiptNumber`, `totalAmount`) is
+already promoted to a top-level field alongside them.
+
+A stored `FISCAL_UNKNOWN`/`FISCAL_FAILED` event is **never rewritten**
+into a success — this is append-only, exactly like `SaleEvent` (§5/§11): a
+later `FISCAL_SUCCESS` for the same `aggregateId` (a device's own recovery
+flow) is stored as an additional row, and reporting must show the full
+history rather than erasing the earlier ambiguous/failed state.
+
+Note: this endpoint is intentionally decoupled from `POST /sale-events`
+(§11) — Android POS's own local sale/refund submission
+(`SbgHardwareCoreService`) is a device-internal call that never reaches
+this Cloud API; only the resulting fiscal *event* does, via this
+endpoint. `POST /sale-events`/`POST /stock-events` (§11/§14) are a
+separate, earlier, still-speculative ingestion surface not yet wired to
+this real contract — see §21.
 
 ## 13. Shift events
 
+**Superseded the same way as §12** — see that section's note. Previous
+event types (`X_REPORT_PRINTED`, `Z_REPORT_CLOSED`, `CASH_IN`, `CASH_OUT`)
+are not part of the real contract; replaced below.
+
 ```
 POST /api/pos/v1/shift-events
+Authorization: Bearer <accessToken>
 ```
 
-Authenticated. Idempotent (§5).
+Same auth note, response shape, and `eventId`-keyed idempotency as §12.
 
-**Event types:**
-
-```
-SHIFT_OPENED
-SHIFT_CLOSED
-X_REPORT_PRINTED
-Z_REPORT_CLOSED
-CASH_IN
-CASH_OUT
-```
-
-`Z_REPORT_CLOSED` appears in both §12 and here deliberately — a Z-report is
-simultaneously a fiscal-module event (it closes fiscal totals) and a shift
-event (it typically accompanies shift close). Emit it on **both** channels
-if both are true for a given occurrence; Cloud must not assume the two are
-mutually exclusive, and must dedupe each independently by its own
-`idempotencyKey` (different `aggregateType` segment: `fiscal` vs `shift`).
+**Event types:** `SHIFT_OPENED`, `SHIFT_CLOSED` only. `shiftState`
+(`OPEN`/`CLOSED_WITH_Z`/...) and `zReportStatus`
+(`NOT_STARTED`/`CLOSED`/...) are free-form strings for the same reason as
+§12's `fiscalStatus`. `rawDaemonResponse`/`rawShiftPayload` are stored
+as-is, same as §12's raw fields.
 
 ## 14. Stock movement events
 
@@ -702,33 +726,39 @@ allow negative" rule applies here too).
 
 ## 15. Cloud commands
 
+**Superseded by the real SBG Lite POS Android contract, §6** — allowed
+command list narrowed, ack statuses changed, and (deliberately) the
+response shape for `GET /commands` below is an exception to this
+document's own §6 general envelope.
+
 ```
 GET /api/pos/v1/commands
+Authorization: Bearer <accessToken>
 ```
 
-Authenticated.
+Same auth note as §12/§13 (source contract specifies `X-Device-Code`; this
+Cloud uses the existing `resolveDevice()` Bearer mechanism instead — see
+§21).
 
-**Response:**
+**Response — literal, not the §6 envelope: no `data` wrapper, no
+`requestId`.** This matches what the real Android client parses
+byte-for-byte; adding fields here was deliberately avoided rather than
+"improving" it toward consistency with the rest of this document.
 
 ```json
 {
   "success": true,
-  "data": {
-    "commands": []
-  }
+  "commands": [
+    { "id": "cmd-uuid-1", "type": "PING", "payload": {}, "createdAtMs": 1720100000000 }
+  ]
 }
 ```
 
-**Allowed command types (v1):**
+An empty `commands` array is a valid, normal response (no admin surface
+creates `CloudCommand` rows yet — see §21).
 
-```
-REFRESH_CATALOG
-REFRESH_SETTINGS
-PING
-UPLOAD_DIAGNOSTICS
-DISABLE_DEVICE
-SHOW_MESSAGE
-```
+**Allowed command types (v1):** `PING`, `REFRESH_CATALOG`,
+`REFRESH_SETTINGS`, `SHOW_MESSAGE`.
 
 **Forbidden for v1** — must never be added to the allowed list without a
 new major version *and* a re-review of §2:
@@ -737,36 +767,47 @@ new major version *and* a re-review of §2:
 FORCE_SALE
 FORCE_REFUND
 FORCE_FISCAL_OPERATION
-FORCE_Z_REPORT
+OPEN_SHIFT
+CLOSE_SHIFT
 ```
 
-These are forbidden because every one of them would let SBGCloud reach
-into a local sale/fiscal transaction from the outside — precisely the
-coupling §2 exists to prevent. A future contract revision that needs
-anything resembling these must instead design a *device-initiated,
-device-gated* flow (the till decides whether/when to act, Cloud only ever
-proposes) and must not simply lift the forbidden list.
+...and, generally, any command type that would create a receipt, payment,
+refund, or fiscal operation. These are forbidden because every one of
+them would let SBGCloud reach into a local sale/fiscal transaction from
+the outside — precisely the coupling §2 exists to prevent. A future
+contract revision that needs anything resembling these must instead
+design a *device-initiated, device-gated* flow (the till decides
+whether/when to act, Cloud only ever proposes) and must not simply lift
+the forbidden list.
 
 ```
 POST /api/pos/v1/commands/:id/ack
+Authorization: Bearer <accessToken>
 ```
 
-Authenticated. Idempotent by `id` (acking an already-acked command returns
-the same result, does not error).
+Tenant/device isolation: a device may only ack its own command — acking a
+command belonging to a different device is `404`, not silently accepted
+or `403` (a `403` would leak that the id exists at all).
 
-**Request:**
+**Request** (accepted verbatim from the source contract):
 
 ```json
 {
-  "status": "ACKED|FAILED",
-  "message": "string"
+  "status": "DONE",
+  "message": null,
+  "processedAtMs": 1720100005000
 }
 ```
 
-A command must never be assumed delivered until acked — Cloud keeps
-offering it via `GET /commands` until an ack (`ACKED` or `FAILED`) is
-received, and a device must be able to poll `GET /commands` repeatedly
-without side effects (it is a pull, not a dequeue-on-read).
+`status` is one of `DONE`, `FAILED`, `IGNORED`, `RETRY_LATER` — not
+`ACKED`/`FAILED` as an earlier draft of this document had it. A command
+must never be assumed delivered until acked — Cloud keeps offering it via
+`GET /commands` until it is acked, and a device must be able to poll
+`GET /commands` repeatedly without side effects (it is a pull, not a
+dequeue-on-read). **Response**: the source contract does not specify one
+for this endpoint — this Cloud uses the same flat `{ success, requestId }`
+ack shape as §12/§13 for consistency, not because the source contract
+requires it.
 
 ## 16. Offline behavior
 
@@ -972,10 +1013,13 @@ gap list, not a criticism — first wave was scoped deliberately narrow
 (no fiscal partner confirmed yet), and this contract is the target to close
 the gap against, not a description of what already exists. The rows marked
 **Closed** below are the exception: `POST /activate`, `POST /heartbeat`,
-`GET /catalog/snapshot`, `GET /settings`, `POST /sale-events` and `POST
-/stock-events` have since been brought in line with this contract (see
-§7–§11, §14) — every other row still describes real, unclosed gaps
-(fiscal/shift ingestion, cloud commands).
+`GET /catalog/snapshot`, `GET /settings`, `POST /sale-events`, `POST
+/stock-events`, `POST /fiscal-events`, `POST /shift-events`, `GET
+/commands` and `POST /commands/:id/ack` have since been brought in line
+with a contract (see §7–§11, §14 for the first group; §12/§13/§15 for the
+second, real-Android-contract group) — the only row below still
+describing a real, unclosed gap is fiscal partner confirmation-adjacent
+work outside this document's scope (there is none left inside it).
 
 | Area | This contract | Current code | Gap |
 |---|---|---|---|
@@ -987,18 +1031,45 @@ the gap against, not a description of what already exists. The rows marked
 | `GET /catalog/snapshot` response | Top-level `categories`/`products`/`barcodes`/`uzProfiles`, `checksum`, `full` | **Closed** — contract shape served; snapshot builder now stores categories alongside products; legacy `{ products }`-only snapshots served with empty arrays for the missing keys | No gap in shape. `barcodes`/`uzProfiles` are always `[]` pending the `Barcode`/`ProductUzProfile` models (§12). `checksum` is opaque in v1 (§9). |
 | `GET /settings` response | Versioned, structured (`taxProfile`, `paymentMethods`, `receiptTemplate`, `printerProfile`, `fiscalProfile`, `offlineLimits`, `roundingRules`, `featureFlags`) | **Closed** — backed by the new `PosSettings` model (store-scoped, `version` + `payload Json`), written via `PUT /store-admin/pos-devices/settings`; unconfigured stores get empty eight-key defaults at version 1 | No gap in shape. Nested shapes are whatever the admin stored — unconstrained by design pending a fiscal partner (§10). The old `currency`/`timezone` placeholder response is gone (not part of the contract body). `settingsVersion` in `/activate` and `/heartbeat` now reports the real `PosSettings.version`. |
 | Sale events | Full event-type vocabulary, idempotent ingestion, `StockLedgerEntry` derivation | **Closed** — `SaleEvent` model (append-only, unique `idempotencyKey` + payload hash), full §5 semantics (identical replay → stored result; different payload → 409), `SALE_COMPLETED` derives `StockLedgerEntry` rows, per-item warnings per §11/§18 | No gap in ingestion. Stock *reconciliation* strategy vs Sellgram Commerce's `StockMovement` is now resolved — see §11 (shared warehouse, synchronous atomic `stockQty` update, negative never clamped). Refund/cancel stock effects intentionally unspecified — only `SALE_COMPLETED` derives stock. |
-| Fiscal/shift events | Full event-type vocabularies, idempotent ingestion | `501 NOT_IMPLEMENTED` stubs | `FiscalReceipt`/`ShiftProjection` models do not exist yet — roadmap step 5, pending a confirmed fiscal integration partner. |
+| Fiscal events | Real SBG Lite POS Android contract (§12): `FISCAL_STARTED/SUCCESS/FAILED/UNKNOWN`, rich receipt snapshot, `eventId`-keyed idempotency | **Closed** — `FiscalEvent` model (append-only, `@@unique([deviceId, eventId])`); flat `{success, requestId}` ack per the real contract; `FISCAL_UNKNOWN`/`FAILED` never rewritten to success | No gap. Auth mismatch is a genuine open item — see §22. Decoupled from `POST /sale-events` (§11) by design (§12 note); the two ingestion surfaces are not yet wired together. |
+| Shift events | Real contract (§13): `SHIFT_OPENED/CLOSED` only, `eventId`-keyed idempotency | **Closed** — `ShiftEvent` model, same idempotency/ack pattern as `FiscalEvent` | No gap. Same §22 auth caveat applies. |
 | Stock movement events | `POST /stock-events` (§14) | **Closed** — `StockEvent` model (append-only, no FK on `productId` on purpose) + full §5 idempotency; known product derives a signed-delta `StockLedgerEntry` (`sourceType: 'StockEvent'`); unknown product stored with an `UNKNOWN_PRODUCT` warning, no ledger row | No gap. `POS_SALE` is rejected at the API — that reason code stays exclusive to sale-event derivation. |
-| Cloud commands | `GET /commands`, `POST /commands/:id/ack` with typed command list | `501 NOT_IMPLEMENTED` stubs (endpoints exist, no logic) | `CloudCommand` model does not exist yet. Allowed/forbidden command type enforcement not implemented. |
-| Idempotency | Required on every critical event, enforced Cloud-side | **Partially closed** — full §5 semantics implemented for sale-events and stock-events (unique key, payload-hash reuse detection, stored-result replay, concurrent-race handling, shared helper) | Fiscal/shift endpoints will reuse the same pattern when implemented — until then idempotency exists only on the sale/stock surfaces. |
+| Cloud commands | `GET /commands`, `POST /commands/:id/ack`, real contract's allowed list (§15) | **Closed** — `CloudCommand` model; `GET /commands` returns the real contract's literal flat shape (no `data`/`requestId`); ack validates `DONE/FAILED/IGNORED/RETRY_LATER` and enforces tenant/device isolation (404 on a foreign command) | No gap in the polling/ack surface. No admin UI creates `CloudCommand` rows yet — `GET /commands` will legitimately return `[]` until one exists. Heartbeat's `hasCommands` still hardcodes `false` (§8) — deliberately not wired to the new model, out of scope for this change (heartbeat logic was off-limits). Same §22 auth caveat applies. |
+| Idempotency | Required on every critical event, enforced Cloud-side | **Closed for every implemented event surface** — sale/stock-events use payload-hash reuse detection (409 on conflict); fiscal/shift-events use the real contract's `eventId`-keyed model (silent replay, no conflict code — see §12) | No gap. Fiscal/shift and sale/stock intentionally use two different (both real, both documented) idempotency shapes — see §5 vs §12 for why. |
 | Rate limiting | 5/min on activate, moderate baseline elsewhere | **Already matches** — implemented exactly as described in §19 | No gap. |
 | Base path | `/api/pos/v1` | **Already matches** | No gap. |
+
+---
+
+## 22. Open Questions
+
+- **Device auth header mismatch (fiscal/shift/commands, §12/§13/§15).**
+  The real SBG Lite POS Android contract (fiscal/shift/commands v1,
+  2026-07-04) specifies `X-Device-Code: <deviceCode>` as the auth header
+  for these three endpoints — a different mechanism from the
+  `Authorization: Bearer <accessToken>` (§4, `resolveDevice()`) used by
+  every other endpoint in this document, including the already-implemented
+  `activate`/`heartbeat`/`sale-events`/`stock-events`. This implementation
+  deliberately does **not** introduce a second auth scheme: all seven
+  authenticated endpoints, old and new, authenticate identically via
+  `resolveDevice()`. This is flagged here, not silently resolved, because
+  it's unclear whether: (a) `X-Device-Code` in the source doc is a
+  simplification/placeholder in Android's own internal notes and the real
+  client already sends `Authorization: Bearer`, or (b) the real Android
+  client genuinely only knows how to send `X-Device-Code` and will fail to
+  authenticate against this Cloud as built. Needs a decision with the SBG
+  Lite POS Android team before real-device integration testing, not an
+  assumption baked into either side silently.
+- **`accessToken`/`refreshToken` refresh flow** (§4) — activation returns
+  both, but no `POST /token/refresh` endpoint is specified or implemented;
+  `accessToken` is long-lived in practice until one exists.
 
 ---
 
 *Cross-references: `docs/SBGCLOUD_ARCHITECTURE.md` (§2 boundary, §7 POS sync
 future module, §12 future data model, §13 migration roadmap),
 `packages/prisma/schema.prisma` (`PosDevice`, `DeviceActivation`,
-`CatalogSnapshot`, `SyncCursor`, `StockLedgerEntry`, and their enums),
+`CatalogSnapshot`, `SyncCursor`, `StockLedgerEntry`, `FiscalEvent`,
+`ShiftEvent`, `CloudCommand`, and their enums),
 `apps/api/src/modules/pos-sync/routes.ts` and `admin-routes.ts` (current
 server code).*
