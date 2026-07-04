@@ -958,6 +958,18 @@ model PosDevice {
   reportedDeviceName String?
   reportedDeviceType String?
   appVersion         String?
+  // PUBLIC device identifier (not a secret — safe to log), sent by the
+  // device at /activate the same way as deviceFingerprint — confirmed
+  // production flow with the SBG Lite POS Android team (their client
+  // derives it from local config). Checked as a PAIR with Authorization:
+  // Bearer on every other authenticated endpoint (docs/POS_SYNC_API.md
+  // §4/§22): Bearer remains the sole real auth factor; a request whose
+  // token was issued for a different deviceCode is rejected, not just a
+  // present-but-unrelated header. Unique per tenant (two devices of one
+  // tenant can't share a code; different tenants may reuse the same
+  // dev-style value, e.g. "POS-1") — nullable only for pre-existing rows
+  // that activated before this column existed.
+  deviceCode   String?
   lastSeenAt   DateTime?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
@@ -970,6 +982,7 @@ model PosDevice {
   shiftEvents  ShiftEvent[]
   cloudCommands CloudCommand[]
 
+  @@unique([tenantId, deviceCode])
   @@index([tenantId, storeId])
   @@map("pos_devices")
 }

@@ -1,4 +1,6 @@
 import Fastify from 'fastify';
+import type { FastifyServerOptions } from 'fastify';
+import { Writable } from 'stream';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -38,8 +40,8 @@ vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 
 import posSyncRoutes from './routes.js';
 
-async function buildApp() {
-  const app = Fastify();
+async function buildApp(options?: FastifyServerOptions) {
+  const app = Fastify(options);
   await app.register(posSyncRoutes, { prefix: '/api' });
   return app;
 }
@@ -55,6 +57,7 @@ describe('pos-sync.routes', () => {
     deviceName: 'POS-1',
     deviceType: 'ANDROID',
     appVersion: '0.1.0',
+    deviceCode: 'code-1',
   };
 
   describe('POST /api/pos/v1/activate', () => {
@@ -67,7 +70,7 @@ describe('pos-sync.routes', () => {
         device: { id: 'dev-1' },
       });
       mocks.prisma.$transaction.mockResolvedValue([
-        { id: 'dev-1', tenantId: 't-1', storeId: 's-1' },
+        { id: 'dev-1', tenantId: 't-1', storeId: 's-1', deviceCode: 'code-1' },
         {},
         {},
       ]);
@@ -92,6 +95,7 @@ describe('pos-sync.routes', () => {
       expect(typeof body.data.refreshToken).toBe('string');
       expect(body.data.refreshToken.startsWith('posr_')).toBe(true);
       expect(body.data.accessToken).not.toBe(body.data.refreshToken);
+      expect(body.data.deviceCode).toBe('code-1');
       expect(body.data.catalogVersion).toBe(2);
       expect(body.data.settingsVersion).toBe(1);
       await app.close();
@@ -103,11 +107,13 @@ describe('pos-sync.routes', () => {
         deviceId: 'dev-1',
         status: 'PENDING',
         expiresAt: new Date(Date.now() + 60_000),
-        device: { id: 'dev-1' },
+        device: { id: 'dev-1', tenantId: 't-1' },
       });
+      // First findFirst call is the fingerprint check (collision found);
+      // the second is the deviceCode check (no collision, default null).
       mocks.prisma.posDevice.findFirst.mockResolvedValueOnce({ id: 'dev-other' });
       mocks.prisma.$transaction.mockResolvedValue([
-        { id: 'dev-1', tenantId: 't-1', storeId: 's-1' },
+        { id: 'dev-1', tenantId: 't-1', storeId: 's-1', deviceCode: 'code-1' },
         {},
         {},
       ]);
@@ -120,6 +126,85 @@ describe('pos-sync.routes', () => {
       });
 
       expect(response.statusCode).toBe(201);
+      await app.close();
+    });
+
+    it('rejects activation with 409 DEVICE_CODE_ALREADY_IN_USE when another active device in the same tenant already holds this deviceCode', async () => {
+      mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
+        id: 'act-1',
+        deviceId: 'dev-1',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() + 60_000),
+        device: { id: 'dev-1', tenantId: 't-1' },
+      });
+      // First call: fingerprint check, no collision. Second call:
+      // deviceCode check, collision with a genuinely different device.
+      mocks.prisma.posDevice.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'dev-other', deviceCode: 'code-1' });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/activate',
+        payload: validActivatePayload,
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe('DEVICE_CODE_ALREADY_IN_USE');
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('does not block re-activation when the deviceCode collision check correctly excludes the device being activated', async () => {
+      mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
+        id: 'act-1',
+        deviceId: 'dev-1',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() + 60_000),
+        device: { id: 'dev-1', tenantId: 't-1' },
+      });
+      // Both findFirst calls resolve null — in a real DB, the deviceCode
+      // check's `id: { not: activation.deviceId }` clause means the
+      // device's own (about-to-be-overwritten) row is never a collision
+      // with itself, even if it already happened to hold this deviceCode.
+      mocks.prisma.posDevice.findFirst.mockResolvedValue(null);
+      mocks.prisma.$transaction.mockResolvedValue([
+        { id: 'dev-1', tenantId: 't-1', storeId: 's-1', deviceCode: 'code-1' },
+        {},
+        {},
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/activate',
+        payload: validActivatePayload,
+      });
+
+      expect(response.statusCode).toBe(201);
+      // The second findFirst call is the deviceCode check — assert it
+      // excludes the device currently being activated.
+      expect(mocks.prisma.posDevice.findFirst).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: 't-1',
+            deviceCode: 'code-1',
+            status: 'ACTIVE',
+            id: { not: 'dev-1' },
+          }),
+        })
+      );
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when deviceCode is missing', async () => {
+      const { deviceCode: _omit, ...payload } = validActivatePayload;
+      const app = await buildApp();
+      const response = await app.inject({ method: 'POST', url: '/api/pos/v1/activate', payload });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
     });
 
@@ -203,6 +288,72 @@ describe('pos-sync.routes', () => {
     });
   });
 
+  // X-Device-Code enforcement is implemented once, shared by every
+  // authenticated endpoint via resolveAuthenticatedDevice() — exercised
+  // here through heartbeat as the representative endpoint, rather than
+  // duplicated per endpoint (each endpoint's own describe block already
+  // sends a matching header on every other test, exercising the
+  // happy-path wiring for that specific route).
+  describe('X-Device-Code header enforcement (shared across pos-sync endpoints)', () => {
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+    });
+
+    it('returns 400 VALIDATION_ERROR when X-Device-Code is missing, even with a valid Bearer token', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/heartbeat',
+        headers: { authorization: 'Bearer pos_validkey' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 401 and logs a security-warning when X-Device-Code does not match the authenticated device', async () => {
+      const lines: string[] = [];
+      const stream = new Writable({
+        write(chunk, _enc, cb) {
+          lines.push(chunk.toString());
+          cb();
+        },
+      });
+
+      const app = await buildApp({ logger: { level: 'warn', stream } });
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/heartbeat',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'wrong-code' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('UNAUTHORIZED');
+      const warnLine = lines.find((l) => l.includes('mismatched credentials'));
+      expect(warnLine).toBeTruthy();
+      // Both the request's (wrong) deviceCode and the resolved device's
+      // real one must be present — not just "something mismatched".
+      expect(warnLine).toContain('wrong-code');
+      expect(warnLine).toContain('code-1');
+      await app.close();
+    });
+
+    it('does not reach the resolveDevice/Bearer check before the X-Device-Code presence check', async () => {
+      // No Authorization header at all — if X-Device-Code presence were
+      // checked after Bearer resolution, this would be 401; it must be
+      // 400, since the header is missing regardless of Bearer validity.
+      const app = await buildApp();
+      const response = await app.inject({ method: 'POST', url: '/api/pos/v1/heartbeat' });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+  });
+
   const validHeartbeatPayload = {
     deviceId: 'dev-1',
     localTime: '2026-07-03T10:00:00+05:00',
@@ -218,7 +369,7 @@ describe('pos-sync.routes', () => {
   describe('POST /api/pos/v1/heartbeat', () => {
     it('updates lastSeenAt and returns license/version info for a valid device key', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.tenant.findUnique.mockResolvedValue({ planExpiresAt: null, blockedAt: null });
       mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ version: 4 });
@@ -228,7 +379,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/heartbeat',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validHeartbeatPayload,
       });
 
@@ -247,7 +398,7 @@ describe('pos-sync.routes', () => {
 
     it('reflects a BLOCKED tenant in licenseStatus', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.tenant.findUnique.mockResolvedValue({ planExpiresAt: null, blockedAt: new Date() });
 
@@ -255,7 +406,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/heartbeat',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validHeartbeatPayload,
       });
 
@@ -266,14 +417,14 @@ describe('pos-sync.routes', () => {
 
     it('returns 400 VALIDATION_ERROR when body deviceId does not match the authenticated device', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
 
       const app = await buildApp();
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/heartbeat',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { ...validHeartbeatPayload, deviceId: 'dev-other' },
       });
 
@@ -284,7 +435,7 @@ describe('pos-sync.routes', () => {
 
     it('returns 400 VALIDATION_ERROR when a required field is missing', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       const { fiscal: _omit, ...payload } = validHeartbeatPayload;
 
@@ -292,7 +443,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/heartbeat',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload,
       });
 
@@ -303,7 +454,11 @@ describe('pos-sync.routes', () => {
 
     it('returns 401 without an Authorization header', async () => {
       const app = await buildApp();
-      const response = await app.inject({ method: 'POST', url: '/api/pos/v1/heartbeat' });
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/heartbeat',
+        headers: { 'x-device-code': 'code-1' },
+      });
       expect(response.statusCode).toBe(401);
       await app.close();
     });
@@ -315,7 +470,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/heartbeat',
-        headers: { authorization: 'Bearer pos_unknown' },
+        headers: { authorization: 'Bearer pos_unknown', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(401);
@@ -326,7 +481,7 @@ describe('pos-sync.routes', () => {
   describe('GET /api/pos/v1/catalog/snapshot', () => {
     it('returns the latest snapshot in the contract shape for the device store', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({
         version: 3,
@@ -343,7 +498,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(200);
@@ -362,7 +517,7 @@ describe('pos-sync.routes', () => {
 
     it('serves legacy { products }-only snapshots with empty arrays for the missing keys', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({
         version: 1, payload: { products: [{ id: 'p-1' }] }, createdAt: new Date(),
@@ -372,7 +527,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(200);
@@ -386,14 +541,14 @@ describe('pos-sync.routes', () => {
 
     it('returns 400 VALIDATION_ERROR when storeId is missing', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
 
       const app = await buildApp();
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/catalog/snapshot',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(400);
@@ -403,14 +558,14 @@ describe('pos-sync.routes', () => {
 
     it("returns 400 VALIDATION_ERROR when storeId is not the device's own store", async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
 
       const app = await buildApp();
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/catalog/snapshot?storeId=s-other',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(400);
@@ -421,7 +576,7 @@ describe('pos-sync.routes', () => {
 
     it('returns 404 NO_SNAPSHOT_AVAILABLE when no snapshot exists yet', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue(null);
 
@@ -429,7 +584,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(404);
@@ -444,7 +599,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
-        headers: { authorization: 'Bearer bad' },
+        headers: { authorization: 'Bearer bad', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(401);
@@ -455,7 +610,7 @@ describe('pos-sync.routes', () => {
   describe('GET /api/pos/v1/settings', () => {
     it('serves the stored PosSettings document with version and checksum', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       const payload = {
         taxProfile: { vat: 12 },
@@ -473,7 +628,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/settings',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(200);
@@ -487,7 +642,7 @@ describe('pos-sync.routes', () => {
 
     it('serves empty eight-key defaults as version 1 when no PosSettings row exists', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
 
@@ -495,7 +650,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/settings',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(200);
@@ -516,7 +671,11 @@ describe('pos-sync.routes', () => {
 
     it('returns 401 for a missing device key', async () => {
       const app = await buildApp();
-      const response = await app.inject({ method: 'GET', url: '/api/pos/v1/settings' });
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/settings',
+        headers: { 'x-device-code': 'code-1' },
+      });
       expect(response.statusCode).toBe(401);
       await app.close();
     });
@@ -545,7 +704,7 @@ describe('pos-sync.routes', () => {
 
     beforeEach(() => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.saleEvent.findUnique.mockResolvedValue(null);
       mocks.prisma.saleEvent.create.mockResolvedValue({ id: 'evt-1' });
@@ -563,7 +722,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validSaleEvent,
       });
 
@@ -614,7 +773,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: {
           ...validSaleEvent,
           eventType: 'SALE_PAID',
@@ -636,7 +795,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: {
           ...validSaleEvent,
           items: [
@@ -665,7 +824,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: {
           ...validSaleEvent,
           items: [{ productId: 'p-1', quantity: 1.5 }],
@@ -689,7 +848,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: {
           ...validSaleEvent,
           items: [{ productId: 'p-1', variantId: 'v-other', quantity: 1 }],
@@ -712,14 +871,14 @@ describe('pos-sync.routes', () => {
       await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validSaleEvent,
       });
       const storedHash = mocks.prisma.saleEvent.create.mock.calls[0][0].data.payloadHash;
 
       vi.clearAllMocks();
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.saleEvent.findUnique.mockResolvedValue({
         id: 'evt-1', payloadHash: storedHash, warnings: [],
@@ -728,7 +887,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validSaleEvent,
       });
 
@@ -749,7 +908,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validSaleEvent,
       });
 
@@ -764,7 +923,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { ...validSaleEvent, deviceId: 'dev-other' },
       });
 
@@ -778,7 +937,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { ...validSaleEvent, storeId: 's-other' },
       });
 
@@ -794,7 +953,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload,
       });
 
@@ -808,6 +967,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/sale-events',
+        headers: { 'x-device-code': 'code-1' },
         payload: validSaleEvent,
       });
       expect(response.statusCode).toBe(401);
@@ -830,7 +990,7 @@ describe('pos-sync.routes', () => {
 
     beforeEach(() => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.stockEvent.findUnique.mockResolvedValue(null);
       mocks.prisma.stockEvent.create.mockResolvedValue({ id: 'stk-1' });
@@ -848,7 +1008,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validStockEvent,
       });
 
@@ -881,7 +1041,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: {
           ...validStockEvent,
           delta: -3,
@@ -907,7 +1067,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { ...validStockEvent, productId: 'p-ghost' },
       });
 
@@ -928,7 +1088,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { ...validStockEvent, variantId: 'v-other' },
       });
 
@@ -946,7 +1106,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { ...validStockEvent, reason: 'POS_SALE', idempotencyKey: 'dev-1:stock:STK-000003:POS_SALE' },
       });
 
@@ -961,14 +1121,14 @@ describe('pos-sync.routes', () => {
       await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validStockEvent,
       });
       const storedHash = mocks.prisma.stockEvent.create.mock.calls[0][0].data.payloadHash;
 
       vi.clearAllMocks();
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.stockEvent.findUnique.mockResolvedValue({
         id: 'stk-1', payloadHash: storedHash, warnings: [],
@@ -977,7 +1137,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validStockEvent,
       });
 
@@ -997,7 +1157,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validStockEvent,
       });
 
@@ -1012,7 +1172,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { ...validStockEvent, deviceId: 'dev-other' },
       });
 
@@ -1026,7 +1186,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { ...validStockEvent, storeId: 's-other' },
       });
 
@@ -1042,7 +1202,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload,
       });
 
@@ -1056,6 +1216,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/stock-events',
+        headers: { 'x-device-code': 'code-1' },
         payload: validStockEvent,
       });
       expect(response.statusCode).toBe(401);
@@ -1094,7 +1255,7 @@ describe('pos-sync.routes', () => {
 
     beforeEach(() => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.fiscalEvent.create.mockResolvedValue({});
     });
@@ -1104,7 +1265,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/fiscal-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validFiscalEvent,
       });
 
@@ -1127,7 +1288,7 @@ describe('pos-sync.routes', () => {
       await app.inject({
         method: 'POST',
         url: '/api/pos/v1/fiscal-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { ...validFiscalEvent, receiptNumber: 42, fiscalReceiptNumber: 'refund-fiscal-receipt-id' },
       });
 
@@ -1144,7 +1305,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/fiscal-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: {
           ...validFiscalEvent,
           eventId: 'fisc-evt-unknown',
@@ -1170,7 +1331,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/fiscal-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload,
       });
 
@@ -1184,6 +1345,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/fiscal-events',
+        headers: { 'x-device-code': 'code-1' },
         payload: validFiscalEvent,
       });
       expect(response.statusCode).toBe(401);
@@ -1210,7 +1372,7 @@ describe('pos-sync.routes', () => {
 
     beforeEach(() => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.shiftEvent.create.mockResolvedValue({});
     });
@@ -1220,7 +1382,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/shift-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validShiftEvent,
       });
 
@@ -1239,7 +1401,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/shift-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: validShiftEvent,
       });
 
@@ -1255,7 +1417,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/shift-events',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload,
       });
 
@@ -1269,6 +1431,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/shift-events',
+        headers: { 'x-device-code': 'code-1' },
         payload: validShiftEvent,
       });
       expect(response.statusCode).toBe(401);
@@ -1279,7 +1442,7 @@ describe('pos-sync.routes', () => {
   describe('GET /api/pos/v1/commands', () => {
     beforeEach(() => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
     });
 
@@ -1294,7 +1457,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/commands',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(200);
@@ -1319,7 +1482,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/pos/v1/commands',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(response.statusCode).toBe(200);
@@ -1334,7 +1497,7 @@ describe('pos-sync.routes', () => {
       await app.inject({
         method: 'GET',
         url: '/api/pos/v1/commands',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
       });
 
       expect(mocks.prisma.cloudCommand.findMany).toHaveBeenCalledWith(
@@ -1345,7 +1508,11 @@ describe('pos-sync.routes', () => {
 
     it('returns 401 without an Authorization header', async () => {
       const app = await buildApp();
-      const response = await app.inject({ method: 'GET', url: '/api/pos/v1/commands' });
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/commands',
+        headers: { 'x-device-code': 'code-1' },
+      });
       expect(response.statusCode).toBe(401);
       await app.close();
     });
@@ -1354,7 +1521,7 @@ describe('pos-sync.routes', () => {
   describe('POST /api/pos/v1/commands/:id/ack', () => {
     beforeEach(() => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
-        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE',
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.cloudCommand.findFirst.mockResolvedValue({ id: 'cmd-1' });
       mocks.prisma.cloudCommand.update.mockResolvedValue({});
@@ -1365,7 +1532,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/commands/cmd-1/ack',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { status: 'DONE', message: null, processedAtMs: 1720100005000 },
       });
 
@@ -1388,7 +1555,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/commands/cmd-other-device/ack',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { status: 'DONE' },
       });
 
@@ -1402,7 +1569,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/commands/cmd-1/ack',
-        headers: { authorization: 'Bearer pos_validkey' },
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         payload: { status: 'BOGUS' },
       });
 
@@ -1416,6 +1583,7 @@ describe('pos-sync.routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/pos/v1/commands/cmd-1/ack',
+        headers: { 'x-device-code': 'code-1' },
         payload: { status: 'DONE' },
       });
       expect(response.statusCode).toBe(401);

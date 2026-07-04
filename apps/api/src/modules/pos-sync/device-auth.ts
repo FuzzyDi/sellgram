@@ -5,6 +5,7 @@ export type ResolvedDevice = {
   id: string;
   tenantId: string;
   storeId: string;
+  deviceCode: string | null;
 };
 
 /**
@@ -20,9 +21,9 @@ export async function resolveDevice(authHeader: string | undefined): Promise<Res
   const apiKeyHash = createHash('sha256').update(raw).digest('hex');
   const device = await prisma.posDevice.findUnique({
     where: { apiKeyHash },
-    select: { id: true, tenantId: true, storeId: true, status: true },
+    select: { id: true, tenantId: true, storeId: true, status: true, deviceCode: true },
   });
   if (!device || device.status !== 'ACTIVE') return null;
 
-  return { id: device.id, tenantId: device.tenantId, storeId: device.storeId };
+  return { id: device.id, tenantId: device.tenantId, storeId: device.storeId, deviceCode: device.deviceCode };
 }

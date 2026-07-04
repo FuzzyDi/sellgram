@@ -5,13 +5,18 @@
   "definitions": {
     "ActivateRequest": {
       "type": "object",
-      "required": ["activationCode", "deviceFingerprint", "deviceName", "deviceType", "appVersion"],
+      "required": ["activationCode", "deviceFingerprint", "deviceName", "deviceType", "appVersion", "deviceCode"],
       "properties": {
         "activationCode": { "type": "string", "minLength": 1 },
         "deviceFingerprint": { "type": "string", "minLength": 1 },
         "deviceName": { "type": "string", "minLength": 1 },
         "deviceType": { "type": "string", "enum": ["WINDOWS", "ANDROID", "LANDI", "WEB"] },
-        "appVersion": { "type": "string", "minLength": 1 }
+        "appVersion": { "type": "string", "minLength": 1 },
+        "deviceCode": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Public, non-secret identifier — required alongside X-Device-Code on every other authenticated endpoint (§4). Unique per tenant."
+        }
       },
       "additionalProperties": false
     },
@@ -24,7 +29,7 @@
           "type": "object",
           "required": [
             "tenantId", "storeId", "deviceId",
-            "accessToken", "refreshToken", "catalogVersion", "settingsVersion"
+            "accessToken", "refreshToken", "deviceCode", "catalogVersion", "settingsVersion"
           ],
           "properties": {
             "tenantId": { "type": "string" },
@@ -32,6 +37,10 @@
             "deviceId": { "type": "string" },
             "accessToken": { "type": "string" },
             "refreshToken": { "type": "string" },
+            "deviceCode": {
+              "type": "string",
+              "description": "Canonical value Cloud persisted and will check on subsequent requests — today always identical to the request's deviceCode."
+            },
             "catalogVersion": { "type": "integer", "minimum": 0 },
             "settingsVersion": { "type": "integer", "minimum": 0 }
           },

@@ -91,9 +91,48 @@ Two stages, never one:
    the device credential is what the till actually stores and uses day to
    day.
 
-Convention for all authenticated endpoints in this document: `Authorization:
-Bearer <accessToken>` header. A missing or invalid token is always `401`
-with `error.code = "UNAUTHORIZED"` (see §6).
+Convention for all authenticated endpoints in this document — **two
+headers, confirmed production flow with the SBG Lite POS Android team**:
+
+- `Authorization: Bearer <accessToken>` — the **sole real authentication
+  factor**, unchanged since §7. A missing or invalid token is always `401`
+  with `error.code = "UNAUTHORIZED"` (see §6).
+- `X-Device-Code: <deviceCode>` — a **public identifier**, not a secret,
+  safe to log and to appear in diagnostics/support correlation. Required
+  on every authenticated endpoint except `/activate` itself (which
+  predates having a device to check it against).
+
+**Checked as a pair, not as two independent facts.** This is the Android
+team's explicit requirement: the `accessToken` must have been issued *for*
+the `deviceCode` presented alongside it — not merely "is this a valid
+token" and separately "is this some known device code." Concretely: Cloud
+resolves the device from `Authorization` first (existing `resolveDevice()`
+logic, unchanged), then checks that the resolved device's stored
+`deviceCode` equals the `X-Device-Code` header.
+
+- `X-Device-Code` missing entirely → `400 VALIDATION_ERROR` (a pure
+  request-shape error, checked before `Authorization` is even resolved —
+  a request missing both headers gets `400`, not `401`).
+- `X-Device-Code` present but not matching the resolved device →
+  `401 UNAUTHORIZED`, **not** `400` — the token itself may be perfectly
+  valid; it's the *pairing* that's wrong, which is exactly the scenario
+  the Android team flagged as a potential security incident (a valid
+  token presented with a foreign/incorrect device code). Logged as a
+  security-warning with both the provided and the expected `deviceCode`
+  (not just "a mismatch happened") — `apps/api/src/modules/pos-sync/
+  routes.ts`'s `resolveAuthenticatedDevice()`.
+
+`deviceCode` is never an independent auth factor and never substitutes for
+`Authorization` — its absence or mismatch never weakens the `Authorization`
+check, and a correct `X-Device-Code` with an invalid `Authorization` is
+still `401`.
+
+`deviceCode` is sent by the device at `/activate` the same way
+`deviceFingerprint` is (§7) — confirmed by the Android team as their
+production flow (derived from local till config today). Unique per
+tenant: two devices in the same tenant cannot share a `deviceCode`, but
+different tenants may both use the same dev-style value (e.g. `"POS-1"`)
+without conflict.
 
 **Open design point (see §22, Open Questions):** this document
 specifies that activation returns both an `accessToken` and a
@@ -208,7 +247,8 @@ hard — see §19.
   "deviceFingerprint": "string",
   "deviceName": "POS-1",
   "deviceType": "WINDOWS|ANDROID|LANDI|WEB",
-  "appVersion": "0.1.0"
+  "appVersion": "0.1.0",
+  "deviceCode": "string"
 }
 ```
 
@@ -223,6 +263,12 @@ hard — see §19.
 - `deviceName`, `deviceType`, `appVersion` — required, descriptive/
   informational, used for fleet visibility (system-admin / tenant
   monitoring, not specified further in this document).
+- `deviceCode` — **required** (§4/§22). The public, non-secret identifier
+  a device must send as `X-Device-Code` on every other authenticated
+  endpoint. Confirmed by the Android team as their production flow: sent
+  the same way `deviceFingerprint` is, derived from local till config
+  today. Unique per tenant (`@@unique([tenantId, deviceCode])` on
+  `PosDevice`) — see the collision handling below.
 
 **Response (`201`):**
 
@@ -235,6 +281,7 @@ hard — see §19.
     "deviceId": "string",
     "accessToken": "string",
     "refreshToken": "string",
+    "deviceCode": "string",
     "catalogVersion": 1,
     "settingsVersion": 1
   },
@@ -252,7 +299,13 @@ from a previous activation (re-activation case) or must pull one before its
 first sale. `refreshToken` is minted and stored (hash-only, same pattern as
 `accessToken`) but nothing consumes it yet — no `token/refresh` endpoint is
 specified in this document, so `accessToken` is still long-lived in
-practice (see §4).
+practice (see §4). `deviceCode` is echoed back as the **canonical** value —
+the exact value Cloud actually persisted and will check on every
+subsequent request — so the device has an authoritative value to send as
+`X-Device-Code` even if Cloud ever starts normalizing what it receives
+(e.g. for a first activation with no meaningful provisioning code); today
+this is always identical to what was sent, since no normalization exists
+yet.
 
 `deviceName`/`deviceType` in the request are stored separately
 (`reportedDeviceName`/`reportedDeviceType` on `PosDevice`) from the
@@ -260,7 +313,21 @@ admin-set `name`/`deviceType` created via `POST /store-admin/pos-devices` —
 the admin's values remain authoritative for fleet display; the
 device-reported values (plus `appVersion` and `deviceFingerprint`) are
 informational/anomaly-detection only. `deviceFingerprint` collision with
-another `ACTIVE` device is logged as a warning, not rejected.
+another `ACTIVE` device is logged as a warning, not rejected —
+`deviceCode` collision is handled differently (below), because it is
+security/money-sensitive (half of the auth pair every other endpoint
+checks — §4) in a way `deviceFingerprint` is not.
+
+**`deviceCode` collision handling.** If another `ACTIVE` `PosDevice` in
+the same tenant already holds the `deviceCode` being activated, the
+activation is **rejected**, not logged-and-allowed: `409` with
+`error.code = "DEVICE_CODE_ALREADY_IN_USE"`. This differs from the
+`deviceFingerprint` precedent deliberately — two devices simultaneously
+authenticating as the same public identifier would undermine exactly the
+pairing guarantee §4 relies on. A device being re-activated (the same
+`PosDevice` row this `activationCode` maps to) is never its own collision
+— the check excludes it by `id`, matching the `deviceFingerprint`
+pattern's exclusion.
 
 **Failure modes:**
 
@@ -270,6 +337,7 @@ another `ACTIVE` device is logged as a warning, not rejected.
 | Code known but expired | `400` | `ACTIVATION_CODE_EXPIRED` |
 | Code known but already confirmed/used | `400` | `ACTIVATION_CODE_ALREADY_USED` |
 | Missing/invalid request fields | `400` | `VALIDATION_ERROR` |
+| `deviceCode` already in use by another active device in this tenant | `409` | `DEVICE_CODE_ALREADY_IN_USE` |
 | Too many attempts from one IP | `429` | `RATE_LIMITED` |
 
 ## 8. Heartbeat
@@ -586,14 +654,13 @@ Android POS actually sends.
 ```
 POST /api/pos/v1/fiscal-events
 Authorization: Bearer <accessToken>
+X-Device-Code: <deviceCode>
 ```
 
-Authenticated the same way as every other endpoint in this document (§4,
-`resolveDevice()`). **Open question**: the source Android contract
-specifies `X-Device-Code: <deviceCode>` instead — see the note at the top
-of the implementation (`apps/api/src/modules/pos-sync/routes.ts`) and
-§21. Not resolved by silently supporting both; needs an explicit decision
-before the real Android client can authenticate against this Cloud.
+Authenticated the same way as every other endpoint in this document (§4)
+— **resolved**: both headers required, `Authorization` is the sole real
+factor, `X-Device-Code` is a public identifier checked for a match (§4,
+§22).
 
 Idempotent, but not via the `deviceId:fiscal:localId:eventType` pattern
 used elsewhere in this document — see §21's amended idempotency rules for
@@ -644,9 +711,10 @@ are not part of the real contract; replaced below.
 ```
 POST /api/pos/v1/shift-events
 Authorization: Bearer <accessToken>
+X-Device-Code: <deviceCode>
 ```
 
-Same auth note, response shape, and `eventId`-keyed idempotency as §12.
+Same auth (§4), response shape, and `eventId`-keyed idempotency as §12.
 
 **Event types:** `SHIFT_OPENED`, `SHIFT_CLOSED` only. `shiftState`
 (`OPEN`/`CLOSED_WITH_Z`/...) and `zReportStatus`
@@ -734,11 +802,10 @@ document's own §6 general envelope.
 ```
 GET /api/pos/v1/commands
 Authorization: Bearer <accessToken>
+X-Device-Code: <deviceCode>
 ```
 
-Same auth note as §12/§13 (source contract specifies `X-Device-Code`; this
-Cloud uses the existing `resolveDevice()` Bearer mechanism instead — see
-§21).
+Same auth as §12/§13 (§4) — both headers required.
 
 **Response — literal, not the §6 envelope: no `data` wrapper, no
 `requestId`.** This matches what the real Android client parses
@@ -783,6 +850,7 @@ the forbidden list.
 ```
 POST /api/pos/v1/commands/:id/ack
 Authorization: Bearer <accessToken>
+X-Device-Code: <deviceCode>
 ```
 
 Tenant/device isolation: a device may only ack its own command — acking a
@@ -1031,10 +1099,11 @@ work outside this document's scope (there is none left inside it).
 | `GET /catalog/snapshot` response | Top-level `categories`/`products`/`barcodes`/`uzProfiles`, `checksum`, `full` | **Closed** — contract shape served; snapshot builder now stores categories alongside products; legacy `{ products }`-only snapshots served with empty arrays for the missing keys | No gap in shape. `barcodes`/`uzProfiles` are always `[]` pending the `Barcode`/`ProductUzProfile` models (§12). `checksum` is opaque in v1 (§9). |
 | `GET /settings` response | Versioned, structured (`taxProfile`, `paymentMethods`, `receiptTemplate`, `printerProfile`, `fiscalProfile`, `offlineLimits`, `roundingRules`, `featureFlags`) | **Closed** — backed by the new `PosSettings` model (store-scoped, `version` + `payload Json`), written via `PUT /store-admin/pos-devices/settings`; unconfigured stores get empty eight-key defaults at version 1 | No gap in shape. Nested shapes are whatever the admin stored — unconstrained by design pending a fiscal partner (§10). The old `currency`/`timezone` placeholder response is gone (not part of the contract body). `settingsVersion` in `/activate` and `/heartbeat` now reports the real `PosSettings.version`. |
 | Sale events | Full event-type vocabulary, idempotent ingestion, `StockLedgerEntry` derivation | **Closed** — `SaleEvent` model (append-only, unique `idempotencyKey` + payload hash), full §5 semantics (identical replay → stored result; different payload → 409), `SALE_COMPLETED` derives `StockLedgerEntry` rows, per-item warnings per §11/§18 | No gap in ingestion. Stock *reconciliation* strategy vs Sellgram Commerce's `StockMovement` is now resolved — see §11 (shared warehouse, synchronous atomic `stockQty` update, negative never clamped). Refund/cancel stock effects intentionally unspecified — only `SALE_COMPLETED` derives stock. |
-| Fiscal events | Real SBG Lite POS Android contract (§12): `FISCAL_STARTED/SUCCESS/FAILED/UNKNOWN`, rich receipt snapshot, `eventId`-keyed idempotency | **Closed** — `FiscalEvent` model (append-only, `@@unique([deviceId, eventId])`); flat `{success, requestId}` ack per the real contract; `FISCAL_UNKNOWN`/`FAILED` never rewritten to success | No gap. Auth mismatch is a genuine open item — see §22. Decoupled from `POST /sale-events` (§11) by design (§12 note); the two ingestion surfaces are not yet wired together. |
-| Shift events | Real contract (§13): `SHIFT_OPENED/CLOSED` only, `eventId`-keyed idempotency | **Closed** — `ShiftEvent` model, same idempotency/ack pattern as `FiscalEvent` | No gap. Same §22 auth caveat applies. |
+| Fiscal events | Real SBG Lite POS Android contract (§12): `FISCAL_STARTED/SUCCESS/FAILED/UNKNOWN`, rich receipt snapshot, `eventId`-keyed idempotency | **Closed** — `FiscalEvent` model (append-only, `@@unique([deviceId, eventId])`); flat `{success, requestId}` ack per the real contract; `FISCAL_UNKNOWN`/`FAILED` never rewritten to success | No gap. Auth mismatch resolved jointly with the Android team — see §4/§22 (dual-header, `deviceCode` origin still unconfirmed). Decoupled from `POST /sale-events` (§11) by design (§12 note); the two ingestion surfaces are not yet wired together. |
+| Shift events | Real contract (§13): `SHIFT_OPENED/CLOSED` only, `eventId`-keyed idempotency | **Closed** — `ShiftEvent` model, same idempotency/ack pattern as `FiscalEvent` | No gap. Same §4/§22 auth note applies. |
 | Stock movement events | `POST /stock-events` (§14) | **Closed** — `StockEvent` model (append-only, no FK on `productId` on purpose) + full §5 idempotency; known product derives a signed-delta `StockLedgerEntry` (`sourceType: 'StockEvent'`); unknown product stored with an `UNKNOWN_PRODUCT` warning, no ledger row | No gap. `POS_SALE` is rejected at the API — that reason code stays exclusive to sale-event derivation. |
-| Cloud commands | `GET /commands`, `POST /commands/:id/ack`, real contract's allowed list (§15) | **Closed** — `CloudCommand` model; `GET /commands` returns the real contract's literal flat shape (no `data`/`requestId`); ack validates `DONE/FAILED/IGNORED/RETRY_LATER` and enforces tenant/device isolation (404 on a foreign command) | No gap in the polling/ack surface. No admin UI creates `CloudCommand` rows yet — `GET /commands` will legitimately return `[]` until one exists. Heartbeat's `hasCommands` still hardcodes `false` (§8) — deliberately not wired to the new model, out of scope for this change (heartbeat logic was off-limits). Same §22 auth caveat applies. |
+| Cloud commands | `GET /commands`, `POST /commands/:id/ack`, real contract's allowed list (§15) | **Closed** — `CloudCommand` model; `GET /commands` returns the real contract's literal flat shape (no `data`/`requestId`); ack validates `DONE/FAILED/IGNORED/RETRY_LATER` and enforces tenant/device isolation (404 on a foreign command) | No gap in the polling/ack surface. No admin UI creates `CloudCommand` rows yet — `GET /commands` will legitimately return `[]` until one exists. Heartbeat's `hasCommands` still hardcodes `false` (§8) — deliberately not wired to the new model, out of scope for this change (heartbeat logic was off-limits). Same §4/§22 auth note applies. |
+| Device auth (all endpoints) | `Authorization: Bearer` + `X-Device-Code`, checked as a pair, confirmed production flow with the Android team (§4) | **Closed** — every authenticated endpoint except `/activate` requires both; `X-Device-Code` missing → `400`, mismatched (valid token, wrong pairing) → `401` + logged security-warning (provided + expected `deviceCode`), via a shared `resolveAuthenticatedDevice()` helper. `deviceCode` required at `/activate`, unique per tenant, collision with another active device → `409 DEVICE_CODE_ALREADY_IN_USE`; canonical value echoed back in the activate response. | No gap — both mechanism and `deviceCode` origin are confirmed (§22 is now empty of open items on this topic). Still a breaking change for already-activated devices — see the Migration notice; the Android client itself is already ready. |
 | Idempotency | Required on every critical event, enforced Cloud-side | **Closed for every implemented event surface** — sale/stock-events use payload-hash reuse detection (409 on conflict); fiscal/shift-events use the real contract's `eventId`-keyed model (silent replay, no conflict code — see §12) | No gap. Fiscal/shift and sale/stock intentionally use two different (both real, both documented) idempotency shapes — see §5 vs §12 for why. |
 | Rate limiting | 5/min on activate, moderate baseline elsewhere | **Already matches** — implemented exactly as described in §19 | No gap. |
 | Base path | `/api/pos/v1` | **Already matches** | No gap. |
@@ -1043,26 +1112,61 @@ work outside this document's scope (there is none left inside it).
 
 ## 22. Open Questions
 
-- **Device auth header mismatch (fiscal/shift/commands, §12/§13/§15).**
-  The real SBG Lite POS Android contract (fiscal/shift/commands v1,
-  2026-07-04) specifies `X-Device-Code: <deviceCode>` as the auth header
-  for these three endpoints — a different mechanism from the
-  `Authorization: Bearer <accessToken>` (§4, `resolveDevice()`) used by
-  every other endpoint in this document, including the already-implemented
-  `activate`/`heartbeat`/`sale-events`/`stock-events`. This implementation
-  deliberately does **not** introduce a second auth scheme: all seven
-  authenticated endpoints, old and new, authenticate identically via
-  `resolveDevice()`. This is flagged here, not silently resolved, because
-  it's unclear whether: (a) `X-Device-Code` in the source doc is a
-  simplification/placeholder in Android's own internal notes and the real
-  client already sends `Authorization: Bearer`, or (b) the real Android
-  client genuinely only knows how to send `X-Device-Code` and will fail to
-  authenticate against this Cloud as built. Needs a decision with the SBG
-  Lite POS Android team before real-device integration testing, not an
-  assumption baked into either side silently.
+Two items previously tracked here are now resolved and removed from this
+list — both confirmed with the SBG Lite POS Android team, whose client is
+already updated, built, and installed on an M20SE terminal:
+
+- Whether `X-Device-Code` and `Authorization: Bearer` were alternative
+  auth mechanisms → **resolved**: both required together, checked as a
+  pair, not independently. See §4 for the full rule.
+- Where `PosDevice.deviceCode` comes from → **resolved**: sent by the
+  device at `/activate` the same way `deviceFingerprint` is, derived from
+  local till config. See §7.
+
+Remaining open item:
+
 - **`accessToken`/`refreshToken` refresh flow** (§4) — activation returns
   both, but no `POST /token/refresh` endpoint is specified or implemented;
   `accessToken` is long-lived in practice until one exists.
+
+---
+
+## Migration notice
+
+**Breaking change — Android client already updated and ready; still
+requires coordinated release timing.** Deploying the dual-header auth
+requirement (§4) means: any device that activated **before** this change
+ships will **fail to authenticate against every endpoint it calls except
+`/activate`** the moment this ships — because:
+
+1. Every authenticated endpoint now returns `400 VALIDATION_ERROR` if
+   `X-Device-Code` is missing at all, and
+2. Even a device sending some value for `X-Device-Code` will get
+   `401 UNAUTHORIZED` unless that value matches `PosDevice.deviceCode` —
+   which is `null` for **every device that activated before this
+   change**, since `deviceCode` didn't exist as a stored/required field
+   until now.
+
+**Status: the SBG Lite POS Android team's client is already updated,
+built, and installed on an M20SE terminal, sending both headers per §4's
+confirmed production flow.** This is no longer a hypothetical
+compatibility risk on their side — the remaining work is purely
+**coordinating exact release timing** so that:
+
+- Devices already activated against an **older** `PosDevice` row (no
+  stored `deviceCode`) are re-activated with the updated client *before*
+  or *immediately after* this ships, since there is no server-side
+  backfill possible — Cloud cannot retroactively know what `deviceCode`
+  value an already-deployed till would send.
+- The deploy of this Cloud change and the Android release reaching real
+  terminals happen close enough together that the window of
+  already-active-but-not-yet-updated devices is minimal and understood by
+  whoever is monitoring the fleet during the rollout.
+
+**Do not deploy to production without explicit confirmation of the
+release window from the Android team** — the client-side readiness
+question is answered, but *when* real terminals receive it still needs to
+be synchronized with this deploy.
 
 ---
 
