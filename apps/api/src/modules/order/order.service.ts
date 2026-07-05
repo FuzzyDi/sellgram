@@ -66,7 +66,9 @@ export async function updateOrderStatus(input: {
         }
       }
 
-      if (order.loyaltyPointsUsed > 0) {
+      // B2B orders have no Customer (docs/B2B_COUNTERPARTIES.md §13 step 1)
+      // — loyalty points are a Sellgram/Telegram-only concept.
+      if (order.customerId && order.loyaltyPointsUsed > 0) {
         await tx.customer.update({
           where: { id: order.customerId },
           data: { loyaltyPoints: { increment: order.loyaltyPointsUsed } },
@@ -87,7 +89,8 @@ export async function updateOrderStatus(input: {
 
     if (input.status === 'COMPLETED') {
       const loyaltyConfig = await tx.loyaltyConfig.findUnique({ where: { tenantId: input.tenantId } });
-      if (loyaltyConfig?.isEnabled) {
+      // B2B orders have no Customer — skip the whole loyalty/referral block.
+      if (loyaltyConfig?.isEnabled && order.customerId) {
         const tiers = (loyaltyConfig.tiers as any) ?? DEFAULT_TIERS;
         const tier = computeTier(Number(order.customer.totalSpent), tiers);
         const basePoints = Math.floor(Number(order.total) / loyaltyConfig.unitAmount) * loyaltyConfig.pointsPerUnit;
