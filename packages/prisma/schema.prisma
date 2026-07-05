@@ -37,6 +37,11 @@ enum OrderStatus {
   REFUNDED
 }
 
+enum SalesChannel {
+  TELEGRAM
+  B2B
+}
+
 enum PaymentMethod {
   CASH_ON_DELIVERY
   MANUAL_TRANSFER
@@ -110,6 +115,11 @@ model Tenant {
   // deletedAt (soft-delete) or plan expiry, consumed by POS Sync's
   // heartbeat licenseStatus (apps/api/src/lib/billing.ts getLicenseStatus).
   blockedAt     DateTime?
+  // Plain per-tenant toggle for the B2B/counterparties module — NOT
+  // plan-gated (unlike posEnabled, which lives in PLANS.limits and is
+  // enforced via planGuard()). Any tenant on any plan can turn this on
+  // (docs/B2B_COUNTERPARTIES.md §9).
+  b2bEnabled    Boolean   @default(false)
 
   users              User[]
   stores             Store[]
@@ -139,6 +149,8 @@ model Tenant {
   fiscalEvents       FiscalEvent[]
   shiftEvents        ShiftEvent[]
   cloudCommands      CloudCommand[]
+  counterparties     Counterparty[]
+  counterpartyLedger CounterpartyLedger[]
 
   @@map("tenants")
 }
@@ -294,6 +306,7 @@ model Product {
   wishlistItems      WishlistItem[]
   stockMovements     StockMovement[]
   stockLedgerEntries StockLedgerEntry[]
+  counterpartyPrices CounterpartyPrice[]
 
   @@index([tenantId])
   @@index([tenantId, categoryId])
@@ -323,6 +336,7 @@ model ProductVariant {
   createdAt DateTime @default(now())
 
   orderItems OrderItem[]
+  counterpartyPrices CounterpartyPrice[]
 
   @@map("product_variants")
 }
@@ -429,6 +443,15 @@ model Order {
   orderNumber        Int
   customerId         String?
   customer           Customer?           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  // B2B/counterparties module (docs/B2B_COUNTERPARTIES.md §6) — salesChannel
+  // defaults to TELEGRAM so every existing row stays correct with no
+  // backfill. counterpartyId is the B2B counterpart to customerId; the
+  // business rule (exactly one of customerId/counterpartyId set,
+  // depending on salesChannel) is enforced in application code, not the
+  // schema — Prisma/Postgres can't express that conditional constraint.
+  salesChannel       SalesChannel        @default(TELEGRAM)
+  counterpartyId     String?
+  counterparty       Counterparty?       @relation(fields: [counterpartyId], references: [id])
   status             OrderStatus         @default(NEW)
   paymentMethod      PaymentMethod       @default(CASH_ON_DELIVERY)
   paymentMethodId    String?
@@ -462,9 +485,10 @@ model Order {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  items         OrderItem[]
-  statusHistory OrderStatusLog[]
-  review        OrderReview?
+  items                     OrderItem[]
+  statusHistory             OrderStatusLog[]
+  review                    OrderReview?
+  counterpartyLedgerEntries CounterpartyLedger[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
@@ -473,6 +497,7 @@ model Order {
   @@index([paymentMethodId])
   @@index([tenantId, storeId])
   @@index([tenantId, customerId])
+  @@index([tenantId, counterpartyId])
   @@index([tenantId, createdAt])
   @@index([deliveryZoneId])
   @@map("orders")
@@ -672,6 +697,7 @@ model Supplier {
   updatedAt   DateTime @updatedAt
 
   purchaseOrders PurchaseOrder[]
+  counterparty   Counterparty?
 
   @@index([tenantId])
   @@map("suppliers")
@@ -718,6 +744,115 @@ model PurchaseOrderItem {
 
   @@index([purchaseOrderId])
   @@map("purchase_order_items")
+}
+
+// ============================================================
+// B2B / COUNTERPARTIES (docs/B2B_COUNTERPARTIES.md)
+// ============================================================
+
+enum CounterpartyType {
+  INDIVIDUAL
+  ORGANIZATION
+}
+
+model Counterparty {
+  id       String           @id @default(cuid())
+  tenantId String
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type     CounterpartyType
+  name     String
+  taxId    String? // required for ORGANIZATION — app-level check, not a DB constraint (Prisma cannot express "required iff type=X")
+  phone    String?
+  email    String?
+  address  String?
+  note     String?
+  isActive Boolean          @default(true)
+
+  // Optional link when the same partner both buys wholesale and supplies
+  // stock. Nullable + unique: at most one Counterparty per Supplier, never
+  // required, never backfilled for existing Supplier rows.
+  supplierId String?   @unique
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  // Cached running balance (docs/B2B_COUNTERPARTIES.md §7). Updated
+  // atomically alongside every CounterpartyLedger row in the same
+  // transaction — never computed by a separate reconciliation job.
+  currentDebt Decimal @default(0) @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prices CounterpartyPrice[]
+  ledger CounterpartyLedger[]
+  orders Order[]
+
+  @@index([tenantId])
+  @@map("counterparties")
+}
+
+// Uniqueness note (docs/B2B_COUNTERPARTIES.md §5.2/§12.3): Postgres does
+// not treat NULL = NULL in a unique index, so a plain
+// @@unique([counterpartyId, productId, variantId]) would NOT stop two rows
+// with variantId = NULL (a non-variant product) from being inserted for
+// the same counterparty+product pair. Rather than keep a @@unique here
+// that only half-covers the real constraint, uniqueness for this model is
+// enforced entirely by two partial unique indexes added by raw SQL in the
+// migration (one for variantId IS NULL, one for variantId IS NOT NULL) —
+// see that migration's comment for the full reasoning. There is
+// deliberately no @@unique line in this model.
+model CounterpartyPrice {
+  id             String          @id @default(cuid())
+  counterpartyId String
+  counterparty   Counterparty    @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId      String?
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  price          Decimal         @db.Decimal(12, 2)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@map("counterparty_prices")
+}
+
+enum CounterpartyLedgerType {
+  ORDER_CHARGE
+  PAYMENT_RECEIVED
+  ADJUSTMENT
+}
+
+model CounterpartyLedger {
+  id             String                 @id @default(cuid())
+  tenantId       String
+  tenant         Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterpartyId String
+  counterparty   Counterparty           @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  type           CounterpartyLedgerType
+  // Signed, same convention as StockLedgerEntry.delta: positive increases
+  // currentDebt, negative decreases it. ORDER_CHARGE rows are always
+  // positive; PAYMENT_RECEIVED rows are always negative; ADJUSTMENT can
+  // be either.
+  delta Decimal @db.Decimal(12, 2)
+
+  // Only ever set for ORDER_CHARGE — a payment is a free-standing amount
+  // against the counterparty's overall balance, not tied to one order
+  // (docs/B2B_COUNTERPARTIES.md §7).
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  // ORDER_CHARGE only. originalDueDate is written once at creation and
+  // never changes. dueDate starts equal to originalDueDate and is the one
+  // field on this row that IS mutated after creation, when a due date is
+  // extended (docs/B2B_COUNTERPARTIES.md §7) — a deliberate, narrow
+  // exception to this ledger otherwise being append-only.
+  originalDueDate DateTime?
+  dueDate         DateTime?
+
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, counterpartyId, createdAt])
+  @@map("counterparty_ledger")
 }
 
 // ============================================================
