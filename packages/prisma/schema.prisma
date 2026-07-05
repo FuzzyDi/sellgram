@@ -427,8 +427,8 @@ model Order {
   storeId            String
   store              Store               @relation(fields: [storeId], references: [id])
   orderNumber        Int
-  customerId         String
-  customer           Customer            @relation(fields: [customerId], references: [id])
+  customerId         String?
+  customer           Customer?           @relation(fields: [customerId], references: [id], onDelete: Restrict)
   status             OrderStatus         @default(NEW)
   paymentMethod      PaymentMethod       @default(CASH_ON_DELIVERY)
   paymentMethodId    String?

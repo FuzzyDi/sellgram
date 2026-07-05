@@ -525,7 +525,9 @@ async function completeDeliveredOrder(orderId: string, storeId: string): Promise
     where: { id: orderId },
     include: { store: true },
   });
-  if (!order) return;
+  // B2B orders have no Customer (docs/B2B_COUNTERPARTIES.md §13 step 1) —
+  // this function is Telegram-only (loyalty points + a bot DM).
+  if (!order || !order.customerId) return;
 
   await awardLoyaltyPoints(order.id);
 
@@ -797,13 +799,13 @@ async function awardLoyaltyPoints(orderId: string): Promise<void> {
   if (pointsEarned <= 0) return;
 
   const customer = await prisma.customer.update({
-    where: { id: order.customerId },
+    where: { id: order.customer.id },
     data: { loyaltyPoints: { increment: pointsEarned } },
   });
 
   await prisma.loyaltyTransaction.create({
     data: {
-      customerId: order.customerId,
+      customerId: order.customer.id,
       tenantId: order.tenantId,
       type: 'EARN',
       points: pointsEarned,
