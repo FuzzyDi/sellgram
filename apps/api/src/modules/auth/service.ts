@@ -17,7 +17,8 @@ type TeamPermissionKey =
   | 'manageSettings'
   | 'manageBilling'
   | 'manageUsers'
-  | 'viewReports';
+  | 'viewReports'
+  | 'manageB2B';
 
 type TeamPermissions = Record<TeamPermissionKey, boolean>;
 
@@ -30,6 +31,7 @@ const FULL_PERMISSIONS: TeamPermissions = {
   manageBilling: true,
   manageUsers: true,
   viewReports: true,
+  manageB2B: true,
 };
 
 const OPERATOR_DEFAULT_PERMISSIONS: TeamPermissions = {
@@ -41,6 +43,7 @@ const OPERATOR_DEFAULT_PERMISSIONS: TeamPermissions = {
   manageBilling: false,
   manageUsers: false,
   viewReports: true,
+  manageB2B: false,
 };
 
 const MARKETER_DEFAULT_PERMISSIONS: TeamPermissions = {
@@ -52,6 +55,7 @@ const MARKETER_DEFAULT_PERMISSIONS: TeamPermissions = {
   manageBilling: false,
   manageUsers: false,
   viewReports: true,
+  manageB2B: false,
 };
 
 function normalizeOperatorPermissions(input?: Partial<TeamPermissions> | null): TeamPermissions {
