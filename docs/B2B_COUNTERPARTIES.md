@@ -472,6 +472,28 @@ plan to revisit it once real usage data exists.
    whether B2B becomes a paid add-on (e.g. Business-only, or its own
    line item) once it's clear which tenants actually use it. Revisit
    after a few months of production data.
+5. **Unauthenticated payment-status spoofing for B2B orders via the
+   `MANUAL_TRANSFER` webhook.** Found while reviewing §13 step 5
+   (`createB2BOrder()`, which sets `Order.paymentMethod: 'MANUAL_TRANSFER'`
+   since B2B has no `StorePaymentMethod`/payment gateway of its own).
+   `POST /api/payments/webhook/:provider`
+   (`apps/api/src/modules/payment/routes.ts`) checks a webhook secret from
+   `order.paymentMethodRef?.meta.webhookSecret` — but a B2B order never has
+   a `paymentMethodId`, so `paymentMethodRef` is always `null` and that
+   check is silently skipped. `verifyProviderWebhookAuth()`
+   (`apps/api/src/payments/webhooks.ts`) only has provider-specific
+   signature checks for `CLICK`/`PAYME`/`UZUM` — nothing for
+   `MANUAL_TRANSFER`. Net effect: anyone who knows a B2B order's
+   `storeId` + `orderNumber` (sequential, not secret) can
+   `POST /api/payments/webhook/manual_transfer` with `status: "PAID"` and
+   flip `Order.paymentStatus` to `PAID` with no authentication at all. This
+   does **not** touch `CounterpartyLedger`/`Counterparty.currentDebt` (a
+   completely separate system) — the actual debt is unaffected — but it
+   leaves `Order.paymentStatus` showing "paid" for an order that is
+   actually still owed. Deferred as a follow-up, not blocking §13 step 5:
+   needs its own fix (e.g. a salesChannel check in the webhook route, or a
+   different `paymentMethod` value that the webhook route doesn't attempt
+   to match at all).
 
 ## 13. Recommended implementation order for next session
 
