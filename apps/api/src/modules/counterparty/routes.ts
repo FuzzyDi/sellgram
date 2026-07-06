@@ -13,9 +13,6 @@ import { createB2BOrder, CounterpartyOrderError } from './order.service.js';
  * Deliberately NOT gated on Tenant.b2bEnabled: that field only controls
  * UI visibility (docs/B2B_COUNTERPARTIES.md §9) — a tenant that hasn't
  * "turned on" B2B in the UI can still use this API directly.
- *
- * Does not touch CounterpartyLedger (debt/payment recording — §13 step 6)
- * or B2B order creation (§13 step 5).
  */
 
 const listCounterpartiesQuerySchema = z.object({
@@ -67,6 +64,16 @@ const upsertPriceSchema = z.object({
   productId: z.string().min(1),
   variantId: z.string().min(1).nullable().optional(),
   price: z.number().positive(),
+});
+
+const recordPaymentSchema = z.object({
+  amount: z.number().positive(),
+  note: z.string().max(2000).optional(),
+});
+
+const listLedgerQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 const createB2BOrderItemSchema = z.object({
@@ -393,6 +400,92 @@ export default async function counterpartyRoutes(fastify: FastifyInstance) {
         }
         throw err;
       }
+    }
+  );
+
+  // Record a payment against the counterparty's overall balance (§13 step
+  // 6, docs/B2B_COUNTERPARTIES.md §7) — not tied to a specific order, same
+  // as the doc's design: a partial or lump-sum payment simply reduces the
+  // running total. Overpayment is deliberately allowed: currentDebt can go
+  // negative, meaning an advance/credit in the counterparty's favor, not
+  // an error — same "don't clamp, the number is the honest signal"
+  // reasoning already applied to POS stock (docs/POS_SYNC_API.md §18) and
+  // now to money.
+  fastify.post(
+    '/counterparties/:id/payments',
+    { preHandler: [permissionGuard('manageB2B')] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const tenantId = request.tenantId!;
+      const parsed = recordPaymentSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ success: false, error: parsed.error.errors[0]?.message ?? 'Invalid input' });
+      }
+      const { amount, note } = parsed.data;
+
+      const counterparty = await prisma.counterparty.findFirst({ where: { id, tenantId }, select: { id: true } });
+      if (!counterparty) return reply.status(404).send({ success: false, error: 'Counterparty not found' });
+
+      // Same atomic cached-total + append-only-ledger-row pattern as
+      // ORDER_CHARGE in order.service.ts's createB2BOrder() — a payment is
+      // just the mirror-image delta.
+      const result = await prisma.$transaction(async (tx: any) => {
+        const updated = await tx.counterparty.update({
+          where: { id },
+          data: { currentDebt: { decrement: amount } },
+          select: { currentDebt: true },
+        });
+        const ledgerEntry = await tx.counterpartyLedger.create({
+          data: {
+            tenantId,
+            counterpartyId: id,
+            type: 'PAYMENT_RECEIVED',
+            delta: -amount,
+            orderId: null,
+            note: note ?? null,
+          },
+        });
+        return { ledgerEntry, currentDebt: updated.currentDebt };
+      });
+
+      return reply.status(201).send({ success: true, data: result });
+    }
+  );
+
+  // Full ORDER_CHARGE/PAYMENT_RECEIVED/ADJUSTMENT history for one
+  // counterparty — the running balance alone (Counterparty.currentDebt)
+  // isn't enough for a UI that needs to show how it got there.
+  fastify.get(
+    '/counterparties/:id/ledger',
+    { preHandler: [permissionGuard('manageB2B')] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const tenantId = request.tenantId!;
+      const parsed = listLedgerQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({ success: false, error: parsed.error.errors[0]?.message ?? 'Invalid input' });
+      }
+      const { page, pageSize } = parsed.data;
+      const skip = (page - 1) * pageSize;
+
+      const counterparty = await prisma.counterparty.findFirst({ where: { id, tenantId }, select: { id: true } });
+      if (!counterparty) return reply.status(404).send({ success: false, error: 'Counterparty not found' });
+
+      const where = { counterpartyId: id };
+      const [items, total] = await Promise.all([
+        prisma.counterpartyLedger.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: pageSize,
+        }),
+        prisma.counterpartyLedger.count({ where }),
+      ]);
+
+      return {
+        success: true,
+        data: { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
+      };
     }
   );
 }
