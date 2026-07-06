@@ -291,6 +291,7 @@ async function main() {
   const publicApiRoutes = (await import('./modules/public-api/routes.js')).default;
   const webhookAdminRoutes = (await import('./modules/webhook/routes.js')).default;
   const posDeviceAdminRoutes = (await import('./modules/pos-sync/admin-routes.js')).default;
+  const counterpartyRoutes = (await import('./modules/counterparty/routes.js')).default;
 
   await fastify.register(
     async (app) => {
@@ -313,6 +314,7 @@ async function main() {
       await app.register(apiKeyAdminRoutes);
       await app.register(webhookAdminRoutes);
       await app.register(posDeviceAdminRoutes);
+      await app.register(counterpartyRoutes);
     },
     { prefix: '/api/store-admin' }
   );
