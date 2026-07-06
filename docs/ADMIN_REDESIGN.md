@@ -286,9 +286,12 @@ new except `Button`):
   switcher) on both desktop and mobile, consolidating what's currently
   duplicated between the desktop `Sidebar` footer (language switcher,
   logout, `App.tsx:189-243`) and the mobile-only header.
-- **`Badge`** / **`StatusPill`** — the current `.sg-pill` CSS class
-  (seen in `Settings.tsx`'s tab buttons) generalized into a reusable
-  component for order status, channel tags, etc.
+- **`Badge`** / **`StatusPill`** — the current `.sg-badge` CSS class
+  (seen in `Products.tsx`, coloring the isActive/inactive product status)
+  generalized into a reusable component for order status, channel tags,
+  etc. (Not `.sg-pill` — checking its actual usage first showed it's a
+  binary active/inactive tab selector in `Settings.tsx`'s tab buttons,
+  not a color-variant status indicator; `.sg-badge` is the real match.)
 
 None of these are built in this pass — this is the inventory for
 Phase 1 (§7).
