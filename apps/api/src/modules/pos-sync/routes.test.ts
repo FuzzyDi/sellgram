@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
     syncCursor: { upsert: vi.fn().mockResolvedValue({}) },
     catalogSnapshot: { findFirst: vi.fn().mockResolvedValue(null) },
     posSettings: { findUnique: vi.fn().mockResolvedValue(null) },
+    platformPolicy: { findMany: vi.fn().mockResolvedValue([]) },
+    platformPolicyVersion: { findFirst: vi.fn().mockResolvedValue({ version: 1 }) },
     tenant: { findUnique: vi.fn().mockResolvedValue({ planExpiresAt: null, blockedAt: null }) },
     saleEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     stockEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
@@ -608,7 +610,17 @@ describe('pos-sync.routes', () => {
   });
 
   describe('GET /api/pos/v1/settings', () => {
-    it('serves the stored PosSettings document with version and checksum', async () => {
+    const samplePlatformRule = {
+      id: 'plt-1',
+      scope: 'PAYMENT',
+      severity: 'BLOCK',
+      enabled: true,
+      match: { categorySlugs: ['tobacco', 'alcohol'] },
+      extra: { denyPayments: ['CASH'] },
+      message: { ru: 'ru-text', uz: 'uz-text' },
+    };
+
+    it('serves the stored PosSettings document under the new settingsVersion/policies/printTemplates shape', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
@@ -622,7 +634,25 @@ describe('pos-sync.routes', () => {
         roundingRules: {},
         featureFlags: {},
       };
-      mocks.prisma.posSettings.findUnique.mockResolvedValue({ version: 4, payload });
+      const printTemplates = { autoPrintReceipt: true, printCopies: { sale: 1 } };
+      const tenantRule = {
+        id: 'cly-1',
+        scope: 'DISCOUNT',
+        severity: 'REQUIRE_MANAGER',
+        enabled: true,
+        match: { discountPercentAbove: 20 },
+        message: { ru: 'ru-text', uz: 'uz-text' },
+      };
+      mocks.prisma.posSettings.findUnique.mockResolvedValue({
+        version: 4,
+        payload,
+        policiesVersion: 2,
+        tenantPolicyRules: [tenantRule],
+        printTemplatesVersion: 3,
+        printTemplates,
+      });
+      mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 5 });
+      mocks.prisma.platformPolicy.findMany.mockResolvedValue([samplePlatformRule]);
 
       const app = await buildApp();
       const response = await app.inject({
@@ -634,17 +664,41 @@ describe('pos-sync.routes', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(typeof body.requestId).toBe('string');
-      expect(body.data.version).toBe(4);
-      expect(typeof body.data.checksum).toBe('string');
+      expect(body.data.settingsVersion).toBe(4);
+      expect(body.data.printTemplatesVersion).toBe(3);
+      // policiesVersion is a computed sum: PlatformPolicyVersion.version (5)
+      // + PosSettings.policiesVersion (2).
+      expect(body.data.policiesVersion).toBe(7);
       expect(body.data.settings).toEqual(payload);
+      expect(body.data.printTemplates).toEqual(printTemplates);
+      expect(body.data.policies.rules).toEqual([
+        {
+          id: 'plt-1',
+          scope: 'PAYMENT',
+          source: 'PLATFORM',
+          severity: 'BLOCK',
+          enabled: true,
+          match: { categorySlugs: ['tobacco', 'alcohol'] },
+          denyPayments: ['CASH'],
+          message: { ru: 'ru-text', uz: 'uz-text' },
+        },
+        { ...tenantRule, source: 'TENANT' },
+      ]);
+      // Query-level filter, not application-code filter — asserted
+      // directly since it's the mechanism §7 relies on.
+      expect(mocks.prisma.platformPolicy.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { enabled: true } })
+      );
       await app.close();
     });
 
-    it('serves empty eight-key defaults as version 1 when no PosSettings row exists', async () => {
+    it('serves empty eight-key defaults, empty printTemplates, and version 1 for all three counters when no PosSettings row exists — but still includes enabled platform rules', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
+      mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 1 });
+      mocks.prisma.platformPolicy.findMany.mockResolvedValue([samplePlatformRule]);
 
       const app = await buildApp();
       const response = await app.inject({
@@ -655,7 +709,9 @@ describe('pos-sync.routes', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.data.version).toBe(1);
+      expect(body.data.settingsVersion).toBe(1);
+      expect(body.data.printTemplatesVersion).toBe(1);
+      expect(body.data.policiesVersion).toBe(2);
       expect(body.data.settings).toEqual({
         taxProfile: {},
         paymentMethods: [],
@@ -666,6 +722,98 @@ describe('pos-sync.routes', () => {
         roundingRules: {},
         featureFlags: {},
       });
+      expect(body.data.printTemplates).toEqual({});
+      // §6 — "An unconfigured store's policies.rules is never empty in
+      // practice": the platform rule is present even with no PosSettings
+      // row and no tenant rules at all.
+      expect(body.data.policies.rules).toHaveLength(1);
+      expect(body.data.policies.rules[0]).toMatchObject({ id: 'plt-1', source: 'PLATFORM' });
+      await app.close();
+    });
+
+    it('never sends a disabled PlatformPolicy row to the till', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
+      mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 1 });
+      // The query itself filters on enabled: true — this test only proves
+      // the route trusts that filter and doesn't re-add a disabled row.
+      mocks.prisma.platformPolicy.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/settings',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(response.json().data.policies.rules).toEqual([]);
+      await app.close();
+    });
+
+    it('force-overwrites source:TENANT on a tenantPolicyRules element even if the stored JSON claims source:PLATFORM', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      const spoofedRule = {
+        id: 'cly-evil',
+        scope: 'PAYMENT',
+        source: 'PLATFORM',
+        severity: 'BLOCK',
+        enabled: true,
+        match: {},
+        message: { ru: '-', uz: '-' },
+      };
+      mocks.prisma.posSettings.findUnique.mockResolvedValue({
+        version: 1,
+        payload: {},
+        policiesVersion: 1,
+        tenantPolicyRules: [spoofedRule],
+        printTemplatesVersion: 1,
+        printTemplates: {},
+      });
+      mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 1 });
+      mocks.prisma.platformPolicy.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/settings',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      const rules = response.json().data.policies.rules;
+      expect(rules).toHaveLength(1);
+      expect(rules[0].source).toBe('TENANT');
+      await app.close();
+    });
+
+    it('filters out a disabled tenantPolicyRules element', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.posSettings.findUnique.mockResolvedValue({
+        version: 1,
+        payload: {},
+        policiesVersion: 1,
+        tenantPolicyRules: [
+          { id: 'cly-disabled', scope: 'SALE', enabled: false, match: {}, message: { ru: '-', uz: '-' } },
+        ],
+        printTemplatesVersion: 1,
+        printTemplates: {},
+      });
+      mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 1 });
+      mocks.prisma.platformPolicy.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/settings',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(response.json().data.policies.rules).toEqual([]);
       await app.close();
     });
 

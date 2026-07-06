@@ -641,13 +641,39 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     const device = await resolveAuthenticatedDevice(request, reply);
     if (!device) return;
 
-    const stored = await prisma.posSettings.findUnique({
-      where: { storeId: device.storeId },
-      select: { version: true, payload: true },
-    });
+    // docs/POS_POLICY_ENGINE.md §6 — this replaces the old single
+    // { version, checksum, settings } shape with three independently
+    // versioned blocks. Fetched in parallel: PosSettings (tenant-scoped,
+    // may not exist yet), the global PlatformPolicyVersion counter, and
+    // enabled PlatformPolicy rows (also global, never tenant-scoped).
+    const [stored, platformPolicyVersion, platformPolicies] = await Promise.all([
+      prisma.posSettings.findUnique({
+        where: { storeId: device.storeId },
+        select: {
+          version: true,
+          payload: true,
+          policiesVersion: true,
+          tenantPolicyRules: true,
+          printTemplatesVersion: true,
+          printTemplates: true,
+        },
+      }),
+      // Singleton by convention (see schema comment on the model) — a
+      // fresh environment with no seed run yet has no row at all, which
+      // is equivalent to version 1 (the model's own column default).
+      prisma.platformPolicyVersion.findFirst({ select: { version: true } }),
+      // §7 — a disabled rule is never sent to a till at all, so this is
+      // filtered at the query, not in application code.
+      prisma.platformPolicy.findMany({
+        where: { enabled: true },
+        select: { id: true, scope: true, severity: true, enabled: true, match: true, message: true, extra: true },
+      }),
+    ]);
 
     // A store that has never configured POS settings still gets a valid,
-    // parseable eight-key document (§10) — empty defaults, version 1.
+    // parseable eight-key document (§10 of docs/POS_SYNC_API.md) — empty
+    // defaults, version 1. Same convention for printTemplates (§6): empty
+    // object, version 1, not an error.
     const settings = stored
       ? (stored.payload as Record<string, unknown>)
       : {
@@ -660,14 +686,61 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           roundingRules: {},
           featureFlags: {},
         };
+    const printTemplates = stored ? (stored.printTemplates as Record<string, unknown>) : {};
+
+    // §7 — the wire Rule shape flattens `extra` onto the rule object
+    // itself rather than nesting it; `source` is always server-assigned
+    // from the table this row came from (PlatformPolicy has no `source`
+    // column of its own — it doesn't need one, every row here IS a
+    // platform rule).
+    const platformRules = platformPolicies.map((row) => {
+      const extra = row.extra && typeof row.extra === 'object' ? (row.extra as Record<string, unknown>) : {};
+      return {
+        ...extra,
+        id: row.id,
+        scope: row.scope,
+        source: 'PLATFORM' as const,
+        severity: row.severity,
+        enabled: row.enabled,
+        match: row.match,
+        message: row.message,
+      };
+    });
+
+    // §7 — tenantPolicyRules elements already arrive in wire Rule shape
+    // (stored that way), so no field mapping is needed. But two things
+    // still must happen server-side, not just be assumed from storage:
+    // filtering out enabled:false (a disabled rule is never sent at all),
+    // and — the important one — forcibly overwriting `source` to
+    // 'TENANT' on every element, never trusting whatever value (if any)
+    // is already embedded in the stored JSON. There is no admin UI
+    // writing to tenantPolicyRules yet, so nothing can inject
+    // source:'PLATFORM' into it today, but the column itself is an
+    // unstructured JSON blob with no DB-level shape constraint. The day
+    // an admin UI (or a bug, or a support script) writes an element
+    // containing source:'PLATFORM', this line is the only thing standing
+    // between that and a tenant successfully impersonating a platform
+    // rule to a till. Do not remove this even though it looks redundant
+    // against "well-behaved" data.
+    const rawTenantRules = Array.isArray(stored?.tenantPolicyRules) ? (stored.tenantPolicyRules as unknown[]) : [];
+    const tenantRules = rawTenantRules
+      .filter((raw): raw is Record<string, unknown> => !!raw && typeof raw === 'object')
+      .filter((rule) => rule.enabled !== false)
+      .map((rule) => ({ ...rule, source: 'TENANT' as const }));
 
     return sendSuccess(
       reply,
       200,
       {
-        version: stored?.version ?? 1,
-        checksum: checksumOf(settings),
+        settingsVersion: stored?.version ?? 1,
+        // §5 — a computed sum of two independently monotonic counters,
+        // not a stored column; the till only needs to know *something*
+        // in `policies` changed, not which side.
+        policiesVersion: (platformPolicyVersion?.version ?? 1) + (stored?.policiesVersion ?? 1),
+        printTemplatesVersion: stored?.printTemplatesVersion ?? 1,
         settings,
+        policies: { rules: [...platformRules, ...tenantRules] },
+        printTemplates,
       },
       request
     );
