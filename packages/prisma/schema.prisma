@@ -1406,8 +1406,104 @@ model PosSettings {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Additive fields for the POS Policy Engine (docs/POS_POLICY_ENGINE.md
+  // §3.2/§13 step 1). `version`/`payload` above are deliberately NOT
+  // renamed — the doc's response shape calls them settingsVersion/
+  // settings at the API level only; the storage/columns are untouched.
+  policiesVersion       Int  @default(1)
+  // Tenant-authored rule objects ONLY (docs/POS_POLICY_ENGINE.md §4
+  // shape) — platform rules are never stored here, always sourced from
+  // PlatformPolicy at request time (§6/§7 of that doc — not implemented
+  // yet, that's step 3).
+  tenantPolicyRules     Json @default("[]")
+  printTemplatesVersion Int  @default(1)
+  // Print business-policy fields (docs/POS_POLICY_ENGINE.md §2/§10) —
+  // despite the name, this is not receipt markup templates, it's
+  // autoPrintReceipt/printCopies/etc.
+  printTemplates        Json @default("{}")
+
   @@index([tenantId])
   @@map("pos_settings")
+}
+
+// ============================================================
+// POS POLICY ENGINE (docs/POS_POLICY_ENGINE.md)
+// ============================================================
+
+enum PolicyScope {
+  SALE
+  REFUND
+  SHIFT
+  PAYMENT
+  MARKING
+  DISCOUNT
+  CASHIER
+  PRINT
+}
+
+enum PolicySeverity {
+  BLOCK
+  WARN
+  REQUIRE_MANAGER
+  REQUIRE_ACTION
+  INFO
+}
+
+// Deliberately NOT tenant-scoped — global to the whole platform, managed
+// centrally (docs/POS_POLICY_ENGINE.md §3.1/§11). A tenant has no write
+// path to this model at all; that (plus till-side max-severity
+// evaluation) is what makes "tenant can only tighten, never loosen a
+// platform rule" hold structurally rather than needing to be validated.
+model PlatformPolicy {
+  id       String         @id @default(cuid())
+  scope    PolicyScope
+  severity PolicySeverity
+  enabled  Boolean        @default(true)
+  // Scope-specific matcher. For PAYMENT/MARKING rules keyed on product
+  // category (e.g. the tobacco/alcohol cash-payment ban): matches on
+  // Category.slug STRING VALUES, not Category.id. Category is
+  // tenant-scoped (@@unique([tenantId, slug])) — a global rule can't FK
+  // to any one tenant's specific category row, since there is no single
+  // "the tobacco category" across tenants. slug is the only thing that
+  // can plausibly recur as the same meaningful string across many
+  // independently-created tenant catalogs, which is exactly what a
+  // global rule needs to match against at evaluation time (the till
+  // checks its OWN tenant's product -> category -> slug, a same-tenant
+  // lookup, then compares the resulting string against this rule's
+  // categorySlugs — never a cross-tenant reference). This relies on
+  // tenants actually slugging equivalent categories consistently (e.g.
+  // "tobacco", not "tabak-i-sigarety") — a real, unenforced convention,
+  // not a hard guarantee; flagged as an open question in
+  // docs/POS_POLICY_ENGINE.md §12 for the till-side matching
+  // implementation (step 3+) to actually reckon with, not solved here.
+  match    Json
+  message  Json // { "ru": string, "uz": string }
+  // Scope-specific fields that don't fit `match` (e.g. PAYMENT rules'
+  // denyPayments: string[]) — same "loose bag, shape settles with real
+  // usage" reasoning as `match` and as pos-sync's rawFiscalPayload.
+  extra    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scope])
+  @@map("platform_policies")
+}
+
+// Global version counter — same atomic-cached-counter pattern as
+// Counterparty.currentDebt/CounterpartyLedger (docs/B2B_COUNTERPARTIES.md
+// §7) and applyStockDelta()/StockLedgerEntry (pos-sync/routes.ts),
+// applied to a single global counter instead of a per-row one.
+// "Singleton" is an application-level convention (code always
+// reads/writes the one row via a well-known id, upserting it into
+// existence on first write) — not a database-enforced constraint;
+// Postgres has no native "exactly one row" constraint, and adding one
+// would be over-engineering for what's fundamentally one counter.
+model PlatformPolicyVersion {
+  id      String @id @default(cuid())
+  version Int    @default(1)
+
+  @@map("platform_policy_version")
 }
 
 model SyncCursor {
