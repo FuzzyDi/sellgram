@@ -72,7 +72,15 @@ async function request<T>(path: string, options?: RequestInit, retried = false):
       } catch {}
     }
     clearTokens();
-    window.location.hash = '';
+    // This module is plain TS, not a React component — useNavigate() isn't
+    // callable here. A hard navigation (not client-side) is the correct
+    // replacement, not just a mechanical swap: it forces TenantApp's
+    // mount-time auth check to actually re-run against the now-cleared
+    // tokens, which the old hash-only write never did (clearTokens() only
+    // touches localStorage; it never reset the in-memory `auth` React
+    // state, so this was a real latent bug, not just a routing mechanism
+    // detail).
+    window.location.href = '/';
     throw new Error('Unauthorized');
   }
 

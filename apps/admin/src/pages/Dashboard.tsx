@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -42,6 +43,7 @@ function RevenueChart({ data }: { data: { date: string; revenue: number }[] }) {
 
 export default function Dashboard() {
   const { tr } = useAdminI18n();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<any>(null);
   const [topProducts, setTopProducts] = useState<any[]>([]);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
@@ -227,7 +229,7 @@ export default function Dashboard() {
             {tr('Срок:', 'Muddat')}: {expiryInfo.expiresAt.toLocaleDateString()}
           </p>
           <div style={{ marginTop: 10 }}>
-            <button className="sg-btn primary" onClick={() => (window.location.hash = '/billing')}>
+            <button className="sg-btn primary" onClick={() => navigate('/billing')}>
               {tr('Продлить тариф', 'Tarifni uzaytirish')}
             </button>
           </div>
@@ -280,7 +282,7 @@ export default function Dashboard() {
             {checks.map((check, i) => (
               <button
                 key={`${check.label}-${i}`}
-                onClick={() => check.to && (window.location.hash = check.to)}
+                onClick={() => check.to && navigate(check.to)}
                 style={{
                   border: '1px solid #e1e9e3',
                   borderRadius: 10,
@@ -308,7 +310,7 @@ export default function Dashboard() {
         <article
           className="sg-card"
           style={{ cursor: ordersPending > 0 ? 'pointer' : 'default', borderColor: ordersPending > 0 ? '#fde68a' : undefined, background: ordersPending > 0 ? '#fffbeb' : undefined }}
-          onClick={() => ordersPending > 0 && (window.location.hash = '/orders?status=NEW')}
+          onClick={() => ordersPending > 0 && navigate('/orders?status=NEW')}
         >
           <div className="sg-kpi-label">{tr('Ожидают обработки', 'Kutilmoqda')}</div>
           <div className="sg-kpi-value" style={{ color: ordersPending > 0 ? '#b45309' : undefined }}>{ordersPending}</div>
@@ -333,7 +335,7 @@ export default function Dashboard() {
           <div className="sg-kpi-label">{tr('Товары', 'Mahsulotlar')}</div>
           <div className="sg-kpi-value">{totalProducts}</div>
         </article>
-        <article className="sg-card" style={{ cursor: reviewCount > 0 ? 'pointer' : 'default' }} onClick={() => reviewCount > 0 && (window.location.hash = '/reviews')}>
+        <article className="sg-card" style={{ cursor: reviewCount > 0 ? 'pointer' : 'default' }} onClick={() => reviewCount > 0 && navigate('/reviews')}>
           <div className="sg-kpi-label">{tr('Рейтинг', 'Reyting')}</div>
           {reviewAvg !== null ? (
             <>
@@ -358,7 +360,7 @@ export default function Dashboard() {
             <button
               className="sg-btn ghost"
               style={{ fontSize: 13, padding: '4px 12px' }}
-              onClick={() => (window.location.hash = '/orders')}
+              onClick={() => navigate('/orders')}
             >
               {tr('Все заказы →', 'Barcha buyurtmalar →')}
             </button>
@@ -368,7 +370,7 @@ export default function Dashboard() {
               <div
                 key={order.id}
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 10, background: '#f9fbfa', border: '1px solid #edf2ee', cursor: 'pointer' }}
-                onClick={() => (window.location.hash = '/orders')}
+                onClick={() => navigate('/orders')}
               >
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>
