@@ -336,6 +336,18 @@ An unconfigured store's `policies.rules` is never empty in practice —
 enabled `PlatformPolicy` rows are always included regardless of tenant
 configuration (§7).
 
+**Resolved with the Android team:** for `printTemplates` specifically,
+Cloud returning `{}` means "no server-side override configured" — the
+till applies its own baked-in local defaults (§10.1) in that case, not
+an empty/blank print configuration. This is a merge, not a replace: any
+field present in the server's `printTemplates` object overrides the
+till's baked-in default for that field; any field absent falls back to
+the till's baked-in default. Today, with no admin UI writing partial
+overrides yet, the server always sends `{}`, so the till always applies
+100% baked-in defaults in practice — but the merge behavior is specified
+now so a future partial-override feature needs no till-side contract
+change.
+
 ## 7. Merge logic
 
 The server's job is **concatenation, not reconciliation**:
@@ -437,6 +449,75 @@ objects.)
 | `receiptPaperWidth` | integer | Preferred/default paper width (mm). Device may override. |
 | `receiptLanguage` | string | Preferred/default receipt language. Device may override. |
 | `printerCodepage` | string | Preferred/default printer codepage. Device may override. |
+
+### 10.1 Reference: till-side baked-in print defaults
+
+**Not something Cloud stores, computes, or returns today** — the server
+currently always sends `printTemplates: {}` for an unconfigured store
+(§6). This block is a reference snapshot of the till's own local
+defaults, supplied by the Android team, recorded here purely so a future
+Cloud-side partial-override feature (§6's merge behavior) has an agreed
+target shape to override fields of, rather than the two sides
+independently guessing at what the till's defaults actually are:
+
+```json
+{
+  "saleReceipt": {
+    "enabled": true,
+    "paperWidth": 42,
+    "autoPrint": true,
+    "copies": 1,
+    "showDiscount": true,
+    "showMxik": true,
+    "showBarcode": true,
+    "showPackageCode": true,
+    "showMarkCode": true,
+    "showOfdQr": true,
+    "showReceiptBarcode": true,
+    "paymentLabels": {
+      "CASH": "NAQD",
+      "CARD": "KARTA",
+      "QR_STATIC_MANUAL": "QR TO'LOV",
+      "QR_PAYME": "PAYME QR",
+      "QR_CLICK": "CLICK QR",
+      "BANK_TRANSFER": "BANK"
+    }
+  },
+  "refundReceipt": {
+    "enabled": true,
+    "paperWidth": 42,
+    "autoPrint": true,
+    "copies": 1,
+    "showOriginalReceipt": true,
+    "showDiscount": true,
+    "showMxik": true,
+    "showBarcode": true,
+    "showPackageCode": true,
+    "showMarkCode": true,
+    "showOfdQr": true
+  },
+  "xReport": {
+    "enabled": true,
+    "paperWidth": 42,
+    "autoPrint": false
+  },
+  "zReport": {
+    "enabled": true,
+    "paperWidth": 42,
+    "autoPrint": true
+  },
+  "cashIn": {
+    "enabled": true,
+    "paperWidth": 42,
+    "autoPrint": true
+  },
+  "cashOut": {
+    "enabled": true,
+    "paperWidth": 42,
+    "autoPrint": true
+  }
+}
+```
 
 ## 11. Admin surface (future, not built now)
 
