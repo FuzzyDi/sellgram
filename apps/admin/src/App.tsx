@@ -1,5 +1,8 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import {
+  BrowserRouter, Routes, Route, useNavigate, useLocation,
+} from 'react-router-dom';
+import {
   LayoutDashboard, ShoppingCart, Package, Tag, Users,
   CreditCard, Megaphone, BarChart2, Settings as SettingsIcon, Receipt,
   HelpCircle, LogOut, Menu, X, Truck, ClipboardList, Building2, Boxes, Star, Image, type LucideIcon,
@@ -31,17 +34,6 @@ const SysLayout     = lazy(() => import('./pages/sys/SysLayout'));
 
 interface AuthState { user: any; tenant: any; }
 
-function useRoute() {
-  const [route, setRoute] = useState(window.location.hash.slice(1) || '/');
-  useEffect(() => {
-    const handler = () => setRoute(window.location.hash.slice(1) || '/');
-    window.addEventListener('hashchange', handler);
-    return () => window.removeEventListener('hashchange', handler);
-  }, []);
-  const navigate = (path: string) => { window.location.hash = path; };
-  return { route, navigate };
-}
-
 const NAV_ICONS: Record<string, LucideIcon> = {
   '/':             LayoutDashboard,
   '/orders':       ShoppingCart,
@@ -63,17 +55,49 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   '/help':         HelpCircle,
 };
 
-function Sidebar({
-  route, navigate, auth, onLogout, open, onClose,
+// Explicit "no access" state, replacing the old silent fallback to
+// <Dashboard/> when a permission is missing (docs/ADMIN_REDESIGN.md §6/§8
+// — a deliberate bug fix, not a side effect of the router migration).
+// Plain text is intentional here; real styling is Phase 2/3.
+function NoAccess() {
+  const { tr } = useAdminI18n();
+  return (
+    <div style={{ padding: 32, color: '#6b7280' }}>
+      <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#111827' }}>
+        {tr('Доступ ограничен', 'Kirish cheklangan')}
+      </h2>
+      <p style={{ margin: 0, fontSize: 14 }}>
+        {tr(
+          'У вас нет прав для просмотра этого раздела. Обратитесь к владельцу магазина.',
+          'Sizda bu bo\'limni ko\'rish uchun huquq yo\'q. Do\'kon egasiga murojaat qiling.'
+        )}
+      </p>
+    </div>
+  );
+}
+
+function ProtectedRoute({
+  perms, requires, children,
 }: {
-  route: string;
-  navigate: (p: string) => void;
+  perms: Record<string, boolean>;
+  requires?: string;
+  children: React.ReactElement;
+}) {
+  if (requires && !perms[requires]) return <NoAccess />;
+  return children;
+}
+
+function Sidebar({
+  auth, onLogout, open, onClose,
+}: {
   auth: AuthState;
   onLogout: () => void;
   open: boolean;
   onClose: () => void;
 }) {
   const { t, tr, lang, setLang } = useAdminI18n();
+  const navigate = useNavigate();
+  const route = useLocation().pathname;
 
   const links = useMemo(() => [
     { to: '/',           label: t('dashboard') },
@@ -245,57 +269,12 @@ function Sidebar({
   );
 }
 
-function PageRouter({ route, auth }: { route: string; auth: AuthState }) {
-  const perms = auth.user?.effectivePermissions || {};
-  const routePermMap: Record<string, string> = {
-    '/orders':       'manageOrders',
-    '/products':     'manageCatalog',
-    '/categories':   'manageCatalog',
-    '/procurement':  'manageCatalog',
-    '/stock':        'manageCatalog',
-    '/suppliers':    'manageCatalog',
-    '/customers':    'manageCustomers',
-    '/payments':     'manageBilling',
-    '/broadcasts':   'manageMarketing',
-    '/reviews':      'manageOrders',
-    '/promo-codes':  'manageSettings',
-    '/banners':      'manageSettings',
-    '/reports':      'viewReports',
-    '/billing':      'manageBilling',
-    '/audit-log':    'manageSettings',
-  };
-  const needPerm = routePermMap[route];
-  if (needPerm && !perms[needPerm]) return <Dashboard />;
-
-  switch (route) {
-    case '/products':     return <Products />;
-    case '/procurement':  return <Procurement />;
-    case '/stock':        return <Stock />;
-    case '/suppliers':    return <Suppliers />;
-    case '/categories':   return <Categories />;
-    case '/orders':       return <Orders />;
-    case '/customers':    return <Customers />;
-    case '/payments':     return <PaymentMethods />;
-    case '/broadcasts':   return <Broadcasts />;
-    case '/reviews':      return <Reviews />;
-    case '/promo-codes':  return <PromoCodes />;
-    case '/banners':      return <Banners />;
-    case '/reports':      return <Reports />;
-    case '/settings':     return <Settings />;
-    case '/billing':      return <Billing />;
-    case '/audit-log':    return <AuditLog />;
-    case '/help':         return <Help />;
-    default:              return <Dashboard />;
-  }
-}
-
-export default function App() {
-  const { t } = useAdminI18n();
+function TenantApp() {
   const [auth, setAuth] = useState<AuthState | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const { route, navigate } = useRoute();
+  const location = useLocation();
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -316,7 +295,7 @@ export default function App() {
   }, []);
 
   // Close sidebar on route change
-  useEffect(() => { setSidebarOpen(false); }, [route]);
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
   const handleLogin = async (email: string, password: string) => {
     const result = await adminApi.login(email, password);
@@ -359,9 +338,10 @@ export default function App() {
     );
   }
 
-  if (route === '/system-admin') return <Suspense fallback={null}><SysLayout /></Suspense>;
   if (!auth) return <Login onLogin={handleLogin} onRegister={handleRegister} />;
   if (showOnboarding) return <OnboardingWizard onFinish={() => setShowOnboarding(false)} />;
+
+  const perms = auth.user?.effectivePermissions || {};
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex' }}>
@@ -374,8 +354,6 @@ export default function App() {
       )}
 
       <Sidebar
-        route={route}
-        navigate={navigate}
         auth={auth}
         onLogout={logout}
         open={sidebarOpen}
@@ -401,15 +379,54 @@ export default function App() {
         </div>
 
         <main
-          key={route}
+          key={location.pathname}
           className="sg-page-enter"
           style={{ flex: 1, padding: 20, overflowY: 'auto' }}
         >
           <Suspense fallback={<div style={{ padding: 28, color: '#94a3b8' }}>Загрузка...</div>}>
-            <PageRouter route={route} auth={auth} />
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/orders" element={<ProtectedRoute perms={perms} requires="manageOrders"><Orders /></ProtectedRoute>} />
+              <Route path="/products" element={<ProtectedRoute perms={perms} requires="manageCatalog"><Products /></ProtectedRoute>} />
+              <Route path="/categories" element={<ProtectedRoute perms={perms} requires="manageCatalog"><Categories /></ProtectedRoute>} />
+              <Route path="/procurement" element={<ProtectedRoute perms={perms} requires="manageCatalog"><Procurement /></ProtectedRoute>} />
+              <Route path="/stock" element={<ProtectedRoute perms={perms} requires="manageCatalog"><Stock /></ProtectedRoute>} />
+              <Route path="/suppliers" element={<ProtectedRoute perms={perms} requires="manageCatalog"><Suppliers /></ProtectedRoute>} />
+              <Route path="/customers" element={<ProtectedRoute perms={perms} requires="manageCustomers"><Customers /></ProtectedRoute>} />
+              <Route path="/payments" element={<ProtectedRoute perms={perms} requires="manageBilling"><PaymentMethods /></ProtectedRoute>} />
+              <Route path="/broadcasts" element={<ProtectedRoute perms={perms} requires="manageMarketing"><Broadcasts /></ProtectedRoute>} />
+              <Route path="/reviews" element={<ProtectedRoute perms={perms} requires="manageOrders"><Reviews /></ProtectedRoute>} />
+              <Route path="/promo-codes" element={<ProtectedRoute perms={perms} requires="manageSettings"><PromoCodes /></ProtectedRoute>} />
+              <Route path="/banners" element={<ProtectedRoute perms={perms} requires="manageSettings"><Banners /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute perms={perms} requires="viewReports"><Reports /></ProtectedRoute>} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/billing" element={<ProtectedRoute perms={perms} requires="manageBilling"><Billing /></ProtectedRoute>} />
+              <Route path="/audit-log" element={<ProtectedRoute perms={perms} requires="manageSettings"><AuditLog /></ProtectedRoute>} />
+              <Route path="/help" element={<Help />} />
+              <Route path="*" element={<Dashboard />} />
+            </Routes>
           </Suspense>
         </main>
       </div>
     </div>
+  );
+}
+
+// Kept structurally separate from TenantApp (docs/ADMIN_REDESIGN.md §6/§9)
+// — its own route, its own auth (sessionStorage-based systemApi token,
+// entirely unrelated to the tenant `auth` state above), no shared state.
+// Splitting it out as its own top-level <Route> (rather than the old
+// early-return check inside one component) also means visiting
+// /system-admin no longer triggers the tenant adminApi.me() fetch/loading
+// skeleton first — a small, incidental efficiency improvement from the
+// restructuring, not a deliberate scope addition.
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/system-admin/*" element={<Suspense fallback={null}><SysLayout /></Suspense>} />
+        <Route path="/*" element={<TenantApp />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

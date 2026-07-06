@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -41,6 +42,7 @@ function ScheduledReportsSection({
   limits: ReportsMeta['reportLimits'];
   tr: (ru: string, uz: string) => string;
 }) {
+  const navigate = useNavigate();
   const maxAllowed = limits?.maxScheduledReports ?? 0;
   const [schedules, setSchedules] = useState<(ScheduledReportDraft & { id: string; nextRunAt?: string; lastSentAt?: string | null })[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -116,7 +118,7 @@ function ScheduledReportsSection({
               'CSV hisobotlarni jadval bo`yicha email ga avtomatik yuboring'
             )}
           </p>
-          <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => (window.location.hash = '/billing')}>
+          <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => navigate('/billing')}>
             {tr('Перейти к тарифам', "Tariflarga o'tish")}
           </button>
         </div>
@@ -319,6 +321,7 @@ function CategoryBarChart({ data }: { data: { categoryName: string; totalRevenue
 
 export default function Reports() {
   const { tr } = useAdminI18n();
+  const navigate = useNavigate();
   const [period, setPeriod] = useState(30);
   const [meta, setMeta] = useState<ReportsMeta | null>(null);
   const [summary, setSummary] = useState<any>(null);
@@ -588,7 +591,7 @@ export default function Reports() {
                 <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
                 <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{tr('Доступно на PRO и BUSINESS', 'PRO va BUSINESS tariflarida mavjud')}</p>
                 <p className="sg-subtitle" style={{ marginTop: 4 }}>{tr('Выручка по дням и отчёт по категориям', 'Kunlik tushum va toifalar hisoboti')}</p>
-                <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => (window.location.hash = '/billing')}>
+                <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => navigate('/billing')}>
                   {tr('Перейти к тарифам', 'Tariflarga o\'tish')}
                 </button>
               </div>
@@ -663,7 +666,7 @@ export default function Reports() {
                 <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
                 <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{tr('Доступно только на BUSINESS', 'Faqat BUSINESS tarifida mavjud')}</p>
                 <p className="sg-subtitle" style={{ marginTop: 4 }}>{tr('Аналитика по клиентам, LTV и сегментация', 'Mijozlar analitikasi, LTV va segmentatsiya')}</p>
-                <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => (window.location.hash = '/billing')}>
+                <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => navigate('/billing')}>
                   {tr('Обновить тариф', 'Tarifni yangilash')}
                 </button>
               </div>

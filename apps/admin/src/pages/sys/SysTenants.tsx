@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { systemApi } from '../../api/system-admin-client';
 import { setTokens } from '../../api/store-admin-client';
 
@@ -38,6 +39,7 @@ function ReminderButton({ tenantId }: { tenantId: string }) {
 }
 
 function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: () => void; onRefresh: () => void }) {
+  const navigate = useNavigate();
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState(tenant.plan);
@@ -92,7 +94,7 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
     try {
       const data = await systemApi.impersonate(tenant.id);
       (setTokens as any)(data.accessToken, data.refreshToken);
-      window.location.hash = '/';
+      navigate('/');
     } catch (e: any) { showNotice('❌ ' + e.message); }
     finally { setImpersonating(false); }
   }

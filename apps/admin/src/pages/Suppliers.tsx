@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -6,6 +7,7 @@ type NoticeTone = 'success' | 'error';
 
 export default function Suppliers() {
   const { tr, locale } = useAdminI18n();
+  const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [planBlocked, setPlanBlocked] = useState(false);
@@ -150,7 +152,7 @@ export default function Suppliers() {
           <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
           <p style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>{tr('Доступно на PRO и BUSINESS', 'PRO va BUSINESS tariflarida mavjud')}</p>
           <p className="sg-subtitle" style={{ marginTop: 6 }}>{tr('Управление контрагентами доступно с тарифом PRO', 'Kontragentlarni boshqarish PRO tarifidan mavjud')}</p>
-          <button className="sg-btn primary" style={{ marginTop: 16 }} onClick={() => (window.location.hash = '/billing')}>
+          <button className="sg-btn primary" style={{ marginTop: 16 }} onClick={() => navigate('/billing')}>
             {tr('Обновить тариф', 'Tarifni yangilash')}
           </button>
         </div>

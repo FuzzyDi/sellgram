@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 
@@ -84,6 +85,7 @@ interface Props {
 
 export default function OnboardingWizard({ onFinish }: Props) {
   const { tr, lang } = useAdminI18n();
+  const navigate = useNavigate();
   const [step, setStep] = useState<Step>('welcome');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -554,7 +556,7 @@ export default function OnboardingWizard({ onFinish }: Props) {
                 onClick={() => {
                   markOnboardingDone();
                   onFinish();
-                  window.location.hash = '/products';
+                  navigate('/products');
                 }}
               >
                 {tr('Добавить товары →', 'Mahsulotlar qo\'shish →')}
