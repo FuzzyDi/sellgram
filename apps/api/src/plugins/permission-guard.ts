@@ -10,7 +10,8 @@ export type PermissionKey =
   | 'manageSettings'
   | 'manageBilling'
   | 'manageUsers'
-  | 'viewReports';
+  | 'viewReports'
+  | 'manageB2B';
 
 /**
  * Returns a Fastify preHandler that enforces RBAC.
