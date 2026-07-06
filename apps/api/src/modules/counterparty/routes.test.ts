@@ -82,7 +82,7 @@ describe('counterparty.routes', () => {
       await app.close();
     });
 
-    it('registers every endpoint (all 11) through permissionGuard(\'manageB2B\')', async () => {
+    it('registers every endpoint (all 12) through permissionGuard(\'manageB2B\')', async () => {
       // permissionGuard(key) is invoked at route-registration time (it's
       // called inline in each route's options object), so building the
       // app alone is enough to prove every route is wired — no requests
@@ -90,7 +90,7 @@ describe('counterparty.routes', () => {
       const app = await buildApp();
       await app.close();
 
-      expect(mocks.permissionGuard).toHaveBeenCalledTimes(11);
+      expect(mocks.permissionGuard).toHaveBeenCalledTimes(12);
       expect(mocks.permissionGuard.mock.calls.every(([key]) => key === 'manageB2B')).toBe(true);
     });
   });
@@ -719,6 +719,154 @@ describe('counterparty.routes', () => {
         method: 'POST',
         url: '/counterparties/cp-1/payments',
         payload: { amount: 1000 },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(mocks.prisma.counterparty.findFirst).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  describe('POST /counterparties/:id/adjustments', () => {
+    it('records a debt write-off (negative delta) and writes a matching audit log', async () => {
+      mocks.prisma.counterparty.findFirst.mockResolvedValue({ id: 'cp-1', currentDebt: 50000 });
+      const tx = {
+        counterparty: { update: vi.fn().mockResolvedValue({ currentDebt: '20000.00' }) },
+        counterpartyLedger: { create: vi.fn().mockResolvedValue({ id: 'ledger-1', type: 'ADJUSTMENT', delta: -30000 }) },
+      };
+      mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/adjustments',
+        payload: { delta: -30000, note: 'Bad debt write-off, agreed with owner' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.currentDebt).toBe('20000.00');
+      expect(tx.counterparty.update).toHaveBeenCalledWith({
+        where: { id: 'cp-1' },
+        data: { currentDebt: { increment: -30000 } },
+        select: { currentDebt: true },
+      });
+      expect(tx.counterpartyLedger.create).toHaveBeenCalledWith({
+        data: {
+          tenantId: 'tenant-1',
+          counterpartyId: 'cp-1',
+          type: 'ADJUSTMENT',
+          delta: -30000,
+          orderId: null,
+          note: 'Bad debt write-off, agreed with owner',
+        },
+      });
+      expect(mocks.writeAuditLog).toHaveBeenCalledWith({
+        tenantId: 'tenant-1',
+        actorId: 'user-1',
+        action: 'b2b.debt.adjusted',
+        targetId: 'cp-1',
+        details: {
+          counterpartyId: 'cp-1',
+          delta: -30000,
+          note: 'Bad debt write-off, agreed with owner',
+          previousDebt: 50000,
+          newDebt: '20000.00',
+        },
+      });
+      await app.close();
+    });
+
+    it('records a positive correction (increases debt)', async () => {
+      mocks.prisma.counterparty.findFirst.mockResolvedValue({ id: 'cp-1', currentDebt: 10000 });
+      const tx = {
+        counterparty: { update: vi.fn().mockResolvedValue({ currentDebt: '15000.00' }) },
+        counterpartyLedger: { create: vi.fn().mockResolvedValue({ id: 'ledger-2', type: 'ADJUSTMENT', delta: 5000 }) },
+      };
+      mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/adjustments',
+        payload: { delta: 5000, note: 'Correction for undercharged invoice' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.currentDebt).toBe('15000.00');
+      expect(tx.counterparty.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { currentDebt: { increment: 5000 } } })
+      );
+      await app.close();
+    });
+
+    it('returns 400 for delta = 0', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/adjustments',
+        payload: { delta: 0, note: 'no-op' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      expect(mocks.writeAuditLog).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 for an empty note', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/adjustments',
+        payload: { delta: -1000, note: '' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 when note is missing entirely', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/adjustments',
+        payload: { delta: -1000 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 404 for a counterparty belonging to another tenant', async () => {
+      mocks.prisma.counterparty.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-foreign/adjustments',
+        payload: { delta: -1000, note: 'write-off' },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      expect(mocks.writeAuditLog).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 403 without manageB2B', async () => {
+      mocks.permissionGuard.mockImplementation((key: string) =>
+        key === 'manageB2B'
+          ? async (_req: any, reply: any) => reply.status(403).send({ success: false, error: 'Forbidden' })
+          : async (_req: any, _reply: any) => {}
+      );
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/adjustments',
+        payload: { delta: -1000, note: 'write-off' },
       });
 
       expect(response.statusCode).toBe(403);

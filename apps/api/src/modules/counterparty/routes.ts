@@ -81,6 +81,14 @@ const extendDueDateSchema = z.object({
   newDueDate: z.string().min(1),
 });
 
+// note is required (unlike recordPaymentSchema's optional note) — a
+// manual debt correction isn't self-explanatory the way a payment is, so
+// it must always carry a reason.
+const recordAdjustmentSchema = z.object({
+  delta: z.number().refine((n) => n !== 0, { message: 'delta must not be zero' }),
+  note: z.string().min(1).max(2000),
+});
+
 const createB2BOrderItemSchema = z.object({
   productId: z.string().min(1),
   variantId: z.string().min(1).nullable().optional(),
@@ -451,6 +459,69 @@ export default async function counterpartyRoutes(fastify: FastifyInstance) {
           },
         });
         return { ledgerEntry, currentDebt: updated.currentDebt };
+      });
+
+      return reply.status(201).send({ success: true, data: result });
+    }
+  );
+
+  // Manual debt correction (found as a gap during the §13 step 8 test-
+  // coverage audit — CounterpartyLedgerType.ADJUSTMENT existed in the
+  // schema/docs but had no way to actually be created). Same atomic
+  // cached-total + append-only-ledger-row transaction as ORDER_CHARGE/
+  // PAYMENT_RECEIVED above, but delta can be either sign (a write-off
+  // decreases the debt, a correction can increase it) and note is
+  // required — unlike a payment, a manual adjustment isn't
+  // self-explanatory and must always carry a reason. Also audited via
+  // writeAuditLog(), same as due-date extension (§13 step 7) — both are
+  // manual corrections to financial state that need a paper trail beyond
+  // the ledger row itself.
+  fastify.post(
+    '/counterparties/:id/adjustments',
+    { preHandler: [permissionGuard('manageB2B')] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const tenantId = request.tenantId!;
+      const parsed = recordAdjustmentSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ success: false, error: parsed.error.errors[0]?.message ?? 'Invalid input' });
+      }
+      const { delta, note } = parsed.data;
+
+      const counterparty = await prisma.counterparty.findFirst({ where: { id, tenantId }, select: { id: true, currentDebt: true } });
+      if (!counterparty) return reply.status(404).send({ success: false, error: 'Counterparty not found' });
+
+      const previousDebt = counterparty.currentDebt;
+
+      const result = await prisma.$transaction(async (tx: any) => {
+        const updated = await tx.counterparty.update({
+          where: { id },
+          data: { currentDebt: { increment: delta } },
+          select: { currentDebt: true },
+        });
+        const ledgerEntry = await tx.counterpartyLedger.create({
+          data: {
+            tenantId,
+            counterpartyId: id,
+            type: 'ADJUSTMENT',
+            delta,
+            orderId: null,
+            note,
+          },
+        });
+        return { ledgerEntry, currentDebt: updated.currentDebt };
+      });
+
+      // Fire-and-forget, same convention as every other writeAuditLog()
+      // call site (including due-date extension above) — not part of the
+      // transaction, since it isn't designed to take a tx client and the
+      // currentDebt/ledger write above is already atomic on its own.
+      writeAuditLog({
+        tenantId,
+        actorId: request.user?.userId,
+        action: 'b2b.debt.adjusted',
+        targetId: id,
+        details: { counterpartyId: id, delta, note, previousDebt, newDebt: result.currentDebt },
       });
 
       return reply.status(201).send({ success: true, data: result });
