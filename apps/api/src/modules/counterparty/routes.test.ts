@@ -23,10 +23,19 @@ const mocks = vi.hoisted(() => ({
     $transaction: vi.fn(),
   },
   permissionGuard: vi.fn((_key: string) => async (_req: any, _reply: any) => {}),
+  createB2BOrder: vi.fn(),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
+// Keep the real CounterpartyOrderError class (routes.ts does an `instanceof`
+// check on it) — only createB2BOrder itself is replaced, same pattern as
+// order/routes.test.ts mocking updateOrderStatus while letting plain Error
+// messages flow through unmodified.
+vi.mock('./order.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./order.service.js')>();
+  return { ...actual, createB2BOrder: mocks.createB2BOrder };
+});
 
 import counterpartyRoutes from './routes.js';
 
@@ -64,7 +73,7 @@ describe('counterparty.routes', () => {
       await app.close();
     });
 
-    it('registers every endpoint (all 7) through permissionGuard(\'manageB2B\')', async () => {
+    it('registers every endpoint (all 8) through permissionGuard(\'manageB2B\')', async () => {
       // permissionGuard(key) is invoked at route-registration time (it's
       // called inline in each route's options object), so building the
       // app alone is enough to prove every route is wired — no requests
@@ -72,7 +81,7 @@ describe('counterparty.routes', () => {
       const app = await buildApp();
       await app.close();
 
-      expect(mocks.permissionGuard).toHaveBeenCalledTimes(7);
+      expect(mocks.permissionGuard).toHaveBeenCalledTimes(8);
       expect(mocks.permissionGuard.mock.calls.every(([key]) => key === 'manageB2B')).toBe(true);
     });
   });
@@ -495,6 +504,96 @@ describe('counterparty.routes', () => {
 
       expect(response.statusCode).toBe(404);
       expect(mocks.prisma.counterpartyPrice.deleteMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  describe('POST /counterparties/:id/orders', () => {
+    it('creates the order and returns 201', async () => {
+      mocks.createB2BOrder.mockResolvedValue({ id: 'order-1', orderNumber: 5, total: 10000 });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/orders',
+        payload: { storeId: 'store-1', items: [{ productId: 'prod-1', qty: 2 }] },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.id).toBe('order-1');
+      expect(mocks.createB2BOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          storeId: 'store-1',
+          counterpartyId: 'cp-1',
+          actorUserId: 'user-1',
+          items: [{ productId: 'prod-1', qty: 2 }],
+          deliveryType: 'PICKUP', // schema default
+        })
+      );
+      await app.close();
+    });
+
+    it('returns 400 when items is empty', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/orders',
+        payload: { storeId: 'store-1', items: [] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.createB2BOrder).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it.each([
+      ['COUNTERPARTY_NOT_FOUND', 404],
+      ['STORE_NOT_FOUND', 404],
+      ['COUNTERPARTY_INACTIVE', 400],
+      ['EMPTY_ORDER', 400],
+    ] as const)('maps %s to %i', async (code, expectedStatus) => {
+      const { CounterpartyOrderError } = await import('./order.service.js');
+      mocks.createB2BOrder.mockRejectedValue(new CounterpartyOrderError(code));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/orders',
+        payload: { storeId: 'store-1', items: [{ productId: 'prod-1', qty: 1 }] },
+      });
+
+      expect(response.statusCode).toBe(expectedStatus);
+      await app.close();
+    });
+
+    it('maps INSUFFICIENT_STOCK to 400 with the item name in the message', async () => {
+      const { CounterpartyOrderError } = await import('./order.service.js');
+      mocks.createB2BOrder.mockRejectedValue(new CounterpartyOrderError('INSUFFICIENT_STOCK', 'Widget'));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/orders',
+        payload: { storeId: 'store-1', items: [{ productId: 'prod-1', qty: 100 }] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toContain('Widget');
+      await app.close();
+    });
+
+    it('rethrows an error that is not a CounterpartyOrderError', async () => {
+      mocks.createB2BOrder.mockRejectedValue(new Error('unexpected'));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/orders',
+        payload: { storeId: 'store-1', items: [{ productId: 'prod-1', qty: 1 }] },
+      });
+
+      expect(response.statusCode).toBe(500);
       await app.close();
     });
   });

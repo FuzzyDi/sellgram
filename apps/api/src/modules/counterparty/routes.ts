@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { createB2BOrder, CounterpartyOrderError } from './order.service.js';
 
 /**
  * Store-admin CRUD for the B2B/counterparties module
@@ -66,6 +67,30 @@ const upsertPriceSchema = z.object({
   productId: z.string().min(1),
   variantId: z.string().min(1).nullable().optional(),
   price: z.number().positive(),
+});
+
+const createB2BOrderItemSchema = z.object({
+  productId: z.string().min(1),
+  variantId: z.string().min(1).nullable().optional(),
+  qty: z.number().int().positive(),
+});
+
+// storeId is required — unlike the Telegram bot (which always knows its
+// one store from the webhook it received), a manager creating a B2B order
+// in the admin has to say which store's inventory/warehouse this draws
+// from (docs/B2B_COUNTERPARTIES.md §13 step 5).
+const createB2BOrderSchema = z.object({
+  storeId: z.string().min(1),
+  items: z.array(createB2BOrderItemSchema).min(1),
+  // No DeliveryZone lookup here (unlike checkout.service.ts) — a B2B order
+  // is entered manually by a manager who already knows the delivery
+  // arrangement (often self-pickup), so deliveryPrice, if any, is typed in
+  // directly rather than resolved from a zone.
+  deliveryType: z.enum(['PICKUP', 'LOCAL', 'NATIONAL']).default('PICKUP'),
+  deliveryAddress: z.string().max(500).optional(),
+  deliveryPrice: z.number().min(0).optional(),
+  note: z.string().max(2000).optional(),
+  paymentTermDays: z.number().int().positive().max(365).optional(),
 });
 
 export default async function counterpartyRoutes(fastify: FastifyInstance) {
@@ -313,6 +338,61 @@ export default async function counterpartyRoutes(fastify: FastifyInstance) {
       if (result.count === 0) return reply.status(404).send({ success: false, error: 'Price not found' });
 
       return { success: true };
+    }
+  );
+
+  // B2B order creation (docs/B2B_COUNTERPARTIES.md §13 step 5) — see
+  // order.service.ts for the transaction (price resolution, stock
+  // decrement, debt ledger).
+  fastify.post(
+    '/counterparties/:id/orders',
+    { preHandler: [permissionGuard('manageB2B')] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const parsed = createB2BOrderSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ success: false, error: parsed.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      try {
+        const order = await createB2BOrder({
+          tenantId: request.tenantId!,
+          storeId: parsed.data.storeId,
+          counterpartyId: id,
+          actorUserId: request.user?.userId,
+          items: parsed.data.items,
+          deliveryType: parsed.data.deliveryType,
+          deliveryAddress: parsed.data.deliveryAddress,
+          deliveryPrice: parsed.data.deliveryPrice,
+          note: parsed.data.note,
+          paymentTermDays: parsed.data.paymentTermDays,
+        });
+        return reply.status(201).send({ success: true, data: order });
+      } catch (err: any) {
+        if (err instanceof CounterpartyOrderError) {
+          switch (err.code) {
+            case 'COUNTERPARTY_NOT_FOUND':
+              return reply.status(404).send({ success: false, error: 'Counterparty not found' });
+            case 'STORE_NOT_FOUND':
+              return reply.status(404).send({ success: false, error: 'Store not found' });
+            case 'PRODUCT_NOT_FOUND':
+              return reply.status(404).send({ success: false, error: `Product not found: ${err.detail}` });
+            case 'VARIANT_NOT_FOUND':
+              return reply.status(404).send({ success: false, error: `Variant not found: ${err.detail}` });
+            case 'COUNTERPARTY_INACTIVE':
+              return reply.status(400).send({ success: false, error: 'Counterparty is inactive' });
+            case 'EMPTY_ORDER':
+              return reply.status(400).send({ success: false, error: 'Order must contain at least one item' });
+            case 'INVALID_QUANTITY':
+              return reply.status(400).send({ success: false, error: `Invalid quantity for product ${err.detail}` });
+            case 'INSUFFICIENT_STOCK':
+              return reply.status(400).send({ success: false, error: `Not enough stock for ${err.detail}` });
+            default:
+              return reply.status(400).send({ success: false, error: err.message });
+          }
+        }
+        throw err;
+      }
     }
   );
 }
