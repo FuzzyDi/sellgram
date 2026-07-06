@@ -20,6 +20,11 @@ const mocks = vi.hoisted(() => ({
       update: vi.fn(),
       deleteMany: vi.fn(),
     },
+    counterpartyLedger: {
+      findMany: vi.fn(),
+      count: vi.fn(),
+      create: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
   permissionGuard: vi.fn((_key: string) => async (_req: any, _reply: any) => {}),
@@ -73,7 +78,7 @@ describe('counterparty.routes', () => {
       await app.close();
     });
 
-    it('registers every endpoint (all 8) through permissionGuard(\'manageB2B\')', async () => {
+    it('registers every endpoint (all 10) through permissionGuard(\'manageB2B\')', async () => {
       // permissionGuard(key) is invoked at route-registration time (it's
       // called inline in each route's options object), so building the
       // app alone is enough to prove every route is wired — no requests
@@ -81,7 +86,7 @@ describe('counterparty.routes', () => {
       const app = await buildApp();
       await app.close();
 
-      expect(mocks.permissionGuard).toHaveBeenCalledTimes(8);
+      expect(mocks.permissionGuard).toHaveBeenCalledTimes(10);
       expect(mocks.permissionGuard.mock.calls.every(([key]) => key === 'manageB2B')).toBe(true);
     });
   });
@@ -594,6 +599,160 @@ describe('counterparty.routes', () => {
       });
 
       expect(response.statusCode).toBe(500);
+      await app.close();
+    });
+  });
+
+  describe('POST /counterparties/:id/payments', () => {
+    it('records the payment and decrements currentDebt', async () => {
+      mocks.prisma.counterparty.findFirst.mockResolvedValue({ id: 'cp-1' });
+      const tx = {
+        counterparty: { update: vi.fn().mockResolvedValue({ currentDebt: '5000.00' }) },
+        counterpartyLedger: { create: vi.fn().mockResolvedValue({ id: 'ledger-1', type: 'PAYMENT_RECEIVED', delta: '-5000.00' }) },
+      };
+      mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/payments',
+        payload: { amount: 5000, note: 'Partial payment' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.currentDebt).toBe('5000.00');
+      expect(tx.counterparty.update).toHaveBeenCalledWith({
+        where: { id: 'cp-1' },
+        data: { currentDebt: { decrement: 5000 } },
+        select: { currentDebt: true },
+      });
+      expect(tx.counterpartyLedger.create).toHaveBeenCalledWith({
+        data: {
+          tenantId: 'tenant-1',
+          counterpartyId: 'cp-1',
+          type: 'PAYMENT_RECEIVED',
+          delta: -5000,
+          orderId: null,
+          note: 'Partial payment',
+        },
+      });
+      await app.close();
+    });
+
+    it('allows overpayment — currentDebt is allowed to go negative', async () => {
+      mocks.prisma.counterparty.findFirst.mockResolvedValue({ id: 'cp-1' });
+      const tx = {
+        counterparty: { update: vi.fn().mockResolvedValue({ currentDebt: '-2000.00' }) },
+        counterpartyLedger: { create: vi.fn().mockResolvedValue({ id: 'ledger-2' }) },
+      };
+      mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/payments',
+        payload: { amount: 10000 },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.currentDebt).toBe('-2000.00');
+      await app.close();
+    });
+
+    it.each([
+      ['zero', 0],
+      ['negative', -100],
+    ])('returns 400 for a %s amount', async (_label, amount) => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/payments',
+        payload: { amount },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 for a non-numeric amount', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/payments',
+        payload: { amount: 'a lot' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 404 for a counterparty belonging to another tenant', async () => {
+      mocks.prisma.counterparty.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-foreign/payments',
+        payload: { amount: 1000 },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 403 without manageB2B', async () => {
+      mocks.permissionGuard.mockImplementation((key: string) =>
+        key === 'manageB2B'
+          ? async (_req: any, reply: any) => reply.status(403).send({ success: false, error: 'Forbidden' })
+          : async (_req: any, _reply: any) => {}
+      );
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/counterparties/cp-1/payments',
+        payload: { amount: 1000 },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(mocks.prisma.counterparty.findFirst).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  describe('GET /counterparties/:id/ledger', () => {
+    it('lists ledger entries for the counterparty with pagination', async () => {
+      mocks.prisma.counterparty.findFirst.mockResolvedValue({ id: 'cp-1' });
+      mocks.prisma.counterpartyLedger.findMany.mockResolvedValue([
+        { id: 'l-2', type: 'PAYMENT_RECEIVED', delta: '-5000.00' },
+        { id: 'l-1', type: 'ORDER_CHARGE', delta: '15000.00' },
+      ]);
+      mocks.prisma.counterpartyLedger.count.mockResolvedValue(2);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/counterparties/cp-1/ledger' });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.items).toHaveLength(2);
+      expect(body.data.total).toBe(2);
+      expect(mocks.prisma.counterpartyLedger.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { counterpartyId: 'cp-1' }, orderBy: { createdAt: 'desc' }, skip: 0, take: 20 })
+      );
+      await app.close();
+    });
+
+    it('returns 404 for a counterparty belonging to another tenant', async () => {
+      mocks.prisma.counterparty.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/counterparties/cp-foreign/ledger' });
+
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.counterpartyLedger.findMany).not.toHaveBeenCalled();
       await app.close();
     });
   });
