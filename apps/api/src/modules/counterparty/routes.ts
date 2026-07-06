@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 import { createB2BOrder, CounterpartyOrderError } from './order.service.js';
+import { writeAuditLog } from '../../lib/audit.js';
 
 /**
  * Store-admin CRUD for the B2B/counterparties module
@@ -74,6 +75,10 @@ const recordPaymentSchema = z.object({
 const listLedgerQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+const extendDueDateSchema = z.object({
+  newDueDate: z.string().min(1),
 });
 
 const createB2BOrderItemSchema = z.object({
@@ -486,6 +491,81 @@ export default async function counterpartyRoutes(fastify: FastifyInstance) {
         success: true,
         data: { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
       };
+    }
+  );
+
+  // Due-date extension (§13 step 7, docs/B2B_COUNTERPARTIES.md §7) — the
+  // one deliberate exception to the ledger being append-only: dueDate is
+  // updated in place on the existing ORDER_CHARGE row. originalDueDate is
+  // never touched — it stays the frozen record of what was promised at
+  // order time. The extension event itself is logged via the existing
+  // writeAuditLog() into TenantAuditLog, not a new ledger row.
+  fastify.patch(
+    '/counterparties/:counterpartyId/ledger/:ledgerEntryId/due-date',
+    { preHandler: [permissionGuard('manageB2B')] },
+    async (request, reply) => {
+      const { counterpartyId, ledgerEntryId } = request.params as { counterpartyId: string; ledgerEntryId: string };
+      const tenantId = request.tenantId!;
+      const parsed = extendDueDateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ success: false, error: parsed.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const newDueDate = new Date(parsed.data.newDueDate);
+      if (isNaN(newDueDate.getTime())) {
+        return reply.status(400).send({ success: false, error: 'newDueDate must be a valid date' });
+      }
+
+      const ledgerEntry = await prisma.counterpartyLedger.findFirst({
+        where: { id: ledgerEntryId, counterpartyId, tenantId },
+      });
+      if (!ledgerEntry) return reply.status(404).send({ success: false, error: 'Ledger entry not found' });
+
+      if (ledgerEntry.type !== 'ORDER_CHARGE') {
+        return reply.status(400).send({
+          success: false,
+          error: 'Only ORDER_CHARGE ledger entries have a due date that can be extended',
+        });
+      }
+
+      // Conservative assumption (not fully specified by the doc): a
+      // due-date "extension" must move the date strictly forward from the
+      // entry's *current* dueDate — pulling it earlier, or "extending" to
+      // the same date, isn't an extension. If product wants to allow
+      // pulling a due date earlier too, that's a deliberate policy change,
+      // not implied by "extension".
+      const currentDueDate = ledgerEntry.dueDate;
+      if (currentDueDate && newDueDate.getTime() <= currentDueDate.getTime()) {
+        return reply.status(400).send({
+          success: false,
+          error: 'newDueDate must be strictly later than the current dueDate',
+        });
+      }
+
+      const previousDueDate = ledgerEntry.dueDate;
+      const updated = await prisma.counterpartyLedger.update({
+        where: { id: ledgerEntryId },
+        data: { dueDate: newDueDate },
+      });
+
+      // Fire-and-forget, same as every other writeAuditLog() call site in
+      // the codebase (it swallows its own errors and isn't designed to
+      // participate in a Prisma transaction) — the dueDate UPDATE above is
+      // the one piece of state that actually needs atomicity, and a
+      // single-column update on a single row already has that inherently.
+      writeAuditLog({
+        tenantId,
+        actorId: request.user?.userId,
+        action: 'b2b.debt.duedate_extended',
+        targetId: ledgerEntry.id,
+        details: {
+          orderId: ledgerEntry.orderId,
+          previousDueDate: previousDueDate?.toISOString() ?? null,
+          newDueDate: newDueDate.toISOString(),
+        },
+      });
+
+      return { success: true, data: updated };
     }
   );
 }

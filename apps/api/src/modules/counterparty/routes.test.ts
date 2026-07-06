@@ -24,15 +24,19 @@ const mocks = vi.hoisted(() => ({
       findMany: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
     },
     $transaction: vi.fn(),
   },
   permissionGuard: vi.fn((_key: string) => async (_req: any, _reply: any) => {}),
   createB2BOrder: vi.fn(),
+  writeAuditLog: vi.fn(),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
+vi.mock('../../lib/audit.js', () => ({ writeAuditLog: mocks.writeAuditLog }));
 // Keep the real CounterpartyOrderError class (routes.ts does an `instanceof`
 // check on it) — only createB2BOrder itself is replaced, same pattern as
 // order/routes.test.ts mocking updateOrderStatus while letting plain Error
@@ -78,7 +82,7 @@ describe('counterparty.routes', () => {
       await app.close();
     });
 
-    it('registers every endpoint (all 10) through permissionGuard(\'manageB2B\')', async () => {
+    it('registers every endpoint (all 11) through permissionGuard(\'manageB2B\')', async () => {
       // permissionGuard(key) is invoked at route-registration time (it's
       // called inline in each route's options object), so building the
       // app alone is enough to prove every route is wired — no requests
@@ -86,7 +90,7 @@ describe('counterparty.routes', () => {
       const app = await buildApp();
       await app.close();
 
-      expect(mocks.permissionGuard).toHaveBeenCalledTimes(10);
+      expect(mocks.permissionGuard).toHaveBeenCalledTimes(11);
       expect(mocks.permissionGuard.mock.calls.every(([key]) => key === 'manageB2B')).toBe(true);
     });
   });
@@ -753,6 +757,154 @@ describe('counterparty.routes', () => {
 
       expect(response.statusCode).toBe(404);
       expect(mocks.prisma.counterpartyLedger.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  describe('PATCH /counterparties/:counterpartyId/ledger/:ledgerEntryId/due-date', () => {
+    const baseEntry = {
+      id: 'ledger-1',
+      counterpartyId: 'cp-1',
+      tenantId: 'tenant-1',
+      type: 'ORDER_CHARGE',
+      orderId: 'order-1',
+      originalDueDate: new Date('2026-08-01T00:00:00.000Z'),
+      dueDate: new Date('2026-08-01T00:00:00.000Z'),
+    };
+
+    it('extends dueDate, leaves originalDueDate untouched, and writes an audit log', async () => {
+      mocks.prisma.counterpartyLedger.findFirst.mockResolvedValue(baseEntry);
+      mocks.prisma.counterpartyLedger.update.mockResolvedValue({
+        ...baseEntry,
+        dueDate: new Date('2026-09-01T00:00:00.000Z'),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/counterparties/cp-1/ledger/ledger-1/due-date',
+        payload: { newDueDate: '2026-09-01T00:00:00.000Z' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.counterpartyLedger.update).toHaveBeenCalledWith({
+        where: { id: 'ledger-1' },
+        data: { dueDate: new Date('2026-09-01T00:00:00.000Z') },
+      });
+      // originalDueDate must never appear in the update payload.
+      const updateData = mocks.prisma.counterpartyLedger.update.mock.calls[0][0].data;
+      expect(updateData.originalDueDate).toBeUndefined();
+
+      expect(mocks.writeAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          actorId: 'user-1',
+          action: 'b2b.debt.duedate_extended',
+          targetId: 'ledger-1',
+          details: {
+            orderId: 'order-1',
+            previousDueDate: '2026-08-01T00:00:00.000Z',
+            newDueDate: '2026-09-01T00:00:00.000Z',
+          },
+        })
+      );
+      await app.close();
+    });
+
+    it('rejects extending a PAYMENT_RECEIVED entry', async () => {
+      mocks.prisma.counterpartyLedger.findFirst.mockResolvedValue({
+        ...baseEntry, type: 'PAYMENT_RECEIVED', orderId: null,
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/counterparties/cp-1/ledger/ledger-1/due-date',
+        payload: { newDueDate: '2026-09-01T00:00:00.000Z' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.counterpartyLedger.update).not.toHaveBeenCalled();
+      expect(mocks.writeAuditLog).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('rejects a newDueDate that is not strictly later than the current dueDate', async () => {
+      mocks.prisma.counterpartyLedger.findFirst.mockResolvedValue(baseEntry);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/counterparties/cp-1/ledger/ledger-1/due-date',
+        payload: { newDueDate: '2026-08-01T00:00:00.000Z' }, // same as current dueDate
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.counterpartyLedger.update).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('rejects an earlier newDueDate', async () => {
+      mocks.prisma.counterpartyLedger.findFirst.mockResolvedValue(baseEntry);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/counterparties/cp-1/ledger/ledger-1/due-date',
+        payload: { newDueDate: '2026-07-01T00:00:00.000Z' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.counterpartyLedger.update).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('rejects an unparseable date', async () => {
+      mocks.prisma.counterpartyLedger.findFirst.mockResolvedValue(baseEntry);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/counterparties/cp-1/ledger/ledger-1/due-date',
+        payload: { newDueDate: 'not-a-date' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.counterpartyLedger.update).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 404 for a ledger entry belonging to another tenant/counterparty', async () => {
+      mocks.prisma.counterpartyLedger.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/counterparties/cp-1/ledger/ledger-foreign/due-date',
+        payload: { newDueDate: '2026-09-01T00:00:00.000Z' },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.counterpartyLedger.update).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 403 without manageB2B', async () => {
+      mocks.permissionGuard.mockImplementation((key: string) =>
+        key === 'manageB2B'
+          ? async (_req: any, reply: any) => reply.status(403).send({ success: false, error: 'Forbidden' })
+          : async (_req: any, _reply: any) => {}
+      );
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/counterparties/cp-1/ledger/ledger-1/due-date',
+        payload: { newDueDate: '2026-09-01T00:00:00.000Z' },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(mocks.prisma.counterpartyLedger.findFirst).not.toHaveBeenCalled();
       await app.close();
     });
   });
