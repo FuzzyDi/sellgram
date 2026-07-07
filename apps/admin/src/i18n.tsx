@@ -24,6 +24,10 @@ const dict = {
     loading: '\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...',
     sign_out: '\u0412\u044b\u0439\u0442\u0438',
     language: '\u042f\u0437\u044b\u043a',
+    catalog: '\u041a\u0430\u0442\u0430\u043b\u043e\u0433',
+    team_settings: '\u041a\u043e\u043c\u0430\u043d\u0434\u0430 \u0438 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438',
+    workspace: 'Workspace',
+    sales_channels: '\u041a\u0430\u043d\u0430\u043b\u044b \u043f\u0440\u043e\u0434\u0430\u0436',
   },
   uz: {
     dashboard: 'Boshqaruv paneli',
@@ -44,6 +48,10 @@ const dict = {
     loading: 'Yuklanmoqda...',
     sign_out: 'Chiqish',
     language: 'Til',
+    catalog: 'Katalog',
+    team_settings: 'Jamoa va sozlamalar',
+    workspace: 'Workspace',
+    sales_channels: 'Savdo kanallari',
   },
 } as const;
 
@@ -165,7 +173,7 @@ function fixBrokenCyrillic(input: string): string {
   return hasReadableCyrillic(current) ? current : input;
 }
 
-type Key = keyof typeof dict.ru;
+export type Key = keyof typeof dict.ru;
 
 interface I18nValue {
   lang: Lang;
