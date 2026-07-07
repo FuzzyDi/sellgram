@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SBGCloud — Одна платформа. Три канала продаж.</title>
+  <meta name="description" content="SBGCloud объединяет Telegram-магазин, POS-кассы и B2B/опт на одном складе, каталоге и аналитике. Единая платформа для розницы в Узбекистане." />
+  <link rel="canonical" href="https://sbgcloud.uz/" />
+  <link rel="alternate" hreflang="ru" href="https://sbgcloud.uz/" />
+  <link rel="alternate" hreflang="uz" href="https://sbgcloud.uz/" />
+  <link rel="alternate" hreflang="x-default" href="https://sbgcloud.uz/" />
+
+  <meta property="og:type"        content="website" />
+  <meta property="og:url"         content="https://sbgcloud.uz/" />
+  <meta property="og:site_name"   content="SBGCloud" />
+  <meta property="og:title"       content="SBGCloud — Одна платформа. Три канала продаж." />
+  <meta property="og:description" content="Единый склад, каталог и аналитика для Telegram, POS-касс и B2B/опта." />
+  <meta name="twitter:card"        content="summary_large_image" />
+
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.svg" sizes="any" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #fafafa;
+      --panel: #ffffff;
+      --text: #0a0a0a;
+      --muted: #6b7280;
+      --line: #e4e4e7;
+      --radius: 10px;
+      --emerald: #10b981;
+      --sky: #0ea5e9;
+      --violet: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Manrope","IBM Plex Sans","Segoe UI",sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 22px; }
+
+    /* ── Header ── */
+    .top { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:6px 0 28px; border-bottom:0.5px solid var(--line); margin-bottom:36px; }
+    .brand { display:inline-flex; align-items:center; gap:10px; font-weight:800; font-size:19px; letter-spacing:-0.3px; text-decoration:none; color:var(--text); }
+    .brand-badge { width:28px; height:28px; border-radius:7px; display:grid; place-items:center; color:#fff; font-weight:800; font-size:13px; background:var(--text); }
+    .nav { display:flex; align-items:center; gap:28px; }
+    .nav a { color:var(--muted); text-decoration:none; font-size:14px; font-weight:600; }
+    .nav a:hover { color:var(--text); }
+    .header-actions { display:flex; align-items:center; gap:10px; }
+    .lang { display:inline-flex; border:0.5px solid var(--line); border-radius:8px; padding:2px; gap:2px; }
+    .lang button { border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:12px; font-weight:700; color:var(--muted); background:transparent; }
+    .lang button.active { background:var(--text); color:#fff; }
+
+    /* ── Buttons ── */
+    .btn { text-decoration:none; border-radius:8px; padding:11px 20px; font-size:14px; font-weight:700; border:0.5px solid transparent; display:inline-flex; align-items:center; gap:7px; cursor:pointer; }
+    .btn.primary { color:#fff; background:var(--text); }
+    .btn.primary:hover { background:#262626; }
+    .btn.ghost { color:var(--text); background:#fff; border-color:var(--line); }
+    .btn.ghost:hover { background:var(--bg); }
+    .btn.lg { padding:14px 26px; font-size:15px; }
+
+    /* ── Hero ── */
+    .hero { text-align:center; padding:20px 0 44px; max-width:760px; margin:0 auto; }
+    .hero h1 { font-size:clamp(30px,4.6vw,50px); line-height:1.08; letter-spacing:-1px; margin-bottom:18px; }
+    .hero p { color:var(--muted); font-size:17px; line-height:1.6; }
+
+    /* ── Section heading ── */
+    .section-head { text-align:center; max-width:640px; margin:0 auto 28px; }
+    .section-head h2 { font-size:26px; font-weight:800; letter-spacing:-0.5px; margin-bottom:8px; }
+    .section-head p { color:var(--muted); font-size:15px; }
+    section { margin-bottom:56px; }
+
+    /* ── Channels ── */
+    .channels { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .channel-card { border:0.5px solid var(--line); border-radius:var(--radius); background:var(--panel); padding:24px 22px; border-top:3px solid var(--accent); }
+    .channel-card.sellgram { --accent: var(--emerald); }
+    .channel-card.pos { --accent: var(--sky); }
+    .channel-card.b2b { --accent: var(--violet); }
+    .channel-dot { width:9px; height:9px; border-radius:50%; background:var(--accent); display:inline-block; margin-bottom:14px; }
+    .channel-card h3 { font-size:17px; font-weight:800; margin-bottom:8px; letter-spacing:-0.2px; }
+    .channel-card p { font-size:14px; color:var(--muted); line-height:1.6; }
+
+    /* ── Key facts ── */
+    .facts { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:0.5px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+    .fact { background:var(--panel); padding:22px 20px; text-align:center; }
+    .fact-label { font-size:14px; font-weight:700; }
+
+    /* ── Pricing ── */
+    .plans-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .plan-card { border:0.5px solid var(--line); border-radius:var(--radius); padding:26px 22px; background:var(--panel); display:flex; flex-direction:column; gap:14px; }
+    .plan-card.featured { border-color:var(--text); }
+    .plan-name-row { display:flex; align-items:center; gap:8px; }
+    .plan-name { font-size:17px; font-weight:800; }
+    .plan-badge { font-size:10px; font-weight:800; padding:3px 8px; border-radius:999px; background:var(--text); color:#fff; }
+    .plan-price-ph { font-size:15px; color:var(--muted); font-weight:600; }
+    .plan-desc { font-size:13px; color:var(--muted); line-height:1.55; flex:1; }
+    .plan-cta { text-align:center; padding:11px; border-radius:8px; font-size:13px; font-weight:700; text-decoration:none; border:0.5px solid var(--line); background:#fff; color:var(--text); }
+    .plan-cta:hover { background:var(--bg); }
+    .plan-card.featured .plan-cta { background:var(--text); color:#fff; border-color:var(--text); }
+
+    /* ── CTA ── */
+    .cta-section { border:0.5px solid var(--line); border-radius:var(--radius); padding:48px 40px; text-align:center; background:var(--panel); }
+    .cta-section h2 { font-size:clamp(22px,3vw,32px); font-weight:800; letter-spacing:-0.5px; margin-bottom:10px; }
+    .cta-section p { color:var(--muted); font-size:15px; margin-bottom:24px; }
+    .cta-actions { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+
+    /* ── Footer ── */
+    .links { display:flex; gap:18px; flex-wrap:wrap; padding-top:24px; border-top:0.5px solid var(--line); }
+    .links a { font-size:13px; font-weight:600; color:var(--muted); text-decoration:none; }
+    .links a:hover { color:var(--text); }
+    .bottom { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; color:var(--muted); font-size:13px; padding-top:14px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 860px) {
+      .nav { display:none; }
+      .channels { grid-template-columns:1fr; }
+      .facts { grid-template-columns:1fr; }
+      .plans-grid { grid-template-columns:1fr; }
+      .cta-section { padding:32px 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <a class="brand" href="/">
+        <span class="brand-badge">S</span>SBGCloud
+      </a>
+      <nav class="nav">
+        <a href="#channels" data-i18n="nav_channels"></a>
+        <a href="#pricing" data-i18n="nav_pricing"></a>
+        <a href="/guide" data-i18n="nav_docs"></a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn ghost" href="https://app.sbgcloud.uz" style="padding:8px 16px;font-size:13px;" data-i18n="cta_login"></a>
+        <div class="lang">
+          <button id="lang-ru" class="active" type="button">RU</button>
+          <button id="lang-uz" type="button">UZ</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+      <h1 data-i18n="hero_title"></h1>
+      <p data-i18n="hero_desc"></p>
+    </section>
+
+    <!-- Channels -->
+    <section id="channels">
+      <div class="section-head">
+        <h2 data-i18n="channels_title"></h2>
+        <p data-i18n="channels_desc"></p>
+      </div>
+      <div class="channels">
+        <article class="channel-card sellgram">
+          <span class="channel-dot"></span>
+          <h3 data-i18n="ch_sellgram_title"></h3>
+          <p data-i18n="ch_sellgram_desc"></p>
+        </article>
+        <article class="channel-card pos">
+          <span class="channel-dot"></span>
+          <h3 data-i18n="ch_pos_title"></h3>
+          <p data-i18n="ch_pos_desc"></p>
+        </article>
+        <article class="channel-card b2b">
+          <span class="channel-dot"></span>
+          <h3 data-i18n="ch_b2b_title"></h3>
+          <p data-i18n="ch_b2b_desc"></p>
+        </article>
+      </div>
+    </section>
+
+    <!-- Key facts -->
+    <section>
+      <div class="facts">
+        <div class="fact"><div class="fact-label" data-i18n="fact1"></div></div>
+        <div class="fact"><div class="fact-label" data-i18n="fact2"></div></div>
+        <div class="fact"><div class="fact-label" data-i18n="fact3"></div></div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="pricing">
+      <div class="section-head">
+        <h2 data-i18n="pricing_title"></h2>
+        <p data-i18n="pricing_desc"></p>
+      </div>
+      <div class="plans-grid">
+        <div class="plan-card">
+          <div class="plan-name-row"><div class="plan-name">Free</div></div>
+          <div class="plan-price-ph" data-i18n="price_placeholder"></div>
+          <div class="plan-desc" data-i18n="plan_free_desc"></div>
+          <a class="plan-cta" href="mailto:sales@sbgcloud.uz?subject=SBGCloud%20Free" data-i18n="plan_cta"></a>
+        </div>
+        <div class="plan-card featured">
+          <div class="plan-name-row">
+            <div class="plan-name">Pro</div>
+            <span class="plan-badge" data-i18n="plan_popular"></span>
+          </div>
+          <div class="plan-price-ph" data-i18n="price_placeholder"></div>
+          <div class="plan-desc" data-i18n="plan_pro_desc"></div>
+          <a class="plan-cta" href="mailto:sales@sbgcloud.uz?subject=SBGCloud%20Pro" data-i18n="plan_cta"></a>
+        </div>
+        <div class="plan-card">
+          <div class="plan-name-row"><div class="plan-name">Business</div></div>
+          <div class="plan-price-ph" data-i18n="price_placeholder"></div>
+          <div class="plan-desc" data-i18n="plan_business_desc"></div>
+          <a class="plan-cta" href="mailto:sales@sbgcloud.uz?subject=SBGCloud%20Business" data-i18n="plan_cta"></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+      <h2 data-i18n="cta_title"></h2>
+      <p data-i18n="cta_desc"></p>
+      <div class="cta-actions">
+        <a class="btn primary lg" href="https://app.sbgcloud.uz/register" data-i18n="cta_start"></a>
+        <a class="btn ghost lg" href="mailto:sales@sbgcloud.uz?subject=SBGCloud%20Demo" data-i18n="cta_demo"></a>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <div class="links">
+      <a href="/guide" data-i18n="link_docs"></a>
+      <a href="mailto:support@sbgcloud.uz" data-i18n="link_support"></a>
+      <a href="/privacy" data-i18n="link_privacy"></a>
+    </div>
+    <footer class="bottom">
+      <span>© <span id="year"></span> SBGCloud</span>
+    </footer>
+  </div>
+
+  <script>
+    const dict = {
+      ru: {
+        nav_channels: "Каналы",
+        nav_pricing: "Pricing",
+        nav_docs: "Docs",
+        cta_login: "Войти",
+        hero_title: "Одна платформа. Три канала продаж.",
+        hero_desc: "Единый склад, каталог и аналитика для Telegram-магазина, POS-касс и B2B/опта — управляйте всеми каналами продаж из одного места.",
+        channels_title: "Три канала, один склад",
+        channels_desc: "Подключайте каналы по мере роста бизнеса — данные о товарах и остатках всегда общие.",
+        ch_sellgram_title: "Sellgram",
+        ch_sellgram_desc: "Витрина и заказы прямо в Telegram — MiniApp-каталог, корзина, оплата Payme/Click.",
+        ch_pos_title: "POS",
+        ch_pos_desc: "Фискальные терминалы для розничной точки — offline-first, UZ-фискализация, синхронизация в реальном времени.",
+        ch_b2b_title: "B2B / Опт",
+        ch_b2b_desc: "Контрагенты, кредитные лимиты и прайс-листы для оптовых продаж и отсрочки платежа.",
+        fact1: "Единый склад",
+        fact2: "POS sync в реальном времени",
+        fact3: "UZ-фискализация",
+        pricing_title: "Тарифы",
+        pricing_desc: "Стоимость зависит от количества каналов и объёма продаж — уточните у нашей команды.",
+        price_placeholder: "По запросу",
+        plan_popular: "Популярный",
+        plan_free_desc: "Для одного канала продаж и небольшого каталога.",
+        plan_pro_desc: "Для растущего бизнеса с несколькими каналами продаж.",
+        plan_business_desc: "Для сетей и крупных операций — все каналы, приоритетная поддержка.",
+        plan_cta: "Узнать цену",
+        cta_title: "Начните бесплатно",
+        cta_desc: "Подключите первый канал продаж за 5 минут — расширяйте платформу по мере роста.",
+        cta_start: "Начать бесплатно",
+        cta_demo: "Запросить демо",
+        link_docs: "Документация",
+        link_support: "Поддержка",
+        link_privacy: "Политика",
+      },
+      uz: {
+        nav_channels: "Kanallar",
+        nav_pricing: "Pricing",
+        nav_docs: "Docs",
+        cta_login: "Kirish",
+        hero_title: "Bitta platforma. Uchta savdo kanali.",
+        hero_desc: "Telegram do'koni, POS-kassalar va B2B/ulgurji savdo uchun yagona ombor, katalog va tahlil — barcha savdo kanallarini bitta joydan boshqaring.",
+        channels_title: "Uchta kanal, bitta ombor",
+        channels_desc: "Biznesingiz o'sishi bilan kanallarni ulang — mahsulot va qoldiq ma'lumotlari doim umumiy.",
+        ch_sellgram_title: "Sellgram",
+        ch_sellgram_desc: "Telegram ichida vitrina va buyurtmalar — MiniApp katalog, savat, Payme/Click to'lovi.",
+        ch_pos_title: "POS",
+        ch_pos_desc: "Chakana savdo nuqtasi uchun fiskal terminallar — offline-first, O'zbekiston fiskalizatsiyasi, real vaqt sinxronizatsiyasi.",
+        ch_b2b_title: "B2B / Ulgurji",
+        ch_b2b_desc: "Ulgurji savdo va to'lov muddatini kechiktirish uchun kontragentlar, kredit limitlari va narxnomalar.",
+        fact1: "Yagona ombor",
+        fact2: "Real vaqtda POS sinxronizatsiyasi",
+        fact3: "O'zbekiston fiskalizatsiyasi",
+        pricing_title: "Tariflar",
+        pricing_desc: "Narx kanallar soni va savdo hajmiga bog'liq — jamoamizdan so'rang.",
+        price_placeholder: "So'rov bo'yicha",
+        plan_popular: "Mashhur",
+        plan_free_desc: "Bitta savdo kanali va kichik katalog uchun.",
+        plan_pro_desc: "Bir nechta savdo kanali bilan o'sib borayotgan biznes uchun.",
+        plan_business_desc: "Tarmoqlar va yirik operatsiyalar uchun — barcha kanallar, ustuvor qo'llab-quvvatlash.",
+        plan_cta: "Narxni bilish",
+        cta_title: "Bepul boshlang",
+        cta_desc: "Birinchi savdo kanalini 5 daqiqada ulang — platformani o'sish bilan kengaytiring.",
+        cta_start: "Bepul boshlash",
+        cta_demo: "Demo so'rash",
+        link_docs: "Hujjatlar",
+        link_support: "Qo'llab-quvvatlash",
+        link_privacy: "Siyosat",
+      }
+    };
+
+    function qs(s) { return document.querySelector(s); }
+    function qsa(s) { return document.querySelectorAll(s); }
+
+    function setLang(lang) {
+      const t = dict[lang] || dict.ru;
+      localStorage.setItem('sbgcloud_landing_lang', lang);
+      document.documentElement.lang = lang;
+
+      qsa('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (key && t[key] !== undefined) el.innerHTML = t[key];
+      });
+
+      qs('#lang-ru').classList.toggle('active', lang === 'ru');
+      qs('#lang-uz').classList.toggle('active', lang === 'uz');
+    }
+
+    qs('#lang-ru').addEventListener('click', () => setLang('ru'));
+    qs('#lang-uz').addEventListener('click', () => setLang('uz'));
+
+    const saved = localStorage.getItem('sbgcloud_landing_lang');
+    const browserLang = (navigator.language || '').toLowerCase();
+    setLang(saved || (browserLang.startsWith('uz') ? 'uz' : 'ru'));
+
+    qs('#year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
