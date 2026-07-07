@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
+import Badge from '../../components/Badge';
 import type { TabProps } from './types';
 
 const ALL_EVENTS = ['order.created', 'order.status_changed', 'order.paid', 'customer.created'];
@@ -79,27 +83,23 @@ export default function WebhooksTab({ onNotice, newWebhookSecret, onCloseSecret,
 
   if (loading) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
-        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-          {[1, 2].map((i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #edf2ee' }}>
-              <div style={{ flex: 1 }}>
-                <div className="sg-skeleton" style={{ height: 16, width: '40%' }} />
-                <div className="sg-skeleton" style={{ height: 12, width: '25%', marginTop: 6 }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="border border-neutral-200 rounded-token-lg overflow-hidden divide-y divide-neutral-200">
+        {[1, 2].map((i) => (
+          <div key={i} className="p-3.5">
+            <div className="h-4 w-2/5 rounded-token-sm bg-neutral-100 animate-pulse" />
+            <div className="h-3 w-1/4 rounded-token-sm bg-neutral-100 animate-pulse mt-1.5" />
+          </div>
+        ))}
+      </div>
     );
   }
 
   return (
-    <section className="sg-grid" style={{ gap: 10 }}>
-      <article className="sg-card">
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Webhooks', 'Webhooks')}</h3>
-        <p className="sg-subtitle">{tr('Получайте события заказов на ваш URL в реальном времени.', 'Buyurtma voqealarini real vaqtda URL manzilingizga oling.')}</p>
-        <p style={{ margin: '6px 0 0', fontSize: 12, color: '#748278', lineHeight: 1.6 }}>
+    <section className="flex flex-col gap-3">
+      <Card>
+        <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Webhooks', 'Webhooks')}</h3>
+        <p className="text-token-sm text-neutral-500">{tr('Получайте события заказов на ваш URL в реальном времени.', 'Buyurtma voqealarini real vaqtda URL manzilingizga oling.')}</p>
+        <p className="mt-1.5 text-token-xs text-neutral-400 leading-relaxed">
           {tr(
             'При каждом событии SellGram делает POST-запрос на ваш URL. Если сервер не ответил 2xx — одна повторная попытка через 3 секунды. Подпись запроса передаётся в заголовке X-Sellgram-Signature: sha256=...',
             "Har bir voqeada SellGram URL manzilingizga POST so'rov yuboradi. Server 2xx javob bermasa — 3 soniyadan so'ng bitta qayta urinish. So'rov imzosi X-Sellgram-Signature: sha256=... sarlavhasida uzatiladi."
@@ -107,26 +107,26 @@ export default function WebhooksTab({ onNotice, newWebhookSecret, onCloseSecret,
         </p>
 
         {newWebhookSecret && (
-          <div className="sg-card" style={{ marginTop: 10, background: '#f0fdf4', border: '1px solid #86efac' }}>
-            <p style={{ margin: 0, fontWeight: 700, color: '#065f46' }}>{tr('Секрет для верификации подписи (сохраните):', 'Imzo tekshirish siri (saqlang):')}</p>
-            <p style={{ margin: '8px 0 0', fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{newWebhookSecret}</p>
-            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b' }}>{tr('Заголовок: X-Sellgram-Signature: sha256=HMAC_SHA256(body, secret)', 'Sarlavha: X-Sellgram-Signature: sha256=HMAC_SHA256(body, secret)')}</p>
-            <button className="sg-btn ghost" type="button" style={{ marginTop: 8, fontSize: 12 }} onClick={onCloseSecret}>{tr('Закрыть', 'Yopish')}</button>
-          </div>
+          <Card className="mt-3 bg-success/5 border-success/30">
+            <p className="m-0 font-semibold text-success">{tr('Секрет для верификации подписи (сохраните):', 'Imzo tekshirish siri (saqlang):')}</p>
+            <p className="mt-2 mb-0 font-mono text-token-sm break-all text-neutral-800">{newWebhookSecret}</p>
+            <p className="mt-1.5 mb-0 text-token-xs text-neutral-500">{tr('Заголовок: X-Sellgram-Signature: sha256=HMAC_SHA256(body, secret)', 'Sarlavha: X-Sellgram-Signature: sha256=HMAC_SHA256(body, secret)')}</p>
+            <Button variant="ghost" size="sm" type="button" className="mt-2" onClick={onCloseSecret}>{tr('Закрыть', 'Yopish')}</Button>
+          </Card>
         )}
 
-        <div className="sg-card soft" style={{ marginTop: 10 }}>
-          <input
+        <Card className="mt-3 bg-neutral-50">
+          <Input
             value={webhookForm.url}
             onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })}
             placeholder="https://your-server.com/webhook"
-            style={{ width: '100%', border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', boxSizing: 'border-box' }}
           />
-          <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+          <div className="flex gap-2.5 mt-2 flex-wrap">
             {ALL_EVENTS.map((ev) => (
-              <label key={ev} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+              <label key={ev} className="flex items-center gap-1.5 text-token-sm text-neutral-700">
                 <input
                   type="checkbox"
+                  className="h-4 w-4 accent-accent-600"
                   checked={webhookForm.events.includes(ev)}
                   onChange={(e) => setWebhookForm({
                     ...webhookForm,
@@ -139,52 +139,54 @@ export default function WebhooksTab({ onNotice, newWebhookSecret, onCloseSecret,
               </label>
             ))}
           </div>
-          <div style={{ marginTop: 10 }}>
-            <button
-              className="sg-btn primary"
+          <div className="mt-3">
+            <Button
+              variant="primary"
+              size="md"
               type="button"
               disabled={saving || !webhookForm.url.trim() || webhookForm.events.length === 0}
               onClick={() => void createWebhook()}
             >
               {saving ? '...' : tr('Добавить вебхук', "Webhook qo'shish")}
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
 
-        <div className="sg-grid" style={{ gap: 8, marginTop: 10 }}>
+        <div className="flex flex-col gap-2 mt-3">
           {webhooks.map((hook) => (
-            <div key={hook.id} className="sg-card soft" style={{ padding: '10px 12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, wordBreak: 'break-all' }}>{hook.url}</div>
-                  <div style={{ fontSize: 12, color: '#6b7a71', marginTop: 4 }}>
-                    {(hook.events as string[]).join(', ')}
-                    {' · '}
-                    {hook.isActive ? tr('активен', 'faol') : tr('отключён', "o'chirilgan")}
+            <Card key={hook.id} className="bg-neutral-50 p-2.5">
+              <div className="flex items-start justify-between gap-2.5 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono text-token-sm font-semibold break-all text-neutral-800">{hook.url}</div>
+                  <div className="flex items-center gap-1.5 mt-1 text-token-xs text-neutral-500">
+                    <span>{(hook.events as string[]).join(', ')}</span>
+                    <Badge variant={hook.isActive ? 'success' : 'neutral'}>
+                      {hook.isActive ? tr('активен', 'faol') : tr('отключён', "o'chirilgan")}
+                    </Badge>
                   </div>
                 </div>
                 {pendingDeleteWebhook === hook.id ? (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>{tr('Удалить?', "O'chirish?")}</span>
-                    <button className="sg-btn danger" type="button" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => void deleteWebhook(hook.id)}>{tr('Да', 'Ha')}</button>
-                    <button className="sg-btn ghost" type="button" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => setPendingDeleteWebhook(null)}>{tr('Отмена', 'Bekor')}</button>
+                  <div className="flex gap-2 items-center flex-shrink-0">
+                    <span className="text-token-xs font-medium text-warning">{tr('Удалить?', "O'chirish?")}</span>
+                    <Button variant="danger" size="sm" type="button" onClick={() => void deleteWebhook(hook.id)}>{tr('Да', 'Ha')}</Button>
+                    <Button variant="ghost" size="sm" type="button" onClick={() => setPendingDeleteWebhook(null)}>{tr('Отмена', 'Bekor')}</Button>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                    <button className="sg-btn ghost" type="button" style={{ padding: '5px 12px', fontSize: 13 }} onClick={() => void toggleWebhook(hook)}>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Button variant="ghost" size="sm" type="button" onClick={() => void toggleWebhook(hook)}>
                       {hook.isActive ? tr('Откл.', "O'ch.") : tr('Вкл.', 'Yoq.')}
-                    </button>
-                    <button className="sg-btn danger" type="button" style={{ padding: '5px 12px', fontSize: 13 }} onClick={() => setPendingDeleteWebhook(hook.id)}>
+                    </Button>
+                    <Button variant="danger" size="sm" type="button" onClick={() => setPendingDeleteWebhook(hook.id)}>
                       {tr('Удалить', "O'chirish")}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
-            </div>
+            </Card>
           ))}
-          {webhooks.length === 0 && <p className="sg-subtitle">{tr('Вебхуков нет', "Webhooklar yo'q")}</p>}
+          {webhooks.length === 0 && <p className="text-token-sm text-neutral-500">{tr('Вебхуков нет', "Webhooklar yo'q")}</p>}
         </div>
-      </article>
+      </Card>
     </section>
   );
 }

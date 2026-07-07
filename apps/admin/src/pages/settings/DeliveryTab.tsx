@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
+import Select from '../../components/Select';
+import Table, { type TableColumn } from '../../components/Table';
 import type { TabProps } from './types';
 
 // Needs its own copy of `stores` (for the zone-creation dropdown/default
@@ -90,149 +95,111 @@ export default function DeliveryTab({ onNotice }: TabProps) {
     }
   }
 
-  if (loading) {
-    return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
-        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-          {[1, 2].map((i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #edf2ee' }}>
-              <div style={{ flex: 1 }}>
-                <div className="sg-skeleton" style={{ height: 16, width: '40%' }} />
-                <div className="sg-skeleton" style={{ height: 12, width: '25%', marginTop: 6 }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div className="sg-skeleton" style={{ height: 32, width: 90, borderRadius: 8 }} />
-                <div className="sg-skeleton" style={{ height: 32, width: 90, borderRadius: 8 }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  }
+  const columns: TableColumn<any>[] = [
+    { key: 'name', header: tr('Зона', 'Hudud'), render: (zone) => <span className="font-semibold text-neutral-800">{zone.name}</span> },
+    { key: 'price', header: tr('Цена', 'Narx'), render: (zone) => `${Number(zone.price).toLocaleString()} UZS` },
+    {
+      key: 'freeFrom',
+      header: tr('Бесплатный порог', 'Bepul chegarasi'),
+      render: (zone) => (zone.freeFrom ? `${Number(zone.freeFrom).toLocaleString()} UZS` : '-'),
+    },
+    {
+      key: 'actions',
+      header: tr('Действия', 'Amallar'),
+      render: (zone) => {
+        const isConfirming = pendingDeleteZone === zone.id;
+        return isConfirming ? (
+          <div className="flex gap-1.5 items-center">
+            <span className="text-token-xs font-medium text-warning">{tr('Удалить?', "O'chirish?")}</span>
+            <Button variant="danger" size="sm" type="button" onClick={() => void deleteZone(zone.id)}>
+              {tr('Да', 'Ha')}
+            </Button>
+            <Button variant="ghost" size="sm" type="button" onClick={() => setPendingDeleteZone(null)}>
+              {tr('Нет', "Yo'q")}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" type="button" onClick={() => openEditZone(zone)}>
+              {tr('Редактировать', 'Tahrirlash')}
+            </Button>
+            <Button variant="danger" size="sm" type="button" onClick={() => setPendingDeleteZone(zone.id)}>
+              {tr('Удалить', "O'chirish")}
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <>
-      <section className="sg-grid" style={{ gap: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <p className="sg-subtitle" style={{ margin: 0 }}>
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-token-sm text-neutral-500">
             {tr('Зоны доставки и тарифы', 'Yetkazib berish hududlari va tariflar')}
           </p>
-          <button className="sg-btn primary" type="button" onClick={openCreateZone}>
+          <Button variant="primary" size="md" type="button" onClick={openCreateZone}>
             + {tr('Зона', 'Hudud')}
-          </button>
+          </Button>
         </div>
 
-        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <table className="sg-table">
-            <thead>
-              <tr>
-                <th>{tr('Зона', 'Hudud')}</th>
-                <th>{tr('Цена', 'Narx')}</th>
-                <th>{tr('Бесплатный порог', 'Bepul chegarasi')}</th>
-                <th>{tr('Действия', 'Amallar')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {zones.map((zone) => {
-                const isConfirming = pendingDeleteZone === zone.id;
-                return (
-                  <tr key={zone.id}>
-                    <td style={{ fontWeight: 700 }}>{zone.name}</td>
-                    <td>{Number(zone.price).toLocaleString()} UZS</td>
-                    <td>{zone.freeFrom ? `${Number(zone.freeFrom).toLocaleString()} UZS` : '-'}</td>
-                    <td>
-                      {isConfirming ? (
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <span style={{ fontSize: 12, color: '#92400e', fontWeight: 600 }}>{tr('Удалить?', "O'chirish?")}</span>
-                          <button className="sg-btn danger" type="button" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => void deleteZone(zone.id)}>
-                            {tr('Да', 'Ha')}
-                          </button>
-                          <button className="sg-btn ghost" type="button" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setPendingDeleteZone(null)}>
-                            {tr('Нет', "Yo'q")}
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button className="sg-btn ghost" type="button" onClick={() => openEditZone(zone)}>
-                            {tr('Редактировать', 'Tahrirlash')}
-                          </button>
-                          <button className="sg-btn danger" type="button" onClick={() => setPendingDeleteZone(zone.id)}>
-                            {tr('Удалить', "O'chirish")}
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {zones.length === 0 && (
-                <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', color: '#6b7a71' }}>
-                    {tr('Зоны доставки не настроены', 'Yetkazib berish hududlari sozlanmagan')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          columns={columns}
+          data={zones}
+          rowKey={(zone) => zone.id}
+          loading={loading}
+          emptyMessage={tr('Зоны доставки не настроены', 'Yetkazib berish hududlari sozlanmagan')}
+        />
       </section>
 
       {showZoneForm && (
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
-          <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
-            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
+          <Card className="w-full max-w-[520px]">
+            <h3 className="m-0 text-token-xl font-semibold text-neutral-800">
               {editingZoneId ? tr('Редактировать зону', 'Hududni tahrirlash') : tr('Новая зона', 'Yangi hudud')}
             </h3>
 
-            <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
+            <div className="flex flex-col gap-3 mt-3">
               {!editingZoneId && (
-                <select
+                <Select
                   value={zoneForm.storeId}
                   onChange={(e) => setZoneForm({ ...zoneForm, storeId: e.target.value })}
-                  className="w-full"
-                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
                 >
                   {stores.map((store) => (
                     <option key={store.id} value={store.id}>
                       {store.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
-              <input
+              <Input
                 value={zoneForm.name}
                 onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
-                className="w-full"
-                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
                 placeholder={tr('Название зоны', 'Hudud nomi')}
               />
-              <input
+              <Input
                 type="number"
                 value={zoneForm.price}
                 onChange={(e) => setZoneForm({ ...zoneForm, price: e.target.value })}
-                className="w-full"
-                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
                 placeholder={tr('Цена', 'Narx')}
               />
-              <input
+              <Input
                 type="number"
                 value={zoneForm.freeFrom}
                 onChange={(e) => setZoneForm({ ...zoneForm, freeFrom: e.target.value })}
-                className="w-full"
-                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
                 placeholder={tr('Бесплатный порог', 'Bepul chegarasi')}
               />
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void saveZone()}>
+              <div className="flex gap-2.5">
+                <Button variant="primary" size="md" type="button" disabled={saving} onClick={() => void saveZone()}>
                   {saving ? '...' : tr('Сохранить', 'Saqlash')}
-                </button>
-                <button className="sg-btn ghost" type="button" disabled={saving} onClick={() => setShowZoneForm(false)}>
+                </Button>
+                <Button variant="ghost" size="md" type="button" disabled={saving} onClick={() => setShowZoneForm(false)}>
                   {tr('Отмена', 'Bekor qilish')}
-                </button>
+                </Button>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </>

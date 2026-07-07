@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
 import type { TabProps } from './types';
 
 export default function StoresTab({ onNotice }: TabProps) {
@@ -125,127 +128,123 @@ export default function StoresTab({ onNotice }: TabProps) {
 
   if (loading) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
-        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-          {[1, 2].map((i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #edf2ee' }}>
-              <div style={{ flex: 1 }}>
-                <div className="sg-skeleton" style={{ height: 16, width: '40%' }} />
-                <div className="sg-skeleton" style={{ height: 12, width: '25%', marginTop: 6 }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div className="sg-skeleton" style={{ height: 32, width: 90, borderRadius: 8 }} />
-                <div className="sg-skeleton" style={{ height: 32, width: 90, borderRadius: 8 }} />
-                <div className="sg-skeleton" style={{ height: 32, width: 80, borderRadius: 8 }} />
-              </div>
+      <div className="border border-neutral-200 rounded-token-lg overflow-hidden divide-y divide-neutral-200">
+        {[1, 2].map((i) => (
+          <div key={i} className="flex items-center justify-between gap-3 p-3.5">
+            <div className="flex-1">
+              <div className="h-4 w-2/5 rounded-token-sm bg-neutral-100 animate-pulse" />
+              <div className="h-3 w-1/4 rounded-token-sm bg-neutral-100 animate-pulse mt-1.5" />
             </div>
-          ))}
-        </div>
-      </section>
+            <div className="flex gap-2">
+              <div className="h-8 w-24 rounded-token-md bg-neutral-100 animate-pulse" />
+              <div className="h-8 w-24 rounded-token-md bg-neutral-100 animate-pulse" />
+              <div className="h-8 w-20 rounded-token-md bg-neutral-100 animate-pulse" />
+            </div>
+          </div>
+        ))}
+      </div>
     );
   }
 
   return (
     <>
-      <section className="sg-grid" style={{ gap: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <p className="sg-subtitle" style={{ margin: 0 }}>
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-token-sm text-neutral-500">
             {tr('Один магазин = один Telegram-бот', "Bitta do'kon = bitta Telegram bot")}
           </p>
-          <button className="sg-btn primary" type="button" onClick={openCreateStore}>
+          <Button variant="primary" size="md" type="button" onClick={openCreateStore}>
             + {tr('Магазин', "Do'kon")}
-          </button>
+          </Button>
         </div>
 
         {stores.map((store) => {
           const isConfirming = pendingDeleteStore === store.id;
           return (
-            <article key={store.id} className="sg-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <Card key={store.id} className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <p style={{ margin: 0, fontWeight: 800 }}>{store.name}</p>
-                {store.botUsername && <p style={{ margin: '4px 0 0', color: '#2e7d64', fontSize: 13 }}>@{store.botUsername}</p>}
+                <p className="m-0 font-semibold text-neutral-800">{store.name}</p>
+                {store.botUsername && <p className="mt-1 mb-0 text-token-sm text-success">@{store.botUsername}</p>}
               </div>
               {isConfirming ? (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>
+                <div className="flex gap-2 items-center">
+                  <span className="text-token-xs font-medium text-warning">
                     {tr('Удалить магазин?', "Do'konni o'chirish?")}
                   </span>
-                  <button className="sg-btn danger" type="button" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => void deleteStore(store.id)}>
+                  <Button variant="danger" size="sm" type="button" onClick={() => void deleteStore(store.id)}>
                     {tr('Да', 'Ha')}
-                  </button>
-                  <button className="sg-btn ghost" type="button" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => setPendingDeleteStore(null)}>
+                  </Button>
+                  <Button variant="ghost" size="sm" type="button" onClick={() => setPendingDeleteStore(null)}>
                     {tr('Отмена', 'Bekor')}
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button className="sg-btn ghost" type="button" onClick={() => openEditStore(store)}>
+                <div className="flex gap-2 flex-wrap">
+                  <Button variant="ghost" size="md" type="button" onClick={() => openEditStore(store)}>
                     {tr('Редактировать', 'Tahrirlash')}
-                  </button>
-                  <button className="sg-btn ghost" type="button" onClick={() => checkStoreConnection(store)}>
+                  </Button>
+                  <Button variant="ghost" size="md" type="button" onClick={() => checkStoreConnection(store)}>
                     {tr('Проверить бота', 'Botni tekshirish')}
-                  </button>
-                  <button className="sg-btn primary" type="button" disabled={!!activating} onClick={() => void activateStoreConnection(store)}>
+                  </Button>
+                  <Button variant="primary" size="md" type="button" disabled={!!activating} onClick={() => void activateStoreConnection(store)}>
                     {activating === store.id ? '...' : tr('Подключить', 'Ulash')}
-                  </button>
-                  <button
-                    className="sg-btn danger"
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="md"
                     type="button"
                     disabled={stores.length <= 1}
                     title={stores.length <= 1 ? tr('Нельзя удалить последний магазин', "Oxirgi do'konni o'chirib bo'lmaydi") : undefined}
                     onClick={() => setPendingDeleteStore(store.id)}
                   >
                     {tr('Удалить', "O'chirish")}
-                  </button>
+                  </Button>
                 </div>
               )}
-            </article>
+            </Card>
           );
         })}
 
-        {stores.length === 0 && <p className="sg-subtitle">{tr('Пока магазинов нет', "Hozircha do'konlar yo'q")}</p>}
+        {stores.length === 0 && <p className="text-token-sm text-neutral-500">{tr('Пока магазинов нет', "Hozircha do'konlar yo'q")}</p>}
       </section>
 
       {showStoreForm && (
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
-          <div className="sg-card" style={{ width: '100%', maxWidth: 520 }}>
-            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
+          <Card className="w-full max-w-[520px]">
+            <h3 className="m-0 text-token-xl font-semibold text-neutral-800">
               {editingStoreId ? tr('Редактировать магазин', "Do'konni tahrirlash") : tr('Новый магазин', "Yangi do'kon")}
             </h3>
 
-            <div className="sg-grid" style={{ gap: 10, marginTop: 12 }}>
-              <input
+            <div className="flex flex-col gap-3 mt-3">
+              <Input
                 value={storeForm.name}
                 onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })}
-                className="w-full"
-                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
                 placeholder={tr('Название магазина', "Do'kon nomi")}
               />
-              <input
+              <Input
                 value={storeForm.botToken}
                 onChange={(e) => setStoreForm({ ...storeForm, botToken: e.target.value })}
-                className="w-full"
-                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
                 placeholder="Bot token"
               />
-              <textarea
-                value={storeForm.welcomeMessage}
-                onChange={(e) => setStoreForm({ ...storeForm, welcomeMessage: e.target.value })}
-                rows={3}
-                className="w-full"
-                style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', resize: 'vertical' }}
-                placeholder={tr('Приветственное сообщение', 'Xush kelibsiz xabari')}
-              />
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void saveStore()}>
+              <div className="flex flex-col gap-1.5">
+                <textarea
+                  value={storeForm.welcomeMessage}
+                  onChange={(e) => setStoreForm({ ...storeForm, welcomeMessage: e.target.value })}
+                  rows={3}
+                  className="w-full rounded-token-md border border-neutral-300 px-3 py-2 text-token-sm text-neutral-800 placeholder:text-neutral-400 bg-white focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500 resize-y"
+                  placeholder={tr('Приветственное сообщение', 'Xush kelibsiz xabari')}
+                />
+              </div>
+              <div className="flex gap-2.5">
+                <Button variant="primary" size="md" type="button" disabled={saving} onClick={() => void saveStore()}>
                   {saving ? '...' : tr('Сохранить', 'Saqlash')}
-                </button>
-                <button className="sg-btn ghost" type="button" disabled={saving} onClick={() => setShowStoreForm(false)}>
+                </Button>
+                <Button variant="ghost" size="md" type="button" disabled={saving} onClick={() => setShowStoreForm(false)}>
                   {tr('Отмена', 'Bekor qilish')}
-                </button>
+                </Button>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </>
