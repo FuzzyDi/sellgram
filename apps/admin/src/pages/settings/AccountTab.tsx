@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
+import Select from '../../components/Select';
+import Badge from '../../components/Badge';
 import type { TabProps } from './types';
 
 const PERM_LABELS: Record<string, { ru: string; uz: string }> = {
@@ -175,96 +180,99 @@ export default function AccountTab({ onNotice }: TabProps) {
 
   if (loading) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
-        <div className="sg-card soft" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ flex: 1 }}>
-            <div className="sg-skeleton" style={{ height: 18, width: '40%' }} />
-            <div className="sg-skeleton" style={{ height: 12, width: '60%', marginTop: 6 }} />
-          </div>
-          <div className="sg-skeleton" style={{ height: 36, width: 140, borderRadius: 10 }} />
+      <Card className="flex items-center justify-between gap-3">
+        <div className="flex-1">
+          <div className="h-5 w-2/5 rounded-token-sm bg-neutral-100 animate-pulse" />
+          <div className="h-3 w-3/5 rounded-token-sm bg-neutral-100 animate-pulse mt-1.5" />
         </div>
-      </section>
+        <div className="h-9 w-36 rounded-token-md bg-neutral-100 animate-pulse" />
+      </Card>
     );
   }
 
   return (
     <>
-      <section className="sg-grid" style={{ gap: 12 }}>
-        <article className="sg-card">
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Мой аккаунт', 'Mening akkauntim')}</h3>
-          <div className="sg-grid cols-2" style={{ marginTop: 10 }}>
-            <input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Имя', 'Ism')} />
-            <input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
+      <section className="flex flex-col gap-3">
+        <Card>
+          <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Мой аккаунт', 'Mening akkauntim')}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <Input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} placeholder={tr('Имя', 'Ism')} />
+            <Input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} placeholder="Email" />
           </div>
-          <div style={{ marginTop: 10 }}>
-            <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void saveMyProfile()}>{saving ? '...' : tr('Сохранить профиль', 'Profilni saqlash')}</button>
+          <div className="mt-3">
+            <Button variant="primary" size="md" type="button" disabled={saving} onClick={() => void saveMyProfile()}>{saving ? '...' : tr('Сохранить профиль', 'Profilni saqlash')}</Button>
           </div>
-        </article>
+        </Card>
 
-        <article className="sg-card">
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Смена пароля', 'Parolni almashtirish')}</h3>
-          <div className="sg-grid cols-3" style={{ marginTop: 10 }}>
-            <input type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Текущий пароль', 'Joriy parol')} />
-            <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Новый пароль', 'Yangi parol')} />
-            <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Подтвердите пароль', 'Parolni tasdiqlang')} />
+        <Card>
+          <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Смена пароля', 'Parolni almashtirish')}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+            <Input type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} placeholder={tr('Текущий пароль', 'Joriy parol')} />
+            <Input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} placeholder={tr('Новый пароль', 'Yangi parol')} />
+            <Input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} placeholder={tr('Подтвердите пароль', 'Parolni tasdiqlang')} />
           </div>
-          <div style={{ marginTop: 10 }}>
-            <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void changeMyPassword()}>{saving ? '...' : tr('Обновить пароль', 'Parolni yangilash')}</button>
+          <div className="mt-3">
+            <Button variant="primary" size="md" type="button" disabled={saving} onClick={() => void changeMyPassword()}>{saving ? '...' : tr('Обновить пароль', 'Parolni yangilash')}</Button>
           </div>
-        </article>
+        </Card>
 
         {canManageUsers && (
-          <article className="sg-card">
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Пользователи и роли', 'Foydalanuvchilar va rollar')}</h3>
-            <p className="sg-subtitle">{tr('Добавляйте операторов и управляйте их правами.', "Operator qo'shing va ruxsatlarini boshqaring.")}</p>
+          <Card>
+            <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Пользователи и роли', 'Foydalanuvchilar va rollar')}</h3>
+            <p className="text-token-sm text-neutral-500">{tr('Добавляйте операторов и управляйте их правами.', "Operator qo'shing va ruxsatlarini boshqaring.")}</p>
 
-            <div className="sg-card soft" style={{ marginTop: 10 }}>
-              <div className="sg-grid cols-4" style={{ gap: 8 }}>
-                <input value={teamForm.email} onChange={(e) => setTeamForm({ ...teamForm, email: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder="Email" />
-                <input value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Имя', 'Ism')} />
-                <input type="password" value={teamForm.password} onChange={(e) => setTeamForm({ ...teamForm, password: e.target.value })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }} placeholder={tr('Пароль', 'Parol')} />
-                <select value={teamForm.role} onChange={(e) => setTeamForm({ ...teamForm, role: e.target.value as 'MANAGER' | 'OPERATOR' | 'MARKETER' })} className="w-full" style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}>
+            <Card className="bg-neutral-50 mt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+                <Input value={teamForm.email} onChange={(e) => setTeamForm({ ...teamForm, email: e.target.value })} placeholder="Email" />
+                <Input value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} placeholder={tr('Имя', 'Ism')} />
+                <Input type="password" value={teamForm.password} onChange={(e) => setTeamForm({ ...teamForm, password: e.target.value })} placeholder={tr('Пароль', 'Parol')} />
+                <Select value={teamForm.role} onChange={(e) => setTeamForm({ ...teamForm, role: e.target.value as 'MANAGER' | 'OPERATOR' | 'MARKETER' })}>
                   <option value="OPERATOR">Operator</option>
                   <option value="MARKETER">Marketer</option>
                   <option value="MANAGER">Manager</option>
-                </select>
+                </Select>
               </div>
 
               {(teamForm.role === 'OPERATOR' || teamForm.role === 'MARKETER') && (
-                <div className="sg-grid cols-4" style={{ marginTop: 10, gap: 8 }}>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
                   {Object.keys(teamForm.permissions).map((key) => (
-                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                      <input type="checkbox" checked={(teamForm.permissions as any)[key]} onChange={(e) => setTeamForm({ ...teamForm, permissions: { ...teamForm.permissions, [key]: e.target.checked } })} />
+                    <label key={key} className="flex items-center gap-2 text-token-xs text-neutral-700">
+                      <input type="checkbox" className="h-4 w-4 accent-accent-600" checked={(teamForm.permissions as any)[key]} onChange={(e) => setTeamForm({ ...teamForm, permissions: { ...teamForm.permissions, [key]: e.target.checked } })} />
                       {tr(PERM_LABELS[key]?.ru ?? key, PERM_LABELS[key]?.uz ?? key)}
                     </label>
                   ))}
                 </div>
               )}
 
-              <div style={{ marginTop: 10 }}>
-                <button className="sg-btn primary" type="button" disabled={saving || !teamForm.email || !teamForm.name || !teamForm.password} onClick={() => void createTeamUser()}>{saving ? '...' : tr('Добавить пользователя', "Foydalanuvchi qo'shish")}</button>
+              <div className="mt-3">
+                <Button variant="primary" size="md" type="button" disabled={saving || !teamForm.email || !teamForm.name || !teamForm.password} onClick={() => void createTeamUser()}>{saving ? '...' : tr('Добавить пользователя', "Foydalanuvchi qo'shish")}</Button>
               </div>
-            </div>
+            </Card>
 
-            <div className="sg-grid" style={{ gap: 8, marginTop: 10 }}>
+            <div className="flex flex-col gap-2 mt-3">
               {team.map((user) => (
-                <div key={user.id} className="sg-card soft" style={{ padding: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <Card key={user.id} className="bg-neutral-50 p-2.5">
+                  <div className="flex items-center justify-between gap-2.5 flex-wrap">
                     <div>
-                      <div style={{ fontWeight: 700 }}>{user.name} ({user.email})</div>
-                      <div style={{ fontSize: 12, color: '#6b7a71' }}>{user.role} • {user.isActive ? tr('активен', 'faol') : tr('отключен', "o'chirilgan")}</div>
+                      <div className="font-semibold text-neutral-800">{user.name} ({user.email})</div>
+                      <div className="flex items-center gap-1.5 mt-1 text-token-xs text-neutral-500">
+                        <span>{user.role}</span>
+                        <Badge variant={user.isActive ? 'success' : 'neutral'}>
+                          {user.isActive ? tr('активен', 'faol') : tr('отключен', "o'chirilgan")}
+                        </Badge>
+                      </div>
                     </div>
                     {user.role !== 'OWNER' && (
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="sg-btn ghost" type="button" disabled={togglingUser === user.id} onClick={() => void toggleTeamUserActive(user)}>{togglingUser === user.id ? '...' : user.isActive ? tr('Отключить', "O'chirish") : tr('Включить', 'Yoqish')}</button>
-                        <button className="sg-btn ghost" type="button" onClick={() => { setPendingResetUser(user.id); setPendingResetPassword(''); }}>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" type="button" disabled={togglingUser === user.id} onClick={() => void toggleTeamUserActive(user)}>{togglingUser === user.id ? '...' : user.isActive ? tr('Отключить', "O'chirish") : tr('Включить', 'Yoqish')}</Button>
+                        <Button variant="ghost" size="sm" type="button" onClick={() => { setPendingResetUser(user.id); setPendingResetPassword(''); }}>
                           {tr('Сброс пароля', 'Parolni tiklash')}
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>
                   {pendingResetUser === user.id && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div className="flex gap-2 mt-3 items-center flex-wrap">
                       <input
                         type="password"
                         autoFocus
@@ -272,78 +280,82 @@ export default function AccountTab({ onNotice }: TabProps) {
                         onChange={(e) => setPendingResetPassword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && void resetTeamUserPassword(user.id)}
                         placeholder={tr('Новый пароль', 'Yangi parol')}
-                        style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '7px 10px', fontSize: 13, flex: 1, minWidth: 160 }}
+                        className="flex-1 min-w-[160px] rounded-token-md border border-neutral-300 px-3 py-2 text-token-sm text-neutral-800 placeholder:text-neutral-400 bg-white focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500"
                       />
-                      <button className="sg-btn primary" type="button" style={{ padding: '7px 14px', fontSize: 13 }} disabled={!pendingResetPassword.trim() || saving} onClick={() => void resetTeamUserPassword(user.id)}>
+                      <Button variant="primary" size="sm" type="button" disabled={!pendingResetPassword.trim() || saving} onClick={() => void resetTeamUserPassword(user.id)}>
                         {saving ? '...' : tr('Сохранить', 'Saqlash')}
-                      </button>
-                      <button className="sg-btn ghost" type="button" style={{ padding: '7px 12px', fontSize: 13 }} onClick={() => { setPendingResetUser(null); setPendingResetPassword(''); }}>
+                      </Button>
+                      <Button variant="ghost" size="sm" type="button" onClick={() => { setPendingResetUser(null); setPendingResetPassword(''); }}>
                         {tr('Отмена', 'Bekor')}
-                      </button>
+                      </Button>
                     </div>
                   )}
-                </div>
+                </Card>
               ))}
             </div>
-          </article>
+          </Card>
         )}
 
         {isOwner && (
-          <article className="sg-card" style={{ border: '1px solid #fecaca' }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#dc2626' }}>{tr('Опасная зона', 'Xavfli zona')}</h3>
-            <p className="sg-subtitle" style={{ marginTop: 6 }}>
+          <Card className="border-danger/30">
+            <h3 className="m-0 text-token-lg font-semibold text-danger">{tr('Опасная зона', 'Xavfli zona')}</h3>
+            <p className="mt-1.5 text-token-sm text-neutral-500">
               {tr('Удаление аккаунта отключит все магазины и боты. Данные будут окончательно удалены через 30 дней.',
                   "Akkauntni o'chirish barcha do'kon va botlarni o'chiradi. Ma'lumotlar 30 kundan so'ng butunlay o'chiriladi.")}
             </p>
-            <button
-              className="sg-btn"
-              type="button"
-              style={{ marginTop: 10, background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', fontWeight: 700 }}
-              onClick={() => { setShowDeleteAccountModal(true); setDeleteAccountPassword(''); }}
-            >
-              {tr('Удалить аккаунт', "Akkauntni o'chirish")}
-            </button>
-          </article>
+            <div className="mt-3">
+              <Button
+                variant="danger"
+                size="md"
+                type="button"
+                onClick={() => { setShowDeleteAccountModal(true); setDeleteAccountPassword(''); }}
+              >
+                {tr('Удалить аккаунт', "Akkauntni o'chirish")}
+              </Button>
+            </div>
+          </Card>
         )}
       </section>
 
       {showDeleteAccountModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 420, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
-            <h3 style={{ margin: '0 0 8px', color: '#dc2626', fontWeight: 800 }}>{tr('Подтвердите удаление', "O'chirishni tasdiqlang")}</h3>
-            <p style={{ margin: '0 0 16px', fontSize: 14, color: '#374151' }}>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+          <Card className="max-w-[420px] w-full border-danger/30">
+            <h3 className="m-0 mb-2 text-token-lg font-semibold text-danger">{tr('Подтвердите удаление', "O'chirishni tasdiqlang")}</h3>
+            <p className="m-0 mb-4 text-token-sm text-neutral-600">
               {tr('Это действие нельзя отменить. Все магазины, товары и заказы будут удалены. Введите пароль для подтверждения.',
                   "Bu amalni bekor qilib bo'lmaydi. Barcha do'kon, mahsulot va buyurtmalar o'chiriladi. Tasdiqlash uchun parolni kiriting.")}
             </p>
-            <input
+            <Input
               type="password"
               autoFocus
               value={deleteAccountPassword}
               onChange={(e) => setDeleteAccountPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void deleteMyAccount()}
               placeholder={tr('Ваш пароль', 'Parolingiz')}
-              style={{ width: '100%', border: '1px solid #fca5a5', borderRadius: 10, padding: '10px 12px', marginBottom: 14, fontSize: 14, boxSizing: 'border-box' }}
+              className="mb-1"
             />
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                className="sg-btn"
+            <div className="flex gap-2.5 mt-3">
+              <Button
+                variant="danger"
+                size="md"
                 type="button"
-                style={{ flex: 1, background: '#dc2626', color: '#fff', fontWeight: 700 }}
+                className="flex-1"
                 disabled={!deleteAccountPassword || deletingAccount}
                 onClick={() => void deleteMyAccount()}
               >
                 {deletingAccount ? '...' : tr('Удалить навсегда', "Butunlay o'chirish")}
-              </button>
-              <button
-                className="sg-btn ghost"
+              </Button>
+              <Button
+                variant="ghost"
+                size="md"
                 type="button"
                 onClick={() => setShowDeleteAccountModal(false)}
                 disabled={deletingAccount}
               >
                 {tr('Отмена', 'Bekor')}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </>

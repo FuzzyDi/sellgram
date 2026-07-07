@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
 import type { TabProps } from './types';
 
 export default function LoyaltyTab({ onNotice }: TabProps) {
@@ -41,71 +44,75 @@ export default function LoyaltyTab({ onNotice }: TabProps) {
 
   if (loading) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
-        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-          {[1, 2].map((i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #edf2ee' }}>
-              <div style={{ flex: 1 }}>
-                <div className="sg-skeleton" style={{ height: 16, width: '40%' }} />
-                <div className="sg-skeleton" style={{ height: 12, width: '25%', marginTop: 6 }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="border border-neutral-200 rounded-token-lg overflow-hidden divide-y divide-neutral-200">
+        {[1, 2].map((i) => (
+          <div key={i} className="p-3.5">
+            <div className="h-4 w-2/5 rounded-token-sm bg-neutral-100 animate-pulse" />
+            <div className="h-3 w-1/4 rounded-token-sm bg-neutral-100 animate-pulse mt-1.5" />
+          </div>
+        ))}
+      </div>
     );
   }
 
   if (!loyalty) return null;
 
   return (
-    <section className="sg-grid" style={{ gap: 12, maxWidth: 760 }}>
+    <section className="flex flex-col gap-3 max-w-[760px]">
       {/* Base settings */}
-      <article className="sg-card">
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Программа лояльности', 'Loyallik dasturi')}</h3>
-        <p className="sg-subtitle">{tr('Начисление баллов и лимиты скидки', 'Ball berish qoidalari va chegirma limitlari')}</p>
-        <form onSubmit={(e) => { e.preventDefault(); void saveLoyalty(); }} className="sg-grid" style={{ gap: 12, marginTop: 10 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-            <input type="checkbox" checked={!!loyalty.isEnabled} onChange={(e) => setLoyalty({ ...loyalty, isEnabled: e.target.checked })} />
+      <Card>
+        <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Программа лояльности', 'Loyallik dasturi')}</h3>
+        <p className="mt-1 text-token-sm text-neutral-500">{tr('Начисление баллов и лимиты скидки', 'Ball berish qoidalari va chegirma limitlari')}</p>
+        <form onSubmit={(e) => { e.preventDefault(); void saveLoyalty(); }} className="flex flex-col gap-3 mt-3">
+          <label className="flex items-center gap-2 text-token-sm text-neutral-700">
+            <input type="checkbox" className="h-4 w-4 accent-accent-600" checked={!!loyalty.isEnabled} onChange={(e) => setLoyalty({ ...loyalty, isEnabled: e.target.checked })} />
             {tr('Включена', 'Yoqilgan')}
           </label>
-          <div className="sg-grid cols-2">
-            <div>
-              <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Сумма шага', 'Qadam summasi')}</label>
-              <input type="number" value={loyalty.unitAmount || 1000} onChange={(e) => setLoyalty({ ...loyalty, unitAmount: +e.target.value })} style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Баллов за шаг', 'Qadam uchun ball')}</label>
-              <input type="number" value={loyalty.pointsPerUnit || 1} onChange={(e) => setLoyalty({ ...loyalty, pointsPerUnit: +e.target.value })} style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }} />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              type="number"
+              label={tr('Сумма шага', 'Qadam summasi')}
+              value={loyalty.unitAmount || 1000}
+              onChange={(e) => setLoyalty({ ...loyalty, unitAmount: +e.target.value })}
+            />
+            <Input
+              type="number"
+              label={tr('Баллов за шаг', 'Qadam uchun ball')}
+              value={loyalty.pointsPerUnit || 1}
+              onChange={(e) => setLoyalty({ ...loyalty, pointsPerUnit: +e.target.value })}
+            />
           </div>
-          <div className="sg-grid cols-2">
-            <div>
-              <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Цена 1 балла (сум)', "1 ball qiymati (so'm)")}</label>
-              <input type="number" value={loyalty.pointValue || 100} onChange={(e) => setLoyalty({ ...loyalty, pointValue: +e.target.value })} style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>{tr('Макс. скидка %', 'Maks. chegirma %')}</label>
-              <input type="number" value={loyalty.maxDiscountPct || 30} onChange={(e) => setLoyalty({ ...loyalty, maxDiscountPct: +e.target.value })} style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }} />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              type="number"
+              label={tr('Цена 1 балла (сум)', "1 ball qiymati (so'm)")}
+              value={loyalty.pointValue || 100}
+              onChange={(e) => setLoyalty({ ...loyalty, pointValue: +e.target.value })}
+            />
+            <Input
+              type="number"
+              label={tr('Макс. скидка %', 'Maks. chegirma %')}
+              value={loyalty.maxDiscountPct || 30}
+              onChange={(e) => setLoyalty({ ...loyalty, maxDiscountPct: +e.target.value })}
+            />
           </div>
-          <button className="sg-btn primary" type="submit" disabled={saving}>
+          <Button variant="primary" size="md" type="submit" disabled={saving}>
             {saving ? '...' : tr('Сохранить', 'Saqlash')}
-          </button>
+          </Button>
         </form>
-      </article>
+      </Card>
 
       {/* Tiers */}
-      <article className="sg-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <Card>
+        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
           <div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Уровни лояльности', 'Loyallik darajalari')}</h3>
-            <p className="sg-subtitle" style={{ margin: '4px 0 0' }}>{tr('Множитель баллов растёт с суммой покупок', "Ball ko'paytmasi umumiy xarid bilan o'sadi")}</p>
+            <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Уровни лояльности', 'Loyallik darajalari')}</h3>
+            <p className="mt-1 text-token-sm text-neutral-500">{tr('Множитель баллов растёт с суммой покупок', "Ball ko'paytmasi umumiy xarid bilan o'sadi")}</p>
           </div>
-          <button
-            className="sg-btn ghost"
+          <Button
+            variant="ghost"
+            size="sm"
             type="button"
-            style={{ fontSize: 12 }}
             onClick={() => {
               const tiers = [...(loyalty.tiers || [])];
               tiers.push({ name: 'New', nameUz: 'Yangi', minSpend: 0, multiplier: 1, color: '#cd7f32' });
@@ -113,12 +120,12 @@ export default function LoyaltyTab({ onNotice }: TabProps) {
             }}
           >
             + {tr('Добавить', "Qo'shish")}
-          </button>
+          </Button>
         </div>
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {(loyalty.tiers || []).map((tier: any, idx: number) => (
-            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 80px 36px 36px', gap: 6, alignItems: 'center', background: '#f9fafb', borderRadius: 10, padding: '8px 10px' }}>
-              <input
+            <div key={idx} className="grid grid-cols-[2fr_2fr_110px_110px_40px_40px] gap-2 items-center bg-neutral-50 rounded-token-md p-2">
+              <Input
                 value={tier.name}
                 onChange={(e) => {
                   const tiers = [...loyalty.tiers];
@@ -126,9 +133,8 @@ export default function LoyaltyTab({ onNotice }: TabProps) {
                   setLoyalty({ ...loyalty, tiers });
                 }}
                 placeholder="Bronze"
-                style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '5px 8px', fontSize: 13 }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={tier.color || '#cd7f32'}
@@ -137,11 +143,11 @@ export default function LoyaltyTab({ onNotice }: TabProps) {
                     tiers[idx] = { ...tiers[idx], color: e.target.value };
                     setLoyalty({ ...loyalty, tiers });
                   }}
-                  style={{ width: 28, height: 28, border: 'none', borderRadius: 6, cursor: 'pointer', padding: 0 }}
+                  className="h-8 w-8 rounded-token-sm border border-neutral-300 cursor-pointer p-0"
                 />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>{tr('от суммы', 'summadan')}</div>
-                  <input
+                <div className="flex-1">
+                  <div className="text-token-xs text-neutral-400 mb-0.5">{tr('от суммы', 'summadan')}</div>
+                  <Input
                     type="number"
                     value={tier.minSpend}
                     min={0}
@@ -150,13 +156,12 @@ export default function LoyaltyTab({ onNotice }: TabProps) {
                       tiers[idx] = { ...tiers[idx], minSpend: +e.target.value };
                       setLoyalty({ ...loyalty, tiers });
                     }}
-                    style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '4px 6px', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>{tr('множитель', "ko'paytma")}</div>
-                <input
+                <div className="text-token-xs text-neutral-400 mb-0.5">{tr('множитель', "ko'paytma")}</div>
+                <Input
                   type="number"
                   value={tier.multiplier}
                   min={0.1}
@@ -166,17 +171,16 @@ export default function LoyaltyTab({ onNotice }: TabProps) {
                     tiers[idx] = { ...tiers[idx], multiplier: +e.target.value };
                     setLoyalty({ ...loyalty, tiers });
                   }}
-                  style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '4px 6px', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>x</div>
-                <span style={{ fontSize: 14, fontWeight: 700, color: tier.color || '#cd7f32' }}>{tier.multiplier}×</span>
+              <div className="text-center">
+                <div className="text-token-xs text-neutral-400 mb-0.5">x</div>
+                <span className="text-token-base font-semibold" style={{ color: tier.color || '#cd7f32' }}>{tier.multiplier}×</span>
               </div>
-              <button
+              <Button
                 type="button"
-                className="sg-btn ghost"
-                style={{ fontSize: 11, padding: '4px 6px' }}
+                variant="ghost"
+                size="sm"
                 disabled={(loyalty.tiers || []).length <= 1}
                 onClick={() => {
                   const tiers = loyalty.tiers.filter((_: any, i: number) => i !== idx);
@@ -184,75 +188,62 @@ export default function LoyaltyTab({ onNotice }: TabProps) {
                 }}
               >
                 ✕
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="sg-btn primary"
-                style={{ fontSize: 11, padding: '4px 6px' }}
+                variant="primary"
+                size="sm"
                 disabled={saving}
                 onClick={() => void saveLoyalty()}
               >
                 ✓
-              </button>
+              </Button>
             </div>
           ))}
         </div>
-      </article>
+      </Card>
 
       {/* Referral program */}
-      <article className="sg-card">
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, marginBottom: 4 }}>{tr('Реферальная программа', 'Referal dasturi')}</h3>
-        <p className="sg-subtitle" style={{ marginBottom: 12 }}>
+      <Card>
+        <h3 className="m-0 mb-1 text-token-lg font-semibold text-neutral-800">{tr('Реферальная программа', 'Referal dasturi')}</h3>
+        <p className="mb-3 text-token-sm text-neutral-500">
           {tr('Клиент получает код, делится с друзьями. Бонус — после первого заказа друга.', "Mijoz kod oladi, do'stlariga ulashadi. Bonus — do'stning birinchi buyurtmasidan keyin.")}
         </p>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+        <div className="flex flex-col gap-3">
+          <label className="flex items-center gap-2 text-token-sm text-neutral-700">
             <input
               type="checkbox"
+              className="h-4 w-4 accent-accent-600"
               checked={!!loyalty.referralEnabled}
               onChange={(e) => setLoyalty({ ...loyalty, referralEnabled: e.target.checked })}
             />
             {tr('Реферальная программа включена', 'Referal dasturi yoqilgan')}
           </label>
           {loyalty.referralEnabled && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 440 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>
-                  {tr('Бонус тому, кто пригласил (баллов)', 'Taklif qiluvchiga bonus (ball)')}
-                </label>
-                <input
-                  type="number"
-                  value={loyalty.referralBonus ?? 500}
-                  min={0}
-                  onChange={(e) => setLoyalty({ ...loyalty, referralBonus: +e.target.value })}
-                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }}
-                />
-                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                  {tr('Начисляется после первого заказа друга', "Do'stning birinchi buyurtmasidan keyin")}
-                </div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, color: '#5f6d64', marginBottom: 6 }}>
-                  {tr('Бонус приглашённому (баллов)', 'Taklif qilinganga bonus (ball)')}
-                </label>
-                <input
-                  type="number"
-                  value={loyalty.referralFriendBonus ?? 0}
-                  min={0}
-                  onChange={(e) => setLoyalty({ ...loyalty, referralFriendBonus: +e.target.value })}
-                  style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }}
-                />
-                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                  {tr('0 = не начислять другу', "0 = do'stga berilmaydi")}
-                </div>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[440px]">
+              <Input
+                type="number"
+                label={tr('Бонус тому, кто пригласил (баллов)', 'Taklif qiluvchiga bonus (ball)')}
+                value={loyalty.referralBonus ?? 500}
+                min={0}
+                onChange={(e) => setLoyalty({ ...loyalty, referralBonus: +e.target.value })}
+                helpText={tr('Начисляется после первого заказа друга', "Do'stning birinchi buyurtmasidan keyin")}
+              />
+              <Input
+                type="number"
+                label={tr('Бонус приглашённому (баллов)', 'Taklif qilinganga bonus (ball)')}
+                value={loyalty.referralFriendBonus ?? 0}
+                min={0}
+                onChange={(e) => setLoyalty({ ...loyalty, referralFriendBonus: +e.target.value })}
+                helpText={tr('0 = не начислять другу', "0 = do'stga berilmaydi")}
+              />
             </div>
           )}
-          <button className="sg-btn primary" type="button" disabled={saving} onClick={() => void saveLoyalty()}>
+          <Button variant="primary" size="md" type="button" disabled={saving} onClick={() => void saveLoyalty()}>
             {saving ? '...' : tr('Сохранить', 'Saqlash')}
-          </button>
+          </Button>
         </div>
-      </article>
+      </Card>
     </section>
   );
 }
