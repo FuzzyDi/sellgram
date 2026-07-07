@@ -288,6 +288,11 @@ textarea:focus-visible {
 @media (max-width: 768px) {
   .sg-mobile-header { display: flex; }
   .sg-sidebar-overlay { display: block; }
+  /* Persistent TopBar's own burger (AppShell/TopBar.tsx) — Tailwind's
+     `hidden` class hides it by default; this overrides it back to
+     visible below the same 768px breakpoint the rest of this file
+     already uses for the mobile drawer. */
+  .sg-topbar-burger { display: flex !important; }
 
   .sg-sidebar {
     position: fixed !important;
