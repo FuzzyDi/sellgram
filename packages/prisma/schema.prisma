@@ -1197,6 +1197,20 @@ model SaleEvent {
   warnings       Json
   createdAt      DateTime        @default(now())
 
+  // Additive fields for the POS Policy Engine (docs/POS_POLICY_ENGINE.md
+  // §8) — nullable at the storage level (existing rows predate these
+  // columns, no backfill), even though the API layer requires
+  // policiesVersion/triggeredRuleIds on every new request.
+  policiesVersion  Int?
+  // Flat list of matched rule ids — same plain-string-array shape as
+  // Customer.tags, not a Json blob like tenantPolicyRules (which stores
+  // full rule objects, not ids).
+  triggeredRuleIds String[] @default([])
+  // Present only if a REQUIRE_MANAGER rule was overridden. Shape not
+  // pinned down by §8/§12.2 yet (not needed until that severity is
+  // actually implemented) — stored as an opaque blob, not a typed column.
+  managerOverride  Json?
+
   @@index([tenantId, storeId, localSaleId])
   @@index([tenantId, occurredAt])
   @@map("sale_events")
@@ -1300,6 +1314,13 @@ model FiscalEvent {
   rawFiscalPayload  Json?
   payloadHash    String
   createdAt      DateTime          @default(now())
+
+  // Additive fields for the POS Policy Engine (docs/POS_POLICY_ENGINE.md
+  // §8) — same nullable-at-storage/required-at-API split as SaleEvent
+  // above.
+  policiesVersion  Int?
+  triggeredRuleIds String[] @default([])
+  managerOverride  Json?
 
   @@unique([deviceId, eventId])
   @@index([deviceId, localReceiptId])

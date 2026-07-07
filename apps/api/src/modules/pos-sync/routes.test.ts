@@ -848,6 +848,8 @@ describe('pos-sync.routes', () => {
       totals: { total: 25000 },
       fiscal: { status: 'OK' },
       print: { status: 'OK' },
+      policiesVersion: 3,
+      triggeredRuleIds: ['plt-1'],
     };
 
     beforeEach(() => {
@@ -1119,6 +1121,131 @@ describe('pos-sync.routes', () => {
         payload: validSaleEvent,
       });
       expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+
+    it('accepts a non-empty triggeredRuleIds and stores it verbatim alongside policiesVersion', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validSaleEvent, policiesVersion: 5, triggeredRuleIds: ['plt-1', 'cly-1'] },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ policiesVersion: 5, triggeredRuleIds: ['plt-1', 'cly-1'] }),
+        })
+      );
+      await app.close();
+    });
+
+    it('accepts an empty triggeredRuleIds array', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validSaleEvent, triggeredRuleIds: [] },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ triggeredRuleIds: [] }) })
+      );
+      await app.close();
+    });
+
+    it('accepts a present managerOverride and stores it verbatim', async () => {
+      const managerOverride = { managerId: 'mgr-1', overriddenAtMs: 1783350000000 };
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validSaleEvent, managerOverride },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ managerOverride }) })
+      );
+      await app.close();
+    });
+
+    it('accepts an absent managerOverride (stored as null)', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validSaleEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ managerOverride: null }) })
+      );
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when policiesVersion is missing', async () => {
+      const { policiesVersion: _omit, ...payload } = validSaleEvent;
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when triggeredRuleIds is missing', async () => {
+      const { triggeredRuleIds: _omit, ...payload } = validSaleEvent;
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when policiesVersion is negative', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validSaleEvent, policiesVersion: -1 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when policiesVersion is not an integer', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validSaleEvent, policiesVersion: 1.5 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
     });
   });
@@ -1399,6 +1526,8 @@ describe('pos-sync.routes', () => {
       ofdStatus: null,
       rawDaemonResponse: { ok: true },
       rawFiscalPayload: {},
+      policiesVersion: 3,
+      triggeredRuleIds: ['plt-1'],
     };
 
     beforeEach(() => {
@@ -1497,6 +1626,129 @@ describe('pos-sync.routes', () => {
         payload: validFiscalEvent,
       });
       expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+
+    it('accepts a non-empty triggeredRuleIds and stores it verbatim alongside policiesVersion', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validFiscalEvent, policiesVersion: 7, triggeredRuleIds: ['plt-1', 'cly-1'] },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ policiesVersion: 7, triggeredRuleIds: ['plt-1', 'cly-1'] }),
+      });
+      await app.close();
+    });
+
+    it('accepts an empty triggeredRuleIds array', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validFiscalEvent, triggeredRuleIds: [] },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ triggeredRuleIds: [] }),
+      });
+      await app.close();
+    });
+
+    it('accepts a present managerOverride and stores it verbatim', async () => {
+      const managerOverride = { managerId: 'mgr-1', overriddenAtMs: 1783350000000 };
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validFiscalEvent, managerOverride },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ managerOverride }),
+      });
+      await app.close();
+    });
+
+    it('accepts an absent managerOverride (stored as null)', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validFiscalEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ managerOverride: null }),
+      });
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when policiesVersion is missing', async () => {
+      const { policiesVersion: _omit, ...payload } = validFiscalEvent;
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when triggeredRuleIds is missing', async () => {
+      const { triggeredRuleIds: _omit, ...payload } = validFiscalEvent;
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when policiesVersion is negative', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validFiscalEvent, policiesVersion: -1 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when policiesVersion is not an integer', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/fiscal-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validFiscalEvent, policiesVersion: 1.5 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
     });
   });
