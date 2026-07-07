@@ -136,6 +136,14 @@ const saleEventSchema = z.object({
   totals: z.record(z.unknown()),
   fiscal: z.record(z.unknown()),
   print: z.record(z.unknown()),
+  // POS Policy Engine integration (docs/POS_POLICY_ENGINE.md §8) —
+  // required on every new request even though the underlying columns are
+  // nullable for pre-existing rows (additive migration, no backfill).
+  policiesVersion: z.number().int().nonnegative(),
+  triggeredRuleIds: z.array(z.string()),
+  // Shape not pinned down by §8/§12.2 yet — present only if a
+  // REQUIRE_MANAGER rule was overridden, no fixed fields required.
+  managerOverride: z.record(z.unknown()).optional(),
 });
 
 type SaleWarning = { index: number; code: string; message: string; productId?: string };
@@ -302,6 +310,11 @@ const fiscalEventSchema = z.object({
   errorMessage: z.string().nullable().optional(),
   rawDaemonResponse: z.record(z.unknown()),
   rawFiscalPayload: z.record(z.unknown()).nullable().optional(),
+  // POS Policy Engine integration (docs/POS_POLICY_ENGINE.md §8) — same
+  // required-at-API/nullable-at-storage split as saleEventSchema above.
+  policiesVersion: z.number().int().nonnegative(),
+  triggeredRuleIds: z.array(z.string()),
+  managerOverride: z.record(z.unknown()).optional(),
 });
 
 const shiftEventSchema = z.object({
@@ -884,6 +897,12 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
               print: body.data.print,
             } as any,
             warnings: warnings as any,
+            // Accept-don't-reject (docs/POS_SYNC_API.md §18): stored as
+            // the till reported it, no validation against real
+            // PlatformPolicy/tenantPolicyRules content.
+            policiesVersion: body.data.policiesVersion,
+            triggeredRuleIds: body.data.triggeredRuleIds,
+            managerOverride: (body.data.managerOverride ?? null) as any,
           },
           select: { id: true },
         });
@@ -1075,6 +1094,12 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           rawDaemonResponse: body.data.rawDaemonResponse as any,
           rawFiscalPayload: (body.data.rawFiscalPayload ?? null) as any,
           payloadHash,
+          // Accept-don't-reject (docs/POS_SYNC_API.md §18): stored as the
+          // till reported it, no validation against real PlatformPolicy/
+          // tenantPolicyRules content.
+          policiesVersion: body.data.policiesVersion,
+          triggeredRuleIds: body.data.triggeredRuleIds,
+          managerOverride: (body.data.managerOverride ?? null) as any,
         },
       });
     } catch (err: any) {
