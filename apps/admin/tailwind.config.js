@@ -1,5 +1,19 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Absolute, cwd-independent content paths — see the comment in
+// postcss.config.js for why: deploy/Dockerfile.admin builds with the
+// monorepo root as cwd, and relative content globs here resolve against
+// cwd regardless of which tailwind.config.js file was explicitly loaded,
+// silently producing zero matches (verified empirically — pointing
+// postcss.config.js at this file's absolute path alone was NOT enough).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  content: [
+    path.join(__dirname, 'index.html'),
+    path.join(__dirname, 'src/**/*.{js,ts,jsx,tsx}'),
+  ],
   theme: {
     extend: {
       // Design tokens for the SBGCloud admin redesign (docs/ADMIN_REDESIGN.md
