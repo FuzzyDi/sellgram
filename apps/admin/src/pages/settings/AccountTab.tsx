@@ -251,7 +251,7 @@ export default function AccountTab({ onNotice }: TabProps) {
 
             <div className="flex flex-col gap-2 mt-3">
               {team.map((user) => (
-                <Card key={user.id} className="bg-neutral-50 p-2.5">
+                <Card key={user.id} className="bg-neutral-50" style={{ padding: 10 }}>
                   <div className="flex items-center justify-between gap-2.5 flex-wrap">
                     <div>
                       <div className="font-semibold text-neutral-800">{user.name} ({user.email})</div>

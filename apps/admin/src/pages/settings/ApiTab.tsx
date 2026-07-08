@@ -91,19 +91,21 @@ export default function ApiTab({ onNotice }: TabProps) {
 
         <Card className="mt-3 bg-neutral-50">
           <div className="flex gap-2 flex-wrap items-end">
-            <Input
-              value={apiKeyForm.name}
-              onChange={(e) => setApiKeyForm({ ...apiKeyForm, name: e.target.value })}
-              placeholder={tr('Название ключа', 'Kalit nomi')}
-              className="flex-1 min-w-[180px]"
-            />
-            <Input
-              type="date"
-              value={apiKeyForm.expiresAt}
-              onChange={(e) => setApiKeyForm({ ...apiKeyForm, expiresAt: e.target.value })}
-              title={tr('Срок действия (необязательно)', 'Amal qilish muddati (ixtiyoriy)')}
-              className="w-40"
-            />
+            <div className="flex-1 min-w-[180px]">
+              <Input
+                value={apiKeyForm.name}
+                onChange={(e) => setApiKeyForm({ ...apiKeyForm, name: e.target.value })}
+                placeholder={tr('Название ключа', 'Kalit nomi')}
+              />
+            </div>
+            <div className="w-40">
+              <Input
+                type="date"
+                value={apiKeyForm.expiresAt}
+                onChange={(e) => setApiKeyForm({ ...apiKeyForm, expiresAt: e.target.value })}
+                title={tr('Срок действия (необязательно)', 'Amal qilish muddati (ixtiyoriy)')}
+              />
+            </div>
             <Button
               variant="primary"
               size="md"
@@ -118,7 +120,7 @@ export default function ApiTab({ onNotice }: TabProps) {
 
         <div className="flex flex-col gap-2 mt-3">
           {apiKeys.map((key) => (
-            <Card key={key.id} className="bg-neutral-50 p-2.5">
+            <Card key={key.id} className="bg-neutral-50" style={{ padding: 10 }}>
               <div className="flex items-center justify-between gap-2.5 flex-wrap">
                 <div>
                   <div className="font-semibold text-neutral-800">{key.name}</div>
