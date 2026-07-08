@@ -2,44 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
-
-function RevenueChart({ data }: { data: { date: string; revenue: number }[] }) {
-  if (!data || data.length === 0) return null;
-  const W = 600, H = 120, PAD = { top: 8, right: 4, bottom: 28, left: 0 };
-  const maxVal = Math.max(...data.map((d) => d.revenue), 1);
-  const xStep = (W - PAD.left - PAD.right) / (data.length - 1);
-  const toY = (v: number) => PAD.top + (1 - v / maxVal) * (H - PAD.top - PAD.bottom);
-  const pts = data.map((d, i) => [PAD.left + i * xStep, toY(d.revenue)] as [number, number]);
-  const area = `M${pts[0][0]},${H - PAD.bottom} L${pts.map(([x, y]) => `${x},${y}`).join(' L')} L${pts[pts.length - 1][0]},${H - PAD.bottom} Z`;
-  const line = `M${pts.map(([x, y]) => `${x},${y}`).join(' L')}`;
-
-  // show label every ~4 points
-  const labelEvery = Math.max(1, Math.round(data.length / 4));
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
-      <defs>
-        <linearGradient id="rev-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#00875a" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#00875a" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#rev-grad)" />
-      <path d={line} fill="none" stroke="#00875a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      {pts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={data[i].revenue > 0 ? 3 : 0} fill="#00875a" />
-      ))}
-      {data.map((d, i) => {
-        if (i % labelEvery !== 0 && i !== data.length - 1) return null;
-        const [x] = pts[i];
-        const label = d.date.slice(5); // MM-DD
-        return (
-          <text key={i} x={x} y={H - 6} textAnchor="middle" fontSize="9" fill="#9ca3af">{label}</text>
-        );
-      })}
-    </svg>
-  );
-}
+import Card from '../components/Card';
+import Button from '../components/Button';
+import Badge from '../components/Badge';
+import Table, { type TableColumn } from '../components/Table';
+import RevenueChart from './dashboard/RevenueChart';
 
 export default function Dashboard() {
   const { tr } = useAdminI18n();
@@ -133,7 +100,7 @@ export default function Dashboard() {
   const resolveProductName = (p: any, index: number) => {
     const raw = p?.product?.name ?? p?.productName ?? p?.name ?? '';
     const normalized = typeof raw === 'string' ? raw.trim() : '';
-    return normalized || `${tr('\u0422\u043E\u0432\u0430\u0440', 'Mahsulot')} #${index + 1}`;
+    return normalized || `${tr('Товар', 'Mahsulot')} #${index + 1}`;
   };
 
   const expiryInfo = useMemo(() => {
@@ -150,283 +117,260 @@ export default function Dashboard() {
     };
   }, [sub?.planExpiresAt]);
 
+  const rankedTopProducts = topProducts.slice(0, 7).map((p: any, i: number) => ({ ...p, __index: i }));
+
+  const topProductsColumns: TableColumn<any>[] = [
+    { key: 'rank', header: '#', width: 32, render: (row) => row.__index + 1 },
+    { key: 'name', header: tr('Товар', 'Mahsulot'), render: (row) => resolveProductName(row, row.__index) },
+    { key: 'revenue', header: tr('Выручка', 'Tushum'), render: (row) => `${Number(row.totalRevenue || row.revenue || 0).toLocaleString()} UZS` },
+  ];
+
   if (error) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <section className="flex flex-col gap-4">
         <header>
-          <h2 className="sg-title">{tr('Дашборд', 'Boshqaruv paneli')}</h2>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Дашборд', 'Boshqaruv paneli')}</h2>
         </header>
-        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
-          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
-          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={load}>
+        <Card className="text-center py-8 px-4">
+          <p className="m-0 font-semibold text-danger">{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
+          <Button variant="ghost" size="md" type="button" className="mt-3.5" onClick={load}>
             {tr('Повторить', 'Qayta urinish')}
-          </button>
-        </div>
+          </Button>
+        </Card>
       </section>
     );
   }
 
   if (loading) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 18 }}>
+      <section className="flex flex-col gap-4">
         <div>
-          <div className="sg-skeleton" style={{ height: 28, width: '40%' }} />
-          <div className="sg-skeleton" style={{ height: 14, width: '60%', marginTop: 8 }} />
+          <div className="h-7 w-2/5 rounded-token-sm bg-neutral-100 animate-pulse" />
+          <div className="h-3.5 w-3/5 rounded-token-sm bg-neutral-100 animate-pulse mt-2" />
         </div>
-        <div className="sg-card soft">
-          <div className="sg-skeleton" style={{ height: 22, width: '35%' }} />
-          <div className="sg-skeleton" style={{ height: 7, borderRadius: 999, marginTop: 14 }} />
-          <div className="sg-grid" style={{ marginTop: 14, gap: 8 }}>
+        <Card className="bg-neutral-50">
+          <div className="h-6 w-[35%] rounded-token-sm bg-neutral-100 animate-pulse" />
+          <div className="h-1.5 rounded-full bg-neutral-100 animate-pulse mt-3.5" />
+          <div className="flex flex-col gap-2 mt-3.5">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="sg-skeleton" style={{ height: 44, borderRadius: 10 }} />
+              <div key={i} className="h-11 rounded-token-md bg-neutral-100 animate-pulse" />
             ))}
           </div>
-        </div>
-        <div className="sg-grid cols-4">
+        </Card>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="sg-card">
-              <div className="sg-skeleton" style={{ height: 13, width: '60%' }} />
-              <div className="sg-skeleton" style={{ height: 28, width: '50%', marginTop: 8 }} />
-            </div>
+            <Card key={i}>
+              <div className="h-3.5 w-3/5 rounded-token-sm bg-neutral-100 animate-pulse" />
+              <div className="h-7 w-1/2 rounded-token-sm bg-neutral-100 animate-pulse mt-2" />
+            </Card>
           ))}
         </div>
-        <div className="sg-card">
-          <div className="sg-skeleton" style={{ height: 22, width: '25%' }} />
-          <div className="sg-skeleton" style={{ height: 14, width: '40%', marginTop: 8 }} />
+        <Card>
+          <div className="h-6 w-1/4 rounded-token-sm bg-neutral-100 animate-pulse" />
+          <div className="h-3.5 w-2/5 rounded-token-sm bg-neutral-100 animate-pulse mt-2" />
           {[1, 2, 3].map((i) => (
-            <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid #edf2ee' }}>
-              <div className="sg-skeleton" style={{ height: 14, width: 20 }} />
-              <div className="sg-skeleton" style={{ height: 14, flex: 1 }} />
-              <div className="sg-skeleton" style={{ height: 14, width: 100 }} />
+            <div key={i} className="flex gap-3 py-2.5 border-b border-neutral-100">
+              <div className="h-3.5 w-5 rounded-token-sm bg-neutral-100 animate-pulse" />
+              <div className="h-3.5 flex-1 rounded-token-sm bg-neutral-100 animate-pulse" />
+              <div className="h-3.5 w-[100px] rounded-token-sm bg-neutral-100 animate-pulse" />
             </div>
           ))}
-        </div>
+        </Card>
       </section>
     );
   }
 
   return (
-    <section className="sg-page sg-grid" style={{ gap: 18 }}>
+    <section className="flex flex-col gap-4">
       <header>
-        <h2 className="sg-title">{tr('Дашборд', 'Boshqaruv paneli')}</h2>
-        <p className="sg-subtitle">{tr('Показатели магазина и прогресс настройки', "Do'kon ko'rsatkichlari va sozlash holati")}</p>
+        <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Дашборд', 'Boshqaruv paneli')}</h2>
+        <p className="mt-1 text-token-sm text-neutral-500">{tr('Показатели магазина и прогресс настройки', "Do'kon ko'rsatkichlari va sozlash holati")}</p>
       </header>
 
       {expiryInfo && expiryInfo.daysLeft <= 7 && (
-        <div
-          className="sg-card"
-          style={{
-            borderColor: expiryInfo.isExpired ? '#fecaca' : '#fde68a',
-            background: expiryInfo.isExpired ? '#fff1f2' : '#fffbeb',
-          }}
-        >
-          <p style={{ margin: 0, fontWeight: 800, color: expiryInfo.isExpired ? '#be123c' : '#92400e' }}>
+        <Card className={expiryInfo.isExpired ? 'bg-danger/5 border-danger/30' : 'bg-warning/10 border-warning/30'}>
+          <p className={`m-0 font-semibold ${expiryInfo.isExpired ? 'text-danger' : 'text-warning'}`}>
             {expiryInfo.isExpired
               ? tr('Подписка истекла. Продлите тариф, чтобы избежать ограничений.', "Obuna muddati tugagan. Cheklovlar bo'lmasligi uchun tarifni uzaytiring.")
               : tr(`Подписка заканчивается через ${expiryInfo.daysLeft} дн. Продлите заранее.`, `Obuna ${expiryInfo.daysLeft} kunda tugaydi. Oldindan uzaytiring.`)}
           </p>
-          <p className="sg-subtitle" style={{ marginTop: 6 }}>
+          <p className="mt-1.5 text-token-sm text-neutral-600">
             {tr('Срок:', 'Muddat')}: {expiryInfo.expiresAt.toLocaleDateString()}
           </p>
-          <div style={{ marginTop: 10 }}>
-            <button className="sg-btn primary" onClick={() => navigate('/billing')}>
+          <div className="mt-2.5">
+            <Button variant="primary" size="md" type="button" onClick={() => navigate('/billing')}>
               {tr('Продлить тариф', 'Tarifni uzaytirish')}
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {completedSteps === totalSteps ? (
-        <div className="sg-card soft" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={{ fontSize: 28 }}>🎉</span>
+        <Card className="bg-success/5 border-success/30 flex items-center gap-3.5">
+          <span className="text-token-2xl">🎉</span>
           <div>
-            <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>{tr('Магазин полностью настроен', "Do'kon to'liq sozlangan")}</p>
-            <p className="sg-subtitle" style={{ marginTop: 4 }}>{tr('Все шаги выполнены. Успешных продаж!', 'Barcha qadamlar bajarildi. Muvaffaqiyatli savdo!')}</p>
+            <p className="m-0 font-semibold text-token-lg text-neutral-800">{tr('Магазин полностью настроен', "Do'kon to'liq sozlangan")}</p>
+            <p className="mt-1 text-token-sm text-neutral-500">{tr('Все шаги выполнены. Успешных продаж!', 'Barcha qadamlar bajarildi. Muvaffaqiyatli savdo!')}</p>
           </div>
-        </div>
+        </Card>
       ) : (
-        <div className="sg-card soft">
+        <Card className="bg-neutral-50">
           {completedSteps <= 1 && (
-            <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, background: '#e8f7ef', border: '1px solid #bbf0d8' }}>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#005c3a' }}>{tr('Добро пожаловать в SellGram!', "SellGram'ga xush kelibsiz!")}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#006f4a' }}>
+            <div className="mb-4 px-3.5 py-3 rounded-token-md bg-success/5 border border-success/30">
+              <p className="m-0 font-semibold text-token-lg text-success">{tr('Добро пожаловать в SellGram!', "SellGram'ga xush kelibsiz!")}</p>
+              <p className="mt-1 text-token-sm text-success">
                 {tr('Выполните несколько шагов, чтобы запустить ваш Telegram-магазин.', "Telegram do'koningizni ishga tushirish uchun bir necha qadamni bajaring.")}
               </p>
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Чек-лист запуска', "Ishga tushirish ro'yxati")}</h3>
-              <p className="sg-subtitle" style={{ marginTop: 6 }}>
+              <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Чек-лист запуска', "Ishga tushirish ro'yxati")}</h3>
+              <p className="mt-1.5 text-token-sm text-neutral-500">
                 {completedSteps} / {totalSteps} {tr('шагов выполнено', 'qadam bajarildi')}
               </p>
             </div>
-            <div className="sg-badge" style={{ background: '#e8f7ef', color: '#006f4a', fontSize: 12 }}>
+            <Badge variant="success">
               {Math.round((completedSteps / totalSteps) * 100)}%
-            </div>
+            </Badge>
           </div>
 
-          <div style={{ height: 7, borderRadius: 999, background: '#e6efe9', marginTop: 12, overflow: 'hidden' }}>
+          <div className="h-1.5 rounded-full bg-neutral-200 mt-3 overflow-hidden">
             <div
-              style={{
-                height: '100%',
-                width: `${(completedSteps / totalSteps) * 100}%`,
-                background: 'linear-gradient(135deg,#00875a,#00a86f)',
-                transition: 'width .35s ease',
-              }}
+              className="h-full bg-accent-600 transition-all duration-300 ease-out"
+              style={{ width: `${(completedSteps / totalSteps) * 100}%` }}
             />
           </div>
 
-          <div className="sg-grid" style={{ marginTop: 14 }}>
+          <div className="grid grid-cols-1 gap-2.5 mt-3.5">
             {checks.map((check, i) => (
               <button
                 key={`${check.label}-${i}`}
                 onClick={() => check.to && navigate(check.to)}
-                style={{
-                  border: '1px solid #e1e9e3',
-                  borderRadius: 10,
-                  background: check.done ? '#f0faf4' : '#fff',
-                  textAlign: 'left',
-                  padding: '10px 12px',
-                  cursor: check.to ? 'pointer' : 'default',
-                }}
+                className={[
+                  'border rounded-token-md text-left px-3 py-2.5',
+                  check.done ? 'bg-success/5 border-success/30' : 'bg-white border-neutral-200',
+                  check.to ? 'cursor-pointer' : 'cursor-default',
+                ].join(' ')}
               >
-                <div style={{ fontWeight: 700, fontSize: 14, color: check.done ? '#5f6d64' : '#18261f' }}>
+                <div className={`font-semibold text-token-sm ${check.done ? 'text-neutral-500' : 'text-neutral-800'}`}>
                   {check.done ? tr('Готово', 'Bajarildi') : `${tr('Шаг', 'Qadam')} ${i + 1}`}: {check.label}
                 </div>
-                {!check.done && <div style={{ color: '#738279', fontSize: 12, marginTop: 2 }}>{check.desc}</div>}
+                {!check.done && <div className="text-token-xs text-neutral-500 mt-0.5">{check.desc}</div>}
               </button>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12 }}>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Заказы сегодня', 'Bugungi buyurtmalar')}</div>
-          <div className="sg-kpi-value">{ordersToday}</div>
-        </article>
-        <article
-          className="sg-card"
-          style={{ cursor: ordersPending > 0 ? 'pointer' : 'default', borderColor: ordersPending > 0 ? '#fde68a' : undefined, background: ordersPending > 0 ? '#fffbeb' : undefined }}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Заказы сегодня', 'Bugungi buyurtmalar')}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{ordersToday}</div>
+        </Card>
+        <Card
+          className={ordersPending > 0 ? 'bg-warning/10 border-warning/30 cursor-pointer' : ''}
           onClick={() => ordersPending > 0 && navigate('/orders?status=NEW')}
         >
-          <div className="sg-kpi-label">{tr('Ожидают обработки', 'Kutilmoqda')}</div>
-          <div className="sg-kpi-value" style={{ color: ordersPending > 0 ? '#b45309' : undefined }}>{ordersPending}</div>
-        </article>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Выручка сегодня', 'Bugungi tushum')}</div>
-          <div className="sg-kpi-value">{Number(revenueToday || 0).toLocaleString()} UZS</div>
-        </article>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Выручка (месяц)', 'Tushum (oy)')}</div>
-          <div className="sg-kpi-value">{Number(revenueMonth || 0).toLocaleString()} UZS</div>
-        </article>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Средний чек', "O'rtacha chek")}</div>
-          <div className="sg-kpi-value">{Number(avgCheck || 0).toLocaleString()} UZS</div>
-        </article>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Клиентов (неделя)', 'Mijozlar (hafta)')}</div>
-          <div className="sg-kpi-value">{newCustomersWeek}</div>
-        </article>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Товары', 'Mahsulotlar')}</div>
-          <div className="sg-kpi-value">{totalProducts}</div>
-        </article>
-        <article className="sg-card" style={{ cursor: reviewCount > 0 ? 'pointer' : 'default' }} onClick={() => reviewCount > 0 && navigate('/reviews')}>
-          <div className="sg-kpi-label">{tr('Рейтинг', 'Reyting')}</div>
+          <div className="text-token-xs text-neutral-500">{tr('Ожидают обработки', 'Kutilmoqda')}</div>
+          <div className={`text-token-2xl font-semibold mt-1.5 ${ordersPending > 0 ? 'text-warning' : 'text-neutral-800'}`}>{ordersPending}</div>
+        </Card>
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Выручка сегодня', 'Bugungi tushum')}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{Number(revenueToday || 0).toLocaleString()} UZS</div>
+        </Card>
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Выручка (месяц)', 'Tushum (oy)')}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{Number(revenueMonth || 0).toLocaleString()} UZS</div>
+        </Card>
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Средний чек', "O'rtacha chek")}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{Number(avgCheck || 0).toLocaleString()} UZS</div>
+        </Card>
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Клиентов (неделя)', 'Mijozlar (hafta)')}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{newCustomersWeek}</div>
+        </Card>
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Товары', 'Mahsulotlar')}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{totalProducts}</div>
+        </Card>
+        <Card className={reviewCount > 0 ? 'cursor-pointer' : ''} onClick={() => reviewCount > 0 && navigate('/reviews')}>
+          <div className="text-token-xs text-neutral-500">{tr('Рейтинг', 'Reyting')}</div>
           {reviewAvg !== null ? (
             <>
-              <div className="sg-kpi-value" style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5 flex items-baseline gap-1.5">
                 {reviewAvg}
-                <span style={{ fontSize: 18, color: '#f59e0b' }}>★</span>
+                <span className="text-token-lg text-warning">★</span>
               </div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+              <div className="text-token-xs text-neutral-400 mt-0.5">
                 {reviewCount} {tr('отзывов', 'sharh')}
               </div>
             </>
           ) : (
-            <div className="sg-kpi-value" style={{ color: '#d1d5db' }}>—</div>
+            <div className="text-token-2xl font-semibold text-neutral-300 mt-1.5">—</div>
           )}
-        </article>
+        </Card>
       </div>
 
       {recentOrders.length > 0 && (
-        <section className="sg-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Новые заказы', 'Yangi buyurtmalar')}</h3>
-            <button
-              className="sg-btn ghost"
-              style={{ fontSize: 13, padding: '4px 12px' }}
-              onClick={() => navigate('/orders')}
-            >
+        <Card>
+          <div className="flex items-center justify-between mb-2.5">
+            <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Новые заказы', 'Yangi buyurtmalar')}</h3>
+            <Button variant="ghost" size="sm" type="button" onClick={() => navigate('/orders')}>
               {tr('Все заказы →', 'Barcha buyurtmalar →')}
-            </button>
+            </Button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="flex flex-col gap-2">
             {recentOrders.map((order: any) => (
               <div
                 key={order.id}
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 10, background: '#f9fbfa', border: '1px solid #edf2ee', cursor: 'pointer' }}
+                className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-token-md bg-neutral-50 border border-neutral-200 cursor-pointer"
                 onClick={() => navigate('/orders')}
               >
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                  <div className="font-semibold text-token-sm text-neutral-800">
                     {tr('Заказ', 'Buyurtma')} #{order.orderNumber}
                     {order.customer?.firstName ? ` · ${order.customer.firstName}` : ''}
                   </div>
-                  <div style={{ fontSize: 12, color: '#748278', marginTop: 2 }}>
+                  <div className="text-token-xs text-neutral-500 mt-0.5">
                     {order.items?.map((i: any) => `${i.name} x${i.qty}`).join(', ')}
                   </div>
                 </div>
-                <div style={{ fontWeight: 800, color: '#00875a', fontSize: 15, whiteSpace: 'nowrap' }}>
+                <div className="font-semibold text-success text-token-base whitespace-nowrap">
                   {Number(order.total).toLocaleString()} UZS
                 </div>
               </div>
             ))}
           </div>
-        </section>
+        </Card>
       )}
 
       {stats?.revenueByDay?.some((d: any) => d.revenue > 0) && (
-        <section className="sg-card">
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Выручка за 14 дней', '14 kunlik tushum')}</h3>
-          <p className="sg-subtitle" style={{ marginBottom: 12 }}>
+        <Card>
+          <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Выручка за 14 дней', '14 kunlik tushum')}</h3>
+          <p className="mt-1 mb-3 text-token-sm text-neutral-500">
             {tr('Завершённые и доставленные заказы', 'Yakunlangan va yetkazilgan buyurtmalar')}
           </p>
           <RevenueChart data={stats.revenueByDay} />
-        </section>
+        </Card>
       )}
 
-      <section className="sg-card">
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Топ товаров', 'Top mahsulotlar')}</h3>
-        <p className="sg-subtitle" style={{ marginBottom: 10 }}>{tr('Лидеры продаж по выручке', "Tushum bo'yicha eng yaxshi mahsulotlar")}</p>
+      <Card>
+        <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Топ товаров', 'Top mahsulotlar')}</h3>
+        <p className="mt-1 mb-2.5 text-token-sm text-neutral-500">{tr('Лидеры продаж по выручке', "Tushum bo'yicha eng yaxshi mahsulotlar")}</p>
 
         {topProducts.length === 0 ? (
-          <p className="sg-subtitle">{tr('Данных пока нет', "Hozircha ma'lumot yo'q")}</p>
+          <p className="text-token-sm text-neutral-500">{tr('Данных пока нет', "Hozircha ma'lumot yo'q")}</p>
         ) : (
-          <table className="sg-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>{tr('Товар', 'Mahsulot')}</th>
-                <th>{tr('Выручка', 'Tushum')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topProducts.slice(0, 7).map((p: any, i: number) => (
-                <tr key={`${p.id || p.name || p.productName}-${i}`}>
-                  <td>{i + 1}</td>
-                  <td>{resolveProductName(p, i)}</td>
-                  <td>{Number(p.totalRevenue || p.revenue || 0).toLocaleString()} UZS</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table
+            columns={topProductsColumns}
+            data={rankedTopProducts}
+            rowKey={(row) => `${row.id || row.name || row.productName}-${row.__index}`}
+          />
         )}
-      </section>
+      </Card>
     </section>
   );
 }

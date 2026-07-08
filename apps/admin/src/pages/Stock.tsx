@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
+import Button from '../components/Button';
+import Input from '../components/Input';
+import Badge from '../components/Badge';
+import Table, { type TableColumn } from '../components/Table';
+import StockMovementsLog from './stock/StockMovementsLog';
 
 type StockFilter = 'all' | 'low' | 'out';
 type AdjustMode = 'set' | 'add' | 'sub';
@@ -209,74 +215,208 @@ export default function Stock() {
     void loadMovements();
   }
 
-  function stockBadgeStyle(qty: number, low: number) {
-    if (qty === 0) return { background: '#fee2e2', color: '#991b1b' };
-    if (qty <= low) return { background: '#fef9c3', color: '#854d0e' };
-    return { background: '#d1fae5', color: '#065f46' };
-  }
-
-  function sortIcon(field: SortField) {
-    if (sortField !== field) return <span style={{ opacity: 0.3 }}>↕</span>;
-    return <span>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  function stockBadgeVariant(qty: number, low: number): 'danger' | 'warning' | 'success' {
+    if (qty === 0) return 'danger';
+    if (qty <= low) return 'warning';
+    return 'success';
   }
 
   const noticeNode = notice && (
-    <div style={{
-      position: 'fixed', top: 18, right: 18, zIndex: 70, minWidth: 260,
-      borderRadius: 12, padding: '12px 16px', fontSize: 13, fontWeight: 700,
-      boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
-      color: notice.tone === 'error' ? '#991b1b' : '#065f46',
-      background: notice.tone === 'error' ? '#fee2e2' : '#d1fae5',
-      border: `1px solid ${notice.tone === 'error' ? '#fecaca' : '#a7f3d0'}`,
-    }}>
+    <div className={[
+      'fixed top-[18px] right-[18px] z-[70] min-w-[260px] rounded-token-lg px-4 py-3 text-token-sm font-semibold shadow-sm border',
+      notice.tone === 'error' ? 'bg-danger/10 text-danger border-danger/30' : 'bg-success/10 text-success border-success/30',
+    ].join(' ')}>
       {notice.message}
     </div>
   );
 
   if (loading) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
-        <div className="sg-skeleton" style={{ height: 28, width: '30%' }} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-          {[1,2,3].map((i) => <div key={i} className="sg-skeleton" style={{ height: 72, borderRadius: 14 }} />)}
+      <section className="flex flex-col gap-4">
+        <div className="h-7 w-[30%] rounded-token-sm bg-neutral-100 animate-pulse" />
+        <div className="grid grid-cols-3 gap-3">
+          {[1, 2, 3].map((i) => <div key={i} className="h-[72px] rounded-token-lg bg-neutral-100 animate-pulse" />)}
         </div>
-        <div className="sg-card" style={{ padding: 0 }}>
-          {[1,2,3,4,5].map((i) => (
-            <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid #edf2ee' }}>
-              <div className="sg-skeleton" style={{ height: 14, flex: 2 }} />
-              <div className="sg-skeleton" style={{ height: 14, flex: 1 }} />
-              <div className="sg-skeleton" style={{ height: 14, width: 60 }} />
+        <Card style={{ padding: 0 }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex gap-3 px-4 py-3 border-b border-neutral-100 last:border-0">
+              <div className="h-3.5 flex-[2] rounded-token-sm bg-neutral-100 animate-pulse" />
+              <div className="h-3.5 flex-1 rounded-token-sm bg-neutral-100 animate-pulse" />
+              <div className="h-3.5 w-[60px] rounded-token-sm bg-neutral-100 animate-pulse" />
             </div>
           ))}
-        </div>
+        </Card>
       </section>
     );
   }
 
   if (loadError) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
-        <header><h2 className="sg-title">{tr('Остатки на складе', 'Ombor qoldiqlari')}</h2></header>
-        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
-          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить данные', 'Ma\'lumot yuklanmadi')}</p>
-          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={load}>{tr('Повторить', 'Qayta urinish')}</button>
-        </div>
+      <section className="flex flex-col gap-4">
+        <header><h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Остатки на складе', 'Ombor qoldiqlari')}</h2></header>
+        <Card className="text-center py-8 px-4">
+          <p className="m-0 font-semibold text-danger">{tr('Не удалось загрузить данные', 'Ma\'lumot yuklanmadi')}</p>
+          <Button variant="ghost" size="md" type="button" className="mt-3.5" onClick={load}>{tr('Повторить', 'Qayta urinish')}</Button>
+        </Card>
       </section>
     );
   }
 
+  const columns: TableColumn<typeof filtered[number]>[] = [
+    {
+      key: 'name',
+      header: tr('Товар', 'Mahsulot'),
+      sortable: true,
+      render: (row) => (
+        <div>
+          <div className="font-semibold text-token-sm text-neutral-800">{row.name}</div>
+          {row.variant && <div className="text-token-xs text-neutral-500 mt-0.5">{row.variant}</div>}
+          {!row.isActive && <span className="text-token-xs text-neutral-400"> ({tr('неактивен', 'noaktiv')})</span>}
+        </div>
+      ),
+    },
+    {
+      key: 'sku',
+      header: tr('Артикул', 'Artikul'),
+      render: (row) => <span className="text-token-xs text-neutral-500">{row.sku || '—'}</span>,
+    },
+    {
+      key: 'qty',
+      header: tr('Остаток', 'Qoldiq'),
+      sortable: true,
+      align: 'right',
+      render: (row) => {
+        const isEditing = editing?.id === row.productId && editing?.variantId === row.variantId;
+        if (!isEditing) {
+          return <Badge variant={stockBadgeVariant(row.stockQty, row.lowStockAlert)}>{row.stockQty}</Badge>;
+        }
+        return (
+          <div className="flex flex-col gap-1.5 min-w-[180px]">
+            <div className="flex gap-1 justify-end">
+              {(['set', 'add', 'sub'] as AdjustMode[]).map((m) => (
+                <Button
+                  key={m}
+                  type="button"
+                  variant={editMode === m ? 'primary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setEditMode(m)}
+                >
+                  {m === 'set' ? tr('Задать', 'Belgilash') : m === 'add' ? '+ Приход' : '− Списание'}
+                </Button>
+              ))}
+            </div>
+            <Input
+              type="number"
+              min={0}
+              value={editQty}
+              onChange={(e) => setEditQty(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditing(null); }}
+              autoFocus
+              placeholder={editMode === 'set' ? tr('Новый остаток', 'Yangi qoldiq') : tr('Количество', 'Miqdor')}
+              className="text-right"
+            />
+            <Input
+              value={editNote}
+              onChange={(e) => setEditNote(e.target.value)}
+              placeholder={tr('Причина (необязательно)', 'Sabab (ixtiyoriy)')}
+            />
+          </div>
+        );
+      },
+    },
+    {
+      key: 'lowStockAlert',
+      header: tr('Мин. остаток', 'Min. qoldiq'),
+      align: 'right',
+      render: (row) => {
+        const isEditingAlert = editingAlert === row.productId && !row.variantId;
+        if (isEditingAlert) {
+          return (
+            <div className="flex gap-1 justify-end items-center">
+              <div className="w-16">
+                <Input
+                  type="number"
+                  min={0}
+                  value={editAlertVal}
+                  onChange={(e) => setEditAlertVal(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveAlert(row.productId); if (e.key === 'Escape') setEditingAlert(null); }}
+                  autoFocus
+                  className="text-right"
+                />
+              </div>
+              <Button variant="primary" size="sm" type="button" onClick={() => saveAlert(row.productId)}>✓</Button>
+              <Button variant="ghost" size="sm" type="button" onClick={() => setEditingAlert(null)}>✕</Button>
+            </div>
+          );
+        }
+        return (
+          <span
+            title={tr('Нажмите, чтобы изменить', 'O\'zgartirish uchun bosing')}
+            onClick={() => { if (!row.variantId) { setEditingAlert(row.productId); setEditAlertVal(String(row.lowStockAlert)); } }}
+            className={`text-token-sm text-neutral-500 ${row.variantId ? 'cursor-default' : 'cursor-pointer border-b border-dashed border-neutral-400'}`}
+          >
+            {row.lowStockAlert}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'price',
+      header: tr('Цена', 'Narx'),
+      align: 'right',
+      render: (row) => <span className="text-token-sm text-neutral-700">{Number(row.price).toLocaleString(locale)}</span>,
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (row) => {
+        const isEditing = editing?.id === row.productId && editing?.variantId === row.variantId;
+        if (isEditing) {
+          return (
+            <div className="flex gap-1 justify-end">
+              <Button variant="primary" size="sm" type="button" onClick={saveEdit} disabled={saving}>
+                {tr('Сохранить', 'Saqlash')}
+              </Button>
+              <Button variant="ghost" size="sm" type="button" onClick={() => setEditing(null)} disabled={saving}>
+                {tr('Отмена', 'Bekor')}
+              </Button>
+            </div>
+          );
+        }
+        return (
+          <div className="flex gap-1 justify-end">
+            <Button variant="ghost" size="sm" type="button" onClick={() => startEdit(row.productId, row.variantId, row.stockQty)}>
+              {tr('Изменить', 'O\'zgartirish')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              title={tr('История движений', 'Harakatlar tarixi')}
+              onClick={() => openLogForProduct(row.productId, row.name)}
+            >
+              <span className="text-accent-600">↕</span>
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
-    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+    <section className="flex flex-col gap-4">
       {noticeNode}
 
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <header className="flex justify-between items-start">
         <div>
-          <h2 className="sg-title">{tr('Остатки на складе', 'Ombor qoldiqlari')}</h2>
-          <p className="sg-subtitle">{tr('Управление складскими остатками товаров', 'Mahsulotlar ombor qoldiqlarini boshqarish')}</p>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Остатки на складе', 'Ombor qoldiqlari')}</h2>
+          <p className="mt-1 text-token-sm text-neutral-500">{tr('Управление складскими остатками товаров', 'Mahsulotlar ombor qoldiqlarini boshqarish')}</p>
         </div>
-        <button
-          className={`sg-btn${showLog ? ' primary' : ' ghost'}`}
-          style={{ fontSize: 13 }}
+        <Button
+          type="button"
+          variant={showLog ? 'primary' : 'ghost'}
+          size="md"
           onClick={() => {
             if (showLog) {
               setShowLog(false);
@@ -289,250 +429,75 @@ export default function Stock() {
           }}
         >
           {tr('Журнал движений', 'Harakatlar jurnali')}
-        </button>
+        </Button>
       </header>
 
       {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { label: tr('Всего позиций', 'Jami pozitsiyalar'), value: stats.total, color: '#1e3a5f' },
-          { label: tr('Мало остатков', 'Oz qoldiq'), value: stats.low, color: '#854d0e' },
-          { label: tr('Нет в наличии', 'Mavjud emas'), value: stats.out, color: '#991b1b' },
+          { label: tr('Всего позиций', 'Jami pozitsiyalar'), value: stats.total, kind: 'total' as const },
+          { label: tr('Мало остатков', 'Oz qoldiq'), value: stats.low, kind: 'low' as const },
+          { label: tr('Нет в наличии', 'Mavjud emas'), value: stats.out, kind: 'out' as const },
         ].map((kpi) => (
-          <div key={kpi.label} className="sg-card" style={{ padding: '14px 16px', cursor: kpi.value > 0 ? 'pointer' : 'default' }}
+          <Card
+            key={kpi.label}
+            className={kpi.value > 0 ? 'cursor-pointer' : ''}
             onClick={() => {
-              if (kpi.color === '#854d0e') setFilter('low');
-              else if (kpi.color === '#991b1b') setFilter('out');
-            }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#748278', textTransform: 'uppercase', letterSpacing: 0.5 }}>{kpi.label}</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: kpi.color, marginTop: 4 }}>{kpi.value}</div>
-          </div>
+              if (kpi.kind === 'low') setFilter('low');
+              else if (kpi.kind === 'out') setFilter('out');
+            }}
+          >
+            <div className="text-token-xs font-semibold text-neutral-500 uppercase tracking-wide">{kpi.label}</div>
+            <div className={[
+              'text-token-2xl font-bold mt-1',
+              kpi.kind === 'low' ? 'text-warning' : kpi.kind === 'out' ? 'text-danger' : 'text-neutral-800',
+            ].join(' ')}>
+              {kpi.value}
+            </div>
+          </Card>
         ))}
       </div>
 
       {/* Filters */}
-      <div className="sg-card" style={{ display: 'grid', gap: 10 }}>
-        <div className="sg-pill-row">
+      <Card className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap gap-2">
           {(['all', 'low', 'out'] as StockFilter[]).map((f) => (
-            <button key={f} onClick={() => setFilter(f)} className={`sg-pill${filter === f ? ' active' : ''}`}>
+            <Button key={f} type="button" variant={filter === f ? 'primary' : 'secondary'} size="sm" onClick={() => setFilter(f)}>
               {f === 'all' ? tr('Все', 'Barchasi') : f === 'low' ? tr('Мало', 'Oz') : tr('Нет в наличии', 'Mavjud emas')}
-              {f === 'low' && stats.low > 0 && <span style={{ marginLeft: 4, background: '#854d0e', color: '#fff', borderRadius: 99, padding: '1px 6px', fontSize: 10 }}>{stats.low}</span>}
-              {f === 'out' && stats.out > 0 && <span style={{ marginLeft: 4, background: '#991b1b', color: '#fff', borderRadius: 99, padding: '1px 6px', fontSize: 10 }}>{stats.out}</span>}
-            </button>
+              {f === 'low' && stats.low > 0 && <span className="ml-1.5">({stats.low})</span>}
+              {f === 'out' && stats.out > 0 && <span className="ml-1.5">({stats.out})</span>}
+            </Button>
           ))}
         </div>
-        <input
+        <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={tr('Поиск по названию, варианту, артикулу', 'Nom, variant yoki SKU bo\'yicha qidirish')}
-          style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 10px', fontSize: 13 }}
         />
-      </div>
+      </Card>
 
       {/* Table */}
-      <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-        {filtered.length === 0 ? (
-          <p className="sg-subtitle" style={{ padding: '24px 16px' }}>{tr('Ничего не найдено', 'Hech narsa topilmadi')}</p>
-        ) : (
-          <table className="sg-table" style={{ margin: 0 }}>
-            <thead>
-              <tr>
-                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('name')}>
-                  {tr('Товар', 'Mahsulot')} {sortIcon('name')}
-                </th>
-                <th>{tr('Артикул', 'Artikul')}</th>
-                <th style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('qty')}>
-                  {tr('Остаток', 'Qoldiq')} {sortIcon('qty')}
-                </th>
-                <th style={{ textAlign: 'right' }}>{tr('Мин. остаток', 'Min. qoldiq')}</th>
-                <th style={{ textAlign: 'right' }}>{tr('Цена', 'Narx')}</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => {
-                const key = row.variantId ?? row.productId;
-                const isEditing = editing?.id === row.productId && editing?.variantId === row.variantId;
-                const isEditingAlert = editingAlert === row.productId && !row.variantId;
-                return (
-                  <tr key={key}>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{row.name}</div>
-                      {row.variant && <div style={{ fontSize: 11, color: '#748278', marginTop: 2 }}>{row.variant}</div>}
-                      {!row.isActive && <span style={{ fontSize: 10, color: '#9ca3af' }}> ({tr('неактивен', 'noaktiv')})</span>}
-                    </td>
-                    <td style={{ fontSize: 12, color: '#748278' }}>{row.sku || '—'}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      {isEditing ? (
-                        <div style={{ display: 'grid', gap: 6, minWidth: 180 }}>
-                          {/* Mode selector */}
-                          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                            {(['set', 'add', 'sub'] as AdjustMode[]).map((m) => (
-                              <button
-                                key={m}
-                                onClick={() => setEditMode(m)}
-                                className={`sg-btn${editMode === m ? ' primary' : ' ghost'}`}
-                                style={{ fontSize: 11, padding: '2px 8px' }}
-                              >
-                                {m === 'set' ? tr('Задать', 'Belgilash') : m === 'add' ? '+ Приход' : '− Списание'}
-                              </button>
-                            ))}
-                          </div>
-                          <input
-                            type="number"
-                            min={0}
-                            value={editQty}
-                            onChange={(e) => setEditQty(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditing(null); }}
-                            autoFocus
-                            placeholder={editMode === 'set' ? tr('Новый остаток', 'Yangi qoldiq') : tr('Количество', 'Miqdor')}
-                            style={{ width: '100%', border: '1px solid #2563eb', borderRadius: 6, padding: '4px 8px', fontSize: 13, textAlign: 'right', boxSizing: 'border-box' }}
-                          />
-                          <input
-                            value={editNote}
-                            onChange={(e) => setEditNote(e.target.value)}
-                            placeholder={tr('Причина (необязательно)', 'Sabab (ixtiyoriy)')}
-                            style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 8px', fontSize: 12, boxSizing: 'border-box' }}
-                          />
-                        </div>
-                      ) : (
-                        <span className="sg-badge" style={stockBadgeStyle(row.stockQty, row.lowStockAlert)}>
-                          {row.stockQty}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ textAlign: 'right', fontSize: 13, color: '#748278' }}>
-                      {isEditingAlert ? (
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <input
-                            type="number" min={0} value={editAlertVal}
-                            onChange={(e) => setEditAlertVal(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') saveAlert(row.productId); if (e.key === 'Escape') setEditingAlert(null); }}
-                            autoFocus
-                            style={{ width: 60, border: '1px solid #2563eb', borderRadius: 6, padding: '3px 6px', fontSize: 12, textAlign: 'right' }}
-                          />
-                          <button className="sg-btn primary" style={{ fontSize: 11, padding: '3px 6px' }} onClick={() => saveAlert(row.productId)}>✓</button>
-                          <button className="sg-btn ghost" style={{ fontSize: 11, padding: '3px 6px' }} onClick={() => setEditingAlert(null)}>✕</button>
-                        </div>
-                      ) : (
-                        <span
-                          title={tr('Нажмите, чтобы изменить', 'O\'zgartirish uchun bosing')}
-                          onClick={() => { if (!row.variantId) { setEditingAlert(row.productId); setEditAlertVal(String(row.lowStockAlert)); } }}
-                          style={{ cursor: row.variantId ? 'default' : 'pointer', borderBottom: row.variantId ? 'none' : '1px dashed #9ca3af' }}
-                        >
-                          {row.lowStockAlert}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>{Number(row.price).toLocaleString(locale)}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      {isEditing ? (
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 4 }}>
-                          <button className="sg-btn primary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={saveEdit} disabled={saving}>
-                            {tr('Сохранить', 'Saqlash')}
-                          </button>
-                          <button className="sg-btn ghost" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setEditing(null)} disabled={saving}>
-                            {tr('Отмена', 'Bekor')}
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                          <button
-                            className="sg-btn ghost"
-                            style={{ fontSize: 12, padding: '4px 10px' }}
-                            onClick={() => startEdit(row.productId, row.variantId, row.stockQty)}
-                          >
-                            {tr('Изменить', 'O\'zgartirish')}
-                          </button>
-                          <button
-                            className="sg-btn ghost"
-                            style={{ fontSize: 12, padding: '4px 8px', color: '#2563eb' }}
-                            title={tr('История движений', 'Harakatlar tarixi')}
-                            onClick={() => openLogForProduct(row.productId, row.name)}
-                          >
-                            ↕
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Table
+        columns={columns}
+        data={filtered}
+        rowKey={(row) => row.variantId ?? row.productId}
+        emptyMessage={tr('Ничего не найдено', 'Hech narsa topilmadi')}
+        sortKey={sortField ?? undefined}
+        sortDirection={sortDir}
+        onSort={(key) => toggleSort(key as SortField)}
+      />
 
       {/* Movement log */}
       {showLog && (
-        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', borderBottom: '1px solid #edf2ee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                {tr('Журнал движений', 'Harakatlar jurnali')}
-              </h3>
-              {logProductFilter && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#eff6ff', borderRadius: 8, padding: '3px 10px', fontSize: 12, color: '#1d4ed8', fontWeight: 600, minWidth: 0 }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
-                    {logProductFilter.name}
-                  </span>
-                  <button
-                    onClick={clearLogFilter}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1d4ed8', padding: 0, lineHeight: 1, fontSize: 14 }}
-                    title={tr('Показать все', 'Hammasini ko\'rsatish')}
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-            </div>
-            <button className="sg-btn ghost" style={{ fontSize: 12, flexShrink: 0 }} onClick={() => loadMovements(logProductFilter?.id)} disabled={movementsLoading}>
-              {movementsLoading ? tr('Загрузка...', 'Yuklanmoqda...') : tr('Обновить', 'Yangilash')}
-            </button>
-          </div>
-          {movementsLoading ? (
-            <div style={{ padding: 16 }}>
-              {[1,2,3].map((i) => <div key={i} className="sg-skeleton" style={{ height: 36, marginBottom: 8 }} />)}
-            </div>
-          ) : movements.length === 0 ? (
-            <p className="sg-subtitle" style={{ padding: '20px 16px' }}>{tr('Движений пока нет', 'Hali harakatlar yo\'q')}</p>
-          ) : (
-            <table className="sg-table" style={{ margin: 0 }}>
-              <thead>
-                <tr>
-                  <th>{tr('Дата', 'Sana')}</th>
-                  <th>{tr('Товар', 'Mahsulot')}</th>
-                  <th style={{ textAlign: 'right' }}>{tr('Изменение', 'O\'zgarish')}</th>
-                  <th style={{ textAlign: 'right' }}>{tr('Было → Стало', 'Oldin → Keyin')}</th>
-                  <th>{tr('Причина', 'Sabab')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movements.map((m: any) => {
-                  const variantName = variantNameForMovement(m);
-                  return (
-                    <tr key={m.id}>
-                      <td style={{ fontSize: 12, color: '#748278', whiteSpace: 'nowrap' }}>
-                        {new Date(m.createdAt).toLocaleString(locale)}
-                      </td>
-                      <td style={{ fontSize: 13 }}>
-                        <div>{m.product?.name ?? '—'}</div>
-                        {variantName && <div style={{ fontSize: 11, color: '#748278', marginTop: 1 }}>{variantName}</div>}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: m.delta > 0 ? '#065f46' : m.delta < 0 ? '#991b1b' : '#748278' }}>
-                        {m.delta > 0 ? `+${m.delta}` : m.delta}
-                      </td>
-                      <td style={{ textAlign: 'right', fontSize: 12, color: '#748278' }}>
-                        {m.qtyBefore} → {m.qtyAfter}
-                      </td>
-                      <td style={{ fontSize: 12, color: '#748278' }}>{m.note || '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <StockMovementsLog
+          movements={movements}
+          movementsLoading={movementsLoading}
+          logProductFilter={logProductFilter}
+          onRefresh={() => loadMovements(logProductFilter?.id)}
+          onClearFilter={clearLogFilter}
+          variantNameForMovement={variantNameForMovement}
+          locale={locale}
+        />
       )}
     </section>
   );

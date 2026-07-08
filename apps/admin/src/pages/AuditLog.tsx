@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
+import Button from '../components/Button';
+import Badge from '../components/Badge';
+import Table, { type TableColumn } from '../components/Table';
 
 const ACTION_LABELS: Record<string, { ru: string; uz: string }> = {
   'store.create':              { ru: 'Магазин создан',           uz: "Do'kon yaratildi" },
@@ -59,101 +63,104 @@ export default function AuditLog() {
     ? logs.filter((l) => l.action.startsWith(category + '.'))
     : logs;
 
+  const columns: TableColumn<any>[] = [
+    {
+      key: 'date',
+      header: tr('Дата', 'Sana'),
+      width: 160,
+      render: (log) => <span className="whitespace-nowrap text-token-xs text-neutral-500">{new Date(log.createdAt).toLocaleString(locale)}</span>,
+    },
+    {
+      key: 'action',
+      header: tr('Действие', 'Harakat'),
+      render: (log) => <Badge variant="neutral">{actionLabel(log.action)}</Badge>,
+    },
+    {
+      key: 'actor',
+      header: tr('Исполнитель', 'Ijrochi'),
+      render: (log) => log.actor ? (log.actor.name || log.actor.email) : <span className="text-neutral-400">—</span>,
+    },
+    {
+      key: 'details',
+      header: tr('Детали', 'Tafsilotlar'),
+      render: (log) => (
+        <span className="text-token-xs text-neutral-500 max-w-[260px]">
+          {log.details ? (
+            <span title={JSON.stringify(log.details, null, 2)}>
+              {Object.entries(log.details as Record<string, unknown>)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ')}
+            </span>
+          ) : (
+            log.targetId ? <span className="text-neutral-400">{log.targetId}</span> : <span className="text-neutral-400">—</span>
+          )}
+        </span>
+      ),
+    },
+  ];
+
   if (loading) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
-        <div className="sg-skeleton" style={{ height: 28, width: '30%' }} />
-        <div className="sg-card sg-grid" style={{ gap: 10 }}>
+      <section className="flex flex-col gap-4">
+        <div className="h-7 w-[30%] rounded-token-sm bg-neutral-100 animate-pulse" />
+        <Card className="flex flex-col gap-2.5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid #edf2ee' }}>
-              <div className="sg-skeleton" style={{ height: 14, width: 140 }} />
-              <div className="sg-skeleton" style={{ height: 14, width: 180 }} />
-              <div className="sg-skeleton" style={{ height: 14, flex: 1 }} />
+            <div key={i} className="flex gap-3 py-2.5 border-b border-neutral-100 last:border-0">
+              <div className="h-3.5 w-[140px] rounded-token-sm bg-neutral-100 animate-pulse" />
+              <div className="h-3.5 w-[180px] rounded-token-sm bg-neutral-100 animate-pulse" />
+              <div className="h-3.5 flex-1 rounded-token-sm bg-neutral-100 animate-pulse" />
             </div>
           ))}
-        </div>
+        </Card>
       </section>
     );
   }
 
   if (error) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <section className="flex flex-col gap-4">
         <header>
-          <h2 className="sg-title">{tr('Журнал действий', 'Harakatlar jurnali')}</h2>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Журнал действий', 'Harakatlar jurnali')}</h2>
         </header>
-        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
-          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить журнал', "Jurnal yuklanmadi")}</p>
-          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={load}>{tr('Повторить', 'Qayta urinish')}</button>
-        </div>
+        <Card className="text-center py-8 px-4">
+          <p className="m-0 font-semibold text-danger">{tr('Не удалось загрузить журнал', "Jurnal yuklanmadi")}</p>
+          <Button variant="ghost" size="md" type="button" className="mt-3.5" onClick={load}>{tr('Повторить', 'Qayta urinish')}</Button>
+        </Card>
       </section>
     );
   }
 
   return (
-    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+    <section className="flex flex-col gap-4">
       <header>
-        <h2 className="sg-title">{tr('Журнал действий', 'Harakatlar jurnali')}</h2>
-        <p className="sg-subtitle">{tr('Последние 100 действий администраторов', "So'nggi 100 ta admin harakati")}</p>
+        <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Журнал действий', 'Harakatlar jurnali')}</h2>
+        <p className="mt-1 text-token-sm text-neutral-500">{tr('Последние 100 действий администраторов', "So'nggi 100 ta admin harakati")}</p>
       </header>
 
-      <div className="sg-pill-row" style={{ flexWrap: 'wrap' }}>
+      <div className="flex flex-wrap gap-2">
         {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
           <button
             key={key}
             type="button"
             onClick={() => setCategory(key)}
-            className={`sg-pill${category === key ? ' active' : ''}`}
+            className={[
+              'rounded-full border px-3 py-1.5 text-token-xs font-semibold transition-colors',
+              category === key
+                ? 'bg-neutral-800 border-neutral-800 text-white'
+                : 'bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50',
+            ].join(' ')}
           >
             {tr(label.ru, label.uz)}
           </button>
         ))}
       </div>
 
-      <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-        {filteredLogs.length === 0 ? (
-          <p className="sg-subtitle" style={{ padding: '24px 16px' }}>{tr('Действий пока нет', "Harakatlar yo'q")}</p>
-        ) : (
-          <table className="sg-table" style={{ margin: 0 }}>
-            <thead>
-              <tr>
-                <th style={{ whiteSpace: 'nowrap' }}>{tr('Дата', 'Sana')}</th>
-                <th>{tr('Действие', 'Harakat')}</th>
-                <th>{tr('Исполнитель', 'Ijrochi')}</th>
-                <th>{tr('Детали', 'Tafsilotlar')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLogs.map((log) => (
-                <tr key={log.id}>
-                  <td style={{ whiteSpace: 'nowrap', fontSize: 12, color: '#748278' }}>
-                    {new Date(log.createdAt).toLocaleString(locale)}
-                  </td>
-                  <td>
-                    <span className="sg-badge" style={{ background: '#f3f4f6', color: '#1f2937', fontWeight: 600 }}>
-                      {actionLabel(log.action)}
-                    </span>
-                  </td>
-                  <td style={{ fontSize: 13 }}>
-                    {log.actor ? (log.actor.name || log.actor.email) : <span style={{ color: '#9ca3af' }}>—</span>}
-                  </td>
-                  <td style={{ fontSize: 12, color: '#5f6d64', maxWidth: 260 }}>
-                    {log.details ? (
-                      <span title={JSON.stringify(log.details, null, 2)}>
-                        {Object.entries(log.details as Record<string, unknown>)
-                          .map(([k, v]) => `${k}: ${v}`)
-                          .join(', ')}
-                      </span>
-                    ) : (
-                      log.targetId ? <span style={{ color: '#9ca3af' }}>{log.targetId}</span> : <span style={{ color: '#9ca3af' }}>—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Table
+        columns={columns}
+        data={filteredLogs}
+        rowKey={(log) => log.id}
+        emptyMessage={tr('Действий пока нет', "Harakatlar yo'q")}
+      />
     </section>
   );
 }

@@ -5,6 +5,7 @@ import {
   ClipboardList, BarChart2, Tag, type LucideIcon,
 } from 'lucide-react';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
 
 const SUPPORT_TG = 'https://t.me/sellgram_support';
 
@@ -430,12 +431,12 @@ export default function Help() {
   }
 
   return (
-    <section className="sg-page sg-grid" style={{ gap: 24 }}>
+    <section className="flex flex-col gap-6">
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <header>
-        <h2 className="sg-title">{tr('Справка', "Qo'llanma")}</h2>
-        <p className="sg-subtitle">
+        <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Справка', "Qo'llanma")}</h2>
+        <p className="mt-1 text-token-sm text-neutral-500">
           {tr(
             'Всё что нужно знать для работы с SellGram',
             "SellGram bilan ishlash uchun kerakli barcha ma'lumotlar",
@@ -444,107 +445,87 @@ export default function Help() {
       </header>
 
       {/* ── Quick-start guide ───────────────────────────────────────────────── */}
-      <div className="sg-card" style={{ padding: '20px 20px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            background: 'linear-gradient(135deg, #00875a, #00a86f)',
-            display: 'grid', placeItems: 'center', fontSize: 18,
-          }}>🚀</div>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
+      <Card>
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-9 h-9 rounded-token-md bg-success/10 flex items-center justify-center text-lg flex-shrink-0">
+            <Rocket size={18} className="text-success" />
+          </div>
+          <h3 className="m-0 text-token-lg font-semibold text-neutral-800">
             {tr('Быстрый старт — 5 шагов', "Tezkor boshlash — 5 qadam")}
           </h3>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
           {QUICKSTART_STEPS.map((step) => (
-            <div key={step.num} style={{
-              background: 'var(--sg-panel-2)',
-              borderRadius: 12,
-              padding: '14px 14px 12px',
-              position: 'relative',
-              border: '1px solid var(--sg-border)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: 8, background: '#00875a',
-                  color: '#fff', fontWeight: 900, fontSize: 13, flexShrink: 0,
-                  display: 'grid', placeItems: 'center',
-                }}>{step.num}</div>
-                <span style={{ fontSize: 20, lineHeight: 1, marginTop: 2 }}>{step.icon}</span>
+            <div key={step.num} className="bg-neutral-50 border border-neutral-200 rounded-token-md p-3">
+              <div className="flex items-start gap-2.5">
+                <div className="w-7 h-7 rounded-token-sm bg-success text-white font-bold text-token-xs flex-shrink-0 flex items-center justify-center">
+                  {step.num}
+                </div>
+                <span className="text-token-xl leading-none mt-0.5">{step.icon}</span>
               </div>
-              <p style={{ margin: '10px 0 4px', fontWeight: 700, fontSize: 13, color: 'var(--sg-text)' }}>
+              <p className="mt-2.5 mb-1 font-semibold text-token-sm text-neutral-800">
                 {tr(step.titleRu, step.titleUz)}
               </p>
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--sg-muted)', lineHeight: 1.5 }}>
+              <p className="m-0 text-token-xs text-neutral-500 leading-relaxed">
                 {tr(step.descRu, step.descUz)}
               </p>
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
       {/* ── Order status flow ───────────────────────────────────────────────── */}
-      <div className="sg-card" style={{ padding: '20px 20px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            background: '#eff6ff', display: 'grid', placeItems: 'center',
-          }}>
-            <ShoppingCart size={18} color="#3b82f6" />
+      <Card>
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-9 h-9 rounded-token-md bg-accent-600/10 flex items-center justify-center flex-shrink-0">
+            <ShoppingCart size={18} className="text-accent-600" />
           </div>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
+          <h3 className="m-0 text-token-lg font-semibold text-neutral-800">
             {tr('Жизненный цикл заказа', "Buyurtma hayot tsikli")}
           </h3>
         </div>
 
-        {/* Flow diagram */}
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6,
-          padding: '12px 0',
-        }}>
+        {/* Flow diagram — per-status colors are intentional legend data (ORDER_STATUSES), not a semantic Badge variant */}
+        <div className="flex flex-wrap items-center gap-1.5 py-3">
           {ORDER_STATUSES.map((s, i) => (
             <React.Fragment key={s.key}>
-              <div style={{
-                background: s.bg,
-                border: `1.5px solid ${s.color}`,
-                borderRadius: 10,
-                padding: '8px 12px',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                minWidth: 88,
-              }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: s.color, letterSpacing: 0.3 }}>{s.key}</span>
-                <span style={{ fontSize: 11, color: s.color, opacity: 0.8 }}>{tr(s.labelRu, s.labelUz)}</span>
+              <div
+                className="rounded-token-md px-3 py-2 flex flex-col items-center gap-0.5 min-w-[88px]"
+                style={{ background: s.bg, border: `1.5px solid ${s.color}` }}
+              >
+                <span className="text-token-xs font-semibold tracking-wide" style={{ color: s.color }}>{s.key}</span>
+                <span className="text-token-xs opacity-80" style={{ color: s.color }}>{tr(s.labelRu, s.labelUz)}</span>
               </div>
               {i < ORDER_STATUSES.length - 1 && (
-                <span style={{ color: '#9ca3af', fontSize: 18, flexShrink: 0 }}>→</span>
+                <span className="text-neutral-400 text-token-lg flex-shrink-0">→</span>
               )}
             </React.Fragment>
           ))}
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: '1 1 260px' }}>
-            <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>💬</span>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--sg-muted)', lineHeight: 1.55 }}>
+        <div className="flex flex-wrap gap-4 mt-2.5">
+          <div className="flex items-start gap-2 flex-[1_1_260px]">
+            <span className="text-token-lg flex-shrink-0 mt-0.5">💬</span>
+            <p className="m-0 text-token-xs text-neutral-500 leading-relaxed">
               {tr(
                 'При каждой смене статуса покупатель получает уведомление в Telegram (кроме заблокировавших бота).',
                 "Har bir status o'zgarishida xaridor Telegram'da bildirishnoma oladi (botni bloklaganlardan tashqari).",
               )}
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: '1 1 260px' }}>
-            <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>⏱️</span>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--sg-muted)', lineHeight: 1.55 }}>
+          <div className="flex items-start gap-2 flex-[1_1_260px]">
+            <span className="text-token-lg flex-shrink-0 mt-0.5">⏱️</span>
+            <p className="m-0 text-token-xs text-neutral-500 leading-relaxed">
               {tr(
                 'Заказы в статусе NEW автоматически отменяются через 24 часа без подтверждения. Остатки восстанавливаются.',
                 "NEW statusidagi buyurtmalar 24 soat ichida tasdiqlanmasa avtomatik bekor qilinadi. Qoldiqlar tiklanadi.",
               )}
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: '1 1 260px' }}>
-            <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>⭐</span>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--sg-muted)', lineHeight: 1.55 }}>
+          <div className="flex items-start gap-2 flex-[1_1_260px]">
+            <span className="text-token-lg flex-shrink-0 mt-0.5">⭐</span>
+            <p className="m-0 text-token-xs text-neutral-500 leading-relaxed">
               {tr(
                 'Баллы лояльности начисляются при COMPLETED. При CANCELLED — автоматически списываются.',
                 "Loyallik ballari COMPLETED da hisoblanadi. CANCELLED da — avtomatik yechiladi.",
@@ -552,24 +533,21 @@ export default function Help() {
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* ── Plan comparison ─────────────────────────────────────────────────── */}
-      <div className="sg-card" style={{ padding: '20px 20px 16px', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            background: '#fef9c3', display: 'grid', placeItems: 'center',
-          }}>
-            <CreditCard size={18} color="#854d0e" />
+      <Card className="overflow-hidden">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-9 h-9 rounded-token-md bg-warning/10 flex items-center justify-center flex-shrink-0">
+            <CreditCard size={18} className="text-warning" />
           </div>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
+          <h3 className="m-0 text-token-lg font-semibold text-neutral-800">
             {tr('Сравнение тарифов', "Tariflarni solishtirish")}
           </h3>
         </div>
 
-        <div style={{ overflowX: 'auto', marginInline: -20 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 400, tableLayout: 'fixed' }}>
+        <div className="overflow-x-auto -mx-4">
+          <table className="w-full border-collapse min-w-[400px]" style={{ tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: '42%' }} />
               <col style={{ width: '19%' }} />
@@ -578,18 +556,15 @@ export default function Help() {
             </colgroup>
             <thead>
               <tr>
-                <th style={{ padding: '8px 20px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: 'var(--sg-muted)' }}>
+                <th className="px-4 py-2 text-left text-token-xs font-semibold text-neutral-500">
                   {tr('Возможность', 'Imkoniyat')}
                 </th>
                 {[
-                  { label: 'FREE',     bg: '#f9fafb', color: '#374151' },
-                  { label: 'PRO',      bg: '#eff6ff', color: '#1d4ed8' },
-                  { label: 'BUSINESS', bg: '#ecfdf5', color: '#059669' },
+                  { label: 'FREE', className: 'bg-neutral-100 text-neutral-700' },
+                  { label: 'PRO', className: 'bg-accent-600/10 text-accent-600' },
+                  { label: 'BUSINESS', className: 'bg-success/10 text-success' },
                 ].map((plan) => (
-                  <th key={plan.label} style={{
-                    padding: '8px 12px', textAlign: 'center', fontSize: 13, fontWeight: 800,
-                    background: plan.bg, color: plan.color, borderRadius: 0,
-                  }}>
+                  <th key={plan.label} className={`px-3 py-2 text-center text-token-sm font-bold ${plan.className}`}>
                     {plan.label}
                   </th>
                 ))}
@@ -597,17 +572,17 @@ export default function Help() {
             </thead>
             <tbody>
               {PLAN_ROWS.map((row, i) => (
-                <tr key={row.featureRu} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--sg-panel-2)' }}>
-                  <td style={{ padding: '7px 20px', fontSize: 13, color: 'var(--sg-text)', fontWeight: 500 }}>
+                <tr key={row.featureRu} className={i % 2 === 0 ? '' : 'bg-neutral-50'}>
+                  <td className="px-4 py-2 text-token-sm text-neutral-800 font-medium">
                     {tr(row.featureRu, row.featureUz)}
                   </td>
-                  <td style={{ padding: '7px 12px', textAlign: 'center', fontSize: 13, color: row.free === '—' ? '#9ca3af' : '#374151' }}>
+                  <td className={`px-3 py-2 text-center text-token-sm ${row.free === '—' ? 'text-neutral-400' : 'text-neutral-700'}`}>
                     {row.free}
                   </td>
-                  <td style={{ padding: '7px 12px', textAlign: 'center', fontSize: 13, color: row.pro === '—' ? '#9ca3af' : '#1d4ed8', fontWeight: row.pro === '✓' ? 700 : 400 }}>
+                  <td className={`px-3 py-2 text-center text-token-sm ${row.pro === '—' ? 'text-neutral-400' : 'text-accent-600'} ${row.pro === '✓' ? 'font-bold' : ''}`}>
                     {row.pro}
                   </td>
-                  <td style={{ padding: '7px 12px', textAlign: 'center', fontSize: 13, color: row.business === '—' ? '#9ca3af' : '#059669', fontWeight: row.business === '✓' ? 700 : 400 }}>
+                  <td className={`px-3 py-2 text-center text-token-sm ${row.business === '—' ? 'text-neutral-400' : 'text-success'} ${row.business === '✓' ? 'font-bold' : ''}`}>
                     {row.business}
                   </td>
                 </tr>
@@ -616,92 +591,74 @@ export default function Help() {
           </table>
         </div>
 
-        <p style={{ margin: '14px 0 0', fontSize: 12, color: 'var(--sg-muted)' }}>
+        <p className="mt-3.5 mb-0 text-token-xs text-neutral-500">
           {tr(
             '⚠️ После истечения тарифа действует 3-дневный льготный период — все функции сохраняются. Данные не удаляются при переходе на FREE.',
             "⚠️ Tarif muddati tugagach 3 kunlik imtiyozli davr beriladi — barcha funksiyalar saqlanadi. FREE ga o'tishda ma'lumotlar o'chirilmaydi.",
           )}
         </p>
-      </div>
+      </Card>
 
       {/* ── Support banner ──────────────────────────────────────────────────── */}
-      <div className="sg-card soft" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-          background: 'linear-gradient(135deg, #00875a, #00a86f)',
-          display: 'grid', placeItems: 'center',
-        }}>
-          <LifeBuoy size={22} color="#fff" />
+      <Card className="bg-neutral-50 flex items-center gap-3.5">
+        <div className="w-11 h-11 rounded-token-md bg-success flex items-center justify-center flex-shrink-0">
+          <LifeBuoy size={22} className="text-white" />
         </div>
-        <div style={{ flex: 1 }}>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>
+        <div className="flex-1">
+          <p className="m-0 font-semibold text-token-base text-neutral-800">
             {tr('Нужна помощь?', 'Yordam kerakmi?')}
           </p>
-          <p className="sg-subtitle" style={{ marginTop: 2 }}>
+          <p className="mt-0.5 text-token-sm text-neutral-500">
             {tr('Напишите нам в Telegram: ', "Telegram'da yozing: ")}
-            <a href={SUPPORT_TG} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--sg-brand)', fontWeight: 700 }}>
+            <a href={SUPPORT_TG} target="_blank" rel="noopener noreferrer" className="text-success font-semibold">
               @sellgram_support
             </a>
           </p>
         </div>
-      </div>
+      </Card>
 
       {/* ── FAQ accordion ───────────────────────────────────────────────────── */}
       <div>
-        <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 800 }}>
+        <h3 className="m-0 mb-3 text-token-lg font-semibold text-neutral-800">
           {tr('Частые вопросы', "Ko'p so'raladigan savollar")}
         </h3>
-        <div className="sg-grid" style={{ gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {FAQ_SECTIONS.map((section) => {
             const isOpen = openFaq.has(section.id);
             const Icon = section.icon;
             return (
-              <div key={section.id} className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <Card key={section.id} className="overflow-hidden" style={{ padding: 0 }}>
                 <button
                   onClick={() => toggleFaq(section.id)}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '14px 16px', background: 'none', border: 'none',
-                    cursor: 'pointer', textAlign: 'left',
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--sg-panel-2)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-transparent border-none cursor-pointer text-left hover:bg-neutral-50"
                 >
-                  <div style={{
-                    width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-                    background: isOpen ? 'linear-gradient(135deg, #00875a, #00a86f)' : 'var(--sg-bg-soft)',
-                    display: 'grid', placeItems: 'center', transition: 'background 0.2s',
-                  }}>
-                    <Icon size={17} color={isOpen ? '#fff' : '#00875a'} />
+                  <div className={`w-[34px] h-[34px] rounded-token-md flex-shrink-0 flex items-center justify-center transition-colors ${isOpen ? 'bg-success' : 'bg-neutral-100'}`}>
+                    <Icon size={17} className={isOpen ? 'text-white' : 'text-success'} />
                   </div>
-                  <span style={{ flex: 1, fontWeight: 800, fontSize: 15 }}>{tr(section.titleRu, section.titleUz)}</span>
+                  <span className="flex-1 font-semibold text-token-base text-neutral-800">{tr(section.titleRu, section.titleUz)}</span>
                   {isOpen
-                    ? <ChevronUp size={18} color="var(--sg-muted)" />
-                    : <ChevronDown size={18} color="var(--sg-muted)" />}
+                    ? <ChevronUp size={18} className="text-neutral-400" />
+                    : <ChevronDown size={18} className="text-neutral-400" />}
                 </button>
 
                 {isOpen && (
-                  <div style={{ borderTop: '1px solid var(--sg-border)' }}>
+                  <div className="border-t border-neutral-200">
                     {section.items.map((item, i) => (
                       <div
                         key={i}
-                        style={{
-                          padding: '14px 16px',
-                          borderBottom: i < section.items.length - 1 ? '1px solid var(--sg-border)' : 'none',
-                          background: i % 2 === 0 ? 'transparent' : 'var(--sg-panel-2)',
-                        }}
+                        className={`px-4 py-3.5 ${i < section.items.length - 1 ? 'border-b border-neutral-200' : ''} ${i % 2 === 0 ? '' : 'bg-neutral-50'}`}
                       >
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: 'var(--sg-text)' }}>
+                        <p className="m-0 font-semibold text-token-base text-neutral-800">
                           {tr(item.qRu, item.qUz)}
                         </p>
-                        <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--sg-muted)', lineHeight: 1.55 }}>
+                        <p className="mt-1.5 mb-0 text-token-base text-neutral-500 leading-relaxed">
                           {tr(item.aRu, item.aUz)}
                         </p>
                       </div>
                     ))}
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>
