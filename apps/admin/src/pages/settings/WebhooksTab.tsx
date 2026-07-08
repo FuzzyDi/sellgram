@@ -154,7 +154,7 @@ export default function WebhooksTab({ onNotice, newWebhookSecret, onCloseSecret,
 
         <div className="flex flex-col gap-2 mt-3">
           {webhooks.map((hook) => (
-            <Card key={hook.id} className="bg-neutral-50 p-2.5">
+            <Card key={hook.id} className="bg-neutral-50" style={{ padding: 10 }}>
               <div className="flex items-start justify-between gap-2.5 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <div className="font-mono text-token-sm font-semibold break-all text-neutral-800">{hook.url}</div>
