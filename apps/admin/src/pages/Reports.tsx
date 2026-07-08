@@ -2,6 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
+import Button from '../components/Button';
+import Select from '../components/Select';
+import Table, { type TableColumn } from '../components/Table';
+import ScheduledReportsSection from './reports/ScheduledReportsSection';
+import RevenueChart from './reports/RevenueChart';
+import NewCustomersChart from './reports/NewCustomersChart';
+import CategoryBarChart from './reports/CategoryBarChart';
 
 type NoticeTone = 'success' | 'error';
 
@@ -27,297 +35,6 @@ type ReportsMeta = {
     monthKey?: string;
   };
 };
-
-type ScheduledFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
-type ScheduledReportDraft = {
-  reportType: string;
-  periodDays: number;
-  frequency: ScheduledFrequency;
-};
-
-function ScheduledReportsSection({
-  limits,
-  tr,
-}: {
-  limits: ReportsMeta['reportLimits'];
-  tr: (ru: string, uz: string) => string;
-}) {
-  const navigate = useNavigate();
-  const maxAllowed = limits?.maxScheduledReports ?? 0;
-  const [schedules, setSchedules] = useState<(ScheduledReportDraft & { id: string; nextRunAt?: string; lastSentAt?: string | null })[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [draft, setDraft] = useState<ScheduledReportDraft>({
-    reportType: 'top-products',
-    periodDays: 30,
-    frequency: 'WEEKLY',
-  });
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
-  const [loadError, setLoadError] = useState(false);
-
-  useEffect(() => {
-    if (maxAllowed === 0) return;
-    adminApi.getScheduledReports()
-      .then((data: any[]) => setSchedules(Array.isArray(data) ? data : []))
-      .catch(() => setLoadError(true));
-  }, [maxAllowed]);
-
-  const canAdd = maxAllowed < 0 || schedules.length < maxAllowed;
-
-  async function addSchedule() {
-    if (!canAdd || saving) return;
-    setSaving(true);
-    setSaveError('');
-    try {
-      const created = await adminApi.createScheduledReport(draft);
-      setSchedules((prev) => [...prev, created]);
-      setShowForm(false);
-    } catch (err: any) {
-      setSaveError(err?.message || tr('Ошибка сохранения', 'Saqlashda xato'));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function removeSchedule(id: string) {
-    try {
-      await adminApi.deleteScheduledReport(id);
-      setSchedules((prev) => prev.filter((s) => s.id !== id));
-    } catch (err: any) {
-      setSaveError(err?.message || tr('Ошибка удаления', "O'chirishda xato"));
-    }
-  }
-
-  const frequencyLabel: Record<ScheduledFrequency, string> = {
-    DAILY:   tr('Каждый день', 'Har kuni'),
-    WEEKLY:  tr('Каждую неделю', 'Har hafta'),
-    MONTHLY: tr('Каждый месяц', 'Har oy'),
-  };
-
-  const reportTypeLabel: Record<string, string> = {
-    'top-products': tr('Топ товаров', 'Top mahsulotlar'),
-    'revenue':      tr('Выручка', 'Tushum'),
-    'categories':   tr('Категории', 'Toifalar'),
-    'customers':    tr('Клиенты', 'Mijozlar'),
-  };
-
-  if (maxAllowed === 0) {
-    return (
-      <section className="sg-card">
-        <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800 }}>
-          {tr('Авто-рассылка отчётов', 'Hisobotlarni avtomatik yuborish')}
-        </h3>
-        <div style={{ padding: '20px 16px', background: 'var(--sg-panel-2)', border: '1px solid var(--sg-border)', borderRadius: 12, textAlign: 'center' }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>
-            {tr('Доступно на PRO и BUSINESS', 'PRO va BUSINESS tariflarida mavjud')}
-          </p>
-          <p className="sg-subtitle" style={{ marginTop: 4 }}>
-            {tr(
-              'Автоматически отправляйте CSV-отчёты по расписанию на email',
-              'CSV hisobotlarni jadval bo`yicha email ga avtomatik yuboring'
-            )}
-          </p>
-          <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => navigate('/billing')}>
-            {tr('Перейти к тарифам', "Tariflarga o'tish")}
-          </button>
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="sg-card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
-            {tr('Авто-рассылка отчётов', 'Hisobotlarni avtomatik yuborish')}
-          </h3>
-          <p className="sg-subtitle" style={{ marginTop: 2 }}>
-            {tr('Отчёты по расписанию на email', 'Email ga jadval bo`yicha hisobotlar')}
-            {maxAllowed > 0 && (
-              <span style={{ marginLeft: 8, fontWeight: 600 }}>
-                ({schedules.length}/{maxAllowed})
-              </span>
-            )}
-          </p>
-        </div>
-        <button
-          className="sg-btn primary"
-          onClick={() => setShowForm(true)}
-          disabled={!canAdd || showForm}
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          + {tr('Добавить', "Qo'shish")}
-        </button>
-      </div>
-
-      {showForm && (
-        <div style={{ border: '1px solid var(--sg-border)', borderRadius: 12, padding: 14, marginBottom: 12, background: 'var(--sg-panel-2)' }}>
-          <div className="sg-grid cols-3" style={{ gap: 10, marginBottom: 12 }}>
-            <div>
-              <label className="sg-kpi-label" style={{ display: 'block', marginBottom: 4 }}>
-                {tr('Тип отчёта', 'Hisobot turi')}
-              </label>
-              <select
-                value={draft.reportType}
-                onChange={(e) => setDraft((d) => ({ ...d, reportType: e.target.value }))}
-                style={{ width: '100%', border: '1px solid var(--sg-border)', borderRadius: 8, padding: '8px 10px' }}
-              >
-                {Object.entries(reportTypeLabel).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="sg-kpi-label" style={{ display: 'block', marginBottom: 4 }}>
-                {tr('Период (дней)', 'Davr (kun)')}
-              </label>
-              <select
-                value={draft.periodDays}
-                onChange={(e) => setDraft((d) => ({ ...d, periodDays: Number(e.target.value) }))}
-                style={{ width: '100%', border: '1px solid var(--sg-border)', borderRadius: 8, padding: '8px 10px' }}
-              >
-                {[7, 14, 30, 60, 90].map((d) => (
-                  <option key={d} value={d}>{d} {tr('дней', 'kun')}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="sg-kpi-label" style={{ display: 'block', marginBottom: 4 }}>
-                {tr('Частота', 'Chastota')}
-              </label>
-              <select
-                value={draft.frequency}
-                onChange={(e) => setDraft((d) => ({ ...d, frequency: e.target.value as ScheduledFrequency }))}
-                style={{ width: '100%', border: '1px solid var(--sg-border)', borderRadius: 8, padding: '8px 10px' }}
-              >
-                {(Object.keys(frequencyLabel) as ScheduledFrequency[]).map((key) => (
-                  <option key={key} value={key}>{frequencyLabel[key]}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {saveError && (
-            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>{saveError}</p>
-          )}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="sg-btn ghost" onClick={() => { setShowForm(false); setSaveError(''); }}>{tr('Отмена', 'Bekor')}</button>
-            <button className="sg-btn primary" onClick={() => void addSchedule()} disabled={saving}>
-              {saving ? tr('Сохранение...', 'Saqlanmoqda...') : tr('Сохранить', 'Saqlash')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {schedules.length === 0 && !showForm ? (
-        <p className="sg-subtitle">{tr('Нет запланированных отчётов', 'Rejalashtirilgan hisobotlar yo`q')}</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {loadError && (
-            <p className="sg-subtitle" style={{ color: '#b91c1c' }}>{tr('Не удалось загрузить расписания', 'Jadvallarni yuklab bo`lmadi')}</p>
-          )}
-          {saveError && !showForm && (
-            <p style={{ margin: 0, fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>{saveError}</p>
-          )}
-          {schedules.map((s) => (
-            <div key={s.id} className="sg-card soft" style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div>
-                <span style={{ fontWeight: 700, fontSize: 14 }}>{reportTypeLabel[s.reportType] || s.reportType}</span>
-                <span className="sg-subtitle" style={{ marginLeft: 10 }}>
-                  {frequencyLabel[s.frequency]} · {s.periodDays} {tr('дней', 'kun')}
-                </span>
-                {s.nextRunAt && (
-                  <span className="sg-subtitle" style={{ marginLeft: 10, fontSize: 11 }}>
-                    {tr('Следующая', 'Keyingisi')}: {new Date(s.nextRunAt).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-              <button
-                className="sg-btn ghost"
-                style={{ fontSize: 12, padding: '4px 10px', color: '#b91c1c' }}
-                onClick={() => void removeSchedule(s.id)}
-              >
-                {tr('Удалить', "O'chirish")}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function SparkChart({
-  data, valueKey, color, gradientId,
-}: {
-  data: Record<string, number>[]; valueKey: string; color: string; gradientId: string;
-}) {
-  if (!data || data.length < 2) return null;
-  const W = 600, H = 120, PAD = { top: 8, right: 4, bottom: 28, left: 0 };
-  const maxVal = Math.max(...data.map((d) => d[valueKey] ?? 0), 1);
-  const xStep = (W - PAD.left - PAD.right) / Math.max(data.length - 1, 1);
-  const toY = (v: number) => PAD.top + (1 - v / maxVal) * (H - PAD.top - PAD.bottom);
-  const pts = data.map((d, i) => [PAD.left + i * xStep, toY(d[valueKey] ?? 0)] as [number, number]);
-  const area = `M${pts[0][0]},${H - PAD.bottom} L${pts.map(([x, y]) => `${x},${y}`).join(' L')} L${pts[pts.length - 1][0]},${H - PAD.bottom} Z`;
-  const line = `M${pts.map(([x, y]) => `${x},${y}`).join(' L')}`;
-  const labelEvery = Math.max(1, Math.round(data.length / 6));
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.18" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill={`url(#${gradientId})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      {pts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={(data[i][valueKey] ?? 0) > 0 ? 3 : 0} fill={color} />
-      ))}
-      {data.map((d: any, i: number) => {
-        if (i % labelEvery !== 0 && i !== data.length - 1) return null;
-        return <text key={i} x={pts[i][0]} y={H - 6} textAnchor="middle" fontSize="9" fill="#9ca3af">{String(d.date ?? '').slice(5)}</text>;
-      })}
-    </svg>
-  );
-}
-
-function RevenueChart({ data }: { data: { date: string; revenue: number; count: number }[] }) {
-  return <SparkChart data={data as any} valueKey="revenue" color="#00875a" gradientId="rep-rev-grad" />;
-}
-
-function NewCustomersChart({ data }: { data: { date: string; count: number }[] }) {
-  return <SparkChart data={data as any} valueKey="count" color="#2563eb" gradientId="rep-cust-grad" />;
-}
-
-function CategoryBarChart({ data }: { data: { categoryName: string; totalRevenue: number }[] }) {
-  if (!data || data.length === 0) return null;
-  const maxVal = Math.max(...data.map((d) => d.totalRevenue), 1);
-  const BAR_H = 22, GAP = 6, PAD_LEFT = 120, PAD_RIGHT = 80;
-  const H = data.length * (BAR_H + GAP);
-  const W = 500;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-      {data.map((row, i) => {
-        const y = i * (BAR_H + GAP);
-        const barW = Math.max(4, ((row.totalRevenue / maxVal) * (W - PAD_LEFT - PAD_RIGHT)));
-        return (
-          <g key={row.categoryName}>
-            <text x={PAD_LEFT - 8} y={y + BAR_H / 2 + 4} textAnchor="end" fontSize="11" fill="#6b7280"
-              style={{ overflow: 'hidden' }}>
-              {row.categoryName.length > 14 ? row.categoryName.slice(0, 13) + '…' : row.categoryName}
-            </text>
-            <rect x={PAD_LEFT} y={y} width={barW} height={BAR_H} rx="4" fill="#00875a" fillOpacity="0.75" />
-            <text x={PAD_LEFT + barW + 6} y={y + BAR_H / 2 + 4} fontSize="11" fill="#374151" fontWeight="600">
-              {Number(row.totalRevenue).toLocaleString()}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 export default function Reports() {
   const { tr } = useAdminI18n();
@@ -437,262 +154,237 @@ export default function Reports() {
       const refreshed = await adminApi.getReportsMeta();
       setMeta(refreshed);
     } catch (err: any) {
-      showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430 \u044d\u043a\u0441\u043f\u043e\u0440\u0442\u0430', 'Eksport xatosi'));
+      showNotice('error', err?.message || tr('Ошибка экспорта', 'Eksport xatosi'));
     } finally {
       setExporting(null);
     }
   };
 
   const noticeNode = notice ? (
-    <div style={{
-      position: 'fixed', right: 16, top: 16, zIndex: 200, minWidth: 260, maxWidth: 420,
-      borderRadius: 12, padding: '12px 16px', fontSize: 13, fontWeight: 700,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.1)', animation: 'sg-fade-in 0.2s ease both',
-      color: notice.tone === 'error' ? '#991b1b' : '#065f46',
-      background: notice.tone === 'error' ? '#fee2e2' : '#d1fae5',
-      border: `1px solid ${notice.tone === 'error' ? '#fecaca' : '#a7f3d0'}`,
-    }}>
+    <div
+      className={[
+        'fixed top-4 right-4 z-[200] min-w-[260px] max-w-[420px] rounded-token-lg px-4 py-3 text-token-sm font-semibold shadow-sm border',
+        notice.tone === 'error' ? 'bg-danger/10 text-danger border-danger/30' : 'bg-success/10 text-success border-success/30',
+      ].join(' ')}
+    >
       {notice.message}
     </div>
   ) : null;
 
+  const topProductsColumns: TableColumn<any>[] = [
+    { key: 'idx', header: '#', width: 36, render: (row) => row.__idx + 1 },
+    { key: 'name', header: tr('Товар', 'Mahsulot'), render: (row) => row?.productName || '-' },
+    { key: 'qty', header: tr('Кол-во', 'Soni'), render: (row) => Number(row?.totalQty || 0) },
+    { key: 'revenue', header: tr('Выручка', 'Tushum'), render: (row) => `${Number(row?.totalRevenue || 0).toLocaleString()} UZS` },
+  ];
+
+  const categoriesColumns: TableColumn<any>[] = [
+    { key: 'name', header: tr('Категория', 'Toifa'), render: (row) => row?.categoryName || '-' },
+    { key: 'qty', header: tr('Кол-во', 'Soni'), render: (row) => Number(row?.totalQty || 0) },
+    { key: 'revenue', header: tr('Выручка', 'Tushum'), render: (row) => `${Number(row?.totalRevenue || 0).toLocaleString()} UZS` },
+  ];
+
+  const customersColumns: TableColumn<any>[] = [
+    { key: 'name', header: tr('Клиент', 'Mijoz'), render: (row) => row?.displayName || '-' },
+    { key: 'orders', header: tr('Заказов', 'Buyurtmalar'), render: (row) => Number(row?.ordersCount || 0) },
+    { key: 'spent', header: tr('Потрачено', 'Sarflagan'), render: (row) => `${Number(row?.totalSpent || 0).toLocaleString()} UZS` },
+    { key: 'points', header: tr('Баллы', 'Ball'), render: (row) => Number(row?.loyaltyPoints || 0) },
+  ];
+
   return (
-    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+    <section className="flex flex-col gap-4">
       {noticeNode}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <header className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="sg-title">{tr('Отчеты', 'Hisobotlar')}</h2>
-          <p className="sg-subtitle">{tr('Сводка продаж по уровню вашего тарифа', 'Tarif darajangiz bo`yicha savdo hisobotlari')}</p>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Отчеты', 'Hisobotlar')}</h2>
+          <p className="mt-1 text-token-sm text-neutral-500">{tr('Сводка продаж по уровню вашего тарифа', 'Tarif darajangiz bo`yicha savdo hisobotlari')}</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className="sg-kpi-label">{tr('Период', 'Davr')}</span>
-          <select value={period} onChange={(e) => setPeriod(Number(e.target.value))} className="w-full border rounded-lg px-3 py-2 text-sm" style={{ minWidth: 140 }}>
-            {[7, 14, 30, 60, 90, 180, 365].map((d) => (
-              <option key={d} value={d}>{d} {tr('дней', 'kun')}</option>
-            ))}
-          </select>
+        <div className="flex gap-2 items-center">
+          <span className="text-token-xs text-neutral-500">{tr('Период', 'Davr')}</span>
+          <div className="w-40">
+            <Select value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
+              {[7, 14, 30, 60, 90, 180, 365].map((d) => (
+                <option key={d} value={d}>{d} {tr('дней', 'kun')}</option>
+              ))}
+            </Select>
+          </div>
         </div>
       </header>
 
       {/* Period KPI summary */}
       {summary && (
-        <div className="sg-grid cols-4" style={{ gap: 10 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
           {[
             { label: tr('Заказов за период', 'Davrda buyurtmalar'), value: summary.ordersCount, sub: `${tr('завершено', 'yakunlandi')}: ${summary.completedCount}` },
             { label: tr('Выручка', 'Tushum'), value: `${Number(summary.revenue).toLocaleString()} UZS`, sub: `${summary.days} ${tr('дней', 'kun')}` },
             { label: tr('Средний чек', "O'rtacha chek"), value: `${Number(summary.avgCheck).toLocaleString()} UZS`, sub: tr('по завершённым', 'yakunlanganlarga') },
             { label: tr('Новых клиентов', 'Yangi mijozlar'), value: summary.newCustomers, sub: tr('за период', 'davr uchun') },
           ].map((kpi) => (
-            <article key={kpi.label} className="sg-card" style={{ padding: '14px 16px' }}>
-              <div className="sg-kpi-label">{kpi.label}</div>
-              <div className="sg-kpi-value" style={{ fontSize: typeof kpi.value === 'string' && kpi.value.length > 12 ? 20 : 28 }}>{kpi.value}</div>
-              <div className="sg-subtitle" style={{ marginTop: 2 }}>{kpi.sub}</div>
-            </article>
+            <Card key={kpi.label}>
+              <div className="text-token-xs text-neutral-500">{kpi.label}</div>
+              <div className={`font-semibold text-neutral-800 mt-1.5 ${typeof kpi.value === 'string' && kpi.value.length > 12 ? 'text-token-xl' : 'text-token-2xl'}`}>{kpi.value}</div>
+              <div className="mt-0.5 text-token-xs text-neutral-500">{kpi.sub}</div>
+            </Card>
           ))}
         </div>
       )}
 
-      <div className="sg-grid cols-4">
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Текущий план', 'Joriy tarif')}</div>
-          <div className="sg-kpi-value">{limits?.planCode || '-'}</div>
-        </article>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Уровень отчетов', 'Hisobot darajasi')}</div>
-          <div className="sg-kpi-value" style={{ fontSize: 24 }}>{reportLevelLabel}</div>
-        </article>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('История', 'Tarix')}</div>
-          <div className="sg-kpi-value">{limits?.reportsHistoryDays ?? '-'} {tr('дней', 'kun')}</div>
-        </article>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Экспорт в месяц', 'Oyiga eksport')}</div>
-          <div className="sg-kpi-value">{exportLeftLabel}</div>
-          <div className="sg-subtitle">{tr('Использовано', 'Ishlatilgan')}: {usage?.exportsThisMonth ?? 0}</div>
-        </article>
-        <article className="sg-card">
-          <div className="sg-kpi-label">{tr('Авто-рассылок', "Avtomatik hisobotlar")}</div>
-          <div className="sg-kpi-value">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Текущий план', 'Joriy tarif')}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{limits?.planCode || '-'}</div>
+        </Card>
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Уровень отчетов', 'Hisobot darajasi')}</div>
+          <div className="text-token-xl font-semibold text-neutral-800 mt-1.5">{reportLevelLabel}</div>
+        </Card>
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('История', 'Tarix')}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{limits?.reportsHistoryDays ?? '-'} {tr('дней', 'kun')}</div>
+        </Card>
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Экспорт в месяц', 'Oyiga eksport')}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{exportLeftLabel}</div>
+          <div className="mt-0.5 text-token-xs text-neutral-500">{tr('Использовано', 'Ishlatilgan')}: {usage?.exportsThisMonth ?? 0}</div>
+        </Card>
+        <Card>
+          <div className="text-token-xs text-neutral-500">{tr('Авто-рассылок', "Avtomatik hisobotlar")}</div>
+          <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">
             {limits?.maxScheduledReports === -1
               ? tr('Без лимита', 'Cheksiz')
               : (limits?.maxScheduledReports ?? 0)}
           </div>
-          <div className="sg-subtitle">{tr('Плановых отчётов', 'Rejalashtirilgan')}</div>
-        </article>
+          <div className="mt-0.5 text-token-xs text-neutral-500">{tr('Плановых отчётов', 'Rejalashtirilgan')}</div>
+        </Card>
       </div>
 
       {loading ? (
-        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} style={{ display: 'flex', gap: 16, padding: '12px 16px', borderBottom: '1px solid #edf2ee', alignItems: 'center' }}>
-              <div className="sg-skeleton" style={{ height: 14, flex: 2 }} />
-              <div className="sg-skeleton" style={{ height: 14, flex: 1 }} />
-              <div className="sg-skeleton" style={{ height: 14, width: 80 }} />
-              <div className="sg-skeleton" style={{ height: 14, width: 60 }} />
-            </div>
-          ))}
-        </div>
+        <Card style={{ padding: 0 }} className="overflow-hidden">
+          <div className="divide-y divide-neutral-200">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex gap-4 px-4 py-3 items-center">
+                <div className="h-3.5 rounded-token-sm bg-neutral-100 animate-pulse" style={{ flex: 2 }} />
+                <div className="h-3.5 rounded-token-sm bg-neutral-100 animate-pulse" style={{ flex: 1 }} />
+                <div className="h-3.5 w-20 rounded-token-sm bg-neutral-100 animate-pulse" />
+                <div className="h-3.5 w-14 rounded-token-sm bg-neutral-100 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </Card>
       ) : (
         <>
-          <section className="sg-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+          <Card>
+            <div className="flex justify-between gap-2.5 items-center">
               <div>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Базовые отчеты', 'Oddiy hisobotlar')}</h3>
-                <p className="sg-subtitle" style={{ marginBottom: 10 }}>{tr('Топ товаров по выручке', 'Tushum bo`yicha top mahsulotlar')}</p>
+                <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Базовые отчеты', 'Oddiy hisobotlar')}</h3>
+                <p className="mt-1 mb-2.5 text-token-sm text-neutral-500">{tr('Топ товаров по выручке', 'Tushum bo`yicha top mahsulotlar')}</p>
               </div>
               {access.export && (
-                <button className="sg-btn ghost" disabled={exporting === 'top-products'} onClick={() => doExport('top-products')}>
+                <Button variant="ghost" size="md" type="button" disabled={exporting === 'top-products'} onClick={() => doExport('top-products')}>
                   {exporting === 'top-products' ? '...' : tr('Экспорт CSV', 'CSV eksport')}
-                </button>
+                </Button>
               )}
             </div>
             {topProducts.length === 0 ? (
-              <p className="sg-subtitle">{tr('Нет данных за выбранный период', 'Tanlangan davrda ma`lumot yo`q')}</p>
+              <p className="text-token-sm text-neutral-500">{tr('Нет данных за выбранный период', 'Tanlangan davrda ma`lumot yo`q')}</p>
             ) : (
-              <table className="sg-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>{tr('Товар', 'Mahsulot')}</th>
-                    <th>{tr('Кол-во', 'Soni')}</th>
-                    <th>{tr('Выручка', 'Tushum')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topProducts.slice(0, 10).map((row: any, idx: number) => (
-                    <tr key={`${row?.productId || idx}`}>
-                      <td>{idx + 1}</td>
-                      <td>{row?.productName || '-'}</td>
-                      <td>{Number(row?.totalQty || 0)}</td>
-                      <td>{Number(row?.totalRevenue || 0).toLocaleString()} UZS</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Table
+                columns={topProductsColumns}
+                data={topProducts.slice(0, 10).map((row, idx) => ({ ...row, __idx: idx }))}
+                rowKey={(row) => String(row?.productId ?? row.__idx)}
+              />
             )}
-          </section>
+          </Card>
 
-          <section className="sg-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Расширенные отчеты (PRO)', 'Kengaytirilgan hisobotlar (PRO)')}</h3>
+          <Card>
+            <div className="flex justify-between gap-2.5 items-center">
+              <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Расширенные отчеты (PRO)', 'Kengaytirilgan hisobotlar (PRO)')}</h3>
               {access.advanced && access.export && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="sg-btn ghost" disabled={exporting === 'revenue'} onClick={() => doExport('revenue')}>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="md" type="button" disabled={exporting === 'revenue'} onClick={() => doExport('revenue')}>
                     {exporting === 'revenue' ? '...' : tr('Выручка CSV', 'Tushum CSV')}
-                  </button>
-                  <button className="sg-btn ghost" disabled={exporting === 'categories'} onClick={() => doExport('categories')}>
+                  </Button>
+                  <Button variant="ghost" size="md" type="button" disabled={exporting === 'categories'} onClick={() => doExport('categories')}>
                     {exporting === 'categories' ? '...' : tr('Категории CSV', 'Toifalar CSV')}
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
             {!access.advanced ? (
-              <div style={{ marginTop: 10, padding: '20px 16px', background: 'var(--sg-panel-2)', border: '1px solid var(--sg-border)', borderRadius: 12, textAlign: 'center' }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{tr('Доступно на PRO и BUSINESS', 'PRO va BUSINESS tariflarida mavjud')}</p>
-                <p className="sg-subtitle" style={{ marginTop: 4 }}>{tr('Выручка по дням и отчёт по категориям', 'Kunlik tushum va toifalar hisoboti')}</p>
-                <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => navigate('/billing')}>
+              <div className="mt-2.5 py-5 px-4 bg-neutral-50 border border-neutral-200 rounded-token-lg text-center">
+                <div className="text-token-2xl mb-2">🔒</div>
+                <p className="m-0 font-semibold text-token-base text-neutral-800">{tr('Доступно на PRO и BUSINESS', 'PRO va BUSINESS tariflarida mavjud')}</p>
+                <p className="mt-1 text-token-sm text-neutral-500">{tr('Выручка по дням и отчёт по категориям', 'Kunlik tushum va toifalar hisoboti')}</p>
+                <Button variant="primary" size="md" type="button" className="mt-3" onClick={() => navigate('/billing')}>
                   {tr('Перейти к тарифам', 'Tariflarga o\'tish')}
-                </button>
+                </Button>
               </div>
             ) : (
-              <div className="sg-grid cols-2" style={{ marginTop: 10 }}>
-                <div className="sg-card soft">
-                  <div className="sg-kpi-label">{tr('Выручка за период', 'Davr bo`yicha tushum')}</div>
-                  <div className="sg-kpi-value">{revenueTotal.toLocaleString()} UZS</div>
-                  <div className="sg-subtitle">{tr('Дней с продажами', 'Savdo bo`lgan kunlar')}: {revenue.length}</div>
-                </div>
-                <div className="sg-card soft">
-                  <div className="sg-kpi-label">{tr('Категории с продажами', 'Savdo bo`lgan toifalar')}</div>
-                  <div className="sg-kpi-value">{categories.length}</div>
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2.5">
+                <Card className="bg-neutral-50">
+                  <div className="text-token-xs text-neutral-500">{tr('Выручка за период', 'Davr bo`yicha tushum')}</div>
+                  <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{revenueTotal.toLocaleString()} UZS</div>
+                  <div className="mt-0.5 text-token-xs text-neutral-500">{tr('Дней с продажами', 'Savdo bo`lgan kunlar')}: {revenue.length}</div>
+                </Card>
+                <Card className="bg-neutral-50">
+                  <div className="text-token-xs text-neutral-500">{tr('Категории с продажами', 'Savdo bo`lgan toifalar')}</div>
+                  <div className="text-token-2xl font-semibold text-neutral-800 mt-1.5">{categories.length}</div>
+                </Card>
               </div>
             )}
 
             {access.advanced && revenue.length > 1 && (
-              <div style={{ marginTop: 14 }}>
-                <div className="sg-kpi-label" style={{ marginBottom: 6 }}>{tr('Выручка по дням', 'Kunlik tushum')}</div>
+              <div className="mt-3.5">
+                <div className="text-token-xs text-neutral-500 mb-1.5">{tr('Выручка по дням', 'Kunlik tushum')}</div>
                 <RevenueChart data={revenue} />
               </div>
             )}
 
             {access.advanced && newCustomersSeries.some((d) => d.count > 0) && (
-              <div style={{ marginTop: 14 }}>
-                <div className="sg-kpi-label" style={{ marginBottom: 6 }}>{tr('Новые клиенты по дням', 'Kunlik yangi mijozlar')}</div>
+              <div className="mt-3.5">
+                <div className="text-token-xs text-neutral-500 mb-1.5">{tr('Новые клиенты по дням', 'Kunlik yangi mijozlar')}</div>
                 <NewCustomersChart data={newCustomersSeries} />
               </div>
             )}
 
             {access.advanced && categories.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <div className="sg-kpi-label" style={{ marginBottom: 8 }}>{tr('Выручка по категориям', 'Toifalar bo`yicha tushum')}</div>
+              <div className="mt-3.5">
+                <div className="text-token-xs text-neutral-500 mb-2">{tr('Выручка по категориям', 'Toifalar bo`yicha tushum')}</div>
                 <CategoryBarChart data={categories.slice(0, 10)} />
               </div>
             )}
 
             {access.advanced && (
-              <table className="sg-table" style={{ marginTop: 14 }}>
-                <thead>
-                  <tr>
-                    <th>{tr('Категория', 'Toifa')}</th>
-                    <th>{tr('Кол-во', 'Soni')}</th>
-                    <th>{tr('Выручка', 'Tushum')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {categories.slice(0, 10).map((row: any) => (
-                    <tr key={row?.categoryId || row?.categoryName}>
-                      <td>{row?.categoryName || '-'}</td>
-                      <td>{Number(row?.totalQty || 0)}</td>
-                      <td>{Number(row?.totalRevenue || 0).toLocaleString()} UZS</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mt-3.5">
+                <Table columns={categoriesColumns} data={categories.slice(0, 10)} rowKey={(row) => String(row?.categoryId ?? row?.categoryName)} />
+              </div>
             )}
-          </section>
+          </Card>
 
-          <section className="sg-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('Полные отчеты (BUSINESS)', 'To`liq hisobotlar (BUSINESS)')}</h3>
+          <Card>
+            <div className="flex justify-between gap-2.5 items-center">
+              <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Полные отчеты (BUSINESS)', 'To`liq hisobotlar (BUSINESS)')}</h3>
               {access.full && access.export && (
-                <button className="sg-btn ghost" disabled={exporting === 'customers'} onClick={() => doExport('customers')}>
+                <Button variant="ghost" size="md" type="button" disabled={exporting === 'customers'} onClick={() => doExport('customers')}>
                   {exporting === 'customers' ? '...' : tr('Клиенты CSV', 'Mijozlar CSV')}
-                </button>
+                </Button>
               )}
             </div>
             {!access.full ? (
-              <div style={{ marginTop: 10, padding: '20px 16px', background: 'var(--sg-panel-2)', border: '1px solid var(--sg-border)', borderRadius: 12, textAlign: 'center' }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{tr('Доступно только на BUSINESS', 'Faqat BUSINESS tarifida mavjud')}</p>
-                <p className="sg-subtitle" style={{ marginTop: 4 }}>{tr('Аналитика по клиентам, LTV и сегментация', 'Mijozlar analitikasi, LTV va segmentatsiya')}</p>
-                <button className="sg-btn primary" style={{ marginTop: 12 }} onClick={() => navigate('/billing')}>
+              <div className="mt-2.5 py-5 px-4 bg-neutral-50 border border-neutral-200 rounded-token-lg text-center">
+                <div className="text-token-2xl mb-2">🔒</div>
+                <p className="m-0 font-semibold text-token-base text-neutral-800">{tr('Доступно только на BUSINESS', 'Faqat BUSINESS tarifida mavjud')}</p>
+                <p className="mt-1 text-token-sm text-neutral-500">{tr('Аналитика по клиентам, LTV и сегментация', 'Mijozlar analitikasi, LTV va segmentatsiya')}</p>
+                <Button variant="primary" size="md" type="button" className="mt-3" onClick={() => navigate('/billing')}>
                   {tr('Обновить тариф', 'Tarifni yangilash')}
-                </button>
+                </Button>
               </div>
             ) : (
-              <table className="sg-table" style={{ marginTop: 10 }}>
-                <thead>
-                  <tr>
-                    <th>{tr('Клиент', 'Mijoz')}</th>
-                    <th>{tr('Заказов', 'Buyurtmalar')}</th>
-                    <th>{tr('Потрачено', 'Sarflagan')}</th>
-                    <th>{tr('Баллы', 'Ball')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {customers.slice(0, 20).map((row: any) => (
-                    <tr key={row?.id}>
-                      <td>{row?.displayName || '-'}</td>
-                      <td>{Number(row?.ordersCount || 0)}</td>
-                      <td>{Number(row?.totalSpent || 0).toLocaleString()} UZS</td>
-                      <td>{Number(row?.loyaltyPoints || 0)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mt-2.5">
+                <Table columns={customersColumns} data={customers.slice(0, 20)} rowKey={(row) => String(row?.id)} />
+              </div>
             )}
-          </section>
+          </Card>
 
           <ScheduledReportsSection limits={limits} tr={tr} />
         </>

@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
+import Card from '../components/Card';
 import Button from '../components/Button';
+import Badge, { type BadgeVariant } from '../components/Badge';
+import Table, { type TableColumn } from '../components/Table';
 import { useAdminI18n } from '../i18n';
+import InvoicePayModal from './billing/InvoicePayModal';
 
 type NoticeTone = 'success' | 'error' | 'info';
 
@@ -22,248 +26,12 @@ const planLimitFallbacks: Record<
   BUSINESS: { maxStores: 10, maxProducts: -1, maxOrdersPerMonth: -1, maxDeliveryZones: -1 },
 };
 
-function StarsPayButton({ invoiceId, prefetched, tr, submitting, setSubmitting, showNotice }: {
-  invoiceId: string;
-  prefetched?: { starsAmount: number; invoiceLink: string } | null;
-  tr: (ru: string, uz: string) => string;
-  submitting: boolean;
-  setSubmitting: (v: boolean) => void;
-  showNotice: (tone: NoticeTone, msg: string) => void;
-}) {
-  const [invoiceLink, setInvoiceLink] = React.useState<string | null>(prefetched?.invoiceLink ?? null);
-
-  React.useEffect(() => {
-    if (prefetched?.invoiceLink) setInvoiceLink(prefetched.invoiceLink);
-  }, [prefetched?.invoiceLink]);
-
-  async function handleClick() {
-    if (invoiceLink) { window.open(invoiceLink, '_blank'); return; }
-    setSubmitting(true);
-    try {
-      const res = await adminApi.payWithStars(invoiceId);
-      setInvoiceLink(res.invoiceLink);
-      window.open(res.invoiceLink, '_blank');
-    } catch (e: any) {
-      showNotice('error', e?.message || tr('Ошибка', 'Xatolik'));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <button onClick={handleClick} disabled={submitting}
-        style={{ background: '#f5c842', color: '#1a1a1a', border: 'none', borderRadius: 8, padding: '9px 20px', fontWeight: 700, fontSize: 13, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
-        {submitting ? '...' : invoiceLink ? tr('Открыть в Telegram ↗', "Telegramda ochish ↗") : tr('Оплатить ⭐ Stars', "⭐ Stars bilan to'lash")}
-      </button>
-      {invoiceLink && (
-        <p style={{ margin: 0, fontSize: 11, color: '#607167' }}>
-          {tr('Ссылка создана. Если не открылось — ', "Havola yaratildi. Ochilmasa — ")}
-          <a href={invoiceLink} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{tr('нажмите здесь', 'bu yerni bosing')}</a>
-        </p>
-      )}
-    </div>
-  );
-}
-
-function InvoicePayModal({
-  invoice,
-  bankDetails,
-  tr,
-  submitting,
-  setSubmitting,
-  paymentRef,
-  setPaymentRef,
-  onSubmit,
-  onClose,
-  showNotice,
-}: {
-  invoice: any;
-  bankDetails: any;
-  tr: (ru: string, uz: string) => string;
-  submitting: boolean;
-  setSubmitting: (v: boolean) => void;
-  paymentRef: string;
-  setPaymentRef: (v: string) => void;
-  onSubmit: () => void;
-  onClose: () => void;
-  showNotice: (tone: NoticeTone, msg: string) => void;
-}) {
-  const paymentMethods: { type: string }[] = bankDetails?.paymentMethods ?? [];
-  const methods: { id: string; label: string }[] = [];
-
-  const methodLabels: Record<string, string> = {
-    bank: tr('Банк / перевод', 'Bank / o\'tkazma'),
-    card: tr('Банк. карта', 'Bank kartasi'),
-    payme: 'Payme',
-    click: 'Click',
-    stars: '⭐ Telegram Stars',
-  };
-
-  for (const m of paymentMethods) {
-    if (methodLabels[m.type]) {
-      methods.push({ id: m.type, label: methodLabels[m.type] });
-    }
-  }
-
-  // Fallback: if no methods configured, show bank
-  if (methods.length === 0 && bankDetails && Object.keys(bankDetails).length > 0) {
-    methods.push({ id: 'bank', label: tr('Банк / перевод', 'Bank / o\'tkazma') });
-  }
-
-  const [method, setMethod] = React.useState(methods[0]?.id ?? 'stars');
-  const [starsData, setStarsData] = React.useState<{ starsAmount: number; invoiceLink: string } | null>(null);
-  const [starsFetching, setStarsFetching] = React.useState(false);
-
-  async function fetchStars() {
-    if (!invoice?.id || starsFetching) return;
-    setStarsFetching(true);
-    try {
-      const res = await adminApi.payWithStars(invoice.id);
-      setStarsData(res);
-    } catch (e: any) {
-      showNotice('error', e?.message || 'Ошибка');
-    } finally {
-      setStarsFetching(false);
-    }
-  }
-
-  // Auto-fetch when Stars tab is active (including on initial render if it's the default)
-  React.useEffect(() => {
-    if (method === 'stars' && !starsData) {
-      void fetchStars();
-    }
-  }, [method]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function selectMethod(id: string) {
-    setMethod(id);
-  }
-
-  // Fields for the currently selected non-stars method
-  function getMethodFields(methodId: string) {
-    const methodData = paymentMethods.find((m) => m.type === methodId);
-    if (!methodData) return [];
-    return Object.entries(methodData as Record<string, string>)
-      .filter(([k, v]) => k !== 'type' && v)
-      .map(([k, v]) => [k, v] as [string, string]);
-  }
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(11,20,16,0.55)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}>
-      <div className="sg-card" style={{ width: '100%', maxWidth: 480 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
-            {tr('Оплата счёта', "Hisob to'lovi")}
-          </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#607167', lineHeight: 1, padding: '2px 6px' }}>×</button>
-        </div>
-
-        <div style={{ marginBottom: 14, padding: '10px 12px', background: '#f0faf4', borderRadius: 10, fontSize: 13 }}>
-          <span style={{ fontWeight: 700 }}>{tr('Тариф', 'Tarif')}: </span>{invoice?.plan}
-          <span style={{ marginLeft: 12 }}>
-            <span style={{ fontWeight: 700 }}>{tr('Сумма', 'Summa')}: </span>
-            {method === 'stars'
-              ? starsFetching
-                ? '...'
-                : starsData
-                  ? `⭐ ${starsData.starsAmount.toLocaleString()} Stars`
-                  : '—'
-              : invoice?.amount
-                ? `${Number(invoice.amount).toLocaleString()} UZS`
-                : '—'}
-          </span>
-        </div>
-
-        {/* Method tabs */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
-          {methods.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => void selectMethod(m.id)}
-              style={{
-                flex: 1,
-                padding: '8px 10px',
-                borderRadius: 8,
-                border: method === m.id ? '2px solid #00875a' : '1px solid #dfe7e2',
-                background: method === m.id ? '#f0faf4' : '#fff',
-                color: method === m.id ? '#00875a' : '#607167',
-                fontWeight: method === m.id ? 800 : 600,
-                fontSize: 13,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-
-        {method !== 'stars' && (
-          <div>
-            {(() => {
-              const fields = getMethodFields(method);
-              return fields.length > 0 ? (
-                <div style={{ marginBottom: 14, padding: '10px 12px', background: '#f8f9fa', borderRadius: 10 }}>
-                  {fields.map(([key, val]) => (
-                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0' }}>
-                      <span style={{ color: '#607167', textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</span>
-                      <span style={{ fontWeight: 700, textAlign: 'right', maxWidth: '60%', wordBreak: 'break-all' }}>{val}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : null;
-            })()}
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: '#3a4f40' }}>
-              {tr('Номер транзакции / чек', 'Tranzaksiya raqami / chek')}
-            </label>
-            <input
-              className="sg-input"
-              value={paymentRef}
-              onChange={(e) => setPaymentRef(e.target.value)}
-              placeholder={tr('Введите номер транзакции', 'Tranzaksiya raqamini kiriting')}
-              style={{ width: '100%', marginBottom: 14 }}
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                className="sg-btn primary"
-                onClick={onSubmit}
-                disabled={submitting || !paymentRef.trim()}
-                style={{ flex: 1 }}
-              >
-                {submitting ? '...' : tr('Отправить', 'Yuborish')}
-              </button>
-              <button className="sg-btn ghost" onClick={onClose} style={{ flex: 1 }}>
-                {tr('Отмена', 'Bekor qilish')}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {method === 'stars' && (
-          <div>
-            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#607167' }}>
-              {tr(
-                'Оплата через Telegram Stars. После оплаты подписка активируется автоматически.',
-                "Telegram Stars orqali to'lov. To'lovdan so'ng obuna avtomatik faollashadi."
-              )}
-            </p>
-            <StarsPayButton
-              invoiceId={invoice?.id}
-              prefetched={starsData}
-              tr={tr}
-              submitting={submitting || starsFetching}
-              setSubmitting={setSubmitting}
-              showNotice={showNotice}
-            />
-            <button className="sg-btn ghost" onClick={onClose} style={{ width: '100%', marginTop: 10 }}>
-              {tr('Закрыть', 'Yopish')}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+const invoiceStatusVariant: Record<string, BadgeVariant> = {
+  PENDING: 'warning',
+  PAID: 'success',
+  CANCELLED: 'danger',
+  EXPIRED: 'neutral',
+};
 
 export default function Billing() {
   const { tr, locale } = useAdminI18n();
@@ -280,11 +48,11 @@ export default function Billing() {
   const statusMap = useMemo(
     () =>
       ({
-        PENDING: { label: tr('Ожидает оплаты', "To'lov kutilmoqda"), color: '#f59e0b' },
-        PAID: { label: tr('Оплачен', "To'langan"), color: '#34c759' },
-        CANCELLED: { label: tr('Отклонен', 'Rad etilgan'), color: '#ef4444' },
-        EXPIRED: { label: tr('Истек', 'Muddati tugagan'), color: '#6b7280' },
-      }) as Record<string, { label: string; color: string }>,
+        PENDING: { label: tr('Ожидает оплаты', "To'lov kutilmoqda") },
+        PAID: { label: tr('Оплачен', "To'langan") },
+        CANCELLED: { label: tr('Отклонен', 'Rad etilgan') },
+        EXPIRED: { label: tr('Истек', 'Muddati tugagan') },
+      }) as Record<string, { label: string }>,
     [tr]
   );
 
@@ -417,57 +185,47 @@ export default function Billing() {
 
   if (loading) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <section className="flex flex-col gap-4">
         <div>
-          <div className="sg-skeleton" style={{ height: 28, width: '30%' }} />
-          <div className="sg-skeleton" style={{ height: 14, width: '50%', marginTop: 8 }} />
+          <div className="h-7 w-[30%] rounded-token-sm bg-neutral-100 animate-pulse" />
+          <div className="h-3.5 w-1/2 rounded-token-sm bg-neutral-100 animate-pulse mt-2" />
         </div>
-        <div className="sg-grid cols-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="sg-skeleton" style={{ height: 260, borderRadius: 16 }} />
+            <div key={i} className="h-[260px] rounded-token-lg bg-neutral-100 animate-pulse" />
           ))}
         </div>
-        <div className="sg-skeleton" style={{ height: 120, borderRadius: 14 }} />
+        <div className="h-[120px] rounded-token-lg bg-neutral-100 animate-pulse" />
       </section>
     );
   }
 
   if (loadFailed) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <section className="flex flex-col gap-4">
         <header>
-          <h2 className="sg-title">{tr('Тарифы и оплата', "Tariflar va to'lov")}</h2>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Тарифы и оплата', "Tariflar va to'lov")}</h2>
         </header>
-        <div className="sg-card" style={{ textAlign: 'center', padding: '40px 16px' }}>
-          <p style={{ margin: '0 0 12px', fontWeight: 700, color: '#be123c' }}>
+        <Card className="text-center py-10 px-4">
+          <p className="m-0 mb-3 font-semibold text-danger">
             {tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}
           </p>
-          <button className="sg-btn primary" onClick={() => { setLoading(true); void load(); }}>
+          <Button variant="primary" size="md" onClick={() => { setLoading(true); void load(); }}>
             {tr('Повторить', 'Qayta urinish')}
-          </button>
-        </div>
+          </Button>
+        </Card>
       </section>
     );
   }
 
   const noticeNode = notice ? (
     <div
-      style={{
-        position: 'fixed',
-        top: 18,
-        right: 18,
-        zIndex: 70,
-        minWidth: 280,
-        maxWidth: 440,
-        borderRadius: 12,
-        padding: '12px 14px',
-        fontSize: 14,
-        fontWeight: 700,
-        boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
-        color: notice.tone === 'error' ? '#991b1b' : notice.tone === 'success' ? '#065f46' : '#1e3a8a',
-        background: notice.tone === 'error' ? '#fee2e2' : notice.tone === 'success' ? '#d1fae5' : '#dbeafe',
-        border: `1px solid ${notice.tone === 'error' ? '#fecaca' : notice.tone === 'success' ? '#a7f3d0' : '#bfdbfe'}`,
-      }}
+      className={[
+        'fixed top-[18px] right-[18px] z-[70] min-w-[280px] max-w-[440px] rounded-token-lg px-3.5 py-3 text-token-sm font-semibold shadow-sm border',
+        notice.tone === 'error' ? 'bg-danger/10 text-danger border-danger/30'
+          : notice.tone === 'success' ? 'bg-success/10 text-success border-success/30'
+          : 'bg-accent-600/10 text-accent-600 border-accent-600/30',
+      ].join(' ')}
       role="status"
       aria-live="polite"
     >
@@ -475,21 +233,36 @@ export default function Billing() {
     </div>
   ) : null;
 
+  const invoiceColumns: TableColumn<any>[] = [
+    { key: 'date', header: tr('Дата', 'Sana'), render: (inv) => new Date(inv.createdAt).toLocaleDateString(locale) },
+    { key: 'plan', header: tr('Тариф', 'Tarif'), render: (inv) => planLabel(inv.plan) },
+    { key: 'amount', header: tr('Сумма', 'Summa'), render: (inv) => `${Number(inv.amount).toLocaleString()} UZS` },
+    {
+      key: 'status',
+      header: tr('Статус', 'Holat'),
+      render: (inv) => {
+        const st = statusMap[inv.status] || { label: inv.status };
+        return <Badge variant={invoiceStatusVariant[inv.status] ?? 'neutral'}>{st.label}</Badge>;
+      },
+    },
+    { key: 'ref', header: tr('Транзакция', 'Tranzaksiya'), render: (inv) => inv.paymentRef || '-' },
+  ];
+
   return (
-    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+    <section className="flex flex-col gap-4">
       {noticeNode}
       <header>
-        <h2 className="sg-title">{tr('Тарифы и оплата', "Tariflar va to'lovlar")}</h2>
-        <p className="sg-subtitle">{tr('Лимиты, смена тарифа и история счетов', "Limitlar, tarifni o'zgartirish va hisoblar tarixi")}</p>
+        <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Тарифы и оплата', "Tariflar va to'lovlar")}</h2>
+        <p className="mt-1 text-token-sm text-neutral-500">{tr('Лимиты, смена тарифа и история счетов', "Limitlar, tarifni o'zgartirish va hisoblar tarixi")}</p>
       </header>
 
-      <div className="sg-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+      <Card>
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="sg-kpi-label">{tr('Текущий тариф', 'Joriy tarif')}</p>
-            <p className="sg-kpi-value" style={{ color: planColors[currentPlan], margin: 0 }}>{planLabel(currentPlan)}</p>
+            <p className="text-token-sm text-neutral-500">{tr('Текущий тариф', 'Joriy tarif')}</p>
+            <p className="m-0 mt-1.5 text-token-2xl font-semibold" style={{ color: planColors[currentPlan] }}>{planLabel(currentPlan)}</p>
             {sub?.planExpiresAt && (
-              <p className="sg-subtitle" style={{ marginTop: 6 }}>
+              <p className="mt-1.5 text-token-sm text-neutral-500">
                 {tr('Действует до', 'Amal qilish muddati')}: {new Date(sub.planExpiresAt).toLocaleDateString(locale)}
               </p>
             )}
@@ -498,27 +271,23 @@ export default function Billing() {
 
         {expiryInfo && expiryInfo.daysLeft <= 7 && (
           <div
-            style={{
-              marginTop: 12,
-              border: `1px solid ${expiryInfo.isExpired ? '#fecaca' : '#fde68a'}`,
-              background: expiryInfo.isExpired ? '#fff1f2' : '#fffbeb',
-              color: expiryInfo.isExpired ? '#be123c' : '#92400e',
-              borderRadius: 12,
-              padding: '10px 12px',
-            }}
+            className={[
+              'mt-3 rounded-token-md px-3 py-2.5 border',
+              expiryInfo.isExpired ? 'bg-danger/5 border-danger/30 text-danger' : 'bg-warning/5 border-warning/30 text-warning',
+            ].join(' ')}
           >
-            <p style={{ margin: 0, fontWeight: 800 }}>
+            <p className="m-0 font-semibold text-token-sm">
               {expiryInfo.isExpired
                 ? tr('Подписка истекла. Оплатите тариф для продолжения работы.', "Obuna muddati tugagan. Ishlashni davom ettirish uchun tarifni to'lang.")
                 : tr(`Подписка закончится через ${expiryInfo.daysLeft} дн.`, `Obuna ${expiryInfo.daysLeft} kunda tugaydi.`)}
             </p>
-            <p style={{ margin: '6px 0 0', fontSize: 13 }}>
+            <p className="mt-1.5 mb-0 text-token-sm">
               {tr('Срок', 'Muddat')}: {expiryInfo.expiresAt.toLocaleDateString(locale)}
             </p>
           </div>
         )}
 
-        <div className="sg-grid cols-2" style={{ marginTop: 14 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3.5">
           {[
             { key: 'stores', label: tr('Stores', "Do'konlar") },
             { key: 'products', label: tr('Products', 'Mahsulotlar') },
@@ -529,25 +298,28 @@ export default function Billing() {
             if (!u) return null;
             const pct = u.limit === -1 ? 0 : Math.min(100, (u.current / u.limit) * 100);
             return (
-              <div key={item.key} className="sg-card soft" style={{ padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13 }}>{item.label}</span>
-                  <span style={{ fontSize: 13, color: '#64756b' }}>
+              <Card key={item.key} className="bg-neutral-50 p-3">
+                <div className="flex justify-between gap-2">
+                  <span className="font-semibold text-token-sm text-neutral-800">{item.label}</span>
+                  <span className="text-token-sm text-neutral-500">
                     {u.current}/{u.limit === -1 ? tr('без лимита', 'cheklanmagan') : u.limit}
                   </span>
                 </div>
-                <div style={{ marginTop: 8, height: 6, background: '#dfe8e2', borderRadius: 999 }}>
-                  <div style={{ height: '100%', borderRadius: 999, width: u.limit === -1 ? '8%' : `${pct}%`, background: pct >= 80 ? '#ef4444' : '#00875a' }} />
+                <div className="mt-2 h-1.5 bg-neutral-200 rounded-full">
+                  <div
+                    className={['h-full rounded-full', pct >= 80 ? 'bg-danger' : 'bg-success'].join(' ')}
+                    style={{ width: u.limit === -1 ? '8%' : `${pct}%` }}
+                  />
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
-      </div>
+      </Card>
 
       <section>
-        <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800 }}>{tr('Выберите тариф', 'Tarifni tanlang')}</h3>
-        <div className="sg-grid cols-3">
+        <h3 className="m-0 mb-2.5 text-token-xl font-semibold text-neutral-800">{tr('Выберите тариф', 'Tarifni tanlang')}</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {planEntries.map(([code, plan]: [string, any]) => {
             const isCurrent = code === currentPlan;
             const limits = getLimits(code, plan, isCurrent);
@@ -571,16 +343,13 @@ export default function Billing() {
 
             const isPopular = code === 'PRO';
             return (
-              <div
+              <Card
                 key={code}
-                className="sg-card"
+                className="relative overflow-hidden transition-transform"
                 style={{
-                  borderColor: isCurrent ? planColors[code] ?? '#dfe7e2' : isPopular ? '#a78bfa' : '#dfe7e2',
+                  borderColor: isCurrent ? planColors[code] ?? undefined : isPopular ? '#a78bfa' : undefined,
                   borderWidth: isPopular ? 2 : 1,
                   padding: 0,
-                  overflow: 'hidden',
-                  transition: 'transform 0.18s, box-shadow 0.18s',
-                  position: 'relative',
                 }}
                 onMouseEnter={(e) => {
                   (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)';
@@ -593,43 +362,48 @@ export default function Billing() {
               >
                 {/* Top stripe */}
                 {isPopular && (
-                  <div style={{ background: 'linear-gradient(135deg,#7c3aed,#a78bfa)', padding: '5px 16px', textAlign: 'center', fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: 0.5 }}>
+                  <div className="bg-gradient-to-br from-[#7c3aed] to-[#a78bfa] px-4 py-1.5 text-center text-token-xs font-semibold text-white tracking-wide">
                     {tr('ПОПУЛЯРНЫЙ', 'MASHHUR')}
                   </div>
                 )}
                 {isCurrent && (
-                  <div style={{ background: `${planColors[code]}22`, borderBottom: `2px solid ${planColors[code]}`, padding: '5px 16px', textAlign: 'center', fontSize: 11, fontWeight: 800, color: planColors[code], letterSpacing: 0.5 }}>
+                  <div
+                    className="px-4 py-1.5 text-center text-token-xs font-semibold tracking-wide border-b-2"
+                    style={{ background: `${planColors[code]}22`, borderColor: planColors[code], color: planColors[code] }}
+                  >
                     {tr('ТЕКУЩИЙ ТАРИФ', 'JORIY TARIF')}
                   </div>
                 )}
 
-                <div style={{ padding: 18 }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: planColors[code] ?? '#607167', textTransform: 'uppercase', letterSpacing: 0.5 }}>{planLabel(code)}</div>
-                  <div style={{ fontSize: 32, fontWeight: 900, marginTop: 6, color: planColors[code] ?? '#15231a', letterSpacing: -0.5 }}>
+                <div className="p-[18px]">
+                  <div className="text-token-xs font-semibold uppercase tracking-wide" style={{ color: planColors[code] ?? undefined }}>{planLabel(code)}</div>
+                  <div className="text-[32px] font-bold mt-1.5 tracking-tight" style={{ color: planColors[code] ?? undefined }}>
                     {price > 0 ? price.toLocaleString() : tr('0', '0')}
                   </div>
-                  <div style={{ marginTop: 2, fontSize: 13, color: '#607167' }}>{price > 0 ? `UZS / ${tr('мес', 'oy')}` : tr('бесплатно', 'bepul')}</div>
+                  <div className="mt-0.5 text-token-sm text-neutral-500">{price > 0 ? `UZS / ${tr('мес', 'oy')}` : tr('бесплатно', 'bepul')}</div>
 
-                  <ul style={{ marginTop: 14, listStyle: 'none', padding: 0, display: 'grid', gap: 6 }}>
+                  <ul className="mt-3.5 list-none p-0 flex flex-col gap-1.5">
                     {features.map((line) => (
-                      <li key={line} style={{ display: 'flex', gap: 8, fontSize: 13, color: '#3a4f40', alignItems: 'start' }}>
-                        <span style={{ color: planColors[code] ?? '#00875a', fontWeight: 900, flexShrink: 0 }}>✓</span>
+                      <li key={line} className="flex gap-2 text-token-sm text-neutral-700 items-start">
+                        <span className="font-bold flex-shrink-0" style={{ color: planColors[code] ?? undefined }}>✓</span>
                         {line}
                       </li>
                     ))}
                   </ul>
 
-                  <div style={{ marginTop: 16 }}>
+                  <div className="mt-4">
                     {isCurrent ? (
-                      <div className="sg-badge" style={{ background: `${planColors[code]}1a`, color: planColors[code] ?? '#0b6f49', fontSize: 12 }}>
+                      <Badge variant="success">
                         {tr('Активен', 'Faol')}
-                      </div>
+                      </Badge>
                     ) : (
                       <Button
                         onClick={() => requestUpgrade(code)}
                         disabled={submitting}
-                        className="sg-btn primary"
-                        style={{ width: '100%', ...(isPopular ? {} : { background: 'transparent', border: `1px solid ${planColors[code] ?? '#00875a'}`, color: planColors[code] ?? '#00875a' }) }}
+                        variant={isPopular ? 'primary' : undefined}
+                        size={isPopular ? 'md' : undefined}
+                        className={isPopular ? 'w-full' : 'w-full rounded-token-md px-3.5 py-2 text-token-sm font-semibold bg-transparent'}
+                        style={isPopular ? undefined : { border: `1px solid ${planColors[code] ?? '#00875a'}`, color: planColors[code] ?? '#00875a' }}
                       >
                         {(planRank[code] ?? 0) < (planRank[currentPlan] ?? 0)
                           ? tr('Понизить', 'Kamaytirish')
@@ -638,68 +412,42 @@ export default function Billing() {
                     )}
                   </div>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
       </section>
 
-      <section className="sg-card">
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{tr('История счетов', 'Hisoblar tarixi')}</h3>
+      <Card>
+        <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('История счетов', 'Hisoblar tarixi')}</h3>
         {invoices.length === 0 ? (
-          <p className="sg-subtitle" style={{ marginTop: 10 }}>{tr('Счетов пока нет', "Hozircha hisoblar yo'q")}</p>
+          <p className="mt-2.5 text-token-sm text-neutral-500">{tr('Счетов пока нет', "Hozircha hisoblar yo'q")}</p>
         ) : (
-          <table className="sg-table" style={{ marginTop: 10 }}>
-            <thead>
-              <tr>
-                <th>{tr('Дата', 'Sana')}</th>
-                <th>{tr('Тариф', 'Tarif')}</th>
-                <th>{tr('Сумма', 'Summa')}</th>
-                <th>{tr('Статус', 'Holat')}</th>
-                <th>{tr('Транзакция', 'Tranzaksiya')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((inv) => {
-                const st = statusMap[inv.status] || { label: inv.status, color: '#6b7280' };
-                return (
-                  <tr key={inv.id}>
-                    <td>{new Date(inv.createdAt).toLocaleDateString(locale)}</td>
-                    <td>{planLabel(inv.plan)}</td>
-                    <td>{Number(inv.amount).toLocaleString()} UZS</td>
-                    <td>
-                      <span className="sg-badge" style={{ background: `${st.color}1a`, color: st.color }}>
-                        {st.label}
-                      </span>
-                    </td>
-                    <td>{inv.paymentRef || '-'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="mt-2.5">
+            <Table columns={invoiceColumns} data={invoices} rowKey={(inv) => inv.id} />
+          </div>
         )}
-      </section>
+      </Card>
 
       {pendingDowngrade && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(11, 20, 16, 0.5)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 }}>
-          <div className="sg-card" style={{ width: '100%', maxWidth: 440 }}>
-            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tr('Понизить тариф?', 'Tarifni kamaytirasizmi?')}</h3>
-            <p className="sg-subtitle" style={{ marginTop: 8 }}>
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-[440px]">
+            <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Понизить тариф?', 'Tarifni kamaytirasizmi?')}</h3>
+            <p className="mt-2 text-token-sm text-neutral-500">
               {tr(
                 `Вы переходите с ${planLabel(currentPlan)} на ${planLabel(pendingDowngrade)}. Часть функций станет недоступна.`,
                 `${planLabel(currentPlan)} dan ${planLabel(pendingDowngrade)} ga o'tasiz. Ba'zi funksiyalar mavjud bo'lmaydi.`
               )}
             </p>
-            <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-              <button onClick={() => doUpgrade(pendingDowngrade)} disabled={submitting} className="sg-btn" style={{ flex: 1, background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', fontWeight: 700 }}>
+            <div className="mt-4 flex gap-2">
+              <Button variant="danger" size="md" onClick={() => doUpgrade(pendingDowngrade)} disabled={submitting} className="flex-1">
                 {submitting ? '...' : tr('Да, понизить', 'Ha, kamaytirish')}
-              </button>
-              <button onClick={() => setPendingDowngrade(null)} className="sg-btn ghost" style={{ flex: 1 }}>
+              </Button>
+              <Button variant="ghost" size="md" onClick={() => setPendingDowngrade(null)} className="flex-1">
                 {tr('Отмена', 'Bekor qilish')}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
