@@ -10,6 +10,13 @@ const mocks = vi.hoisted(() => ({
     category: { findMany: vi.fn().mockResolvedValue([]) },
     catalogSnapshot: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
     posSettings: { upsert: vi.fn() },
+    posOperator: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
@@ -231,6 +238,173 @@ describe('pos-sync.admin-routes', () => {
       expect(response.statusCode).toBe(404);
       expect(mocks.prisma.posSettings.upsert).not.toHaveBeenCalled();
       await app.close();
+    });
+  });
+
+  describe('POS operators (docs/POS_POLICY_ENGINE.md §14)', () => {
+    describe('GET /pos-operators', () => {
+      it('lists operators for a store owned by the tenant', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.posOperator.findMany.mockResolvedValue([
+          { id: 'op-1', name: 'Alice', role: 'CASHIER', permissions: [], active: true },
+        ]);
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'GET', url: '/pos-operators?storeId=store-1' });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().data).toHaveLength(1);
+        expect(mocks.prisma.posOperator.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { tenantId: 'tenant-1', storeId: 'store-1' }, orderBy: { name: 'asc' } })
+        );
+        await app.close();
+      });
+
+      it('returns 404 when the store does not belong to the tenant', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'GET', url: '/pos-operators?storeId=store-foreign' });
+
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.posOperator.findMany).not.toHaveBeenCalled();
+        await app.close();
+      });
+    });
+
+    describe('POST /pos-operators', () => {
+      it('creates an operator and bumps PosSettings.staffVersion for the store', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.posOperator.create.mockResolvedValue({
+          id: 'op-1', tenantId: 'tenant-1', storeId: 'store-1', name: 'Alice', role: 'CASHIER', permissions: [], active: true,
+        });
+        mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 2 });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/pos-operators',
+          payload: { storeId: 'store-1', name: 'Alice', role: 'CASHIER', permissions: ['void_sale'] },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(response.json().data.id).toBe('op-1');
+        expect(mocks.prisma.posOperator.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              tenantId: 'tenant-1', storeId: 'store-1', name: 'Alice', role: 'CASHIER', permissions: ['void_sale'], active: true,
+            }),
+          })
+        );
+        expect(mocks.prisma.posSettings.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { storeId: 'store-1' },
+            update: { staffVersion: { increment: 1 } },
+            create: expect.objectContaining({ tenantId: 'tenant-1', storeId: 'store-1' }),
+          })
+        );
+        await app.close();
+      });
+
+      it('returns 404 when the store does not belong to the tenant', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/pos-operators',
+          payload: { storeId: 'store-foreign', name: 'Alice', role: 'CASHIER' },
+        });
+
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.posOperator.create).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('returns 400 for an invalid role', async () => {
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/pos-operators',
+          payload: { storeId: 'store-1', name: 'Alice', role: 'SUPERVISOR' },
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(mocks.prisma.posOperator.create).not.toHaveBeenCalled();
+        await app.close();
+      });
+    });
+
+    describe('PATCH /pos-operators/:id', () => {
+      it('updates an operator belonging to the tenant and bumps staffVersion', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1', storeId: 'store-1' });
+        mocks.prisma.posOperator.update.mockResolvedValue({
+          id: 'op-1', name: 'Alice B.', role: 'SENIOR_CASHIER', permissions: [], active: true,
+        });
+        mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 3 });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'PATCH',
+          url: '/pos-operators/op-1',
+          payload: { name: 'Alice B.', role: 'SENIOR_CASHIER' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(mocks.prisma.posOperator.update).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { id: 'op-1' }, data: { name: 'Alice B.', role: 'SENIOR_CASHIER' } })
+        );
+        expect(mocks.prisma.posSettings.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { storeId: 'store-1' }, update: { staffVersion: { increment: 1 } } })
+        );
+        await app.close();
+      });
+
+      it('returns 404 (tenant isolation) for an operator belonging to another tenant', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'PATCH',
+          url: '/pos-operators/op-foreign',
+          payload: { active: false },
+        });
+
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.posOperator.update).not.toHaveBeenCalled();
+        expect(mocks.prisma.posSettings.upsert).not.toHaveBeenCalled();
+        await app.close();
+      });
+    });
+
+    describe('DELETE /pos-operators/:id', () => {
+      it('deletes an operator belonging to the tenant and bumps staffVersion', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1', storeId: 'store-1' });
+        mocks.prisma.posOperator.delete.mockResolvedValue({ id: 'op-1' });
+        mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 4 });
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'DELETE', url: '/pos-operators/op-1' });
+
+        expect(response.statusCode).toBe(200);
+        expect(mocks.prisma.posOperator.delete).toHaveBeenCalledWith({ where: { id: 'op-1' } });
+        expect(mocks.prisma.posSettings.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { storeId: 'store-1' }, update: { staffVersion: { increment: 1 } } })
+        );
+        await app.close();
+      });
+
+      it('returns 404 (tenant isolation) for an operator belonging to another tenant', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'DELETE', url: '/pos-operators/op-foreign' });
+
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.posOperator.delete).not.toHaveBeenCalled();
+        expect(mocks.prisma.posSettings.upsert).not.toHaveBeenCalled();
+        await app.close();
+      });
     });
   });
 });
