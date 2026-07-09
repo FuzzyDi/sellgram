@@ -382,6 +382,21 @@ export const adminApi = {
   updateWebhook: (id: string, data: { url?: string; events?: string[]; isActive?: boolean }) =>
     request<any>(`/webhooks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteWebhook: (id: string) => request<any>(`/webhooks/${id}`, { method: 'DELETE' }),
+
+  getPosDevices: (storeId: string) => request<any>(`/pos-devices?storeId=${encodeURIComponent(storeId)}`),
+  createPosDevice: (data: { storeId: string; name: string; deviceType?: string }) =>
+    request<any>('/pos-devices', { method: 'POST', body: JSON.stringify(data) }),
+
+  getPosOperators: (storeId: string) => request<any>(`/pos-operators?storeId=${encodeURIComponent(storeId)}`),
+  createPosOperator: (data: { storeId: string; name: string; role: string; permissions?: string[]; active?: boolean }) =>
+    request<any>('/pos-operators', { method: 'POST', body: JSON.stringify(data) }),
+  updatePosOperator: (id: string, data: { name?: string; role?: string; permissions?: string[]; active?: boolean }) =>
+    request<any>(`/pos-operators/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deletePosOperator: (id: string) => request<any>(`/pos-operators/${id}`, { method: 'DELETE' }),
+
+  getPosSettings: (storeId: string) => request<any>(`/pos-devices/settings?storeId=${encodeURIComponent(storeId)}`),
+  updatePosSettings: (storeId: string, settings: Record<string, unknown>) =>
+    request<any>('/pos-devices/settings', { method: 'PUT', body: JSON.stringify({ storeId, settings }) }),
 };
 
 
