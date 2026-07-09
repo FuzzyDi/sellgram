@@ -26,6 +26,9 @@ const Reviews       = lazy(() => import('./pages/Reviews'));
 const PromoCodes    = lazy(() => import('./pages/PromoCodes'));
 const Banners       = lazy(() => import('./pages/Banners'));
 const Settings      = lazy(() => import('./pages/Settings'));
+const PosDevices    = lazy(() => import('./pages/pos/PosDevices'));
+const PosOperators  = lazy(() => import('./pages/pos/PosOperators'));
+const PosSettings   = lazy(() => import('./pages/pos/PosSettings'));
 const SysLayout     = lazy(() => import('./pages/sys/SysLayout'));
 
 interface AuthState { user: any; tenant: any; }
@@ -158,6 +161,9 @@ function TenantApp() {
             <Route path="/banners" element={<ProtectedRoute perms={perms} requires="manageSettings"><Banners /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute perms={perms} requires="viewReports"><Reports /></ProtectedRoute>} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/pos/devices" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosDevices /></ProtectedRoute>} />
+            <Route path="/pos/operators" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosOperators /></ProtectedRoute>} />
+            <Route path="/pos/settings" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosSettings /></ProtectedRoute>} />
             <Route path="/billing" element={<ProtectedRoute perms={perms} requires="manageBilling"><Billing /></ProtectedRoute>} />
             <Route path="/audit-log" element={<ProtectedRoute perms={perms} requires="manageSettings"><AuditLog /></ProtectedRoute>} />
             <Route path="/help" element={<Help />} />

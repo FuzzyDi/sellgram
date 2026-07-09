@@ -27,6 +27,29 @@ const catalogSnapshotSchema = z.object({
   storeId: z.string().min(1),
 });
 
+const listDevicesQuerySchema = z.object({
+  storeId: z.string().min(1),
+});
+
+const getSettingsQuerySchema = z.object({
+  storeId: z.string().min(1),
+});
+
+// Same empty eight-key document POST /pos-operators' bumpStaffVersion
+// upserts for a store with no PosSettings row yet (docs/POS_SYNC_API.md
+// §10) — GET returns it at version 0 rather than 404 so the admin UI can
+// render a settings form for a store that hasn't been configured yet.
+const EMPTY_POS_SETTINGS_PAYLOAD = {
+  taxProfile: {},
+  paymentMethods: [],
+  receiptTemplate: {},
+  printerProfile: {},
+  fiscalProfile: {},
+  offlineLimits: {},
+  roundingRules: {},
+  featureFlags: {},
+};
+
 // The eight-key settings body from docs/POS_SYNC_API.md §10. Internals are
 // intentionally unconstrained (they depend on a fiscal integration partner
 // not yet confirmed) — only the top-level keys and their object/array kind
@@ -157,6 +180,35 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // List a store's POS devices for the fleet screen (admin UI only —
+  // devices themselves never call this, they only ever see their own
+  // record via /pos/v1/heartbeat).
+  fastify.get(
+    '/pos-devices',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const query = listDevicesQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({ success: false, error: query.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const devices = await prisma.posDevice.findMany({
+        where: { tenantId, storeId: store.id },
+        select: {
+          id: true, name: true, deviceType: true, status: true,
+          deviceCode: true, lastSeenAt: true, createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return reply.status(200).send({ success: true, data: devices });
+    }
+  );
+
   // Manually build and store a catalog snapshot for a store's devices to pull.
   // Not triggered automatically on product/category changes — see
   // docs/SBGCLOUD_ARCHITECTURE.md §13 (future sprint work).
@@ -218,6 +270,38 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       });
 
       return reply.status(201).send({ success: true, data: snapshot });
+    }
+  );
+
+  // Read the store's POS settings document for the admin settings screen —
+  // mirrors PUT's tenant scoping, but returns the eight-key defaults at
+  // version 0 for a store that hasn't been configured yet instead of 404
+  // (docs/POS_SYNC_API.md §10: "unconfigured stores get empty eight-key
+  // defaults at version 1" describes devices' first GET /pos/v1/settings
+  // pull, not this admin read — no PosSettings row is created here, only
+  // on first PUT/staff write, so version 0 signals "nothing saved yet").
+  fastify.get(
+    '/pos-devices/settings',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const query = getSettingsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({ success: false, error: query.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const settings = await prisma.posSettings.findUnique({
+        where: { storeId: store.id },
+        select: { storeId: true, version: true, payload: true, updatedAt: true },
+      });
+
+      return reply.status(200).send({
+        success: true,
+        data: settings ?? { storeId: store.id, version: 0, payload: EMPTY_POS_SETTINGS_PAYLOAD, updatedAt: null },
+      });
     }
   );
 

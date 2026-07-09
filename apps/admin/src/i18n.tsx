@@ -28,6 +28,7 @@ const dict = {
     team_settings: '\u041a\u043e\u043c\u0430\u043d\u0434\u0430 \u0438 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438',
     workspace: 'Workspace',
     sales_channels: '\u041a\u0430\u043d\u0430\u043b\u044b \u043f\u0440\u043e\u0434\u0430\u0436',
+    pos: 'POS',
   },
   uz: {
     dashboard: 'Boshqaruv paneli',
@@ -52,6 +53,7 @@ const dict = {
     team_settings: 'Jamoa va sozlamalar',
     workspace: 'Workspace',
     sales_channels: 'Savdo kanallari',
+    pos: 'POS',
   },
 } as const;
 
