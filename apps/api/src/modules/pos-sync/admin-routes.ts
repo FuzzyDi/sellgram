@@ -45,6 +45,57 @@ const posSettingsSchema = z.object({
   }),
 });
 
+const posOperatorRoleSchema = z.enum(['CASHIER', 'SENIOR_CASHIER', 'ADMIN']);
+
+const listOperatorsQuerySchema = z.object({
+  storeId: z.string().min(1),
+});
+
+const createOperatorSchema = z.object({
+  storeId: z.string().min(1),
+  name: z.string().min(1).max(200),
+  role: posOperatorRoleSchema,
+  permissions: z.array(z.string()).default([]),
+  active: z.boolean().default(true),
+});
+
+const updateOperatorSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    role: posOperatorRoleSchema,
+    permissions: z.array(z.string()),
+    active: z.boolean(),
+  })
+  .partial();
+
+// Bumps PosSettings.staffVersion for this store on every PosOperator
+// create/update/delete (docs/POS_POLICY_ENGINE.md §14/§5) — same
+// independent-counter pattern as policiesVersion/printTemplatesVersion.
+// A store with no PosSettings row yet gets one created with defaults
+// (the eight-key empty document, §10 of docs/POS_SYNC_API.md) rather than
+// failing — staff management must not depend on settings having been
+// configured first.
+async function bumpStaffVersion(tenantId: string, storeId: string) {
+  await prisma.posSettings.upsert({
+    where: { storeId },
+    create: {
+      tenantId,
+      storeId,
+      payload: {
+        taxProfile: {},
+        paymentMethods: [],
+        receiptTemplate: {},
+        printerProfile: {},
+        fiscalProfile: {},
+        offlineLimits: {},
+        roundingRules: {},
+        featureFlags: {},
+      },
+    },
+    update: { staffVersion: { increment: 1 } },
+  });
+}
+
 /**
  * Store-admin endpoints for POS device onboarding. Registered under
  * /api/store-admin — see docs/SBGCLOUD_ARCHITECTURE.md for the boundary
@@ -202,6 +253,104 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       });
 
       return reply.status(200).send({ success: true, data: settings });
+    }
+  );
+
+  // POS staff/operators CRUD (docs/POS_POLICY_ENGINE.md §14) — PosOperator
+  // is store-scoped and unrelated to User/Team, so this is a plain
+  // tenant-isolated roster CRUD, not a permission-guard variant of the
+  // existing user-management endpoints.
+  fastify.get(
+    '/pos-operators',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const query = listOperatorsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({ success: false, error: query.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const operators = await prisma.posOperator.findMany({
+        where: { tenantId, storeId: store.id },
+        orderBy: { name: 'asc' },
+      });
+
+      return reply.status(200).send({ success: true, data: operators });
+    }
+  );
+
+  fastify.post(
+    '/pos-operators',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const body = createOperatorSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: body.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const operator = await prisma.posOperator.create({
+        data: {
+          tenantId,
+          storeId: store.id,
+          name: body.data.name,
+          role: body.data.role,
+          permissions: body.data.permissions,
+          active: body.data.active,
+        },
+      });
+      await bumpStaffVersion(tenantId, store.id);
+
+      return reply.status(201).send({ success: true, data: operator });
+    }
+  );
+
+  fastify.patch(
+    '/pos-operators/:id',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { id } = request.params as { id: string };
+      const body = updateOperatorSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      // Tenant isolation: an operator that exists but belongs to a
+      // different tenant must not leak as "found" — 404, not 403.
+      const existing = await prisma.posOperator.findFirst({ where: { id, tenantId }, select: { id: true, storeId: true } });
+      if (!existing) return reply.status(404).send({ success: false, error: 'Operator not found' });
+
+      const operator = await prisma.posOperator.update({
+        where: { id: existing.id },
+        data: body.data,
+      });
+      await bumpStaffVersion(tenantId, existing.storeId);
+
+      return reply.status(200).send({ success: true, data: operator });
+    }
+  );
+
+  fastify.delete(
+    '/pos-operators/:id',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { id } = request.params as { id: string };
+
+      const existing = await prisma.posOperator.findFirst({ where: { id, tenantId }, select: { id: true, storeId: true } });
+      if (!existing) return reply.status(404).send({ success: false, error: 'Operator not found' });
+
+      await prisma.posOperator.delete({ where: { id: existing.id } });
+      await bumpStaffVersion(tenantId, existing.storeId);
+
+      return reply.status(200).send({ success: true, data: { id: existing.id } });
     }
   );
 }

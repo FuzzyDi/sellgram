@@ -659,7 +659,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     // versioned blocks. Fetched in parallel: PosSettings (tenant-scoped,
     // may not exist yet), the global PlatformPolicyVersion counter, and
     // enabled PlatformPolicy rows (also global, never tenant-scoped).
-    const [stored, platformPolicyVersion, platformPolicies] = await Promise.all([
+    const [stored, platformPolicyVersion, platformPolicies, operators] = await Promise.all([
       prisma.posSettings.findUnique({
         where: { storeId: device.storeId },
         select: {
@@ -669,6 +669,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           tenantPolicyRules: true,
           printTemplatesVersion: true,
           printTemplates: true,
+          staffVersion: true,
         },
       }),
       // Singleton by convention (see schema comment on the model) — a
@@ -680,6 +681,15 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       prisma.platformPolicy.findMany({
         where: { enabled: true },
         select: { id: true, scope: true, severity: true, enabled: true, match: true, message: true, extra: true },
+      }),
+      // §14 — staff is optional: a store with no operators configured
+      // sends `staff: null` (below) so the till knows to fall back to its
+      // local roster, rather than an empty array meaning "no cashiers can
+      // work here." Only active operators are ever sent to a till.
+      prisma.posOperator.findMany({
+        where: { tenantId: device.tenantId, storeId: device.storeId, active: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, role: true, permissions: true, active: true },
       }),
     ]);
 
@@ -741,6 +751,23 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       .filter((rule) => rule.enabled !== false)
       .map((rule) => ({ ...rule, source: 'TENANT' as const }));
 
+    // §14 — wire Role is lowercase; PosOperatorRole is stored uppercase
+    // (CASHIER/SENIOR_CASHIER/ADMIN). `staff: null` (not `[]`) when there
+    // are no active operators, so Android can distinguish "this store has
+    // no operators configured" from "the block isn't supported" and fall
+    // back to its local roster.
+    const staff = operators.length
+      ? {
+          operators: operators.map((op) => ({
+            id: op.id,
+            name: op.name,
+            role: op.role.toLowerCase(),
+            permissions: op.permissions,
+            active: op.active,
+          })),
+        }
+      : null;
+
     return sendSuccess(
       reply,
       200,
@@ -751,9 +778,11 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         // in `policies` changed, not which side.
         policiesVersion: (platformPolicyVersion?.version ?? 1) + (stored?.policiesVersion ?? 1),
         printTemplatesVersion: stored?.printTemplatesVersion ?? 1,
+        staffVersion: stored?.staffVersion ?? 1,
         settings,
         policies: { rules: [...platformRules, ...tenantRules] },
         printTemplates,
+        staff,
       },
       request
     );

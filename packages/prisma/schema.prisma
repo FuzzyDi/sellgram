@@ -151,6 +151,7 @@ model Tenant {
   cloudCommands      CloudCommand[]
   counterparties     Counterparty[]
   counterpartyLedger CounterpartyLedger[]
+  posOperators       PosOperator[]
 
   @@map("tenants")
 }
@@ -238,6 +239,7 @@ model Store {
   stockEvents      StockEvent[]
   fiscalEvents     FiscalEvent[]
   shiftEvents      ShiftEvent[]
+  posOperators     PosOperator[]
 
   @@index([tenantId])
   @@map("stores")
@@ -1443,8 +1445,49 @@ model PosSettings {
   // autoPrintReceipt/printCopies/etc.
   printTemplates        Json @default("{}")
 
+  // Additive field for staff/operators support (docs/POS_POLICY_ENGINE.md
+  // §14) — same independent-counter pattern as policiesVersion/
+  // printTemplatesVersion. Bumped on every PosOperator create/update/
+  // delete for this store; PosOperator itself lives in its own table
+  // (below), not embedded here.
+  staffVersion          Int  @default(1)
+
   @@index([tenantId])
   @@map("pos_settings")
+}
+
+// ============================================================
+// POS STAFF / OPERATORS (docs/POS_POLICY_ENGINE.md §14)
+// ============================================================
+
+enum PosOperatorRole {
+  CASHIER
+  SENIOR_CASHIER
+  ADMIN
+}
+
+// Deliberately its own entity, not a role/permission variant of User/Team —
+// a cashier working a till has no login to the tenant-admin panel and no
+// User row at all (docs/POS_POLICY_ENGINE.md §14). Store-scoped like
+// PosDevice/PosSettings; `id` is a real CUID from this table, never an
+// arbitrary string the till or store-admin client supplies. PIN/password
+// auth is explicitly out of scope for this iteration — this is a roster +
+// permissions list only.
+model PosOperator {
+  id          String          @id @default(cuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId     String
+  store       Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  role        PosOperatorRole
+  permissions String[]        @default([])
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([tenantId, storeId])
+  @@map("pos_operators")
 }
 
 // ============================================================

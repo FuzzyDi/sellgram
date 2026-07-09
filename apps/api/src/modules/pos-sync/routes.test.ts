@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     posSettings: { findUnique: vi.fn().mockResolvedValue(null) },
     platformPolicy: { findMany: vi.fn().mockResolvedValue([]) },
     platformPolicyVersion: { findFirst: vi.fn().mockResolvedValue({ version: 1 }) },
+    posOperator: { findMany: vi.fn().mockResolvedValue([]) },
     tenant: { findUnique: vi.fn().mockResolvedValue({ planExpiresAt: null, blockedAt: null }) },
     saleEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     stockEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
@@ -650,6 +651,7 @@ describe('pos-sync.routes', () => {
         tenantPolicyRules: [tenantRule],
         printTemplatesVersion: 3,
         printTemplates,
+        staffVersion: 6,
       });
       mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 5 });
       mocks.prisma.platformPolicy.findMany.mockResolvedValue([samplePlatformRule]);
@@ -666,6 +668,7 @@ describe('pos-sync.routes', () => {
       expect(typeof body.requestId).toBe('string');
       expect(body.data.settingsVersion).toBe(4);
       expect(body.data.printTemplatesVersion).toBe(3);
+      expect(body.data.staffVersion).toBe(6);
       // policiesVersion is a computed sum: PlatformPolicyVersion.version (5)
       // + PosSettings.policiesVersion (2).
       expect(body.data.policiesVersion).toBe(7);
@@ -711,6 +714,8 @@ describe('pos-sync.routes', () => {
       const body = response.json();
       expect(body.data.settingsVersion).toBe(1);
       expect(body.data.printTemplatesVersion).toBe(1);
+      expect(body.data.staffVersion).toBe(1);
+      expect(body.data.staff).toBeNull();
       expect(body.data.policiesVersion).toBe(2);
       expect(body.data.settings).toEqual({
         taxProfile: {},
@@ -814,6 +819,63 @@ describe('pos-sync.routes', () => {
       });
 
       expect(response.json().data.policies.rules).toEqual([]);
+      await app.close();
+    });
+
+    it('returns staff: null when the store has no active PosOperator rows', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
+      mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 1 });
+      mocks.prisma.platformPolicy.findMany.mockResolvedValue([]);
+      mocks.prisma.posOperator.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/settings',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(response.json().data.staff).toBeNull();
+      await app.close();
+    });
+
+    it('includes active operators sorted by name with lowercase role on the wire, and queries only active: true for this store', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
+      mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 1 });
+      mocks.prisma.platformPolicy.findMany.mockResolvedValue([]);
+      mocks.prisma.posOperator.findMany.mockResolvedValue([
+        { id: 'op-1', name: 'Alice', role: 'SENIOR_CASHIER', permissions: ['void_sale'], active: true },
+        { id: 'op-2', name: 'Bob', role: 'ADMIN', permissions: [], active: true },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/settings',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      const body = response.json();
+      expect(body.data.staff).toEqual({
+        operators: [
+          { id: 'op-1', name: 'Alice', role: 'senior_cashier', permissions: ['void_sale'], active: true },
+          { id: 'op-2', name: 'Bob', role: 'admin', permissions: [], active: true },
+        ],
+      });
+      // Query-level filter, not application-code filter, and store-scoped —
+      // mirrors the platformPolicy.findMany assertion above.
+      expect(mocks.prisma.posOperator.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId: 't-1', storeId: 's-1', active: true },
+          orderBy: { name: 'asc' },
+        })
+      );
       await app.close();
     });
 
