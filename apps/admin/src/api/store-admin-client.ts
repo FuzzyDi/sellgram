@@ -392,6 +392,8 @@ export const adminApi = {
   getPosDevices: (storeId: string) => request<any>(`/pos-devices?storeId=${encodeURIComponent(storeId)}`),
   createPosDevice: (data: { storeId: string; name: string; deviceType?: string }) =>
     request<any>('/pos-devices', { method: 'POST', body: JSON.stringify(data) }),
+  createCatalogSnapshot: (storeId: string) =>
+    request<any>('/pos-devices/catalog-snapshot', { method: 'POST', body: JSON.stringify({ storeId }) }),
 
   getPosOperators: (storeId: string) => request<any>(`/pos-operators?storeId=${encodeURIComponent(storeId)}`),
   createPosOperator: (data: { storeId: string; name: string; role: string; permissions?: string[]; active?: boolean }) =>
