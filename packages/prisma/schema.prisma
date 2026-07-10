@@ -153,6 +153,7 @@ model Tenant {
   counterpartyLedger CounterpartyLedger[]
   posOperators       PosOperator[]
   markingCodes       ProductMarkingCode[]
+  barcodes           ProductBarcode[]
 
   @@map("tenants")
 }
@@ -338,6 +339,7 @@ model Product {
   stockLedgerEntries StockLedgerEntry[]
   counterpartyPrices CounterpartyPrice[]
   markingCodes       ProductMarkingCode[]
+  barcodes           ProductBarcode[]
 
   @@index([tenantId])
   @@index([tenantId, categoryId])
@@ -368,8 +370,39 @@ model ProductVariant {
 
   orderItems OrderItem[]
   counterpartyPrices CounterpartyPrice[]
+  barcodes           ProductBarcode[]
 
   @@map("product_variants")
+}
+
+model ProductBarcode {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // nullable: a barcode can belong to the whole product, or to one
+  // specific variant (e.g. a different EAN per size/color).
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  barcode   String
+  // EAN13/EAN8/CODE128/DATAMATRIX/QR — String, not an enum, so a new
+  // symbology can be supported without a migration.
+  type      String  @default("EAN13")
+  // The barcode to print on a receipt/label when a product has more
+  // than one — at most one true per product, enforced by the store-admin
+  // route handler's transaction (apps/api/src/modules/product/routes.ts),
+  // not by the schema.
+  isDefault Boolean @default(false)
+  // Units per package this barcode actually represents — 1 = a single
+  // piece, 10 = a block/case of 10, etc. Lets a till scanning a case
+  // barcode decrement stock by the right multiple instead of 1.
+  unitQty   Decimal? @db.Decimal(10, 3)
+
+  @@unique([tenantId, barcode])
+  @@index([tenantId, productId])
+  @@index([tenantId, variantId])
+  @@map("product_barcodes")
 }
 
 model StockMovement {

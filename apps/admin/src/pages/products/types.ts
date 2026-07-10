@@ -46,6 +46,15 @@ export interface PendingVariant {
   stockQty: string;
 }
 
+export interface ProductBarcode {
+  id: string;
+  barcode: string;
+  type: string;
+  isDefault: boolean;
+  unitQty: number | string | null;
+  variantId?: string | null;
+}
+
 export interface FormData {
   name: string;
   sku: string;

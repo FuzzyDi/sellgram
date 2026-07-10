@@ -139,6 +139,12 @@ export const adminApi = {
   deleteProductVariant: (productId: string, variantId: string) =>
     request<any>(`/products/${productId}/variants/${variantId}`, { method: 'DELETE' }),
 
+  getProductBarcodes: (productId: string) => request<any>(`/products/${productId}/barcodes`),
+  createProductBarcode: (productId: string, data: { barcode: string; type?: string; isDefault?: boolean; unitQty?: number; variantId?: string }) =>
+    request<any>(`/products/${productId}/barcodes`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteProductBarcode: (productId: string, barcodeId: string) =>
+    request<any>(`/products/${productId}/barcodes/${barcodeId}`, { method: 'DELETE' }),
+
   getOrders: (params?: string) => request<any>(`/orders${params ? '?' + params : ''}`),
   getOrder: (id: string) => request<any>(`/orders/${id}`),
   downloadOrdersCsv: async (params?: string) => {

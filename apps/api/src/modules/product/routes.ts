@@ -279,6 +279,105 @@ export default async function productRoutes(fastify: FastifyInstance) {
     return { success: true, message: 'Variant deleted' };
   });
 
+  // Barcode CRUD (packages/prisma/schema.prisma ProductBarcode) — a
+  // product can have several scannable codes (e.g. a unit EAN and a
+  // case/block EAN with a different unitQty); at most one is
+  // isDefault (printed on receipts/labels).
+  const createBarcodeSchema = z.object({
+    barcode: z.string().min(1).max(64),
+    type: z.enum(['EAN13', 'EAN8', 'CODE128', 'DATAMATRIX', 'QR']).default('EAN13'),
+    isDefault: z.boolean().default(false),
+    unitQty: z.number().positive().optional(),
+    variantId: z.string().optional(),
+  });
+
+  fastify.get('/products/:id/barcodes', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId! }, select: { id: true } });
+    if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
+
+    const barcodes = await prisma.productBarcode.findMany({
+      where: { productId: id },
+      orderBy: [{ isDefault: 'desc' }, { barcode: 'asc' }],
+    });
+    return { success: true, data: barcodes };
+  });
+
+  fastify.post('/products/:id/barcodes', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const tenantId = request.tenantId!;
+    const parsed = createBarcodeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: parsed.error.errors[0]?.message ?? 'Invalid input' });
+    }
+    const { barcode, type, isDefault, unitQty, variantId } = parsed.data;
+
+    const product = await prisma.product.findFirst({ where: { id, tenantId }, select: { id: true } });
+    if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
+
+    if (variantId) {
+      const variant = await prisma.productVariant.findFirst({ where: { id: variantId, productId: id }, select: { id: true } });
+      if (!variant) return reply.status(404).send({ success: false, error: 'Variant not found for this product' });
+    }
+
+    // Pre-check for a clear 409 — @@unique([tenantId, barcode]) is the
+    // real guarantee, backstopped by the P2002 catch below against a
+    // concurrent identical insert.
+    const existing = await prisma.productBarcode.findFirst({ where: { tenantId, barcode }, select: { id: true } });
+    if (existing) {
+      return reply.status(409).send({ success: false, error: 'BARCODE_ALREADY_EXISTS' });
+    }
+
+    let created;
+    try {
+      created = await prisma.$transaction(async (tx: any) => {
+        // At most one isDefault per product — reset any existing default
+        // before creating this one, same tenantId scoping as everything
+        // else in this handler.
+        if (isDefault) {
+          await tx.productBarcode.updateMany({
+            where: { productId: id, isDefault: true },
+            data: { isDefault: false },
+          });
+        }
+        return tx.productBarcode.create({
+          data: {
+            tenantId,
+            productId: id,
+            variantId: variantId ?? null,
+            barcode,
+            type,
+            isDefault,
+            unitQty: unitQty ?? null,
+          },
+        });
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        return reply.status(409).send({ success: false, error: 'BARCODE_ALREADY_EXISTS' });
+      }
+      throw err;
+    }
+
+    return reply.status(201).send({ success: true, data: created });
+  });
+
+  fastify.delete('/products/:id/barcodes/:barcodeId', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id, barcodeId } = request.params as { id: string; barcodeId: string };
+    const tenantId = request.tenantId!;
+
+    const product = await prisma.product.findFirst({ where: { id, tenantId }, select: { id: true } });
+    if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
+
+    // Tenant isolation via productId (already tenant-checked above) +
+    // barcodeId together — a barcode that exists but belongs to a
+    // different tenant's product is a 404, never a 403.
+    const result = await prisma.productBarcode.deleteMany({ where: { id: barcodeId, productId: id } });
+    if (result.count === 0) return reply.status(404).send({ success: false, error: 'Barcode not found' });
+
+    return { success: true, message: 'Barcode deleted' };
+  });
+
   const stockAdjustSchema = z.object({
     qty: z.number().int(),
     variantId: z.string().optional(),
