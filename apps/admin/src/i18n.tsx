@@ -29,6 +29,7 @@ const dict = {
     workspace: 'Workspace',
     sales_channels: '\u041a\u0430\u043d\u0430\u043b\u044b \u043f\u0440\u043e\u0434\u0430\u0436',
     pos: 'POS',
+    b2b: 'B2B/\u041e\u043f\u0442',
   },
   uz: {
     dashboard: 'Boshqaruv paneli',
@@ -54,6 +55,7 @@ const dict = {
     workspace: 'Workspace',
     sales_channels: 'Savdo kanallari',
     pos: 'POS',
+    b2b: 'B2B/Optom',
   },
 } as const;
 

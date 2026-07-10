@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Package, Boxes, Users, BarChart2, Settings as SettingsIcon, CreditCard, type LucideIcon,
+  LayoutDashboard, Package, Boxes, Users, BarChart2, Settings as SettingsIcon, CreditCard, Briefcase, type LucideIcon,
 } from 'lucide-react';
 import { useAdminI18n, type Key } from '../i18n';
 
@@ -27,9 +27,8 @@ function TelegramIcon({ size = 16 }: { size?: number }) {
 }
 
 // Two-level IA (docs/ADMIN_REDESIGN.md §3): Workspace (channel-agnostic)
-// and Sales channels (per-channel — Sellgram and, as of Phase 3 step 5,
-// POS; B2B still has no screens, so its nav item doesn't exist rather
-// than pointing nowhere). Icon substitution note: the brief asked for Tabler outline
+// and Sales channels (per-channel — Sellgram, POS (Phase 3 step 5), and
+// B2B/Опт (Phase 3 step 6)). Icon substitution note: the brief asked for Tabler outline
 // icons (ti-layout-dashboard etc.) — this app has no Tabler dependency at
 // all, only lucide-react (already used throughout the old App.tsx
 // Sidebar). Adding a whole new icon library for a Phase 2 shell felt like
@@ -114,8 +113,8 @@ export default function Sidebar({ tenantName, permissions, mobileOpen, onCloseMo
           })}
         </div>
 
-        {/* Sales channels — Sellgram + POS (docs/ADMIN_REDESIGN.md §3/§10
-            step 4/5); B2B still has no screens, so it isn't listed here. */}
+        {/* Sales channels — Sellgram + POS + B2B (docs/ADMIN_REDESIGN.md
+            §3/§10 step 4/5/6). */}
         <p className="px-2.5 mb-1.5 text-token-xs font-semibold uppercase tracking-wide text-neutral-400">
           {t('sales_channels')}
         </p>
@@ -131,6 +130,12 @@ export default function Sidebar({ tenantName, permissions, mobileOpen, onCloseMo
               <CreditCard size={16} strokeWidth={isActive('/pos') ? 2.2 : 1.8} />
             </span>
             {t('pos')}
+          </button>
+          <button onClick={() => go('/b2b/counterparties')} className={navItemClass(isActive('/b2b'))}>
+            <span className="text-channel-b2b">
+              <Briefcase size={16} strokeWidth={isActive('/b2b') ? 2.2 : 1.8} />
+            </span>
+            {t('b2b')}
           </button>
         </div>
       </nav>
