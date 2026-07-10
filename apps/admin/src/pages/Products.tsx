@@ -138,6 +138,7 @@ export default function Products() {
 
       {form.showForm && (
         <ProductForm
+          key={form.editingId ?? 'new'}
           editingId={form.editingId}
           form={form.form}
           updateForm={form.updateForm}
