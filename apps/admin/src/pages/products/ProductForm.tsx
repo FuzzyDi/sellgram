@@ -7,7 +7,8 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Select from '../../components/Select';
 import ProductVariantsSection from './ProductVariantsSection';
-import type { Category, FormData as ProductFormData } from './types';
+import BarcodesSection from './BarcodesSection';
+import type { Category, FormData as ProductFormData, NoticeTone } from './types';
 
 // docs/POS_SYNC_API.md §10/§12 — the (vatRate, vatExempt) pair collapses
 // to one Select; 'CUSTOM' (see useProductForm.ts's vatOptionFromProduct)
@@ -52,6 +53,7 @@ interface ProductFormProps {
   fileInputRef: React.RefObject<HTMLInputElement>;
   onUploadImages: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemoveImage: (id: string) => void;
+  showNotice: (tone: NoticeTone, message: string) => void;
   variantsSectionProps: Omit<React.ComponentProps<typeof ProductVariantsSection>, 'categoryAttrs'>;
 }
 
@@ -60,6 +62,7 @@ export default function ProductForm({
   showCatForm, onToggleCatForm, catName, setCatName, onCreateCategory,
   onSubmit, onClose,
   editImages, uploading, fileInputRef, onUploadImages, onRemoveImage,
+  showNotice,
   variantsSectionProps,
 }: ProductFormProps) {
   const { tr } = useAdminI18n();
@@ -191,6 +194,10 @@ export default function ProductForm({
 
           {editingId && (
             <ProductVariantsSection categoryAttrs={categoryAttrs} {...variantsSectionProps} />
+          )}
+
+          {editingId && (
+            <BarcodesSection editingId={editingId} showNotice={showNotice} />
           )}
 
           <div className="flex gap-2.5 mt-1">

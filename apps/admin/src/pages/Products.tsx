@@ -157,6 +157,7 @@ export default function Products() {
           fileInputRef={form.fileInputRef}
           onUploadImages={form.uploadImages}
           onRemoveImage={(id) => void form.removeImage(id)}
+          showNotice={showNotice}
           variantsSectionProps={{
             editVariants: variants.editVariants,
             onDeleteVariant: (id) => void variants.deleteVariant(id),

@@ -245,6 +245,13 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           vatExempt: true,
           markType: true,
           isMarked: true,
+          // packages/prisma/schema.prisma ProductBarcode — a till scans
+          // any of these to resolve back to this Product, and uses
+          // unitQty to decrement stock by the right multiple for a
+          // case/block barcode (not necessarily 1).
+          barcodes: {
+            select: { id: true, barcode: true, type: true, isDefault: true, unitQty: true, variantId: true },
+          },
           variants: {
             where: { isActive: true },
             select: { id: true, name: true, sku: true, price: true, stockQty: true },
