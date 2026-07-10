@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { toImageUrl } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
 import Card from '../../components/Card';
@@ -40,7 +41,7 @@ export default function ProductForm({
   const { tr } = useAdminI18n();
   const categoryAttrs = categories.find((c) => c.id === form.categoryId)?.attributes || [];
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/45 overflow-y-auto z-50 p-4">
       <Card className="w-full max-w-[860px] mx-auto">
         <h3 className="m-0 text-token-2xl font-semibold text-neutral-800">
@@ -162,6 +163,7 @@ export default function ProductForm({
           </div>
         </form>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }
