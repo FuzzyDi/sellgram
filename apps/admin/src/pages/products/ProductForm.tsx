@@ -41,8 +41,8 @@ export default function ProductForm({
   const categoryAttrs = categories.find((c) => c.id === form.categoryId)?.attributes || [];
 
   return (
-    <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-[860px] max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/45 overflow-y-auto z-50 p-4">
+      <Card className="w-full max-w-[860px] mx-auto">
         <h3 className="m-0 text-token-2xl font-semibold text-neutral-800">
           {editingId ? tr('Редактировать товар', 'Mahsulotni tahrirlash') : tr('Новый товар', 'Yangi mahsulot')}
         </h3>
