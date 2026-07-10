@@ -1177,3 +1177,117 @@ future module, §12 future data model, §13 migration roadmap),
 `ShiftEvent`, `CloudCommand`, and their enums),
 `apps/api/src/modules/pos-sync/routes.ts` and `admin-routes.ts` (current
 server code).*
+
+---
+
+## 23. Reference: Demo Store Tashkent production config
+
+> **Living document, not a schema spec.** §10's eight-key `settings` body
+> is intentionally shape-only — this section is the opposite: one real,
+> currently-live store's actual configured values, verified against a
+> real terminal (**LANDI M20SE, serial `24BKCD203654`**) at
+> `settingsVersion=3` / `policiesVersion=2`. Nothing here overrides or
+> narrows §10/§14's contract; treat every value below as "this is what
+> Demo Store Tashkent happens to have configured today," not as a new
+> required field or enum. These values are edited through the admin UI
+> (**POS → Настройки** at `app.sbgcloud.uz`), never by hand-editing code
+> or this document — if the store's config changes, this section goes
+> stale until someone re-verifies it against the device and updates it.
+
+### 23.1 `settings` (verified `settingsVersion=3`)
+
+```json
+{
+  "taxProfile": {
+    "vatRate": 12,
+    "vatEnabled": true,
+    "country": "UZ",
+    "taxSystem": "GENERAL"
+  },
+  "paymentMethods": ["CASH", "CARD", "QR_PAYME", "QR_CLICK", "QR_STATIC_MANUAL", "BANK_TRANSFER"],
+  "receiptTemplate": {
+    "header": "<store header text — tenant-configured, not reproduced here>",
+    "footer": "<store footer text — tenant-configured, not reproduced here>",
+    "showLogo": false,
+    "showMxik": true,
+    "showBarcode": true,
+    "showOfdQr": true,
+    "showDiscount": true,
+    "showPackageCode": true,
+    "showMarkCode": true,
+    "showReceiptBarcode": true,
+    "paperWidth": 42
+  },
+  "printerProfile": {
+    "type": "THERMAL",
+    "paperWidth": 42,
+    "charset": "CP866",
+    "override": false,
+    "note": "Cloud profile is advisory only — see override semantics below"
+  },
+  "fiscalProfile": {
+    "provider": "SBG_HARDWARE_CORE",
+    "country": "UZ",
+    "fiscalEnabled": true,
+    "ofdEnabled": true
+  },
+  "offlineLimits": {
+    "maxOfflineHours": 24,
+    "maxOfflineAmountUZS": 10000000,
+    "syncIntervalSeconds": 300
+  },
+  "roundingRules": {
+    "cashRounding": 100,
+    "roundingMode": "NEAREST",
+    "currency": "UZS"
+  },
+  "featureFlags": {
+    "refundEnabled": true,
+    "discountEnabled": true,
+    "markingEnabled": true,
+    "xReportEnabled": true,
+    "zReportEnabled": true,
+    "cashInOutEnabled": true,
+    "multiOperatorEnabled": true
+  }
+}
+```
+
+**`printerProfile.override` semantics:** `override: false` means this
+Cloud-side profile is treated as a *recommendation* only — the till's
+actual physical connection (host/port/pairing) stays a local, on-device
+setting that Cloud never dictates. `override: true` is a different,
+stronger contract (Cloud values take precedence over local ones) and
+must be explicitly agreed with the SBG Lite POS Android team *before* any
+store is switched to it — it is not a value to flip casually from the
+admin UI without that coordination.
+
+### 23.2 Staff snapshot (verified `staffVersion=1`)
+
+One active operator, confirmed present on the device:
+
+```json
+{
+  "operators": [
+    {
+      "name": "TestKassir",
+      "role": "cashier",
+      "active": true
+    }
+  ]
+}
+```
+
+Device-side roster source confirmed as **CLOUD** (the till pulled this
+operator from `GET /settings`'s `staff` block, §14.3) — not the
+device-local fallback roster Android uses when `staff` is `null`.
+
+### 23.3 Checksum (verified format)
+
+```
+settings=3;policies=2;printTemplates=1;staff=1
+```
+
+Matches §10's "opaque, compare-only" semantics for `checksum` — this is
+simply what that opaque string actually looked like for this store at
+this moment, not a format guarantee for other stores or future versions.
