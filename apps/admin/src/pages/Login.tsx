@@ -64,49 +64,40 @@ export default function Login({ onLogin, onRegister }: Props) {
     setLoading(false);
   };
 
-  const features = [
-    tr('\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u043e\u043c', 'Katalog boshqaruvi'),
-    tr('\u041f\u043e\u0442\u043e\u043a \u0437\u0430\u043a\u0430\u0437\u043e\u0432', 'Buyurtma oqimi'),
-    tr('\u041b\u043e\u044f\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0438 \u0431\u0438\u043b\u043b\u0438\u043d\u0433', 'Loyallik va billing'),
-    tr('\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u0438 \u0440\u0430\u0441\u0441\u044b\u043b\u043a\u0438', 'Analitika va xabarnomalar'),
+  const channels = [
+    { name: 'Sellgram', desc: tr('Telegram-\u0432\u0438\u0442\u0440\u0438\u043d\u0430', 'Telegram-vitrina'), dotClass: 'bg-channel-sellgram' },
+    { name: 'POS', desc: tr('\u0444\u0438\u0441\u043a\u0430\u043b\u044c\u043d\u044b\u0435 \u0442\u0435\u0440\u043c\u0438\u043d\u0430\u043b\u044b', 'fiskal terminallar'), dotClass: 'bg-channel-pos' },
+    { name: 'B2B / \u041e\u043f\u0442', desc: tr('\u043a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442\u044b \u0438 \u0434\u043e\u043b\u0433\u0438', 'kontragentlar va qarzlar'), dotClass: 'bg-channel-b2b' },
   ];
 
   return (
     <div className="sg-login">
-      {/* Hero */}
-      <section className="sg-login-hero" style={{ color: '#edf3ff', padding: '46px clamp(20px, 6vw, 72px)' }}>
-        <h1 style={{ fontSize: 'clamp(42px, 5vw, 66px)', lineHeight: 1, margin: 0, fontWeight: 900, letterSpacing: -1.2 }}>
-          Sell<span style={{ color: '#00b96b' }}>Gram</span>
+      {/* Hero \u2014 SBGCloud branding: flat neutral-900, no gradient, no green accent */}
+      <section className="sg-login-hero bg-neutral-900" style={{ color: '#fff', padding: '46px clamp(20px, 6vw, 72px)' }}>
+        <h1 style={{ fontSize: 'clamp(38px, 4.6vw, 58px)', lineHeight: 1, margin: 0, fontWeight: 800, letterSpacing: -1 }}>
+          SBGCloud
         </h1>
-        <p style={{ marginTop: 18, fontSize: 'clamp(16px, 2vw, 21px)', lineHeight: 1.55, color: '#9eb3c9', maxWidth: 540 }}>
+        <p className="text-neutral-100" style={{ marginTop: 18, fontSize: 'clamp(18px, 2.1vw, 23px)', lineHeight: 1.4, fontWeight: 600, maxWidth: 540 }}>
+          {tr('\u0415\u0434\u0438\u043d\u0430\u044f \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0430 \u0434\u043b\u044f \u0432\u0430\u0448\u0435\u0433\u043e \u0431\u0438\u0437\u043d\u0435\u0441\u0430', 'Biznesingiz uchun yagona platforma')}
+        </p>
+        <p className="text-neutral-400" style={{ marginTop: 10, fontSize: 'clamp(15px, 1.6vw, 18px)', lineHeight: 1.55, maxWidth: 540 }}>
           {tr(
-            "\u0417\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u0435 \u043c\u0430\u0433\u0430\u0437\u0438\u043d \u0432 Telegram \u0437\u0430 \u043c\u0438\u043d\u0443\u0442\u044b \u0438 \u0443\u043f\u0440\u0430\u0432\u043b\u044f\u0439\u0442\u0435 \u0432\u0441\u0435\u043c \u0438\u0437 \u043e\u0434\u043d\u043e\u0439 \u0443\u0434\u043e\u0431\u043d\u043e\u0439 \u043a\u043e\u043d\u0441\u043e\u043b\u0438.",
-            "Telegram do'koningizni bir necha daqiqada ishga tushiring va hammasini bitta qulay konsolda boshqaring.",
+            'Telegram, \u043a\u0430\u0441\u0441\u0430 \u0438 \u043e\u043f\u0442\u043e\u0432\u044b\u0435 \u043f\u0440\u043e\u0434\u0430\u0436\u0438 \u2014 \u0432\u0441\u0451 \u0432 \u043e\u0434\u043d\u043e\u043c \u0440\u0430\u0431\u043e\u0447\u0435\u043c \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u0435.',
+            "Telegram, kassa va ulgurji savdo \u2014 hammasi bir ish maydonida.",
           )}
         </p>
 
-        <div className="sg-grid cols-2" style={{ marginTop: 28, maxWidth: 680 }}>
-          {features.map((f) => (
-            <div key={f} style={{ fontSize: 15, color: '#d8e6f7', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: '#00b96b', fontWeight: 900, fontSize: 18 }}>+</span>
-              <span>{f}</span>
+        <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 480 }}>
+          {channels.map((c) => (
+            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className={`inline-block h-2 w-2 rounded-full ${c.dotClass}`} aria-hidden="true" />
+              <span className="text-white" style={{ fontSize: 15, fontWeight: 700 }}>{c.name}</span>
+              <span className="text-neutral-400" style={{ fontSize: 14 }}>— {c.desc}</span>
             </div>
           ))}
         </div>
 
-        {/* Decorative stats */}
-        <div style={{ display: 'flex', gap: 24, marginTop: 40 }}>
-          {[
-            { value: '5 мин', label: tr('\u0434\u043e \u043f\u0435\u0440\u0432\u043e\u0433\u043e \u0437\u0430\u043a\u0430\u0437\u0430', 'birinchi buyurtmagacha') },
-            { value: '0 UZS', label: tr('\u0441\u0442\u0430\u0440\u0442 \u0431\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u043e', 'bepul boshlash') },
-            { value: '24/7', label: tr('\u0440\u0430\u0431\u043e\u0442\u0430 \u0431\u043e\u0442\u0430', 'bot ishlaydi') },
-          ].map((s) => (
-            <div key={s.label}>
-              <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: -0.5 }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: '#7a9ab4', marginTop: 2 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
+        <p className="text-neutral-500" style={{ marginTop: 40, fontSize: 12 }}>© 2026 SBGCloud</p>
       </section>
 
       {/* Form panel */}
