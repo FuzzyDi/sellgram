@@ -245,6 +245,8 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           vatExempt: true,
           markType: true,
           isMarked: true,
+          mxikCode: true,
+          packageCode: true,
           // packages/prisma/schema.prisma ProductBarcode — a till scans
           // any of these to resolve back to this Product, and uses
           // unitQty to decrement stock by the right multiple for a
