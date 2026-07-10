@@ -5,6 +5,8 @@ export interface Product {
   name: string;
   description?: string;
   sku: string;
+  mxikCode?: string | null;
+  packageCode?: string | null;
   price: number;
   stockQty: number;
   lowStockAlert: number;
@@ -43,6 +45,8 @@ export interface PendingVariant {
 export interface FormData {
   name: string;
   sku: string;
+  mxikCode: string;
+  packageCode: string;
   description: string;
   price: string;
   costPrice: string;
@@ -56,6 +60,8 @@ export interface FormData {
 export const emptyForm: FormData = {
   name: '',
   sku: '',
+  mxikCode: '',
+  packageCode: '',
   description: '',
   price: '',
   costPrice: '',

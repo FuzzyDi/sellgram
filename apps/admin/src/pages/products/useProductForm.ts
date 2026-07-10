@@ -48,6 +48,8 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
     setForm({
       name: fullProduct.name,
       sku: fullProduct.sku || '',
+      mxikCode: fullProduct.mxikCode || '',
+      packageCode: fullProduct.packageCode || '',
       description: fullProduct.description || '',
       price: String(fullProduct.price),
       costPrice: fullProduct.costPrice ? String(fullProduct.costPrice) : '',
@@ -84,6 +86,8 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       };
 
       if (form.sku) payload.sku = form.sku;
+      if (form.mxikCode) payload.mxikCode = form.mxikCode;
+      if (form.packageCode) payload.packageCode = form.packageCode;
       payload.description = form.description || null;
       if (form.costPrice) payload.costPrice = parseFloat(form.costPrice);
       if (form.unit) payload.unit = form.unit;
