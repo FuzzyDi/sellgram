@@ -62,6 +62,20 @@ export default function ProductForm({
             <Input label="SKU" value={form.sku} onChange={updateForm('sku')} />
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label={tr('ИКПУ код', 'IKPU kodi')}
+              value={form.mxikCode}
+              onChange={updateForm('mxikCode')}
+              helpText={tr('Код товара в системе маркировки', "Belgilash tizimidagi mahsulot kodi")}
+            />
+            <Input
+              label={tr('Код упаковки', "Qadoq kodi")}
+              value={form.packageCode}
+              onChange={updateForm('packageCode')}
+            />
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input type="number" label={`${tr('Цена (UZS)', 'Narx (UZS)')} *`} value={form.price} onChange={updateForm('price')} />
             <Input type="number" label={tr('Себестоимость', 'Tannarx')} value={form.costPrice} onChange={updateForm('costPrice')} />
