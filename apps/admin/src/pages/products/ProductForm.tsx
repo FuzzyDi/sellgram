@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { toImageUrl } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
-import Card from '../../components/Card';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Select from '../../components/Select';
@@ -40,9 +39,19 @@ export default function ProductForm({
   const { tr } = useAdminI18n();
   const categoryAttrs = categories.find((c) => c.id === form.categoryId)?.attributes || [];
 
+  // Card isn't built with React.forwardRef, so ref={cardRef} on <Card>
+  // would silently no-op — this element inlines Card's own base classes
+  // as a plain div instead, so the ref lands on the actual
+  // overflow-y-auto node (not a non-scrolling wrapper around it).
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    cardRef.current?.scrollTo(0, 0);
+  }, []);
+
   return (
     <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-[860px] max-h-[90vh] overflow-y-auto">
+      <div ref={cardRef} className="border border-neutral-200 rounded-token-lg bg-white p-4 w-full max-w-[860px] max-h-[90vh] overflow-y-auto">
         <h3 className="m-0 text-token-2xl font-semibold text-neutral-800">
           {editingId ? tr('Редактировать товар', 'Mahsulotni tahrirlash') : tr('Новый товар', 'Yangi mahsulot')}
         </h3>
@@ -161,7 +170,7 @@ export default function ProductForm({
             </Button>
           </div>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }
