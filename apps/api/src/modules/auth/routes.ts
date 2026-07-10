@@ -102,7 +102,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         permissions: true,
         isActive: true,
         tenant: {
-          select: { id: true, name: true, slug: true, plan: true },
+          select: { id: true, name: true, slug: true, plan: true, b2bEnabled: true },
         },
       },
     });

@@ -397,6 +397,30 @@ export const adminApi = {
   getPosSettings: (storeId: string) => request<any>(`/pos-devices/settings?storeId=${encodeURIComponent(storeId)}`),
   updatePosSettings: (storeId: string, settings: Record<string, unknown>) =>
     request<any>('/pos-devices/settings', { method: 'PUT', body: JSON.stringify({ storeId, settings }) }),
+
+  updateB2bSettings: (enabled: boolean) =>
+    request<any>('/b2b-settings', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+
+  getCounterparties: (params?: string) => request<any>(`/counterparties${params ? '?' + params : ''}`),
+  getCounterparty: (id: string) => request<any>(`/counterparties/${id}`),
+  createCounterparty: (data: any) => request<any>('/counterparties', { method: 'POST', body: JSON.stringify(data) }),
+  updateCounterparty: (id: string, data: any) => request<any>(`/counterparties/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  getCounterpartyPrices: (id: string) => request<any>(`/counterparties/${id}/prices`),
+  upsertCounterpartyPrice: (id: string, data: { productId: string; variantId?: string | null; price: number }) =>
+    request<any>(`/counterparties/${id}/prices`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCounterpartyPrice: (id: string, priceId: string) =>
+    request<any>(`/counterparties/${id}/prices/${priceId}`, { method: 'DELETE' }),
+
+  getCounterpartyLedger: (id: string, params?: string) =>
+    request<any>(`/counterparties/${id}/ledger${params ? '?' + params : ''}`),
+  recordCounterpartyPayment: (id: string, data: { amount: number; note?: string }) =>
+    request<any>(`/counterparties/${id}/payments`, { method: 'POST', body: JSON.stringify(data) }),
+  recordCounterpartyAdjustment: (id: string, data: { delta: number; note: string }) =>
+    request<any>(`/counterparties/${id}/adjustments`, { method: 'POST', body: JSON.stringify(data) }),
+
+  createB2bOrder: (counterpartyId: string, data: any) =>
+    request<any>(`/counterparties/${counterpartyId}/orders`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 

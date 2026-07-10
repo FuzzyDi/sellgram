@@ -27,6 +27,7 @@ const listOrdersQuerySchema = z.object({
   status: z.enum(['NEW', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'REFUNDED']).optional(),
   storeId: z.string().optional(),
   paymentStatus: z.enum(['PENDING', 'PAID', 'REFUNDED']).optional(),
+  salesChannel: z.enum(['TELEGRAM', 'B2B']).optional(),
   search: z.string().max(200).optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
@@ -47,13 +48,14 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
-    const { page: pageNum, pageSize: pageSizeNum, status, storeId, paymentStatus, search, dateFrom, dateTo } = query;
+    const { page: pageNum, pageSize: pageSizeNum, status, storeId, paymentStatus, salesChannel, search, dateFrom, dateTo } = query;
     const skip = (pageNum - 1) * pageSizeNum;
 
     const where: any = { tenantId: request.tenantId! };
     if (status) where.status = status;
     if (storeId) where.storeId = storeId;
     if (paymentStatus) where.paymentStatus = paymentStatus;
+    if (salesChannel) where.salesChannel = salesChannel;
     if (dateFrom || dateTo) {
       where.createdAt = {};
       if (dateFrom) where.createdAt.gte = new Date(dateFrom);
@@ -86,6 +88,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         where,
         include: {
           customer: { select: { id: true, firstName: true, lastName: true, telegramUser: true, phone: true } },
+          counterparty: { select: { id: true, name: true, type: true } },
           store: { select: { id: true, name: true } },
           items: true,
           deliveryZone: { select: { id: true, name: true } },

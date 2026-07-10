@@ -89,6 +89,10 @@ const recordAdjustmentSchema = z.object({
   note: z.string().min(1).max(2000),
 });
 
+const updateB2BSettingsSchema = z.object({
+  enabled: z.boolean(),
+});
+
 const createB2BOrderItemSchema = z.object({
   productId: z.string().min(1),
   variantId: z.string().min(1).nullable().optional(),
@@ -639,4 +643,22 @@ export default async function counterpartyRoutes(fastify: FastifyInstance) {
       return { success: true, data: updated };
     }
   );
+
+  // Module toggle (docs/B2B_COUNTERPARTIES.md §9/§13 step 4) — gated on
+  // manageSettings, not manageB2B, "matching how other tenant-level
+  // toggles are gated today": this switches the module's visibility in
+  // the admin UI, it isn't itself a B2B data operation. Deliberately NOT
+  // routed through planGuard() — b2bEnabled is free on every plan (§9).
+  fastify.patch('/b2b-settings', { preHandler: [permissionGuard('manageSettings')] }, async (request, reply) => {
+    const parsed = updateB2BSettingsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: parsed.error.errors[0]?.message ?? 'Invalid input' });
+    }
+    const tenant = await prisma.tenant.update({
+      where: { id: request.tenantId! },
+      data: { b2bEnabled: parsed.data.enabled },
+      select: { b2bEnabled: true },
+    });
+    return { success: true, data: tenant };
+  });
 }

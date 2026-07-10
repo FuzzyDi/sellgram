@@ -82,16 +82,21 @@ describe('counterparty.routes', () => {
       await app.close();
     });
 
-    it('registers every endpoint (all 12) through permissionGuard(\'manageB2B\')', async () => {
+    it('registers every counterparty endpoint (12) through permissionGuard(\'manageB2B\'), plus the b2b-settings toggle through manageSettings', async () => {
       // permissionGuard(key) is invoked at route-registration time (it's
       // called inline in each route's options object), so building the
       // app alone is enough to prove every route is wired — no requests
-      // needed.
+      // needed. PATCH /b2b-settings is deliberately gated on
+      // manageSettings, not manageB2B (docs/B2B_COUNTERPARTIES.md §9/§13
+      // step 4 — it toggles UI visibility, not B2B data), so it's counted
+      // separately rather than folded into the manageB2B total.
       const app = await buildApp();
       await app.close();
 
-      expect(mocks.permissionGuard).toHaveBeenCalledTimes(12);
-      expect(mocks.permissionGuard.mock.calls.every(([key]) => key === 'manageB2B')).toBe(true);
+      expect(mocks.permissionGuard).toHaveBeenCalledTimes(13);
+      const keys = mocks.permissionGuard.mock.calls.map(([key]) => key);
+      expect(keys.filter((key) => key === 'manageB2B')).toHaveLength(12);
+      expect(keys.filter((key) => key === 'manageSettings')).toHaveLength(1);
     });
   });
 

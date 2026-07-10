@@ -29,6 +29,9 @@ const Settings      = lazy(() => import('./pages/Settings'));
 const PosDevices    = lazy(() => import('./pages/pos/PosDevices'));
 const PosOperators  = lazy(() => import('./pages/pos/PosOperators'));
 const PosSettings   = lazy(() => import('./pages/pos/PosSettings'));
+const B2bCounterparties     = lazy(() => import('./pages/b2b/B2bCounterparties'));
+const B2bCounterpartyDetail = lazy(() => import('./pages/b2b/B2bCounterpartyDetail'));
+const B2bOrders             = lazy(() => import('./pages/b2b/B2bOrders'));
 const SysLayout     = lazy(() => import('./pages/sys/SysLayout'));
 
 interface AuthState { user: any; tenant: any; }
@@ -164,6 +167,9 @@ function TenantApp() {
             <Route path="/pos/devices" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosDevices /></ProtectedRoute>} />
             <Route path="/pos/operators" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosOperators /></ProtectedRoute>} />
             <Route path="/pos/settings" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosSettings /></ProtectedRoute>} />
+            <Route path="/b2b/counterparties" element={<ProtectedRoute perms={perms} requires="manageB2B"><B2bCounterparties /></ProtectedRoute>} />
+            <Route path="/b2b/counterparties/:id" element={<ProtectedRoute perms={perms} requires="manageB2B"><B2bCounterpartyDetail /></ProtectedRoute>} />
+            <Route path="/b2b/orders" element={<ProtectedRoute perms={perms} requires="manageB2B"><B2bOrders /></ProtectedRoute>} />
             <Route path="/billing" element={<ProtectedRoute perms={perms} requires="manageBilling"><Billing /></ProtectedRoute>} />
             <Route path="/audit-log" element={<ProtectedRoute perms={perms} requires="manageSettings"><AuditLog /></ProtectedRoute>} />
             <Route path="/help" element={<Help />} />
