@@ -7,6 +7,10 @@ export interface Product {
   sku: string;
   mxikCode?: string | null;
   packageCode?: string | null;
+  vatRate?: number | null;
+  vatExempt?: boolean;
+  markType?: string | null;
+  isMarked?: boolean;
   price: number;
   stockQty: number;
   lowStockAlert: number;
@@ -47,6 +51,12 @@ export interface FormData {
   sku: string;
   mxikCode: string;
   packageCode: string;
+  // Select-driven, not a raw Product field: encodes the (vatRate,
+  // vatExempt) pair as one of 'DEFAULT' | '12' | '0' | 'EXEMPT' | 'CUSTOM'
+  // (see useProductForm.ts's vatOptionFromProduct/vatOptionToPayload).
+  vatOption: string;
+  // '' = not a marked good (isMarked derives from this being non-empty).
+  markType: string;
   description: string;
   price: string;
   costPrice: string;
@@ -62,6 +72,8 @@ export const emptyForm: FormData = {
   sku: '',
   mxikCode: '',
   packageCode: '',
+  vatOption: 'DEFAULT',
+  markType: '',
   description: '',
   price: '',
   costPrice: '',

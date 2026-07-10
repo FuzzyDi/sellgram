@@ -235,6 +235,16 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           currency: true,
           stockQty: true,
           categoryId: true,
+          // Per-item VAT/marking (docs/POS_SYNC_API.md §10/§12; schema
+          // comment on Product) — a till needs these at sale time to (a)
+          // apply the right VAT rate, falling back to
+          // settings.taxProfile.vatRate when vatRate is null, and (b)
+          // know whether to prompt for a marking code (isMarked=true)
+          // and which classification it is (markType).
+          vatRate: true,
+          vatExempt: true,
+          markType: true,
+          isMarked: true,
           variants: {
             where: { isActive: true },
             select: { id: true, name: true, sku: true, price: true, stockQty: true },
