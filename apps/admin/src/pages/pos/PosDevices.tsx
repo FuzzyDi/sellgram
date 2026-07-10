@@ -41,6 +41,7 @@ export default function PosDevices() {
   const [formStoreId, setFormStoreId] = useState('');
   const [saving, setSaving] = useState(false);
   const [activation, setActivation] = useState<{ code: string; expiresAt: string; deviceName: string } | null>(null);
+  const [refreshingCatalog, setRefreshingCatalog] = useState(false);
 
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
@@ -102,6 +103,25 @@ export default function PosDevices() {
       showNotice('error', err?.message || tr('Ошибка сохранения', 'Saqlashda xato'));
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Manually (re)builds and stores the catalog snapshot the store's
+  // devices pull from — not auto-triggered on product/category changes
+  // yet (docs/SBGCLOUD_ARCHITECTURE.md §13), so a manager clicks this
+  // after editing the catalog. Store-scoped, not device-scoped (the
+  // endpoint takes storeId, not a deviceId), hence one shared button
+  // rather than one per device row.
+  async function refreshCatalog() {
+    if (!storeId) return;
+    setRefreshingCatalog(true);
+    try {
+      await adminApi.createCatalogSnapshot(storeId);
+      showNotice('success', tr('Каталог обновлён', 'Katalog yangilandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Не удалось обновить каталог', "Katalogni yangilab bo'lmadi"));
+    } finally {
+      setRefreshingCatalog(false);
     }
   }
 
@@ -190,7 +210,10 @@ export default function PosDevices() {
         <PosPlanBlocked />
       ) : (
         <>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="md" type="button" onClick={() => void refreshCatalog()} disabled={refreshingCatalog}>
+              {refreshingCatalog ? tr('Обновление...', 'Yangilanmoqda...') : tr('Обновить каталог', 'Katalogni yangilash')}
+            </Button>
             <Button variant="primary" size="md" type="button" onClick={openCreate}>
               + {tr('Добавить устройство', "Qurilma qo'shish")}
             </Button>
