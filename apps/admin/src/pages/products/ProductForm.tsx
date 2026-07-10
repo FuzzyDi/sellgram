@@ -9,6 +9,30 @@ import Select from '../../components/Select';
 import ProductVariantsSection from './ProductVariantsSection';
 import type { Category, FormData as ProductFormData } from './types';
 
+// docs/POS_SYNC_API.md §10/§12 — the (vatRate, vatExempt) pair collapses
+// to one Select; 'CUSTOM' (see useProductForm.ts's vatOptionFromProduct)
+// is deliberately not listed here, since it's a hydration-only fallback,
+// never a user-selectable option.
+const VAT_OPTIONS = [
+  { value: 'DEFAULT', ru: 'По умолчанию магазина', uz: "Do'kon standarti" },
+  { value: '12', ru: '12%', uz: '12%' },
+  { value: '0', ru: '0%', uz: '0%' },
+  { value: 'EXEMPT', ru: 'Без НДС', uz: 'QQSsiz' },
+] as const;
+
+// UZ goods-marking classification (SetRetail10). '' = not marked;
+// isMarked is derived from this being non-empty (useProductForm.ts).
+const MARK_TYPE_OPTIONS = [
+  { value: '', ru: 'Не маркируемый', uz: 'Belgilanmaydigan' },
+  { value: 'TOBACCO', ru: 'Табак', uz: 'Tamaki' },
+  { value: 'ALCOHOL', ru: 'Алкоголь', uz: 'Alkogol' },
+  { value: 'BEER', ru: 'Пиво', uz: 'Pivo' },
+  { value: 'DRUGS', ru: 'Лекарства', uz: 'Dorilar' },
+  { value: 'WATER_AND_BEVERAGES', ru: 'Вода и напитки', uz: "Suv va ichimliklar" },
+  { value: 'HOUSEHOLD_APPLIANCES', ru: 'Бытовая техника', uz: 'Maishiy texnika' },
+  { value: 'OIL', ru: 'Растительные масла', uz: "O'simlik yog'lari" },
+] as const;
+
 interface ProductFormProps {
   editingId: string | null;
   form: ProductFormData;
@@ -75,6 +99,22 @@ export default function ProductForm({
               value={form.packageCode}
               onChange={updateForm('packageCode')}
             />
+          </div>
+
+          <div>
+            <label className="text-token-sm font-medium text-neutral-700 block mb-2">{tr('Налоги и маркировка', 'Soliq va markirovka')}</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Select label={tr('НДС', 'QQS')} value={form.vatOption} onChange={updateForm('vatOption')}>
+                {VAT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{tr(option.ru, option.uz)}</option>
+                ))}
+              </Select>
+              <Select label={tr('Тип маркировки', 'Markirovka turi')} value={form.markType} onChange={updateForm('markType')}>
+                {MARK_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{tr(option.ru, option.uz)}</option>
+                ))}
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -4,6 +4,22 @@ import { useAdminI18n } from '../../i18n';
 import { emptyForm } from './types';
 import type { FormData, NoticeTone, Product } from './types';
 
+// Derives the VAT Select's single value from the two underlying Product
+// columns (docs/POS_SYNC_API.md §10/§12; schema comment on Product).
+// 'CUSTOM' is a hydration-only fallback for a vatRate that doesn't match
+// any of the four options the Select actually offers — it's never a
+// selectable <option>, so if the user doesn't touch the field, the
+// payload builder below leaves vatRate/vatExempt untouched rather than
+// silently overwriting a custom rate with the default on next save.
+function vatOptionFromProduct(vatRate: unknown, vatExempt: boolean | undefined): string {
+  if (vatExempt) return 'EXEMPT';
+  if (vatRate === null || vatRate === undefined) return 'DEFAULT';
+  const n = Number(vatRate);
+  if (n === 12) return '12';
+  if (n === 0) return '0';
+  return 'CUSTOM';
+}
+
 interface UseProductFormParams {
   loadProducts: () => Promise<void>;
   loadCategories: () => Promise<void>;
@@ -50,6 +66,8 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       sku: fullProduct.sku || '',
       mxikCode: fullProduct.mxikCode || '',
       packageCode: fullProduct.packageCode || '',
+      vatOption: vatOptionFromProduct(fullProduct.vatRate, fullProduct.vatExempt),
+      markType: fullProduct.markType || '',
       description: fullProduct.description || '',
       price: String(fullProduct.price),
       costPrice: fullProduct.costPrice ? String(fullProduct.costPrice) : '',
@@ -88,6 +106,31 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       if (form.sku) payload.sku = form.sku;
       if (form.mxikCode) payload.mxikCode = form.mxikCode;
       if (form.packageCode) payload.packageCode = form.packageCode;
+
+      // Always sent (like isActive/description below), not gated on
+      // truthiness — a Select always has a defined value, and switching
+      // back to "default"/"not marked" must actually clear the previous
+      // value server-side, unlike a blank text input.
+      if (form.vatOption === 'DEFAULT') {
+        payload.vatRate = null;
+        payload.vatExempt = false;
+      } else if (form.vatOption === '12') {
+        payload.vatRate = 12;
+        payload.vatExempt = false;
+      } else if (form.vatOption === '0') {
+        payload.vatRate = 0;
+        payload.vatExempt = false;
+      } else if (form.vatOption === 'EXEMPT') {
+        payload.vatRate = null;
+        payload.vatExempt = true;
+      }
+      // 'CUSTOM' (hydration-only, see vatOptionFromProduct) has no
+      // matching branch — vatRate/vatExempt are deliberately left out of
+      // the payload so an untouched custom rate isn't overwritten.
+
+      payload.markType = form.markType || null;
+      payload.isMarked = Boolean(form.markType);
+
       payload.description = form.description || null;
       if (form.costPrice) payload.costPrice = parseFloat(form.costPrice);
       if (form.unit) payload.unit = form.unit;

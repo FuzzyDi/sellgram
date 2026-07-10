@@ -152,6 +152,7 @@ model Tenant {
   counterparties     Counterparty[]
   counterpartyLedger CounterpartyLedger[]
   posOperators       PosOperator[]
+  markingCodes       ProductMarkingCode[]
 
   @@map("tenants")
 }
@@ -304,6 +305,23 @@ model Product {
   // don't warrant a one-to-one extension table.
   mxikCode      String?
   packageCode   String?
+  // Per-item VAT (docs/POS_SYNC_API.md §10 taxProfile.vatRate is the
+  // store-level default; this is the per-product override). null means
+  // "use the store's taxProfile.vatRate default" — not the same as 0,
+  // which is an explicit zero rate. vatExempt is a distinct legal
+  // status ("without VAT") from a 0% rate, hence its own column rather
+  // than overloading vatRate=0 to mean both. Decimal, not an enum — UZ
+  // VAT rates can change without a migration.
+  vatRate       Decimal?  @db.Decimal(5, 2)
+  vatExempt     Boolean   @default(false)
+  // UZ goods-marking classification (SetRetail10). null/markType
+  // unset = not a marked good. String, not an enum — the classification
+  // list can grow without a migration. isMarked is a denormalized
+  // shortcut (mirrors markType != null) so a till can check one boolean
+  // instead of a null check to decide whether to prompt for a marking
+  // code (KM) at sale time.
+  markType      String?
+  isMarked      Boolean   @default(false)
   stockQty      Int       @default(0)
   lowStockAlert Int       @default(5)
   isActive      Boolean   @default(true)
@@ -319,6 +337,7 @@ model Product {
   stockMovements     StockMovement[]
   stockLedgerEntries StockLedgerEntry[]
   counterpartyPrices CounterpartyPrice[]
+  markingCodes       ProductMarkingCode[]
 
   @@index([tenantId])
   @@index([tenantId, categoryId])
@@ -369,6 +388,62 @@ model StockMovement {
   @@index([tenantId, productId])
   @@index([tenantId, createdAt(sort: Desc)])
   @@map("stock_movements")
+}
+
+// Scaffold only — no routes, no service logic, no UI yet. Structure for
+// future piece-level tracking of UZ marking codes (KM/Data Matrix), one
+// level more granular than Product.markType/isMarked (which only flag
+// *that* a product requires marking, not track individual physical
+// units' codes).
+enum MarkingCodeStatus {
+  IN_STOCK
+  SOLD
+  RETURNED
+  VOIDED
+}
+
+model ProductMarkingCode {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Mirrors Product.markType at the time this code was received —
+  // duplicated rather than joined through product, so an already-received
+  // code's classification survives a later change to
+  // Product.markType/isMarked.
+  markType String
+
+  // The actual marking code (КМ / Data Matrix payload). Unique per
+  // tenant — a real code must never be double-counted within one
+  // tenant's stock.
+  code String
+
+  status MarkingCodeStatus @default(IN_STOCK)
+
+  // Where this code came from — nullable, since a code can be entered
+  // manually (no PurchaseOrder), not only received through procurement.
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  // Which sale actually consumed this code. Deliberately NOT a real
+  // relation (no FK) to SaleEvent/Order — this is a scaffold, and which
+  // channel(s) will eventually reference these rows isn't decided yet,
+  // so no referential-integrity guarantee is made here.
+  saleEventId String?
+  orderId     String?
+
+  receivedAt DateTime  @default(now())
+  soldAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId, productId, status])
+  @@map("product_marking_codes")
 }
 
 // ============================================================
@@ -736,7 +811,8 @@ model PurchaseOrder {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  items PurchaseOrderItem[]
+  items        PurchaseOrderItem[]
+  markingCodes ProductMarkingCode[]
 
   @@unique([tenantId, poNumber])
   @@index([tenantId])
