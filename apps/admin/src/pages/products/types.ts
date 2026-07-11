@@ -101,7 +101,7 @@ export const emptyForm: FormData = {
   costPrice: '',
   stockQty: '0',
   lowStockAlert: '5',
-  unit: 'шт',
+  unit: '',
   isWeightedPiece: false,
   pluCode: '',
   categoryId: '',

@@ -131,12 +131,19 @@ export default function ProductForm({
               onChange={updateForm('price')}
             />
             <Input type="number" label={tr('Себестоимость', 'Tannarx')} value={form.costPrice} onChange={updateForm('costPrice')} />
-            <Input
+            <Select
               label={tr('Ед. измерения', "O'lchov birligi")}
               value={form.unit}
               onChange={updateForm('unit')}
-              placeholder="шт / кг / г / л / м"
-            />
+            >
+              <option value="шт">{tr('шт — штука', 'dona')}</option>
+              <option value="кг">{tr('кг — килограмм', 'kg')}</option>
+              <option value="г">{tr('г — грамм', 'g')}</option>
+              <option value="л">{tr('л — литр', 'litr')}</option>
+              <option value="м">{tr('м — метр', 'metr')}</option>
+              <option value="уп">{tr('уп — упаковка', 'qadoq')}</option>
+              <option value="">{tr('— не указано —', '— belgilanmagan —')}</option>
+            </Select>
           </div>
 
           {isWeightUnit && (
