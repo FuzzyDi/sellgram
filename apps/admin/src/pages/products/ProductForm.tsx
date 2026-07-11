@@ -34,12 +34,6 @@ const MARK_TYPE_OPTIONS = [
   { value: 'OIL', ru: 'Растительные масла', uz: "O'simlik yog'lari" },
 ] as const;
 
-// Presets for the unit-of-measure field, offered via a <datalist> rather
-// than a plain <Select> — unit is a free string on Product (any tenant
-// can use any unit), so the input must accept a typed custom value too,
-// not only one of these six.
-const UNIT_PRESETS = ['шт', 'кг', 'г', 'л', 'м', 'уп'];
-
 interface ProductFormProps {
   editingId: string | null;
   form: ProductFormData;
@@ -141,11 +135,8 @@ export default function ProductForm({
               label={tr('Ед. измерения', "O'lchov birligi")}
               value={form.unit}
               onChange={updateForm('unit')}
-              list="unit-presets"
+              placeholder="шт / кг / г / л / м"
             />
-            <datalist id="unit-presets">
-              {UNIT_PRESETS.map((u) => <option key={u} value={u} />)}
-            </datalist>
           </div>
 
           {isWeightUnit && (
