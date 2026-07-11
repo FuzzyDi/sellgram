@@ -18,7 +18,8 @@ const createProductSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   categoryId: z.string().optional(),
-  price: z.number().positive(),
+  // 0 is valid — a draft/unfilled product, priced later by a manager.
+  price: z.number().min(0),
   costPrice: z.number().positive().optional(),
   sku: z.string().optional(),
   mxikCode: z.string().optional(),
@@ -46,7 +47,8 @@ const updateProductSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
-  price: z.number().positive().optional(),
+  // 0 is valid — see createProductSchema's price comment above.
+  price: z.number().min(0).optional(),
   costPrice: z.number().positive().nullable().optional(),
   sku: z.string().nullable().optional(),
   mxikCode: z.string().nullable().optional(),
