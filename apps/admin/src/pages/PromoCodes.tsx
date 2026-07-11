@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
+import Button from '../components/Button';
+import Input from '../components/Input';
+import Select from '../components/Select';
+import Badge from '../components/Badge';
+import Table, { type TableColumn } from '../components/Table';
 
 export default function PromoCodes() {
   const { tr } = useAdminI18n();
@@ -53,113 +59,154 @@ export default function PromoCodes() {
     try { await adminApi.deletePromoCode(id); setDeleteId(null); await load(); } catch {}
   }
 
+  const columns: TableColumn<any>[] = [
+    {
+      key: 'code',
+      header: tr('Код', 'Kod'),
+      render: (item) => <span className="font-mono font-bold text-token-sm text-accent-600">{item.code}</span>,
+    },
+    {
+      key: 'value',
+      header: tr('Скидка', 'Chegirma'),
+      render: (item) => (
+        <span className="font-semibold text-neutral-800">
+          {item.type === 'PERCENT' ? `${item.value}%` : `${Number(item.value).toLocaleString()} UZS`}
+        </span>
+      ),
+    },
+    {
+      key: 'minOrder',
+      header: tr('Мин. сумма', 'Min. summa'),
+      render: (item) => (item.minOrderAmount ? Number(item.minOrderAmount).toLocaleString() : '—'),
+    },
+    {
+      key: 'usage',
+      header: tr('Использований', 'Foydalanish'),
+      render: (item) => `${item.usedCount}${item.maxUses ? `/${item.maxUses}` : ''}`,
+    },
+    {
+      key: 'expires',
+      header: tr('Действует до', 'Amal qilish muddati'),
+      render: (item) => {
+        if (!item.expiresAt) return '—';
+        const expired = new Date(item.expiresAt) < new Date();
+        return <span className={expired ? 'text-danger' : 'text-neutral-600'}>{new Date(item.expiresAt).toLocaleDateString()}</span>;
+      },
+    },
+    {
+      key: 'status',
+      header: tr('Статус', 'Holat'),
+      render: (item) => {
+        const expired = item.expiresAt && new Date(item.expiresAt) < new Date();
+        const exhausted = item.maxUses != null && item.usedCount >= item.maxUses;
+        if (expired) return <Badge variant="danger">{tr('Истёк', "Muddati o'tgan")}</Badge>;
+        if (exhausted) return <Badge variant="danger">{tr('Исчерпан', 'Tugagan')}</Badge>;
+        return item.isActive
+          ? <Badge variant="success">{tr('Активен', 'Faol')}</Badge>
+          : <Badge variant="neutral">{tr('Выключен', "O'chirilgan")}</Badge>;
+      },
+    },
+    {
+      key: 'actions',
+      header: tr('Действия', 'Amallar'),
+      render: (item) => (
+        deleteId === item.id ? (
+          <div className="flex gap-1.5 items-center">
+            <Button variant="danger" size="sm" type="button" onClick={() => handleDelete(item.id)}>{tr('Удалить', "O'chirish")}</Button>
+            <Button variant="ghost" size="sm" type="button" onClick={() => setDeleteId(null)}>{tr('Отмена', 'Bekor')}</Button>
+          </div>
+        ) : (
+          <div className="flex gap-1.5">
+            <Button variant="ghost" size="sm" type="button" disabled={togglingId === item.id} onClick={() => toggleActive(item.id, item.isActive)}>
+              {togglingId === item.id ? '…' : item.isActive ? tr('Выкл.', "O'ch.") : tr('Вкл.', 'Yoq.')}
+            </Button>
+            <Button variant="danger" size="sm" type="button" onClick={() => setDeleteId(item.id)}>✕</Button>
+          </div>
+        )
+      ),
+    },
+  ];
+
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+    <section className="flex flex-col gap-4">
+      <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>{tr('Промокоды', 'Promokodlar')}</h2>
-          <p style={{ color: '#6b7280', fontSize: 13, margin: '4px 0 0' }}>{tr('Скидочные коды для клиентов', 'Mijozlar uchun chegirma kodlari')}</p>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Промокоды', 'Promokodlar')}</h2>
+          <p className="mt-1 text-token-sm text-neutral-500">{tr('Скидочные коды для клиентов', 'Mijozlar uchun chegirma kodlari')}</p>
         </div>
-        <button className="sg-btn sg-btn-primary" onClick={() => { setShowForm(true); setFormError(''); }}>
+        <Button variant="primary" size="md" type="button" onClick={() => { setShowForm(true); setFormError(''); }}>
           + {tr('Создать', 'Yaratish')}
-        </button>
-      </div>
+        </Button>
+      </header>
 
       {showForm && (
-        <div className="sg-card" style={{ padding: 20, marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700 }}>{tr('Новый промокод', 'Yangi promokod')}</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>{tr('Код', 'Kod')} *</label>
-              <input className="sg-input" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="SUMMER20" />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>{tr('Тип', 'Tur')}</label>
-              <select className="sg-input" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-                <option value="PERCENT">% {tr('от суммы', 'summadan')}</option>
-                <option value="FIXED">{tr('Фикс. сумма', 'Belgilangan summa')}</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>{tr('Размер скидки', 'Chegirma miqdori')} *</label>
-              <input className="sg-input" type="number" value={form.value} onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))} placeholder={form.type === 'PERCENT' ? '10' : '5000'} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>{tr('Мин. сумма заказа', 'Min. buyurtma summasi')}</label>
-              <input className="sg-input" type="number" value={form.minOrder} onChange={(e) => setForm((f) => ({ ...f, minOrder: e.target.value }))} placeholder="50000" />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>{tr('Макс. использований', 'Maks. foydalanish')}</label>
-              <input className="sg-input" type="number" value={form.maxUses} onChange={(e) => setForm((f) => ({ ...f, maxUses: e.target.value }))} placeholder={tr('Без лимита', 'Limit yoq')} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>{tr('Действует до', 'Amal qilish muddati')}</label>
-              <input className="sg-input" type="date" value={form.expiresAt} onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))} />
-            </div>
+        <Card>
+          <h3 className="m-0 mb-3 text-token-base font-semibold text-neutral-800">{tr('Новый промокод', 'Yangi promokod')}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <Input
+              label={`${tr('Код', 'Kod')} *`}
+              value={form.code}
+              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+              placeholder="SUMMER20"
+            />
+            <Select label={tr('Тип', 'Tur')} value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
+              <option value="PERCENT">% {tr('от суммы', 'summadan')}</option>
+              <option value="FIXED">{tr('Фикс. сумма', 'Belgilangan summa')}</option>
+            </Select>
+            <Input
+              type="number"
+              label={`${tr('Размер скидки', 'Chegirma miqdori')} *`}
+              value={form.value}
+              onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+              placeholder={form.type === 'PERCENT' ? '10' : '5000'}
+            />
+            <Input
+              type="number"
+              label={tr('Мин. сумма заказа', 'Min. buyurtma summasi')}
+              value={form.minOrder}
+              onChange={(e) => setForm((f) => ({ ...f, minOrder: e.target.value }))}
+              placeholder="50000"
+            />
+            <Input
+              type="number"
+              label={tr('Макс. использований', 'Maks. foydalanish')}
+              value={form.maxUses}
+              onChange={(e) => setForm((f) => ({ ...f, maxUses: e.target.value }))}
+              placeholder={tr('Без лимита', 'Limit yoq')}
+            />
+            <Input
+              type="date"
+              label={tr('Действует до', 'Amal qilish muddati')}
+              value={form.expiresAt}
+              onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))}
+            />
           </div>
-          {formError && <p style={{ color: '#b91c1c', fontSize: 13, margin: '0 0 12px' }}>{formError}</p>}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="sg-btn sg-btn-primary" onClick={handleCreate} disabled={saving}>{saving ? '...' : tr('Сохранить', 'Saqlash')}</button>
-            <button className="sg-btn sg-btn-ghost" onClick={() => setShowForm(false)}>{tr('Отмена', 'Bekor')}</button>
+          {formError && <p className="text-token-sm text-danger mb-3">{formError}</p>}
+          <div className="flex gap-2">
+            <Button variant="primary" size="md" type="button" onClick={handleCreate} disabled={saving}>
+              {saving ? '...' : tr('Сохранить', 'Saqlash')}
+            </Button>
+            <Button variant="ghost" size="md" type="button" onClick={() => setShowForm(false)}>
+              {tr('Отмена', 'Bekor')}
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {loadError && (
-        <div className="sg-card" style={{ padding: 32, textAlign: 'center' }}>
-          <p style={{ color: '#b91c1c', marginBottom: 12 }}>{tr('Ошибка загрузки', 'Yuklashda xato')}</p>
-          <button className="sg-btn sg-btn-primary" onClick={load}>{tr('Повторить', 'Qayta')}</button>
-        </div>
+      {loadError ? (
+        <Card className="text-center py-8 px-4">
+          <p className="m-0 mb-3 text-danger">{tr('Ошибка загрузки', 'Yuklashda xato')}</p>
+          <Button variant="primary" size="md" type="button" onClick={load}>{tr('Повторить', 'Qayta')}</Button>
+        </Card>
+      ) : (
+        <Table
+          columns={columns}
+          data={items}
+          rowKey={(item) => item.id}
+          loading={loading}
+          emptyMessage={tr('Промокодов нет', "Promokodlar yo'q")}
+        />
       )}
-
-      {loading && !loadError && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[1, 2, 3].map((i) => <div key={i} className="sg-skeleton" style={{ height: 64, borderRadius: 12 }} />)}
-        </div>
-      )}
-
-      {!loading && !loadError && items.length === 0 && (
-        <div className="sg-card" style={{ padding: 48, textAlign: 'center', color: '#9ca3af' }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>🏷️</div>
-          <p style={{ margin: 0, marginBottom: 16 }}>{tr('Промокодов нет', 'Promokodlar yo\'q')}</p>
-          <button className="sg-btn sg-btn-primary" onClick={() => { setShowForm(true); setFormError(''); }}>
-            + {tr('Создать первый промокод', 'Birinchi promokod yaratish')}
-          </button>
-        </div>
-      )}
-
-      {!loading && !loadError && items.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {items.map((item) => {
-            const expired = item.expiresAt && new Date(item.expiresAt) < new Date();
-            const exhausted = item.maxUses != null && item.usedCount >= item.maxUses;
-            return (
-              <div key={item.id} className="sg-card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', opacity: (!item.isActive || expired || exhausted) ? 0.6 : 1 }}>
-                <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, background: '#f0f9ff', color: '#0369a1', padding: '3px 10px', borderRadius: 6 }}>{item.code}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
-                  {item.type === 'PERCENT' ? `${item.value}%` : `${Number(item.value).toLocaleString()} UZS`}
-                </span>
-                {item.minOrderAmount && <span style={{ fontSize: 12, color: '#6b7280' }}>{tr('от', 'dan')} {Number(item.minOrderAmount).toLocaleString()}</span>}
-                <span style={{ fontSize: 12, color: '#6b7280' }}>{item.usedCount}{item.maxUses ? `/${item.maxUses}` : ''} {tr('исп.', 'ish.')}</span>
-                {item.expiresAt && <span style={{ fontSize: 12, color: expired ? '#b91c1c' : '#6b7280' }}>{tr('до', 'gacha')} {new Date(item.expiresAt).toLocaleDateString()}</span>}
-                {(expired || exhausted) && <span style={{ fontSize: 11, fontWeight: 600, color: '#b91c1c', background: '#fef2f2', padding: '2px 8px', borderRadius: 6 }}>{expired ? tr('Истёк', 'Muddati o\'tgan') : tr('Исчерпан', 'Tugagan')}</span>}
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                  <button className={`sg-btn ${item.isActive ? 'sg-btn-ghost' : 'sg-btn-primary'}`} style={{ fontSize: 12 }} disabled={togglingId === item.id} onClick={() => toggleActive(item.id, item.isActive)}>
-                    {togglingId === item.id ? '…' : item.isActive ? tr('Выкл.', 'O\'ch.') : tr('Вкл.', 'Yoq.')}
-                  </button>
-                  {deleteId === item.id
-                    ? <>
-                        <button className="sg-btn sg-btn-danger" style={{ fontSize: 12 }} onClick={() => handleDelete(item.id)}>{tr('Удалить', 'O\'chirish')}</button>
-                        <button className="sg-btn sg-btn-ghost" style={{ fontSize: 12 }} onClick={() => setDeleteId(null)}>{tr('Отмена', 'Bekor')}</button>
-                      </>
-                    : <button className="sg-btn sg-btn-ghost" style={{ fontSize: 12, color: '#b91c1c' }} onClick={() => setDeleteId(item.id)}>✕</button>
-                  }
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    </section>
   );
 }

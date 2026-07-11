@@ -10,6 +10,11 @@ import {
   ProviderCode,
 } from '../components/payments/payment-method-model';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
+import Button from '../components/Button';
+import Select from '../components/Select';
+import Badge from '../components/Badge';
+import Table, { type TableColumn } from '../components/Table';
 
 export default function PaymentMethods() {
   const { tr, lang } = useAdminI18n();
@@ -117,7 +122,7 @@ export default function PaymentMethods() {
       setFormOpen(false);
       await loadMethods(storeId);
     } catch (err: any) {
-      showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f', 'Saqlashda xato'));
+      showNotice('error', err?.message || tr('Ошибка сохранения', 'Saqlashda xato'));
     } finally {
       setSaving(false);
     }
@@ -128,156 +133,143 @@ export default function PaymentMethods() {
     try {
       await adminApi.deleteStorePaymentMethod(storeId, methodId);
       await loadMethods(storeId);
-      showNotice('success', tr('\u0421\u043f\u043e\u0441\u043e\u0431 \u043e\u043f\u043b\u0430\u0442\u044b \u0430\u0440\u0445\u0438\u0432\u0438\u0440\u043e\u0432\u0430\u043d', "To'lov usuli arxivlandi"));
+      showNotice('success', tr('Способ оплаты архивирован', "To'lov usuli arxivlandi"));
     } catch (err: any) {
-      showNotice('error', err?.message || tr('\u041e\u0448\u0438\u0431\u043a\u0430', 'Xatolik'));
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
     }
   }
 
   const noticeNode = notice ? (
-    <div style={{
-      position: 'fixed', right: 16, top: 16, zIndex: 200, minWidth: 260, maxWidth: 420,
-      borderRadius: 12, padding: '12px 16px', fontSize: 13, fontWeight: 700,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.1)', animation: 'sg-fade-in 0.2s ease both',
-      color: notice.tone === 'error' ? '#991b1b' : '#065f46',
-      background: notice.tone === 'error' ? '#fee2e2' : '#d1fae5',
-      border: `1px solid ${notice.tone === 'error' ? '#fecaca' : '#a7f3d0'}`,
-    }}>
+    <div
+      className={[
+        'fixed top-[18px] right-[18px] z-[70] min-w-[280px] max-w-[440px] rounded-token-lg px-3.5 py-3 text-token-sm font-semibold shadow-sm border',
+        notice.tone === 'error' ? 'bg-danger/10 text-danger border-danger/30' : 'bg-success/10 text-success border-success/30',
+      ].join(' ')}
+      role="status"
+      aria-live="polite"
+    >
       {notice.message}
     </div>
   ) : null;
 
+  const columns: TableColumn<any>[] = [
+    {
+      key: 'title',
+      header: tr('Название', 'Nomi'),
+      render: (method) => (
+        <div>
+          <div className="font-semibold text-neutral-800">{method.title}</div>
+          {method.description && <div className="text-token-xs text-neutral-500">{method.description}</div>}
+        </div>
+      ),
+    },
+    { key: 'provider', header: 'Provider', render: (method) => method.provider },
+    { key: 'code', header: 'Code', render: (method) => method.code },
+    {
+      key: 'flags',
+      header: tr('Флаги', 'Holat'),
+      render: (method) => (
+        <div className="flex gap-1.5 flex-wrap">
+          <Badge variant={method.isActive ? 'success' : 'neutral'}>
+            {method.isActive ? tr('Активен', 'Faol') : tr('Отключен', "O'chirilgan")}
+          </Badge>
+          {method.isDefault && <Badge variant="info">{tr('По умолчанию', 'Asosiy')}</Badge>}
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      header: tr('Действия', 'Amallar'),
+      render: (method) => (
+        pendingArchive === method.id ? (
+          <div className="flex gap-1.5 items-center">
+            <span className="text-token-xs text-neutral-600">{tr('Удалить?', "O'chirish?")}</span>
+            <Button variant="danger" size="sm" type="button" onClick={() => archiveMethod(method.id)}>
+              {tr('Да', 'Ha')}
+            </Button>
+            <Button variant="ghost" size="sm" type="button" onClick={() => setPendingArchive(null)}>
+              {tr('Нет', "Yo'q")}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-1.5">
+            <Button variant="ghost" size="sm" type="button" onClick={() => openEdit(method)}>
+              {tr('Изменить', 'Tahrirlash')}
+            </Button>
+            <Button variant="danger" size="sm" type="button" onClick={() => setPendingArchive(method.id)}>
+              {tr('Архив', 'Arxiv')}
+            </Button>
+          </div>
+        )
+      ),
+    },
+  ];
+
   if (loading) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
-        <div className="sg-skeleton" style={{ height: 36, width: '30%' }} />
-        <div className="sg-skeleton" style={{ height: 20, width: '55%' }} />
-        <div className="sg-skeleton" style={{ height: 120 }} />
+      <section className="flex flex-col gap-4">
+        <div className="h-9 w-[30%] rounded-token-sm bg-neutral-100 animate-pulse" />
+        <div className="h-5 w-[55%] rounded-token-sm bg-neutral-100 animate-pulse" />
+        <div className="h-[120px] rounded-token-lg bg-neutral-100 animate-pulse" />
       </section>
     );
   }
 
   if (loadError) {
     return (
-      <section className="sg-page sg-grid" style={{ gap: 16 }}>
+      <section className="flex flex-col gap-4">
         <header>
-          <h2 className="sg-title">{tr('Способы оплаты', "To'lov usullari")}</h2>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Способы оплаты', "To'lov usullari")}</h2>
         </header>
-        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
-          <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
-          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={() => void bootstrap()}>{tr('Повторить', 'Qayta urinish')}</button>
-        </div>
+        <Card className="text-center py-8 px-4">
+          <p className="m-0 font-semibold text-danger">{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
+          <Button variant="ghost" size="md" type="button" className="mt-3.5" onClick={() => void bootstrap()}>
+            {tr('Повторить', 'Qayta urinish')}
+          </Button>
+        </Card>
       </section>
     );
   }
 
   return (
-    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+    <section className="flex flex-col gap-4">
       {noticeNode}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+      <header className="flex justify-between items-center gap-3 flex-wrap">
         <div>
-          <h2 className="sg-title">{tr('Способы оплаты', "To'lov usullari")}</h2>
-          <p className="sg-subtitle">
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Способы оплаты', "To'lov usullari")}</h2>
+          <p className="mt-1 text-token-sm text-neutral-500">
             {tr(
               'Sellgram не принимает деньги за магазин. Владелец сам подключает и настраивает свои реквизиты.',
               "Sellgram do'kon pullarini qabul qilmaydi. Egasi o'z rekvizitlari va provayderlarini o'zi sozlaydi."
             )}
           </p>
         </div>
-        <button onClick={openCreate} className="sg-btn primary" type="button">
+        <Button variant="primary" size="md" type="button" onClick={openCreate}>
           + {tr('Добавить', "Qo'shish")}
-        </button>
+        </Button>
       </header>
 
-      <div className="sg-card">
-        <label style={{ display: 'block', color: '#5f6d64', fontSize: 13, marginBottom: 6 }}>{tr('Магазин', "Do'kon")}</label>
-        <select
-          value={storeId}
-          onChange={(e) => setStoreId(e.target.value)}
-          className="w-full"
-          style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px' }}
-        >
+      <Card>
+        <Select label={tr('Магазин', "Do'kon")} value={storeId} onChange={(e) => setStoreId(e.target.value)}>
           {stores.map((store) => (
-            <option key={store.id} value={store.id}>
-              {store.name}
-            </option>
+            <option key={store.id} value={store.id}>{store.name}</option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Card>
 
-      <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table className="sg-table">
-          <thead>
-            <tr>
-              <th>{tr('Название', 'Nomi')}</th>
-              <th>Provider</th>
-              <th>Code</th>
-              <th>{tr('Флаги', 'Holat')}</th>
-              <th>{tr('Действия', 'Amallar')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {methods.map((method) => (
-              <tr key={method.id}>
-                <td>
-                  <div style={{ fontWeight: 700 }}>{method.title}</div>
-                  {method.description && <div style={{ color: '#617068', fontSize: 12 }}>{method.description}</div>}
-                </td>
-                <td>{method.provider}</td>
-                <td>{method.code}</td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <span className="sg-badge" style={method.isActive
-                      ? { background: '#d1fae5', color: '#065f46' }
-                      : { background: '#f3f4f6', color: '#4b5563' }}>
-                      {method.isActive ? tr('\u0410\u043a\u0442\u0438\u0432\u0435\u043d', 'Faol') : tr('\u041e\u0442\u043a\u043b\u044e\u0447\u0435\u043d', "O'chirilgan")}
-                    </span>
-                    {method.isDefault && (
-                      <span className="sg-badge" style={{ background: '#ede9fe', color: '#5b21b6' }}>
-                        {tr('\u041f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e', 'Asosiy')}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td>
-                  {pendingArchive === method.id ? (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, color: '#4b5563' }}>{tr('\u0423\u0434\u0430\u043b\u0438\u0442\u044c?', "O'chirish?")}</span>
-                      <button className="sg-btn danger" type="button" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => archiveMethod(method.id)}>
-                        {tr('\u0414\u0430', 'Ha')}
-                      </button>
-                      <button className="sg-btn ghost" type="button" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setPendingArchive(null)}>
-                        {tr('\u041d\u0435\u0442', "Yo'q")}
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="sg-btn ghost" type="button" onClick={() => openEdit(method)}>
-                        {tr('\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c', 'Tahrirlash')}
-                      </button>
-                      <button className="sg-btn danger" type="button" onClick={() => setPendingArchive(method.id)}>
-                        {tr('\u0410\u0440\u0445\u0438\u0432', 'Arxiv')}
-                      </button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {methods.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ textAlign: 'center', padding: '32px 16px' }}>
-                  <div style={{ color: '#6b7a71', marginBottom: 12 }}>
-                    {tr('Способы оплаты не настроены', "To'lov usullari sozlanmagan")}
-                  </div>
-                  <button className="sg-btn primary" type="button" onClick={openCreate}>
-                    + {tr('Добавить способ оплаты', "To'lov usulini qo'shish")}
-                  </button>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        columns={columns}
+        data={methods}
+        rowKey={(method) => method.id}
+        emptyMessage={
+          <div className="py-4">
+            <div className="text-neutral-500 mb-3">{tr('Способы оплаты не настроены', "To'lov usullari sozlanmagan")}</div>
+            <Button variant="primary" size="md" type="button" onClick={openCreate}>
+              + {tr('Добавить способ оплаты', "To'lov usulini qo'shish")}
+            </Button>
+          </div>
+        }
+      />
 
       <PaymentMethodFormModal
         open={formOpen}

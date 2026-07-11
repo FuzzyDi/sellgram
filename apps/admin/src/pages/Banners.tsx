@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { adminApi, toImageUrl } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
+import Button from '../components/Button';
+import Input from '../components/Input';
+import Badge from '../components/Badge';
 
 interface Banner {
   id: string;
@@ -32,7 +36,7 @@ export default function Banners() {
       const data = await adminApi.getBanners();
       setBanners(Array.isArray(data) ? data : data.items || []);
     } catch {
-      showNotice('error', tr('Не удалось загрузить баннеры', 'Bannerlarni yuklab bo\'lmadi'));
+      showNotice('error', tr('Не удалось загрузить баннеры', "Bannerlarni yuklab bo'lmadi"));
     } finally {
       setLoading(false);
     }
@@ -58,7 +62,7 @@ export default function Banners() {
       setNewTitle('');
       setNewLink('');
       setNewOrder('0');
-      showNotice('success', tr('Баннер добавлен', 'Banner qo\'shildi'));
+      showNotice('success', tr('Баннер добавлен', "Banner qo'shildi"));
       await load();
     } catch (err: any) {
       showNotice('error', err.message || tr('Ошибка загрузки', 'Yuklash xatosi'));
@@ -105,171 +109,155 @@ export default function Banners() {
     setPendingDelete(null);
     try {
       await adminApi.deleteBanner(id);
-      showNotice('success', tr('Удалено', 'O\'chirildi'));
+      showNotice('success', tr('Удалено', "O'chirildi"));
       await load();
     } catch (err: any) {
       showNotice('error', err.message || tr('Ошибка', 'Xatolik'));
     }
   };
 
-  return (
-    <section className="sg-page sg-grid" style={{ gap: 16 }}>
-      {notice && (
-        <div style={{
-          position: 'fixed', top: 18, right: 18, zIndex: 70, minWidth: 280, maxWidth: 440,
-          borderRadius: 12, padding: '12px 14px', fontSize: 14, fontWeight: 700,
-          boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
-          color: notice.tone === 'error' ? '#991b1b' : '#065f46',
-          background: notice.tone === 'error' ? '#fee2e2' : '#d1fae5',
-          border: `1px solid ${notice.tone === 'error' ? '#fecaca' : '#a7f3d0'}`,
-        }}>
-          {notice.message}
-        </div>
-      )}
+  const noticeNode = notice ? (
+    <div
+      className={[
+        'fixed top-[18px] right-[18px] z-[70] min-w-[280px] max-w-[440px] rounded-token-lg px-3.5 py-3 text-token-sm font-semibold shadow-sm border',
+        notice.tone === 'error' ? 'bg-danger/10 text-danger border-danger/30' : 'bg-success/10 text-success border-success/30',
+      ].join(' ')}
+      role="status"
+      aria-live="polite"
+    >
+      {notice.message}
+    </div>
+  ) : null;
 
+  return (
+    <section className="flex flex-col gap-4">
+      {noticeNode}
       <header>
-        <h2 className="sg-title">{tr('Баннеры', 'Bannerlar')}</h2>
-        <p className="sg-subtitle">{tr('Рекламные баннеры на витрине магазина', 'Do\'kon vitrinasidagi reklama bannerlari')}</p>
+        <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Баннеры', 'Bannerlar')}</h2>
+        <p className="mt-1 text-token-sm text-neutral-500">{tr('Рекламные баннеры на витрине магазина', "Do'kon vitrinasidagi reklama bannerlari")}</p>
       </header>
 
-      <div className="sg-card sg-grid" style={{ gap: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{tr('Добавить баннер', 'Banner qo\'shish')}</h3>
-        <div className="sg-grid cols-2" style={{ gap: 10 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{tr('Заголовок (необязательно)', 'Sarlavha (ixtiyoriy)')}</label>
-            <input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder={tr('Летняя акция', 'Yozgi aksiya')}
-              style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{tr('Ссылка (необязательно)', 'Havola (ixtiyoriy)')}</label>
-            <input
-              value={newLink}
-              onChange={(e) => setNewLink(e.target.value)}
-              placeholder="https://..."
-              style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: '100%', boxSizing: 'border-box' }}
-            />
-          </div>
+      <Card className="flex flex-col gap-3">
+        <h3 className="m-0 text-token-base font-semibold text-neutral-800">{tr('Добавить баннер', "Banner qo'shish")}</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Input
+            label={tr('Заголовок (необязательно)', 'Sarlavha (ixtiyoriy)')}
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder={tr('Летняя акция', 'Yozgi aksiya')}
+          />
+          <Input
+            label={tr('Ссылка (необязательно)', 'Havola (ixtiyoriy)')}
+            value={newLink}
+            onChange={(e) => setNewLink(e.target.value)}
+            placeholder="https://..."
+          />
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{tr('Порядок', 'Tartib')}</label>
-            <input
+        <div className="flex gap-3 items-end flex-wrap">
+          <div className="w-[100px]">
+            <Input
               type="number"
+              label={tr('Порядок', 'Tartib')}
               value={newOrder}
               onChange={(e) => setNewOrder(e.target.value)}
               min={0}
-              style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '9px 11px', width: 80 }}
             />
           </div>
-          <label style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '9px 16px', borderRadius: 10,
-            background: uploading ? '#e5e7eb' : '#00875a', color: '#fff',
-            fontWeight: 700, fontSize: 14, cursor: uploading ? 'not-allowed' : 'pointer',
-          }}>
+          <label
+            className={[
+              'inline-flex items-center gap-2 rounded-token-md px-4 py-2 text-token-sm font-semibold text-white',
+              uploading ? 'bg-neutral-300 cursor-not-allowed' : 'bg-accent-600 hover:bg-accent-500 cursor-pointer',
+            ].join(' ')}
+          >
             {uploading ? tr('Загрузка...', 'Yuklanmoqda...') : `+ ${tr('Загрузить изображение', 'Rasm yuklash')}`}
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} style={{ display: 'none' }} disabled={uploading} />
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" disabled={uploading} />
           </label>
         </div>
-      </div>
+      </Card>
 
       {loading ? (
-        <div className="sg-grid cols-2">
-          {[1, 2, 3].map((i) => <div key={i} className="sg-skeleton" style={{ height: 180, borderRadius: 12 }} />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {[1, 2, 3].map((i) => <div key={i} className="h-[180px] rounded-token-lg bg-neutral-100 animate-pulse" />)}
         </div>
       ) : banners.length === 0 ? (
-        <div className="sg-card" style={{ textAlign: 'center', padding: '40px 16px', color: '#748278' }}>
-          {tr('Баннеров нет. Загрузите первый баннер.', 'Bannerlar yo\'q. Birinchi bannerni yuklang.')}
-        </div>
+        <Card className="text-center py-10 px-4">
+          <p className="m-0 text-token-sm text-neutral-500">{tr('Баннеров нет. Загрузите первый баннер.', "Bannerlar yo'q. Birinchi bannerni yuklang.")}</p>
+        </Card>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+        <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
           {banners.map((banner) => (
-            <div key={banner.id} className="sg-card" style={{ padding: 0, overflow: 'hidden', opacity: banner.isActive ? 1 : 0.55 }}>
-              <div style={{ position: 'relative', aspectRatio: '16/6', background: '#eef3f0' }}>
+            <Card key={banner.id} className={`overflow-hidden p-0 ${banner.isActive ? '' : 'opacity-55'}`}>
+              <div className="relative bg-neutral-100" style={{ aspectRatio: '16/6' }}>
                 <img
                   src={toImageUrl(banner.imageUrl)}
                   alt={banner.title || 'banner'}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  className="w-full h-full object-cover block"
                 />
-                <span
-                  className="sg-badge"
-                  style={{
-                    position: 'absolute', top: 8, right: 8,
-                    background: banner.isActive ? '#d1fae5' : '#f3f4f6',
-                    color: banner.isActive ? '#065f46' : '#4b5563',
-                  }}
-                >
+                <Badge variant={banner.isActive ? 'success' : 'neutral'} className="absolute top-2 right-2">
                   {banner.isActive ? tr('Активен', 'Faol') : tr('Скрыт', 'Yashirin')}
-                </span>
+                </Badge>
               </div>
 
               {editingId === banner.id ? (
-                <div style={{ padding: '12px 14px', display: 'grid', gap: 8 }}>
-                  <input
+                <div className="p-3.5 flex flex-col gap-2">
+                  <Input
                     value={editForm.title}
                     onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
                     placeholder={tr('Заголовок', 'Sarlavha')}
-                    style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '7px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }}
                   />
-                  <input
+                  <Input
                     value={editForm.linkUrl}
                     onChange={(e) => setEditForm((f) => ({ ...f, linkUrl: e.target.value }))}
                     placeholder="https://..."
-                    style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '7px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }}
                   />
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <label style={{ fontSize: 12, color: '#748278' }}>{tr('Порядок', 'Tartib')}:</label>
-                    <input
-                      type="number"
-                      value={editForm.sortOrder}
-                      onChange={(e) => setEditForm((f) => ({ ...f, sortOrder: e.target.value }))}
-                      style={{ border: '1px solid #d6e0da', borderRadius: 8, padding: '5px 8px', fontSize: 13, width: 60 }}
-                    />
-                    <button className="sg-btn primary" style={{ marginLeft: 'auto', padding: '5px 14px', fontSize: 13 }} disabled={saving} onClick={saveEdit}>
+                  <div className="flex gap-2 items-center">
+                    <label className="text-token-xs text-neutral-500">{tr('Порядок', 'Tartib')}:</label>
+                    <div className="w-[70px]">
+                      <Input
+                        type="number"
+                        value={editForm.sortOrder}
+                        onChange={(e) => setEditForm((f) => ({ ...f, sortOrder: e.target.value }))}
+                      />
+                    </div>
+                    <Button variant="primary" size="sm" type="button" className="ml-auto" disabled={saving} onClick={saveEdit}>
                       {saving ? '...' : tr('Сохранить', 'Saqlash')}
-                    </button>
-                    <button className="sg-btn ghost" style={{ padding: '5px 10px', fontSize: 13 }} onClick={() => setEditingId(null)}>
+                    </Button>
+                    <Button variant="ghost" size="sm" type="button" onClick={() => setEditingId(null)}>
                       {tr('Отмена', 'Bekor')}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
-                <div style={{ padding: '10px 14px' }}>
-                  {banner.title && <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{banner.title}</div>}
-                  {banner.linkUrl && <div style={{ fontSize: 12, color: '#748278', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{banner.linkUrl}</div>}
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                    <button className="sg-btn ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => openEdit(banner)}>
+                <div className="p-3.5">
+                  {banner.title && <div className="font-semibold text-token-sm text-neutral-800 mb-0.5">{banner.title}</div>}
+                  {banner.linkUrl && (
+                    <div className="text-token-xs text-neutral-500 mb-1.5 overflow-hidden text-ellipsis whitespace-nowrap">{banner.linkUrl}</div>
+                  )}
+                  <div className="flex gap-1.5 mt-2">
+                    <Button variant="ghost" size="sm" type="button" onClick={() => openEdit(banner)}>
                       {tr('Изменить', 'Tahrirlash')}
-                    </button>
-                    <button
-                      className="sg-btn ghost"
-                      style={{ fontSize: 12, padding: '4px 10px' }}
-                      onClick={() => toggleActive(banner)}
-                    >
-                      {banner.isActive ? tr('Скрыть', 'Yashirish') : tr('Показать', 'Ko\'rsatish')}
-                    </button>
+                    </Button>
+                    <Button variant="ghost" size="sm" type="button" onClick={() => toggleActive(banner)}>
+                      {banner.isActive ? tr('Скрыть', 'Yashirish') : tr('Показать', "Ko'rsatish")}
+                    </Button>
                     {pendingDelete === banner.id ? (
                       <>
-                        <button className="sg-btn danger" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => deleteBanner(banner.id)}>
+                        <Button variant="danger" size="sm" type="button" onClick={() => deleteBanner(banner.id)}>
                           {tr('Да', 'Ha')}
-                        </button>
-                        <button className="sg-btn ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => setPendingDelete(null)}>
-                          {tr('Нет', 'Yo\'q')}
-                        </button>
+                        </Button>
+                        <Button variant="ghost" size="sm" type="button" onClick={() => setPendingDelete(null)}>
+                          {tr('Нет', "Yo'q")}
+                        </Button>
                       </>
                     ) : (
-                      <button className="sg-btn danger" style={{ fontSize: 12, padding: '4px 10px', marginLeft: 'auto' }} onClick={() => setPendingDelete(banner.id)}>
-                        {tr('Удалить', 'O\'chirish')}
-                      </button>
+                      <Button variant="danger" size="sm" type="button" className="ml-auto" onClick={() => setPendingDelete(banner.id)}>
+                        {tr('Удалить', "O'chirish")}
+                      </Button>
                     )}
                   </div>
                 </div>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       )}
