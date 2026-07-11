@@ -45,6 +45,18 @@ const WORKSPACE_LINKS: NavLink[] = [
   { to: '/settings', label: 'team_settings', icon: SettingsIcon },
 ];
 
+// Sellgram's own screens (docs/ADMIN_REDESIGN.md §3) — exact paths from
+// App.tsx's route table. Note /payments, not /payment-methods — that's
+// the actual registered route for PaymentMethods.tsx.
+const SELLGRAM_LINKS: { to: string; label: Key }[] = [
+  { to: '/orders', label: 'orders' },
+  { to: '/promo-codes', label: 'promo_codes' },
+  { to: '/banners', label: 'banners' },
+  { to: '/broadcasts', label: 'broadcasts' },
+  { to: '/payments', label: 'payments' },
+  { to: '/reviews', label: 'reviews' },
+];
+
 interface SidebarProps {
   tenantName?: string;
   permissions: Record<string, boolean>;
@@ -74,6 +86,17 @@ export default function Sidebar({ tenantName, permissions, mobileOpen, onCloseMo
       active
         ? 'bg-accent-600 text-white'
         : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800',
+    ].join(' ');
+  }
+
+  // Same active/hover treatment as navItemClass, scaled down for a
+  // sub-nav row: smaller text, deeper left indent, no icon slot.
+  function subNavItemClass(active: boolean) {
+    return [
+      'w-full flex items-center pl-8 pr-2.5 py-1.5 rounded-token-md text-token-xs font-semibold text-left transition-colors',
+      active
+        ? 'bg-accent-600 text-white'
+        : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800',
     ].join(' ');
   }
 
@@ -119,12 +142,17 @@ export default function Sidebar({ tenantName, permissions, mobileOpen, onCloseMo
           {t('sales_channels')}
         </p>
         <div className="flex flex-col gap-0.5">
-          <button onClick={() => go('/orders')} className={navItemClass(isActive('/orders'))}>
+          <div className="w-full flex items-center gap-2.5 px-2.5 py-2 text-token-sm font-semibold text-neutral-600">
             <span className="text-channel-sellgram">
               <TelegramIcon size={16} />
             </span>
             Sellgram
-          </button>
+          </div>
+          {SELLGRAM_LINKS.map((link) => (
+            <button key={link.to} onClick={() => go(link.to)} className={subNavItemClass(isActive(link.to))}>
+              {t(link.label)}
+            </button>
+          ))}
           <button onClick={() => go('/pos/devices')} className={navItemClass(isActive('/pos'))}>
             <span className="text-channel-pos">
               <CreditCard size={16} strokeWidth={isActive('/pos') ? 2.2 : 1.8} />

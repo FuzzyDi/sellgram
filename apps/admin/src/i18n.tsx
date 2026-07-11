@@ -30,6 +30,8 @@ const dict = {
     sales_channels: '\u041a\u0430\u043d\u0430\u043b\u044b \u043f\u0440\u043e\u0434\u0430\u0436',
     pos: 'POS',
     b2b: 'B2B/\u041e\u043f\u0442',
+    promo_codes: '\u041f\u0440\u043e\u043c\u043e\u043a\u043e\u0434\u044b',
+    banners: '\u0411\u0430\u043d\u043d\u0435\u0440\u044b',
   },
   uz: {
     dashboard: 'Boshqaruv paneli',
@@ -56,6 +58,8 @@ const dict = {
     sales_channels: 'Savdo kanallari',
     pos: 'POS',
     b2b: 'B2B/Optom',
+    promo_codes: 'Promokodlar',
+    banners: 'Bannerlar',
   },
 } as const;
 
