@@ -365,16 +365,16 @@ export default function B2bCounterpartyDetail() {
         </div>
       </Card>
 
-      <div className="sg-pill-row">
-        <button type="button" className={`sg-pill ${tab === 'prices' ? 'active' : ''}`} onClick={() => setTab('prices')}>
+      <div className="flex gap-1">
+        <Button type="button" variant={tab === 'prices' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('prices')}>
           {tr('Прайс-лист', "Narxlar ro'yxati")}
-        </button>
-        <button type="button" className={`sg-pill ${tab === 'ledger' ? 'active' : ''}`} onClick={() => setTab('ledger')}>
+        </Button>
+        <Button type="button" variant={tab === 'ledger' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('ledger')}>
           {tr('История долга', 'Qarz tarixi')}
-        </button>
-        <button type="button" className={`sg-pill ${tab === 'ops' ? 'active' : ''}`} onClick={() => setTab('ops')}>
+        </Button>
+        <Button type="button" variant={tab === 'ops' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('ops')}>
           {tr('Платёж / Корректировка', "To'lov / Tuzatish")}
-        </button>
+        </Button>
       </div>
 
       {tab === 'prices' && (

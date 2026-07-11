@@ -170,7 +170,7 @@ export default function SysInvoices() {
             </tr>
           </thead>
           <tbody>
-            {loading && [1,2,3].map((i) => <tr key={i}><td colSpan={7} style={{ padding: 14 }}><div className="sg-skeleton" style={{ height: 14 }} /></td></tr>)}
+            {loading && [1,2,3].map((i) => <tr key={i}><td colSpan={7} style={{ padding: 14 }}><div className="animate-pulse bg-neutral-200 rounded" style={{ height: 14 }} /></td></tr>)}
             {!loading && items.map((inv: any) => (
               <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                 <td style={{ padding: '10px 14px', fontWeight: 600 }}>{inv.tenant?.name || inv.tenantId?.slice(0, 12)}</td>

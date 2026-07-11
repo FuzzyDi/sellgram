@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Button from '../components/Button';
 
 const STORAGE_KEY = 'sg_onboarding_done';
 export function markOnboardingDone() { localStorage.setItem(STORAGE_KEY, '1'); }
@@ -274,13 +275,14 @@ export default function OnboardingWizard({ onFinish }: Props) {
                 </div>
               ))}
             </div>
-            <button
-              className="sg-btn primary"
+            <Button
+              variant="primary"
+              size="md"
               style={{ width: '100%', padding: '13px 0', fontSize: 16 }}
               onClick={() => setStep('template')}
             >
               {tr('Начать настройку', 'Sozlashni boshlash')} →
-            </button>
+            </Button>
           </>
         )}
 
@@ -348,13 +350,14 @@ export default function OnboardingWizard({ onFinish }: Props) {
                 </div>
               </div>
             )}
-            <button
-              className="sg-btn primary"
+            <Button
+              variant="primary"
+              size="md"
               style={{ width: '100%', padding: '13px 0', fontSize: 15 }}
               onClick={() => setStep('store')}
             >
               {tr('Продолжить', 'Davom etish')} →
-            </button>
+            </Button>
           </>
         )}
 
@@ -396,14 +399,15 @@ export default function OnboardingWizard({ onFinish }: Props) {
                 </p>
               </div>
             </div>
-            <button
-              className="sg-btn primary"
+            <Button
+              variant="primary"
+              size="md"
               style={{ width: '100%', padding: '12px 0', fontSize: 15 }}
               disabled={saving}
               onClick={createStore}
             >
               {saving ? tr('Создание...', 'Yaratilmoqda...') : tr('Создать магазин', 'Do\'kon yaratish')}
-            </button>
+            </Button>
           </>
         )}
 
@@ -418,14 +422,14 @@ export default function OnboardingWizard({ onFinish }: Props) {
             </div>
 
             {botStatus === 'idle' && (
-              <button className="sg-btn primary" style={{ width: '100%', padding: '12px 0' }} onClick={checkBot}>
+              <Button variant="primary" size="md" style={{ width: '100%', padding: '12px 0' }} onClick={checkBot}>
                 {tr('Проверить бота', 'Botni tekshirish')}
-              </button>
+              </Button>
             )}
 
             {botStatus === 'checking' && (
               <div style={{ textAlign: 'center', padding: '16px 0', color: '#6b7280' }}>
-                <div className="sg-skeleton" style={{ height: 14, width: '60%', margin: '0 auto' }} />
+                <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 14, width: '60%', margin: '0 auto' }} />
               </div>
             )}
 
@@ -437,21 +441,22 @@ export default function OnboardingWizard({ onFinish }: Props) {
                     @{botInfo.username || botInfo.botUsername || '—'}
                   </div>
                 </div>
-                <button
-                  className="sg-btn primary"
+                <Button
+                  variant="primary"
+                  size="md"
                   style={{ width: '100%', padding: '12px 0' }}
                   disabled={saving}
                   onClick={activateBot}
                 >
                   {saving ? tr('Активация...', 'Faollashtirish...') : tr('Активировать и продолжить', 'Faollashtirish va davom etish')}
-                </button>
+                </Button>
               </>
             )}
 
             {botStatus === 'error' && (
-              <button className="sg-btn ghost" style={{ width: '100%', padding: '12px 0' }} onClick={checkBot}>
+              <Button variant="ghost" size="md" style={{ width: '100%', padding: '12px 0' }} onClick={checkBot}>
                 {tr('Попробовать снова', 'Qayta urinish')}
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -518,8 +523,9 @@ export default function OnboardingWizard({ onFinish }: Props) {
               </div>
             )}
 
-            <button
-              className="sg-btn primary"
+            <Button
+              variant="primary"
+              size="md"
               style={{ width: '100%', padding: '12px 0' }}
               disabled={saving}
               onClick={saveDelivery}
@@ -530,7 +536,7 @@ export default function OnboardingWizard({ onFinish }: Props) {
                   ? tr('Сохранить и создать категории', 'Saqlash va kategoriyalar yaratish')
                   : tr('Сохранить и продолжить', 'Saqlash va davom etish')
               }
-            </button>
+            </Button>
           </>
         )}
 
@@ -550,8 +556,9 @@ export default function OnboardingWizard({ onFinish }: Props) {
               </p>
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
-              <button
-                className="sg-btn primary"
+              <Button
+                variant="primary"
+                size="md"
                 style={{ width: '100%', padding: '13px 0', fontSize: 15 }}
                 onClick={() => {
                   markOnboardingDone();
@@ -560,14 +567,15 @@ export default function OnboardingWizard({ onFinish }: Props) {
                 }}
               >
                 {tr('Добавить товары →', 'Mahsulotlar qo\'shish →')}
-              </button>
-              <button
-                className="sg-btn ghost"
+              </Button>
+              <Button
+                variant="ghost"
+                size="md"
                 style={{ width: '100%', padding: '11px 0' }}
                 onClick={() => { markOnboardingDone(); onFinish(); }}
               >
                 {tr('Перейти на дашборд', 'Boshqaruv paneliga o\'tish')}
-              </button>
+              </Button>
             </div>
           </>
         )}

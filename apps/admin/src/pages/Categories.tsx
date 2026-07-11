@@ -3,6 +3,7 @@ import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import Badge from '../components/Badge';
 
 interface CategoryAttribute {
   id: string;
@@ -184,7 +185,7 @@ export default function Categories() {
         </Card>
       ) : (
         <Card style={{ padding: 0, overflow: 'hidden' }}>
-          <table className="sg-table">
+          <table className="w-full text-token-sm">
             <thead>
               <tr>
                 <th>{tr('\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435', 'Nomi')}</th>
@@ -211,24 +212,23 @@ export default function Categories() {
                       </td>
                       <td>{productCount}</td>
                       <td>
-                        <span className="sg-badge" style={category.isActive
-                          ? { background: '#d1fae5', color: '#065f46' }
-                          : { background: '#f3f4f6', color: '#4b5563' }}>
+                        <Badge variant={category.isActive ? 'success' : 'neutral'}>
                           {category.isActive ? tr('\u0410\u043a\u0442\u0438\u0432\u043d\u0430', 'Faol') : tr('\u0421\u043a\u0440\u044b\u0442\u0430', 'Yashirin')}
-                        </span>
+                        </Badge>
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <Button variant="ghost" size="md" type="button" onClick={() => openEdit(category)}>
                             {tr('\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c', 'Tahrirlash')}
                           </Button>
-                          <button
-                            className="sg-btn danger"
+                          <Button
+                            variant="danger"
+                            size="sm"
                             type="button"
                             onClick={() => setPendingDelete(isConfirming ? null : category.id)}
                           >
                             {tr('\u0423\u0434\u0430\u043b\u0438\u0442\u044c', "O'chirish")}
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -244,14 +244,15 @@ export default function Categories() {
                                   )
                                 : tr('\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044e?', "Toifani o'chirishni tasdiqlaysizmi?")}
                             </span>
-                            <button
-                              className="sg-btn danger"
+                            <Button
+                              variant="danger"
+                              size="sm"
                               type="button"
                               style={{ padding: '4px 12px', fontSize: 12 }}
                               onClick={() => void removeCategory(category.id)}
                             >
                               {tr('\u0414\u0430, \u0443\u0434\u0430\u043b\u0438\u0442\u044c', "Ha, o'chirish")}
-                            </button>
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"

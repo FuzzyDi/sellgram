@@ -122,12 +122,12 @@ function TenantApp() {
         </div>
         {/* Skeleton content */}
         <div style={{ flex: 1, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="sg-skeleton" style={{ height: 32, width: '35%' }} />
-          <div className="sg-skeleton" style={{ height: 18, width: '55%' }} />
+          <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 32, width: '35%' }} />
+          <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 18, width: '55%' }} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginTop: 8 }}>
-            {[1,2,3,4].map((i) => <div key={i} className="sg-skeleton" style={{ height: 80, borderRadius: 14 }} />)}
+            {[1,2,3,4].map((i) => <div key={i} className="animate-pulse bg-neutral-200 rounded" style={{ height: 80, borderRadius: 14 }} />)}
           </div>
-          <div className="sg-skeleton" style={{ height: 220, borderRadius: 14 }} />
+          <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 220, borderRadius: 14 }} />
         </div>
       </div>
     );

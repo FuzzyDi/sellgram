@@ -85,17 +85,21 @@ export function PosSubNav() {
   const navigate = useNavigate();
   const pathname = useLocation().pathname;
   return (
-    <div className="sg-pill-row">
-      {POS_TABS.map((tab) => (
-        <button
-          key={tab.to}
-          type="button"
-          className={`sg-pill ${pathname.startsWith(tab.to) ? 'active' : ''}`}
-          onClick={() => navigate(tab.to)}
-        >
-          {tr(tab.ru, tab.uz)}
-        </button>
-      ))}
+    <div className="flex gap-1">
+      {POS_TABS.map((tab) => {
+        const active = pathname.startsWith(tab.to);
+        return (
+          <Button
+            key={tab.to}
+            type="button"
+            variant={active ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => navigate(tab.to)}
+          >
+            {tr(tab.ru, tab.uz)}
+          </Button>
+        );
+      })}
     </div>
   );
 }

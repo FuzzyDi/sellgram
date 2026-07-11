@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Button from '../components/Button';
 
 interface Props {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -114,11 +115,12 @@ export default function Login({ onLogin, onRegister }: Props) {
           {/* Lang switcher */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, gap: 6 }}>
             {(['ru', 'uz'] as const).map((l) => (
-              <button
+              <Button
                 key={l}
                 type="button"
                 onClick={() => setLang(l)}
-                className="sg-btn ghost"
+                variant="ghost"
+                size="md"
                 style={{
                   fontSize: 12,
                   fontWeight: 800,
@@ -127,7 +129,7 @@ export default function Login({ onLogin, onRegister }: Props) {
                 }}
               >
                 {l.toUpperCase()}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -155,7 +157,7 @@ export default function Login({ onLogin, onRegister }: Props) {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="sg-grid" style={{ gap: 10 }}>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
             {mode === 'register' && (
               <>
                 <Field label={tr('Название магазина', "Do'kon nomi")}>
@@ -199,13 +201,13 @@ export default function Login({ onLogin, onRegister }: Props) {
               </Field>
             )}
 
-            <button type="submit" disabled={loading} className="sg-btn primary" style={{ width: '100%', height: 44, marginTop: 4, fontSize: 15 }}>
+            <Button type="submit" disabled={loading} variant="primary" size="md" style={{ width: '100%', height: 44, marginTop: 4, fontSize: 15 }}>
               {loading ? '...'
                 : mode === 'login' ? tr('Войти', 'Kirish')
                 : mode === 'register' ? tr('Создать', 'Yaratish')
                 : mode === 'forgot' ? tr('Отправить код', 'Kod yuborish')
                 : tr('Сменить пароль', 'Parolni o\'zgartirish')}
-            </button>
+            </Button>
           </form>
 
           <div style={{ marginTop: 16, fontSize: 13, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6 }}>

@@ -90,7 +90,7 @@ export default function SysUsers() {
             </tr>
           </thead>
           <tbody>
-            {loading && [1,2,3,4].map((i) => <tr key={i}><td colSpan={6} style={{ padding: 14 }}><div className="sg-skeleton" style={{ height: 14, width: '50%' }} /></td></tr>)}
+            {loading && [1,2,3,4].map((i) => <tr key={i}><td colSpan={6} style={{ padding: 14 }}><div className="animate-pulse bg-neutral-200 rounded" style={{ height: 14, width: '50%' }} /></td></tr>)}
             {!loading && items.map((u: any) => {
               const rc = ROLE_COLORS[u.role] || { bg: '#f1f5f9', color: '#374151' };
               return (

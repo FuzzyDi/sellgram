@@ -161,7 +161,7 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
         </div>
 
         {/* Stats */}
-        {loading && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>{[1,2,3,4,5,6].map(i => <div key={i} className="sg-skeleton" style={{ height: 56, borderRadius: 8 }} />)}</div>}
+        {loading && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>{[1,2,3,4,5,6].map(i => <div key={i} className="animate-pulse bg-neutral-200 rounded" style={{ height: 56, borderRadius: 8 }} />)}</div>}
         {detail && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
             {[
@@ -387,7 +387,7 @@ export default function SysTenants() {
           </thead>
           <tbody>
             {loading && [1,2,3,4,5].map((i) => (
-              <tr key={i}><td colSpan={7} style={{ padding: '10px 14px' }}><div className="sg-skeleton" style={{ height: 14, width: '60%' }} /></td></tr>
+              <tr key={i}><td colSpan={7} style={{ padding: '10px 14px' }}><div className="animate-pulse bg-neutral-200 rounded" style={{ height: 14, width: '60%' }} /></td></tr>
             ))}
             {!loading && items.map((t: any) => {
               const expiresAt = t.planExpiresAt ? new Date(t.planExpiresAt) : null;

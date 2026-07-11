@@ -69,7 +69,7 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
     <div style={{ padding: 28 }}>
       <div style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', marginBottom: 24 }}>Dashboard</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-        {[1,2,3,4].map(i => <div key={i} style={{ height: 90, background: '#fff', borderRadius: 12 }} className="sg-skeleton" />)}
+        {[1,2,3,4].map(i => <div key={i} style={{ height: 90, background: '#fff', borderRadius: 12 }} className="animate-pulse bg-neutral-200 rounded" />)}
       </div>
     </div>
   );
