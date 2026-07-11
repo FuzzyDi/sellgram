@@ -212,7 +212,7 @@ export default function OnboardingWizard({ onFinish }: Props) {
       }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#00875a' }}>SellGram</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f2134' }}>SBGCloud</div>
           {step !== 'welcome' && step !== 'done' && (
             <button
               onClick={skip}
@@ -257,8 +257,8 @@ export default function OnboardingWizard({ onFinish }: Props) {
               </h2>
               <p style={{ margin: '10px 0 0', color: '#6b7280', fontSize: 15, lineHeight: 1.6 }}>
                 {tr(
-                  'Настроим ваш Telegram-магазин за несколько шагов.',
-                  'Bir necha qadamda Telegram-do\'koningizni sozlaymiz.'
+                  'Настроим ваш магазин в Telegram — один из каналов SBGCloud — за несколько шагов.',
+                  'SBGCloud kanallaridan biri bo\'lgan Telegram-do\'koningizni bir necha qadamda sozlaymiz.'
                 )}
               </p>
             </div>
@@ -268,9 +268,9 @@ export default function OnboardingWizard({ onFinish }: Props) {
                 tr('Настроить доставку', 'Yetkazib berishni sozlash'),
                 tr('Добавить товары', 'Mahsulotlar qo\'shish'),
               ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#f0faf4', borderRadius: 10, border: '1px solid #bbf0d8' }}>
-                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#00875a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#065f46' }}>{item}</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#f3f4f6', borderRadius: 10, border: '1px solid #e5e7eb' }}>
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#111827', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{item}</span>
                 </div>
               ))}
             </div>
