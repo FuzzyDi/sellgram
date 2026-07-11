@@ -11,6 +11,11 @@ export interface Product {
   vatExempt?: boolean;
   markType?: string | null;
   isMarked?: boolean;
+  unit?: string | null;
+  isByWeight?: boolean;
+  isWeightedPiece?: boolean;
+  pluCode?: string | null;
+  pricePerKg?: number | null;
   price: number;
   stockQty: number;
   lowStockAlert: number;
@@ -72,6 +77,14 @@ export interface FormData {
   stockQty: string;
   lowStockAlert: string;
   unit: string;
+  // Weighted-goods fields — isWeightedPiece/pluCode/pricePerKg are only
+  // meaningful (and only shown in the UI) when isByWeight is true; the
+  // payload builder in useProductForm.ts clears them server-side when
+  // isByWeight is false, so stale hidden-field state can't resurface.
+  isByWeight: boolean;
+  isWeightedPiece: boolean;
+  pluCode: string;
+  pricePerKg: string;
   categoryId: string;
   isActive: boolean;
 }
@@ -88,7 +101,11 @@ export const emptyForm: FormData = {
   costPrice: '',
   stockQty: '0',
   lowStockAlert: '5',
-  unit: 'dona',
+  unit: 'шт',
+  isByWeight: false,
+  isWeightedPiece: false,
+  pluCode: '',
+  pricePerKg: '',
   categoryId: '',
   isActive: true,
 };

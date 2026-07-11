@@ -496,7 +496,8 @@ store.
       "fiscalProfile": {},
       "offlineLimits": {},
       "roundingRules": {},
-      "featureFlags": {}
+      "featureFlags": {},
+      "weightBarcode": {}
     }
   },
   "requestId": "string"
@@ -504,11 +505,11 @@ store.
 ```
 
 A store whose admin has never configured POS settings still gets a valid
-document: the empty eight-key body above, `version: 1`. The settings
-document is written by the store admin via
-`PUT /store-admin/pos-devices/settings`; every write bumps `version`, which
-is what heartbeat's `settingsVersion` reports (§8). `checksum` has the same
-v1 opaque semantics as the catalog snapshot's (§9).
+document: the empty eight-key body above (see the `weightBarcode` caveat
+below), `version: 1`. The settings document is written by the store admin
+via `PUT /store-admin/pos-devices/settings`; every write bumps `version`,
+which is what heartbeat's `settingsVersion` reports (§8). `checksum` has
+the same v1 opaque semantics as the catalog snapshot's (§9).
 
 Each nested object's internal shape is intentionally not fixed by this
 document yet — `taxProfile`, `receiptTemplate`, `printerProfile`,
@@ -522,6 +523,25 @@ requiring a sync") and `roundingRules` (cash rounding) are POS-operational
 concerns with no existing Sellgram Commerce analog. `featureFlags` is a
 free-form bag for gradual rollout of new POS Sync capabilities without a
 version bump.
+
+`weightBarcode` — the store's convention for decoding an internal weight
+barcode printed at the scale (which digit ranges encode the PLU vs. the
+weight/price, checksum handling, etc.), so a till can turn a scanned
+weight barcode into a `Product.pluCode` lookup plus a quantity, rather
+than that logic being hardcoded per-till. Same "free-form, tenant-defined
+JSON" treatment as the other eight keys.
+
+**Caveat, found while adding this key (not yet fixed):** unlike the other
+eight keys, `weightBarcode` is **not actually persisted today**.
+`posSettingsSchema.settings` in `pos-sync/admin-routes.ts` is a plain
+`z.object({ ...8 named keys... })` with no `.passthrough()`, so Zod
+silently strips any `weightBarcode` key a `PUT` request sends before it
+ever reaches `PosSettings.payload` — and `apps/admin/src/pages/pos/PosSettings.tsx`
+only renders edit panels for the existing eight keys, so there is
+currently no UI path to send it either. This section documents the
+intended shape; making it actually configurable needs both a schema
+change (add `weightBarcode: z.record(z.unknown()).optional()`) and a
+ninth panel in `PosSettings.tsx` — neither done here.
 
 ## 11. Sale events
 

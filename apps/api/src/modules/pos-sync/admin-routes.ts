@@ -247,6 +247,17 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           isMarked: true,
           mxikCode: true,
           packageCode: true,
+          // Unit of measure + weighted-goods sale (docs/POS_SYNC_API.md
+          // §10's weightBarcode key; schema comment on Product) — a till
+          // uses unit for display, isByWeight/isWeightedPiece to decide
+          // whether to prompt for a weight/qty, pluCode to resolve a
+          // scanned weight barcode back to this Product, and
+          // pricePerKg ?? price to compute the line total.
+          unit: true,
+          isByWeight: true,
+          isWeightedPiece: true,
+          pluCode: true,
+          pricePerKg: true,
           // packages/prisma/schema.prisma ProductBarcode — a till scans
           // any of these to resolve back to this Product, and uses
           // unitQty to decrement stock by the right multiple for a
