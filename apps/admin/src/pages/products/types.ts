@@ -76,15 +76,15 @@ export interface FormData {
   costPrice: string;
   stockQty: string;
   lowStockAlert: string;
+  // unit alone now drives weighted-goods behavior — 'кг'/'г' means
+  // isByWeight=true at save time (useProductForm.ts's saveProduct);
+  // there is no separate isByWeight form field/checkbox anymore.
   unit: string;
-  // Weighted-goods fields — isWeightedPiece/pluCode/pricePerKg are only
-  // meaningful (and only shown in the UI) when isByWeight is true; the
-  // payload builder in useProductForm.ts clears them server-side when
-  // isByWeight is false, so stale hidden-field state can't resurface.
-  isByWeight: boolean;
+  // Only meaningful (and only shown in the UI) when unit is 'кг'/'г';
+  // the payload builder clears it server-side otherwise, so stale
+  // hidden-field state can't resurface.
   isWeightedPiece: boolean;
   pluCode: string;
-  pricePerKg: string;
   categoryId: string;
   isActive: boolean;
 }
@@ -102,10 +102,8 @@ export const emptyForm: FormData = {
   stockQty: '0',
   lowStockAlert: '5',
   unit: 'шт',
-  isByWeight: false,
   isWeightedPiece: false,
   pluCode: '',
-  pricePerKg: '',
   categoryId: '',
   isActive: true,
 };

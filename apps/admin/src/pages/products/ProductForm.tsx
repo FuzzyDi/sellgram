@@ -73,6 +73,9 @@ export default function ProductForm({
 }: ProductFormProps) {
   const { tr } = useAdminI18n();
   const categoryAttrs = categories.find((c) => c.id === form.categoryId)?.attributes || [];
+  // unit alone decides weighted-goods behavior now (no separate
+  // isByWeight checkbox) — see useProductForm.ts's saveProduct/resolveUnit.
+  const isWeightUnit = form.unit === 'кг' || form.unit === 'г';
 
   return createPortal(
     <div className="fixed inset-0 bg-black/45 overflow-y-auto z-50 p-4">
@@ -127,7 +130,12 @@ export default function ProductForm({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input type="number" label={`${tr('Цена (UZS)', 'Narx (UZS)')} *`} value={form.price} onChange={updateForm('price')} />
+            <Input
+              type="number"
+              label={isWeightUnit ? `${tr('Цена за кг (UZS)', 'Kg narxi (UZS)')} *` : `${tr('Цена (UZS)', 'Narx (UZS)')} *`}
+              value={form.price}
+              onChange={updateForm('price')}
+            />
             <Input type="number" label={tr('Себестоимость', 'Tannarx')} value={form.costPrice} onChange={updateForm('costPrice')} />
             <Input
               label={tr('Ед. измерения', "O'lchov birligi")}
@@ -140,34 +148,20 @@ export default function ProductForm({
             </datalist>
           </div>
 
-          <div>
-            <label className="flex items-center gap-2 text-token-sm text-neutral-700 mb-2">
-              <input type="checkbox" className="h-4 w-4 accent-accent-600" checked={form.isByWeight} onChange={updateForm('isByWeight')} />
-              {tr('Весовой товар', "Vazn bo'yicha mahsulot")}
-            </label>
-
-            {form.isByWeight && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pl-6">
-                <label className="flex items-center gap-2 text-token-sm text-neutral-700">
-                  <input type="checkbox" className="h-4 w-4 accent-accent-600" checked={form.isWeightedPiece} onChange={updateForm('isWeightedPiece')} />
-                  {tr('Штучно-весовой', 'Dona-vazn')}
-                </label>
-                <Input
-                  label={tr('PLU код', 'PLU kodi')}
-                  value={form.pluCode}
-                  onChange={updateForm('pluCode')}
-                  placeholder="1234"
-                />
-                <Input
-                  type="number"
-                  label={tr('Цена за кг', 'Kg narxi')}
-                  value={form.pricePerKg}
-                  onChange={updateForm('pricePerKg')}
-                  placeholder={tr('= цена товара', '= mahsulot narxi')}
-                />
-              </div>
-            )}
-          </div>
+          {isWeightUnit && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label={tr('PLU код', 'PLU kodi')}
+                value={form.pluCode}
+                onChange={updateForm('pluCode')}
+                placeholder="1234"
+              />
+              <label className="flex items-center gap-2 text-token-sm text-neutral-700 self-end pb-2.5">
+                <input type="checkbox" className="h-4 w-4 accent-accent-600" checked={form.isWeightedPiece} onChange={updateForm('isWeightedPiece')} />
+                {tr('Штучно-весовой', 'Dona-vazn')}
+              </label>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input type="number" label={tr('Остаток', 'Qoldiq')} value={form.stockQty} onChange={updateForm('stockQty')} />

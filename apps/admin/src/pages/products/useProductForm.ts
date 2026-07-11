@@ -20,6 +20,19 @@ function vatOptionFromProduct(vatRate: unknown, vatExempt: boolean | undefined):
   return 'CUSTOM';
 }
 
+const WEIGHT_UNITS = ['кг', 'г'];
+
+// unit alone now drives weighted-goods behavior (no separate isByWeight
+// form field/checkbox). Hydration fallback: a product already flagged
+// isByWeight in the database whose stored unit somehow isn't 'кг'/'г'
+// (e.g. left over from before this field existed) is coerced to 'кг' so
+// the form doesn't silently reopen as a non-weighted product.
+function resolveUnit(product: any): string {
+  const unit = product.unit || 'шт';
+  if (product.isByWeight && !WEIGHT_UNITS.includes(unit)) return 'кг';
+  return unit;
+}
+
 interface UseProductFormParams {
   loadProducts: () => Promise<void>;
   loadCategories: () => Promise<void>;
@@ -73,11 +86,9 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       costPrice: fullProduct.costPrice ? String(fullProduct.costPrice) : '',
       stockQty: String(fullProduct.stockQty),
       lowStockAlert: String(fullProduct.lowStockAlert),
-      unit: fullProduct.unit || 'шт',
-      isByWeight: Boolean(fullProduct.isByWeight),
+      unit: resolveUnit(fullProduct),
       isWeightedPiece: Boolean(fullProduct.isWeightedPiece),
       pluCode: fullProduct.pluCode || '',
-      pricePerKg: fullProduct.pricePerKg != null ? String(fullProduct.pricePerKg) : '',
       categoryId: fullProduct.category?.id || '',
       isActive: fullProduct.isActive,
     });
@@ -139,16 +150,21 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       if (form.costPrice) payload.costPrice = parseFloat(form.costPrice);
       if (form.unit) payload.unit = form.unit;
 
-      // Always sent, same reasoning as vatOption/markType above — a
-      // checkbox always has a defined value. isWeightedPiece/pluCode/
-      // pricePerKg are explicitly cleared (not just left out) when
-      // isByWeight is false, so toggling it off actually clears them
+      // isByWeight is derived from unit, not a separate checkbox —
+      // 'кг'/'г' means weighted goods (docs/POS_SYNC_API.md §10/§12).
+      // Always sent, same reasoning as vatOption/markType above:
+      // isWeightedPiece/pluCode/pricePerKg are explicitly cleared (not
+      // just left out) when unit isn't a weight unit, so switching a
+      // product's unit back to e.g. 'шт' actually clears them
       // server-side instead of leaving stale hidden-field state that
-      // resurfaces on a later unrelated save.
-      payload.isByWeight = form.isByWeight;
-      payload.isWeightedPiece = form.isByWeight && form.isWeightedPiece;
-      payload.pluCode = form.isByWeight && form.pluCode ? form.pluCode : null;
-      payload.pricePerKg = form.isByWeight && form.pricePerKg ? parseFloat(form.pricePerKg) : null;
+      // resurfaces on a later unrelated save. pricePerKg is synced
+      // straight from price — for a weighted item they're the same
+      // number, so there's no separate "price per kg" input anymore.
+      const isWeightUnit = form.unit === 'кг' || form.unit === 'г';
+      payload.isByWeight = isWeightUnit;
+      payload.isWeightedPiece = isWeightUnit && form.isWeightedPiece;
+      payload.pluCode = isWeightUnit && form.pluCode ? form.pluCode : null;
+      payload.pricePerKg = isWeightUnit ? parseFloat(form.price) : null;
 
       if (form.categoryId) payload.categoryId = form.categoryId;
 
