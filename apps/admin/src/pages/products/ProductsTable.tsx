@@ -99,6 +99,11 @@ export default function ProductsTable({
       render: (product) => <span className="font-semibold text-neutral-800">{Number(product.price).toLocaleString()} UZS</span>,
     },
     {
+      key: 'unit',
+      header: tr('ЕД.', "O'lchov"),
+      render: (product) => product.unit || '—',
+    },
+    {
       key: 'stock',
       header: tr('Склад', 'Ombor'),
       render: (product) => (
