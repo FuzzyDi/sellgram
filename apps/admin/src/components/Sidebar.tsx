@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Package, Boxes, Users, BarChart2, Settings as SettingsIcon, CreditCard, Briefcase, type LucideIcon,
+  LayoutDashboard, Package, Boxes, Users, BarChart2, Settings as SettingsIcon, CreditCard, Briefcase, ChevronDown, ChevronUp, type LucideIcon,
 } from 'lucide-react';
 import { useAdminI18n, type Key } from '../i18n';
 
@@ -70,6 +70,10 @@ export default function Sidebar({ tenantName, permissions, mobileOpen, onCloseMo
   const pathname = useLocation().pathname;
 
   const visibleWorkspaceLinks = WORKSPACE_LINKS.filter((l) => !l.perm || Boolean(permissions[l.perm]));
+
+  const [sellgramOpen, setSellgramOpen] = useState(() =>
+    SELLGRAM_LINKS.some((link) => pathname.startsWith(link.to)),
+  );
 
   function go(to: string) {
     navigate(to);
@@ -142,13 +146,17 @@ export default function Sidebar({ tenantName, permissions, mobileOpen, onCloseMo
           {t('sales_channels')}
         </p>
         <div className="flex flex-col gap-0.5">
-          <div className="w-full flex items-center gap-2.5 px-2.5 py-2 text-token-sm font-semibold text-neutral-600">
+          <button
+            onClick={() => setSellgramOpen((open) => !open)}
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 text-token-sm font-semibold text-left text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800 rounded-token-md transition-colors"
+          >
             <span className="text-channel-sellgram">
               <TelegramIcon size={16} />
             </span>
-            Sellgram
-          </div>
-          {SELLGRAM_LINKS.map((link) => (
+            <span className="flex-1">Sellgram</span>
+            {sellgramOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          {sellgramOpen && SELLGRAM_LINKS.map((link) => (
             <button key={link.to} onClick={() => go(link.to)} className={subNavItemClass(isActive(link.to))}>
               {t(link.label)}
             </button>
