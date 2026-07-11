@@ -1,32 +1,35 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
+import Button from '../components/Button';
+import Select from '../components/Select';
+import Input from '../components/Input';
 
 function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
-    <span style={{ display: 'inline-flex', gap: 1 }}>
+    <span className="inline-flex gap-px">
       {[1, 2, 3, 4, 5].map((s) => (
-        <span key={s} style={{ fontSize: size, color: s <= rating ? '#f59e0b' : '#d1d5db' }}>★</span>
+        <span key={s} style={{ fontSize: size }} className={s <= rating ? 'text-warning' : 'text-neutral-300'}>★</span>
       ))}
     </span>
   );
 }
 
 function DistributionBar({ dist, total }: { dist: Record<number, number>; total: number }) {
-  const { tr } = useAdminI18n();
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div className="flex flex-col gap-1">
       {[5, 4, 3, 2, 1].map((star) => {
         const count = dist[star] ?? 0;
         const pct = total > 0 ? (count / total) * 100 : 0;
         return (
-          <div key={star} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-            <span style={{ width: 10, color: '#6b7280', textAlign: 'right' }}>{star}</span>
-            <span style={{ color: '#f59e0b', fontSize: 13 }}>★</span>
-            <div style={{ flex: 1, height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${pct}%`, height: '100%', background: '#f59e0b', borderRadius: 3, transition: 'width 0.4s' }} />
+          <div key={star} className="flex items-center gap-2 text-token-xs">
+            <span className="w-2.5 text-neutral-500 text-right">{star}</span>
+            <span className="text-warning text-token-sm">★</span>
+            <div className="flex-1 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+              <div className="h-full bg-warning rounded-full transition-all" style={{ width: `${pct}%` }} />
             </div>
-            <span style={{ width: 28, color: '#6b7280', textAlign: 'right' }}>{count}</span>
+            <span className="w-7 text-neutral-500 text-right">{count}</span>
           </div>
         );
       })}
@@ -84,176 +87,128 @@ export default function Reviews() {
   const totalPages: number = data?.totalPages ?? 1;
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto' }}>
-      <h2 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 4px' }}>
-        {tr('Отзывы', 'Sharhlar')}
-      </h2>
-      <p style={{ color: '#6b7280', fontSize: 13, margin: '0 0 16px' }}>
-        {tr('Оценки клиентов после получения заказов', "Buyurtmalardan so'ng mijozlar reytingi")}
-      </p>
+    <section className="flex flex-col gap-4">
+      <header>
+        <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Отзывы', 'Sharhlar')}</h2>
+        <p className="mt-1 text-token-sm text-neutral-500">{tr('Оценки клиентов после получения заказов', "Buyurtmalardan so'ng mijozlar reytingi")}</p>
+      </header>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '2px solid #e5e7eb', paddingBottom: 0 }}>
-        {[
-          { key: false, label: tr('Видимые', 'Ko\'rinadigan') },
-          { key: true,  label: tr('Скрытые', 'Yashirilgan') },
-        ].map(({ key, label }) => (
-          <button
-            key={String(key)}
-            onClick={() => setShowHidden(key)}
-            style={{
-              padding: '8px 18px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-              background: 'transparent', borderBottom: showHidden === key ? '2px solid #111' : '2px solid transparent',
-              color: showHidden === key ? '#111' : '#6b7280', marginBottom: -2,
-            }}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex gap-1.5">
+        <Button variant={!showHidden ? 'primary' : 'ghost'} size="sm" type="button" onClick={() => setShowHidden(false)}>
+          {tr('Видимые', "Ko'rinadigan")}
+        </Button>
+        <Button variant={showHidden ? 'primary' : 'ghost'} size="sm" type="button" onClick={() => setShowHidden(true)}>
+          {tr('Скрытые', 'Yashirilgan')}
+        </Button>
       </div>
 
       {/* Stats */}
       {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16, marginBottom: 24 }}>
-          <div className="sg-card" style={{ padding: 20, textAlign: 'center' }}>
-            <div style={{ fontSize: 48, fontWeight: 900, color: '#111', lineHeight: 1 }}>
-              {stats.avg ?? '—'}
-            </div>
-            <div style={{ margin: '8px 0 4px' }}>
-              <Stars rating={Math.round(stats.avg ?? 0)} size={20} />
-            </div>
-            <div style={{ fontSize: 13, color: '#6b7280' }}>
-              {total} {tr('отзывов', 'sharh')}
-            </div>
-          </div>
-          <div className="sg-card" style={{ padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12 }}>
-              {tr('Распределение', 'Taqsimot')}
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <Card className="text-center sm:col-span-1">
+            <div className="text-token-2xl font-extrabold text-neutral-800" style={{ fontSize: 40 }}>{stats.avg ?? '—'}</div>
+            <div className="my-2"><Stars rating={Math.round(stats.avg ?? 0)} size={20} /></div>
+            <div className="text-token-sm text-neutral-500">{total} {tr('отзывов', 'sharh')}</div>
+          </Card>
+          <Card className="sm:col-span-2">
+            <div className="text-token-sm font-semibold text-neutral-700 mb-3">{tr('Распределение', 'Taqsimot')}</div>
             <DistributionBar dist={stats.distribution} total={total} />
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-        <select
-          value={ratingFilter}
-          onChange={(e) => setRatingFilter(e.target.value)}
-          className="sg-input"
-          style={{ width: 140 }}
-        >
-          <option value="">{tr('Все оценки', 'Barcha reytinglar')}</option>
-          {[5, 4, 3, 2, 1].map((r) => (
-            <option key={r} value={r}>{'★'.repeat(r)} ({r})</option>
-          ))}
-        </select>
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          className="sg-input"
-          style={{ width: 150 }}
-          placeholder={tr('Дата от', 'Sanadan')}
-        />
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          className="sg-input"
-          style={{ width: 150 }}
-          placeholder={tr('Дата до', 'Sanagacha')}
-        />
+      <div className="flex gap-2.5 flex-wrap items-end">
+        <div className="w-[160px]">
+          <Select label={tr('Оценка', 'Reyting')} value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value)}>
+            <option value="">{tr('Все оценки', 'Barcha reytinglar')}</option>
+            {[5, 4, 3, 2, 1].map((r) => (
+              <option key={r} value={r}>{'★'.repeat(r)} ({r})</option>
+            ))}
+          </Select>
+        </div>
+        <div className="w-[160px]">
+          <Input type="date" label={tr('Дата от', 'Sanadan')} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </div>
+        <div className="w-[160px]">
+          <Input type="date" label={tr('Дата до', 'Sanagacha')} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
         {(ratingFilter || dateFrom || dateTo) && (
-          <button
-            className="sg-btn sg-btn-ghost"
-            onClick={() => { setRatingFilter(''); setDateFrom(''); setDateTo(''); }}
-          >
+          <Button variant="ghost" size="md" type="button" onClick={() => { setRatingFilter(''); setDateFrom(''); setDateTo(''); }}>
             {tr('Сбросить', 'Tozalash')}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Error */}
       {loadError && (
-        <div className="sg-card" style={{ padding: 32, textAlign: 'center', color: '#b91c1c' }}>
-          <p style={{ margin: '0 0 12px' }}>{tr('Ошибка загрузки', 'Yuklashda xato')}</p>
-          <button className="sg-btn sg-btn-primary" onClick={() => load(page)}>
+        <Card className="text-center py-8 px-4">
+          <p className="m-0 mb-3 text-danger">{tr('Ошибка загрузки', 'Yuklashda xato')}</p>
+          <Button variant="primary" size="md" type="button" onClick={() => load(page)}>
             {tr('Повторить', 'Qayta urinish')}
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
 
       {/* Skeleton */}
       {loading && !loadError && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="sg-skeleton" style={{ height: 72, borderRadius: 12 }} />
+            <div key={i} className="h-[72px] rounded-token-lg bg-neutral-100 animate-pulse" />
           ))}
         </div>
       )}
 
       {/* Empty */}
       {!loading && !loadError && items.length === 0 && (
-        <div className="sg-card" style={{ padding: 48, textAlign: 'center', color: '#9ca3af' }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>⭐</div>
-          <p style={{ margin: 0 }}>{tr('Отзывов пока нет', 'Hali sharhlar yo\'q')}</p>
-        </div>
+        <Card className="text-center py-12 px-4">
+          <div className="text-token-2xl mb-2">⭐</div>
+          <p className="m-0 text-neutral-500">{tr('Отзывов пока нет', "Hali sharhlar yo'q")}</p>
+        </Card>
       )}
 
       {/* List */}
       {!loading && !loadError && items.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {items.map((item: any) => {
             const customer = item.order?.customer;
             const customerName = customer
               ? [customer.firstName, customer.lastName].filter(Boolean).join(' ') || `@${customer.telegramUser}` || '—'
               : '—';
             return (
-              <div
-                key={item.id}
-                className="sg-card"
-                style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <Card key={item.id} className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-3 flex-wrap">
                   <Stars rating={item.rating} size={16} />
-                  <span style={{ fontWeight: 700, fontSize: 13, color: '#111' }}>
+                  <span className="font-semibold text-token-sm text-neutral-800">
                     {tr('Заказ', 'Buyurtma')} #{item.order?.orderNumber}
                   </span>
-                  <span style={{ fontSize: 12, color: '#6b7280' }}>{customerName}</span>
+                  <span className="text-token-xs text-neutral-500">{customerName}</span>
                   {item.order?.store?.name && (
-                    <span
-                      style={{
-                        fontSize: 11, fontWeight: 600, padding: '2px 8px',
-                        borderRadius: 6, background: '#f0f9ff', color: '#0369a1',
-                      }}
-                    >
+                    <span className="text-token-xs font-semibold px-2 py-0.5 rounded-token-sm bg-accent-600/10 text-accent-600">
                       {item.order.store.name}
                     </span>
                   )}
-                  <span style={{ fontSize: 11, color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                  <span className="text-token-xs text-neutral-400 whitespace-nowrap">
                     {new Date(item.createdAt).toLocaleDateString(locale)}
                   </span>
-                  <button
-                    onClick={() => toggleHidden(item.id, item.hidden)}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    className={`ml-auto ${item.hidden ? 'text-success' : 'text-danger'}`}
                     disabled={toggling === item.id}
-                    style={{
-                      marginLeft: 'auto', border: 'none', cursor: 'pointer', borderRadius: 6,
-                      padding: '3px 10px', fontSize: 11, fontWeight: 700,
-                      background: item.hidden ? '#d1fae5' : '#fee2e2',
-                      color: item.hidden ? '#065f46' : '#991b1b',
-                      opacity: toggling === item.id ? 0.5 : 1,
-                    }}
+                    onClick={() => toggleHidden(item.id, item.hidden)}
                   >
-                    {toggling === item.id ? '...' : item.hidden ? tr('Показать', 'Ko\'rsatish') : tr('Скрыть', 'Yashirish')}
-                  </button>
+                    {toggling === item.id ? '...' : item.hidden ? tr('Показать', "Ko'rsatish") : tr('Скрыть', 'Yashirish')}
+                  </Button>
                 </div>
                 {item.comment && (
-                  <p style={{ margin: 0, fontSize: 13, color: item.hidden ? '#9ca3af' : '#374151', lineHeight: 1.5 }}>
+                  <p className={`m-0 text-token-sm leading-relaxed ${item.hidden ? 'text-neutral-400' : 'text-neutral-700'}`}>
                     {item.comment}
                   </p>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -261,31 +216,18 @@ export default function Reviews() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 20 }}>
-          <button
-            className="sg-btn sg-btn-ghost"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            style={{ minWidth: 90, padding: '7px 14px' }}
-          >
+        <div className="flex justify-center items-center gap-2 mt-2">
+          <Button variant="ghost" size="md" type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
             ← {tr('Назад', 'Orqaga')}
-          </button>
-          <span style={{
-            padding: '7px 14px', fontSize: 13, fontWeight: 600, color: '#374151',
-            background: '#f3f4f6', borderRadius: 8, minWidth: 80, textAlign: 'center',
-          }}>
+          </Button>
+          <span className="px-3.5 py-1.5 text-token-sm font-semibold text-neutral-700 bg-neutral-100 rounded-token-md min-w-[80px] text-center">
             {page} / {totalPages}
           </span>
-          <button
-            className="sg-btn sg-btn-ghost"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            style={{ minWidth: 90, padding: '7px 14px' }}
-          >
+          <Button variant="ghost" size="md" type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
             {tr('Далее', 'Keyingi')} →
-          </button>
+          </Button>
         </div>
       )}
-    </div>
+    </section>
   );
 }
