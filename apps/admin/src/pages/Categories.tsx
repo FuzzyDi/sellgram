@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
+import Button from '../components/Button';
 
 interface CategoryAttribute {
   id: string;
@@ -140,7 +142,7 @@ export default function Categories() {
   ) : null;
 
   return (
-    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+    <section className="flex flex-col gap-4">
       {noticeNode}
 
       <header style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
@@ -148,12 +150,12 @@ export default function Categories() {
           <h2 className="sg-title">{tr('\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438', 'Toifalar')}</h2>
           <p className="sg-subtitle">{tr('\u0413\u0440\u0443\u043f\u043f\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043e\u0432\u0430\u0440\u044b \u0434\u043b\u044f \u0443\u0434\u043e\u0431\u043d\u043e\u0439 \u043d\u0430\u0432\u0438\u0433\u0430\u0446\u0438\u0438', 'Mahsulotlarni qulay navigatsiya uchun guruhlang')}</p>
         </div>
-        <button onClick={openCreate} className="sg-btn primary" type="button">
+        <Button onClick={openCreate} variant="primary" size="md" type="button">
           + {tr('\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c', "Qo'shish")}
-        </button>
+        </Button>
       </header>
 
-      <div className="sg-card" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <Card style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -161,27 +163,27 @@ export default function Categories() {
           className="w-full"
           style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px', flex: 1 }}
         />
-      </div>
+      </Card>
 
       {loadError ? (
-        <div className="sg-card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+        <Card style={{ textAlign: 'center', padding: '32px 16px' }}>
           <p style={{ margin: 0, fontWeight: 700, color: '#be123c' }}>{tr('Не удалось загрузить категории', "Toifalarni yuklab bo'lmadi")}</p>
-          <button className="sg-btn ghost" style={{ marginTop: 14 }} onClick={() => void load()}>{tr('Повторить', 'Qayta urinish')}</button>
-        </div>
+          <Button variant="ghost" size="md" style={{ marginTop: 14 }} onClick={() => void load()}>{tr('Повторить', 'Qayta urinish')}</Button>
+        </Card>
       ) : loading ? (
-        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
           {[1, 2, 3].map((i) => (
             <div key={i} style={{ display: 'flex', gap: 16, padding: '12px 16px', borderBottom: '1px solid #edf2ee', alignItems: 'center' }}>
-              <div className="sg-skeleton" style={{ height: 16, flex: 2 }} />
-              <div className="sg-skeleton" style={{ height: 14, flex: 2 }} />
-              <div className="sg-skeleton" style={{ height: 14, width: 30 }} />
-              <div className="sg-skeleton" style={{ height: 22, width: 60, borderRadius: 999 }} />
-              <div className="sg-skeleton" style={{ height: 32, width: 100, borderRadius: 8 }} />
+              <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 16, flex: 2 }} />
+              <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 14, flex: 2 }} />
+              <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 14, width: 30 }} />
+              <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 22, width: 60, borderRadius: 999 }} />
+              <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 32, width: 100, borderRadius: 8 }} />
             </div>
           ))}
-        </div>
+        </Card>
       ) : (
-        <div className="sg-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
           <table className="sg-table">
             <thead>
               <tr>
@@ -217,9 +219,9 @@ export default function Categories() {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button className="sg-btn ghost" type="button" onClick={() => openEdit(category)}>
+                          <Button variant="ghost" size="md" type="button" onClick={() => openEdit(category)}>
                             {tr('\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c', 'Tahrirlash')}
-                          </button>
+                          </Button>
                           <button
                             className="sg-btn danger"
                             type="button"
@@ -250,14 +252,15 @@ export default function Categories() {
                             >
                               {tr('\u0414\u0430, \u0443\u0434\u0430\u043b\u0438\u0442\u044c', "Ha, o'chirish")}
                             </button>
-                            <button
-                              className="sg-btn ghost"
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               type="button"
                               style={{ padding: '4px 12px', fontSize: 12 }}
                               onClick={() => setPendingDelete(null)}
                             >
                               {tr('\u041e\u0442\u043c\u0435\u043d\u0430', 'Bekor qilish')}
-                            </button>
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -277,9 +280,9 @@ export default function Categories() {
                         <div style={{ color: '#6b7a71', marginBottom: 12 }}>
                           {tr('Категорий пока нет — добавьте первую', "Toifalar hozircha yo'q — birinchisini qo'shing")}
                         </div>
-                        <button className="sg-btn primary" type="button" onClick={openCreate}>
+                        <Button variant="primary" size="md" type="button" onClick={openCreate}>
                           + {tr('Создать категорию', 'Toifa yaratish')}
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </td>
@@ -287,12 +290,12 @@ export default function Categories() {
               )}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
-          <div className="sg-card" style={{ width: '100%', maxWidth: 460 }}>
+          <Card style={{ width: '100%', maxWidth: 460 }}>
             <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
               {editing ? tr('\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044e', 'Toifani tahrirlash') : tr('\u041d\u043e\u0432\u0430\u044f \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f', 'Yangi toifa')}
             </h3>
@@ -331,21 +334,21 @@ export default function Categories() {
                   placeholder={tr('Размер', "O'lchov")}
                   style={{ border: '1px solid #d6e0da', borderRadius: 10, padding: '8px 11px', flex: 1, fontSize: 13 }}
                 />
-                <button type="button" className="sg-btn ghost" onClick={addAttr} disabled={!newAttrName.trim()}>
+                <Button type="button" variant="ghost" size="md" onClick={addAttr} disabled={!newAttrName.trim()}>
                   + {tr('Добавить', "Qo'shish")}
-                </button>
+                </Button>
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-              <button className="sg-btn primary" type="button" onClick={() => void saveCategory()} disabled={saving || !name.trim()}>
+              <Button variant="primary" size="md" type="button" onClick={() => void saveCategory()} disabled={saving || !name.trim()}>
                 {saving ? tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u0435...', 'Saqlanmoqda...') : tr('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Saqlash')}
-              </button>
-              <button className="sg-btn ghost" type="button" onClick={() => setShowForm(false)}>
+              </Button>
+              <Button variant="ghost" size="md" type="button" onClick={() => setShowForm(false)}>
                 {tr('\u041e\u0442\u043c\u0435\u043d\u0430', 'Bekor qilish')}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </section>

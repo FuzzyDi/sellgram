@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
+import Card from '../components/Card';
+import Button from '../components/Button';
 import type { NoticeTone } from './settings/types';
 import StoresTab from './settings/StoresTab';
 import DeliveryTab from './settings/DeliveryTab';
@@ -88,14 +90,14 @@ export default function Settings() {
   ) : null;
 
   return (
-    <section className="sg-page sg-grid" style={{ gap: 16 }}>
+    <section className="flex flex-col gap-4">
       {noticeNode}
       <header>
         <h2 className="sg-title">{tr('Настройки', 'Sozlamalar')}</h2>
         <p className="sg-subtitle">{tr('Магазины, доставка, лояльность и Telegram-привязка', "Do'konlar, yetkazib berish, loyallik va Telegram bog'lash")}</p>
       </header>
 
-      <div className="sg-card soft">
+      <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <p style={{ margin: 0, fontWeight: 800 }}>{tr('Привязка Telegram-админа', "Telegram adminini bog'lash")}</p>
@@ -103,13 +105,13 @@ export default function Settings() {
               {tr('Сгенерируйте код и отправьте боту: /admin CODE', "Kod yarating va botga yuboring: /admin CODE")}
             </p>
           </div>
-          <button className="sg-btn primary" type="button" onClick={generateTelegramLinkCode}>
+          <Button variant="primary" size="md" type="button" onClick={generateTelegramLinkCode}>
             {telegramLinkLoading ? tr('Генерируется...', 'Yaratilmoqda...') : tr('Сгенерировать код', 'Kod yaratish')}
-          </button>
+          </Button>
         </div>
 
         {telegramLinkData && (
-          <div className="sg-card" style={{ marginTop: 12 }}>
+          <Card className="mt-3">
             <p style={{ margin: 0, fontSize: 14 }}>
               {tr('Код', 'Kod')}: <b style={{ fontFamily: 'monospace' }}>{telegramLinkData.code}</b>
             </p>
@@ -119,32 +121,32 @@ export default function Settings() {
             <p style={{ margin: '6px 0 0', fontSize: 12, color: '#65746b' }}>
               {tr('Команда', 'Buyruq')}: <span style={{ fontFamily: 'monospace' }}>{telegramLinkData.command}</span>
             </p>
-          </div>
+          </Card>
         )}
-      </div>
+      </Card>
 
-      <div className="sg-pill-row">
-        <button className={`sg-pill ${tab === 'stores' ? 'active' : ''}`} type="button" onClick={() => selectTab('stores')}>
+      <div className="flex gap-1">
+        <Button variant={tab === 'stores' ? 'primary' : 'ghost'} size="sm" type="button" onClick={() => selectTab('stores')}>
           {tr('Магазины', "Do'konlar")}
-        </button>
-        <button className={`sg-pill ${tab === 'zones' ? 'active' : ''}`} type="button" onClick={() => selectTab('zones')}>
+        </Button>
+        <Button variant={tab === 'zones' ? 'primary' : 'ghost'} size="sm" type="button" onClick={() => selectTab('zones')}>
           {tr('Доставка', 'Yetkazib berish')}
-        </button>
-        <button className={`sg-pill ${tab === 'loyalty' ? 'active' : ''}`} type="button" onClick={() => selectTab('loyalty')}>
+        </Button>
+        <Button variant={tab === 'loyalty' ? 'primary' : 'ghost'} size="sm" type="button" onClick={() => selectTab('loyalty')}>
           {tr('Лояльность', 'Loyallik')}
-        </button>
-        <button className={`sg-pill ${tab === 'account' ? 'active' : ''}`} type="button" onClick={() => selectTab('account')}>
+        </Button>
+        <Button variant={tab === 'account' ? 'primary' : 'ghost'} size="sm" type="button" onClick={() => selectTab('account')}>
           {tr('Аккаунт', 'Akkaunt')}
-        </button>
-        <button className={`sg-pill ${tab === 'api' ? 'active' : ''}`} type="button" onClick={() => selectTab('api')}>
+        </Button>
+        <Button variant={tab === 'api' ? 'primary' : 'ghost'} size="sm" type="button" onClick={() => selectTab('api')}>
           {tr('API', 'API')}
-        </button>
-        <button className={`sg-pill ${tab === 'webhooks' ? 'active' : ''}`} type="button" onClick={() => selectTab('webhooks')}>
+        </Button>
+        <Button variant={tab === 'webhooks' ? 'primary' : 'ghost'} size="sm" type="button" onClick={() => selectTab('webhooks')}>
           {tr('Webhooks', 'Webhooks')}
-        </button>
-        <button className={`sg-pill ${tab === 'crm' ? 'active' : ''}`} type="button" onClick={() => selectTab('crm')}>
+        </Button>
+        <Button variant={tab === 'crm' ? 'primary' : 'ghost'} size="sm" type="button" onClick={() => selectTab('crm')}>
           {tr('CRM', 'CRM')}
-        </button>
+        </Button>
       </div>
 
       {visitedTabs.has('stores') && (
