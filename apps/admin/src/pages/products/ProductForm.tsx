@@ -34,6 +34,12 @@ const MARK_TYPE_OPTIONS = [
   { value: 'OIL', ru: 'Растительные масла', uz: "O'simlik yog'lari" },
 ] as const;
 
+// Presets for the unit-of-measure field, offered via a <datalist> rather
+// than a plain <Select> — unit is a free string on Product (any tenant
+// can use any unit), so the input must accept a typed custom value too,
+// not only one of these six.
+const UNIT_PRESETS = ['шт', 'кг', 'г', 'л', 'м', 'уп'];
+
 interface ProductFormProps {
   editingId: string | null;
   form: ProductFormData;
@@ -123,7 +129,44 @@ export default function ProductForm({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input type="number" label={`${tr('Цена (UZS)', 'Narx (UZS)')} *`} value={form.price} onChange={updateForm('price')} />
             <Input type="number" label={tr('Себестоимость', 'Tannarx')} value={form.costPrice} onChange={updateForm('costPrice')} />
-            <Input label={tr('Ед. измерения', "O'lchov birligi")} value={form.unit} onChange={updateForm('unit')} />
+            <Input
+              label={tr('Ед. измерения', "O'lchov birligi")}
+              value={form.unit}
+              onChange={updateForm('unit')}
+              list="unit-presets"
+            />
+            <datalist id="unit-presets">
+              {UNIT_PRESETS.map((u) => <option key={u} value={u} />)}
+            </datalist>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-token-sm text-neutral-700 mb-2">
+              <input type="checkbox" className="h-4 w-4 accent-accent-600" checked={form.isByWeight} onChange={updateForm('isByWeight')} />
+              {tr('Весовой товар', "Vazn bo'yicha mahsulot")}
+            </label>
+
+            {form.isByWeight && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pl-6">
+                <label className="flex items-center gap-2 text-token-sm text-neutral-700">
+                  <input type="checkbox" className="h-4 w-4 accent-accent-600" checked={form.isWeightedPiece} onChange={updateForm('isWeightedPiece')} />
+                  {tr('Штучно-весовой', 'Dona-vazn')}
+                </label>
+                <Input
+                  label={tr('PLU код', 'PLU kodi')}
+                  value={form.pluCode}
+                  onChange={updateForm('pluCode')}
+                  placeholder="1234"
+                />
+                <Input
+                  type="number"
+                  label={tr('Цена за кг', 'Kg narxi')}
+                  value={form.pricePerKg}
+                  onChange={updateForm('pricePerKg')}
+                  placeholder={tr('= цена товара', '= mahsulot narxi')}
+                />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

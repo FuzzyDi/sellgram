@@ -73,7 +73,11 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       costPrice: fullProduct.costPrice ? String(fullProduct.costPrice) : '',
       stockQty: String(fullProduct.stockQty),
       lowStockAlert: String(fullProduct.lowStockAlert),
-      unit: fullProduct.unit || 'dona',
+      unit: fullProduct.unit || 'шт',
+      isByWeight: Boolean(fullProduct.isByWeight),
+      isWeightedPiece: Boolean(fullProduct.isWeightedPiece),
+      pluCode: fullProduct.pluCode || '',
+      pricePerKg: fullProduct.pricePerKg != null ? String(fullProduct.pricePerKg) : '',
       categoryId: fullProduct.category?.id || '',
       isActive: fullProduct.isActive,
     });
@@ -134,6 +138,18 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       payload.description = form.description || null;
       if (form.costPrice) payload.costPrice = parseFloat(form.costPrice);
       if (form.unit) payload.unit = form.unit;
+
+      // Always sent, same reasoning as vatOption/markType above — a
+      // checkbox always has a defined value. isWeightedPiece/pluCode/
+      // pricePerKg are explicitly cleared (not just left out) when
+      // isByWeight is false, so toggling it off actually clears them
+      // server-side instead of leaving stale hidden-field state that
+      // resurfaces on a later unrelated save.
+      payload.isByWeight = form.isByWeight;
+      payload.isWeightedPiece = form.isByWeight && form.isWeightedPiece;
+      payload.pluCode = form.isByWeight && form.pluCode ? form.pluCode : null;
+      payload.pricePerKg = form.isByWeight && form.pricePerKg ? parseFloat(form.pricePerKg) : null;
+
       if (form.categoryId) payload.categoryId = form.categoryId;
 
       if (editingId) {
