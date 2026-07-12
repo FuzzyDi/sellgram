@@ -79,6 +79,10 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
       String(body.secret || '');
     const configuredSecret = String((order.paymentMethodRef?.meta as any)?.webhookSecret || '');
 
+    if (!configuredSecret && provider === 'MANUAL_TRANSFER') {
+      return reply.status(401).send({ success: false, error: 'MANUAL_TRANSFER webhook requires webhookSecret configured on payment method' });
+    }
+
     if (configuredSecret) {
       const provided = Buffer.from(providedSecret);
       const expected = Buffer.from(configuredSecret);
