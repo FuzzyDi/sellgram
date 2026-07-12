@@ -1251,6 +1251,13 @@ model PosDevice {
   // that activated before this column existed.
   deviceCode   String?
   lastSeenAt   DateTime?
+  // Set when jobs/pos-device-monitor.ts sends an offline-heartbeat alert
+  // to the store owner, cleared back to null the next time this device's
+  // heartbeat updates lastSeenAt (pos-sync/routes.ts) — the "have we
+  // already nagged about this outage" flag, so the every-5-minutes job
+  // doesn't resend the same alert every cycle (only once, then at most
+  // hourly while the device stays offline).
+  alertSentAt  DateTime?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 

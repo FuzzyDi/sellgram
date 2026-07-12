@@ -434,6 +434,15 @@ async function main() {
     fastify.log.error(`Scheduled reports runner failed to start: ${err.message}`);
   }
 
+  // POS device offline monitor (every 5 min)
+  try {
+    const { startPosDeviceMonitor } = await import('./jobs/pos-device-monitor.js');
+    startPosDeviceMonitor();
+    fastify.log.info('POS device offline monitor started');
+  } catch (err: any) {
+    fastify.log.error(`POS device offline monitor failed to start: ${err.message}`);
+  }
+
   // Nightly subscription reminders
   setInterval(async () => {
     try {
