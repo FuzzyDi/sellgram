@@ -10,8 +10,9 @@ import SysAnalytics from './SysAnalytics';
 import SysSettings from './SysSettings';
 import SysPlans from './SysPlans';
 import SysPayment from './SysPayment';
+import SysPolicies from './SysPolicies';
 
-export type SysPage = 'overview' | 'tenants' | 'invoices' | 'monitoring' | 'users' | 'announcements' | 'analytics' | 'plans' | 'payment' | 'settings';
+export type SysPage = 'overview' | 'tenants' | 'invoices' | 'monitoring' | 'users' | 'announcements' | 'analytics' | 'plans' | 'payment' | 'policies' | 'settings';
 
 const NAV: { id: SysPage; label: string; icon: string }[] = [
   { id: 'overview',      label: 'Dashboard',       icon: '🏠' },
@@ -23,6 +24,7 @@ const NAV: { id: SysPage; label: string; icon: string }[] = [
   { id: 'analytics',     label: 'Аналитика',        icon: '📊' },
   { id: 'plans',         label: 'Тарифы',           icon: '📋' },
   { id: 'payment',       label: 'Оплата',           icon: '💰' },
+  { id: 'policies',      label: 'Политики POS',     icon: '🛡️' },
   { id: 'settings',      label: 'Настройки',        icon: '⚙️' },
 ];
 
@@ -156,6 +158,7 @@ export default function SysLayout() {
         {page === 'analytics'     && <SysAnalytics />}
         {page === 'plans'         && <SysPlans />}
         {page === 'payment'       && <SysPayment />}
+        {page === 'policies'      && <SysPolicies />}
         {page === 'settings'      && <SysSettings />}
       </main>
     </div>

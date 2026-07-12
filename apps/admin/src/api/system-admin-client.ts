@@ -122,4 +122,17 @@ export const systemApi = {
   monitorSettings: () => systemRequest<any>('/settings/monitor'),
   updateMonitorSettings: (patch: { botToken?: string; chatId?: string; diskThreshold?: number }) =>
     systemRequest<any>('/settings/monitor', { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  // Platform policies (docs/POS_POLICY_ENGINE.md §13 step 5)
+  platformPolicies: () => systemRequest<any[]>('/platform-policies'),
+  platformPolicyVersion: () => systemRequest<{ version: number }>('/platform-policies/version'),
+  createPlatformPolicy: (payload: {
+    scope: string; severity: string; enabled: boolean;
+    match: Record<string, unknown>; message: { ru: string; uz: string }; extra?: Record<string, unknown>;
+  }) => systemRequest<any>('/platform-policies', { method: 'POST', body: JSON.stringify(payload) }),
+  updatePlatformPolicy: (id: string, patch: Partial<{
+    scope: string; severity: string; enabled: boolean;
+    match: Record<string, unknown>; message: { ru: string; uz: string }; extra?: Record<string, unknown> | null;
+  }>) => systemRequest<any>(`/platform-policies/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deletePlatformPolicy: (id: string) => systemRequest<any>(`/platform-policies/${id}`, { method: 'DELETE' }),
 };
