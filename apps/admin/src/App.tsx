@@ -133,7 +133,15 @@ function TenantApp() {
     );
   }
 
-  if (!auth) return <Login onLogin={handleLogin} onRegister={handleRegister} />;
+  if (!auth) {
+    return (
+      <Login
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        initialMode={location.pathname === '/register' ? 'register' : 'login'}
+      />
+    );
+  }
   if (showOnboarding) return <OnboardingWizard onFinish={() => setShowOnboarding(false)} />;
 
   const perms = auth.user?.effectivePermissions || {};

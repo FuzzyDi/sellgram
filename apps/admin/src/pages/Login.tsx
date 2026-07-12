@@ -6,11 +6,12 @@ import Button from '../components/Button';
 interface Props {
   onLogin: (email: string, password: string) => Promise<void>;
   onRegister: (data: { email: string; password: string; name: string; tenantName: string; tenantSlug: string }) => Promise<void>;
+  initialMode?: 'login' | 'register' | 'forgot' | 'reset';
 }
 
-export default function Login({ onLogin, onRegister }: Props) {
+export default function Login({ onLogin, onRegister, initialMode = 'login' }: Props) {
   const { tr, lang, setLang } = useAdminI18n();
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'reset'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'reset'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
