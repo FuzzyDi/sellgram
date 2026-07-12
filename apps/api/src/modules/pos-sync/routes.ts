@@ -555,7 +555,11 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
 
     const now = new Date();
     const [, tenant, latestSnapshot, storeSettings] = await Promise.all([
-      prisma.posDevice.update({ where: { id: device.id }, data: { lastSeenAt: now } }),
+      // alertSentAt: null clears jobs/pos-device-monitor.ts's offline-alert
+      // dedup flag the moment the device checks back in, so a device that
+      // recovers and later drops offline again gets a fresh alert instead
+      // of staying silenced by a stale timestamp from the previous outage.
+      prisma.posDevice.update({ where: { id: device.id }, data: { lastSeenAt: now, alertSentAt: null } }),
       prisma.tenant.findUnique({
         where: { id: device.tenantId },
         select: { planExpiresAt: true, blockedAt: true },

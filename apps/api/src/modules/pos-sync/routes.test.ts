@@ -399,6 +399,32 @@ describe('pos-sync.routes', () => {
       await app.close();
     });
 
+    it('clears alertSentAt on heartbeat (resets jobs/pos-device-monitor.ts\'s offline-alert dedup flag)', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.tenant.findUnique.mockResolvedValue({ planExpiresAt: null, blockedAt: null });
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ version: 1 });
+      mocks.prisma.posSettings.findUnique.mockResolvedValueOnce({ version: 1 });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/heartbeat',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validHeartbeatPayload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.posDevice.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'dev-1' },
+          data: expect.objectContaining({ lastSeenAt: expect.any(Date), alertSentAt: null }),
+        })
+      );
+      await app.close();
+    });
+
     it('reflects a BLOCKED tenant in licenseStatus', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
