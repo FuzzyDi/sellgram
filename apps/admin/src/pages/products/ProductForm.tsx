@@ -9,6 +9,7 @@ import Select from '../../components/Select';
 import ProductVariantsSection from './ProductVariantsSection';
 import BarcodesSection from './BarcodesSection';
 import type { Category, FormData as ProductFormData, NoticeTone } from './types';
+import { buildCategoryHierarchy } from '../../lib/category-tree';
 
 // docs/POS_SYNC_API.md §10/§12 — the (vatRate, vatExempt) pair collapses
 // to one Select; 'CUSTOM' (see useProductForm.ts's vatOptionFromProduct)
@@ -67,6 +68,7 @@ export default function ProductForm({
 }: ProductFormProps) {
   const { tr } = useAdminI18n();
   const categoryAttrs = categories.find((c) => c.id === form.categoryId)?.attributes || [];
+  const hierarchicalCategories = buildCategoryHierarchy(categories);
   // unit alone decides weighted-goods behavior now (no separate
   // isByWeight checkbox) — see useProductForm.ts's saveProduct/resolveUnit.
   const isWeightUnit = form.unit === 'кг' || form.unit === 'г';
@@ -166,9 +168,9 @@ export default function ProductForm({
             <Input type="number" label={tr('Мин. остаток', 'Min. qoldiq')} value={form.lowStockAlert} onChange={updateForm('lowStockAlert')} />
             <Select label={tr('Категория', 'Toifa')} value={form.categoryId} onChange={updateForm('categoryId')}>
               <option value="">{tr('Без категории', 'Toifasiz')}</option>
-              {categories.map((category) => (
+              {hierarchicalCategories.map((category) => (
                 <option key={category.id} value={category.id}>
-                  {category.name}
+                  {category.depth > 0 ? `${'  '.repeat(category.depth)}└ ${category.name}` : category.name}
                 </option>
               ))}
             </Select>

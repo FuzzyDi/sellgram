@@ -4,6 +4,8 @@ import { useAdminI18n } from '../i18n';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
+import Select from '../components/Select';
+import { buildCategoryHierarchy, getDescendantIds } from '../lib/category-tree';
 
 interface CategoryAttribute {
   id: string;
@@ -17,6 +19,7 @@ interface Category {
   slug: string;
   sortOrder: number;
   isActive: boolean;
+  parentId?: string | null;
   _count?: { products: number };
   attributes?: CategoryAttribute[];
 }
@@ -28,6 +31,7 @@ export default function Categories() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [name, setName] = useState('');
+  const [parentId, setParentId] = useState('');
   const [attributes, setAttributes] = useState<string[]>([]);
   const [newAttrName, setNewAttrName] = useState('');
   const [search, setSearch] = useState('');
@@ -65,9 +69,26 @@ export default function Categories() {
     return categories.filter((c) => c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q));
   }, [categories, search]);
 
+  // Parent-then-children ordering for the table — built from the
+  // search-filtered list, so a search match with a filtered-out parent
+  // still shows (as a root-level row, via buildCategoryHierarchy's
+  // orphan fallback) instead of disappearing.
+  const hierarchical = useMemo(() => buildCategoryHierarchy(filtered), [filtered]);
+
+  // "Родительская категория" options: every category except the one being
+  // edited and any of its own descendants (can't become a child of your
+  // own child). Built from the full, unfiltered list — search shouldn't
+  // hide valid parent choices — with hierarchy-aware indentation so deep
+  // categories are still easy to pick out.
+  const parentOptions = useMemo(() => {
+    const excluded = editing ? new Set([editing.id, ...getDescendantIds(categories, editing.id)]) : new Set<string>();
+    return buildCategoryHierarchy(categories).filter((c) => !excluded.has(c.id));
+  }, [categories, editing]);
+
   function openCreate() {
     setEditing(null);
     setName('');
+    setParentId('');
     setAttributes([]);
     setNewAttrName('');
     setShowForm(true);
@@ -76,6 +97,7 @@ export default function Categories() {
   function openEdit(category: Category) {
     setEditing(category);
     setName(category.name);
+    setParentId(category.parentId || '');
     setAttributes((category.attributes || []).map((a) => a.name));
     setNewAttrName('');
     setShowForm(true);
@@ -100,16 +122,17 @@ export default function Categories() {
     try {
       let savedId: string;
       if (editing) {
-        await adminApi.updateCategory(editing.id, { name: nextName });
+        await adminApi.updateCategory(editing.id, { name: nextName, parentId: parentId || null });
         savedId = editing.id;
       } else {
-        const created = await adminApi.createCategory({ name: nextName });
+        const created = await adminApi.createCategory({ name: nextName, parentId: parentId || null });
         savedId = created.id;
       }
       await adminApi.updateCategoryAttributes(savedId, attributes.map((name) => ({ name })));
       setShowForm(false);
       setEditing(null);
       setName('');
+      setParentId('');
       setAttributes([]);
       await load();
     } catch (err: any) {
@@ -197,13 +220,19 @@ export default function Categories() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((category) => {
+              {hierarchical.map((category) => {
                 const productCount = category._count?.products || 0;
                 const isConfirming = pendingDelete === category.id;
                 return (
                   <React.Fragment key={category.id}>
                     <tr>
-                      <td style={{ fontWeight: 700 }}>{category.name}</td>
+                      <td
+                        style={{ fontWeight: 700 }}
+                        className={category.depth > 0 ? 'pl-6' : undefined}
+                      >
+                        {category.depth > 0 && <span style={{ color: '#b0bcb5', marginRight: 4 }}>└</span>}
+                        {category.name}
+                      </td>
                       <td style={{ color: '#64756b', fontSize: 13 }}>{category.slug}</td>
                       <td style={{ fontSize: 12, color: '#5a6b61' }}>
                         {(category.attributes || []).length > 0
@@ -269,7 +298,7 @@ export default function Categories() {
                   </React.Fragment>
                 );
               })}
-              {filtered.length === 0 && (
+              {hierarchical.length === 0 && (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '36px 16px' }}>
                     {search.trim() ? (
@@ -310,6 +339,21 @@ export default function Categories() {
               style={{ marginTop: 12, border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px' }}
               placeholder={tr('\u041d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u041d\u0430\u043f\u0438\u0442\u043a\u0438', 'Masalan: Ichimliklar')}
             />
+
+            <div style={{ marginTop: 12 }}>
+              <Select
+                label={tr('\u0420\u043e\u0434\u0438\u0442\u0435\u043b\u044c\u0441\u043a\u0430\u044f \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f', 'Ota toifa')}
+                value={parentId}
+                onChange={(e) => setParentId(e.target.value)}
+              >
+                <option value="">{tr('\u2014 \u043a\u043e\u0440\u043d\u0435\u0432\u0430\u044f \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f \u2014', '\u2014 asosiy toifa \u2014')}</option>
+                {parentOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.depth > 0 ? `${'\u2014'.repeat(c.depth)} ${c.name}` : c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
 
             <div style={{ marginTop: 16 }}>
               <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
