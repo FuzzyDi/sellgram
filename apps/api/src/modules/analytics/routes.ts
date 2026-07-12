@@ -67,6 +67,17 @@ function getReportAccess(reportLimits: ReportLimits) {
   };
 }
 
+// FiscalEvent.items/payments are unconstrained Json (z.record(z.unknown())
+// on the wire, docs/POS_SYNC_API.md) — no fixed field names guaranteed.
+// Same alias list and reasoning as pos-sync/admin-routes.ts's pickField;
+// duplicated rather than imported for the same reason policy-routes.ts
+// duplicates authenticateSystem — not worth a cross-module coupling for
+// four lines.
+function pickItemField(obj: any, keys: string[]): any {
+  for (const k of keys) if (obj?.[k] !== undefined && obj[k] !== null) return obj[k];
+  return undefined;
+}
+
 function getMonthKey(date = new Date()) {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -372,6 +383,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const fourteenDaysAgo = new Date(today.getTime() - 13 * 24 * 60 * 60 * 1000);
+    // "последние 30 дней" for the new multi-channel fields below —
+    // deliberately a separate rolling window from `monthStart` above
+    // (calendar month-to-date), which the pre-existing back-compat
+    // revenue.month/orders fields keep using unchanged.
+    const last30DaysStart = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
+    const onlineCutoff = new Date(now.getTime() - 5 * 60 * 1000);
 
     const [
       totalOrders,
@@ -436,9 +453,171 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       revenueByDay.push({ date: d, revenue: revenueMap[d] ?? 0 });
     }
 
+    // ── Multi-channel data (Sellgram/POS/B2B) ──────────────────────────────
+    // SalesChannel only has TELEGRAM/B2B (schema.prisma) — "sellgram" below
+    // means Order.salesChannel = 'TELEGRAM', the real enum value for the
+    // Telegram storefront channel. A second, separate Promise.all rather
+    // than folding into the block above — keeps every back-compat field's
+    // query untouched, at the cost of one extra sequential round trip.
+    const [
+      sellgramOrdersToday,
+      sellgramOrdersPending,
+      sellgramOrdersMonth,
+      sellgramRevenueTodayAgg,
+      sellgramRevenueMonthAgg,
+      posDevicesOnline,
+      posDevicesTotal,
+      posShiftsToday,
+      posReceiptsToday,
+      posRevenueTodayAgg,
+      posRevenueMonthAgg,
+      b2bCounterpartiesActive,
+      b2bTotalDebtAgg,
+      b2bOrdersMonth,
+      b2bRevenueTodayAgg,
+      b2bRevenueMonthAgg,
+      posDeviceList,
+      recentTelegramOrders,
+      sellgramOrders14d,
+      posEvents14d,
+      b2bLedger14d,
+      orderItemGroups30d,
+      fiscalEventsForItems30d,
+    ] = await Promise.all([
+      prisma.order.count({ where: { tenantId, salesChannel: 'TELEGRAM', createdAt: { gte: today } } }),
+      prisma.order.count({ where: { tenantId, salesChannel: 'TELEGRAM', status: 'NEW' } }),
+      prisma.order.count({ where: { tenantId, salesChannel: 'TELEGRAM', createdAt: { gte: last30DaysStart } } }),
+      prisma.order.aggregate({ where: { tenantId, salesChannel: 'TELEGRAM', status: { in: ['COMPLETED', 'DELIVERED'] }, createdAt: { gte: today } }, _sum: { total: true } }),
+      prisma.order.aggregate({ where: { tenantId, salesChannel: 'TELEGRAM', status: { in: ['COMPLETED', 'DELIVERED'] }, createdAt: { gte: last30DaysStart } }, _sum: { total: true } }),
+      prisma.posDevice.count({ where: { tenantId, status: 'ACTIVE', lastSeenAt: { gte: onlineCutoff } } }),
+      prisma.posDevice.count({ where: { tenantId } }),
+      // "смен сегодня" — shifts opened today, so a shift shows up on the
+      // dashboard the moment it starts rather than only once closed.
+      prisma.shiftEvent.count({ where: { tenantId, eventType: 'SHIFT_OPENED', openedAtMs: { gte: today } } }),
+      prisma.fiscalEvent.count({ where: { tenantId, eventType: 'FISCAL_SUCCESS', createdAtMs: { gte: today } } }),
+      prisma.fiscalEvent.aggregate({ where: { tenantId, eventType: 'FISCAL_SUCCESS', createdAtMs: { gte: today } }, _sum: { totalAmount: true } }),
+      prisma.fiscalEvent.aggregate({ where: { tenantId, eventType: 'FISCAL_SUCCESS', createdAtMs: { gte: last30DaysStart } }, _sum: { totalAmount: true } }),
+      prisma.counterparty.count({ where: { tenantId, isActive: true } }),
+      prisma.counterparty.aggregate({ where: { tenantId, currentDebt: { gt: 0 } }, _sum: { currentDebt: true } }),
+      prisma.order.count({ where: { tenantId, salesChannel: 'B2B', createdAt: { gte: last30DaysStart } } }),
+      prisma.counterpartyLedger.aggregate({ where: { tenantId, type: 'ORDER_CHARGE', createdAt: { gte: today } }, _sum: { delta: true } }),
+      prisma.counterpartyLedger.aggregate({ where: { tenantId, type: 'ORDER_CHARGE', createdAt: { gte: last30DaysStart } }, _sum: { delta: true } }),
+      prisma.posDevice.findMany({ where: { tenantId, status: 'ACTIVE' }, select: { name: true, lastSeenAt: true }, orderBy: { name: 'asc' } }),
+      prisma.order.findMany({
+        where: { tenantId, salesChannel: 'TELEGRAM' },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: { customer: true, items: true },
+      }),
+      prisma.order.findMany({
+        where: { tenantId, salesChannel: 'TELEGRAM', status: { in: ['COMPLETED', 'DELIVERED'] }, createdAt: { gte: fourteenDaysAgo } },
+        select: { createdAt: true, total: true },
+      }),
+      prisma.fiscalEvent.findMany({
+        where: { tenantId, eventType: 'FISCAL_SUCCESS', createdAtMs: { gte: fourteenDaysAgo } },
+        select: { createdAtMs: true, totalAmount: true },
+      }),
+      prisma.counterpartyLedger.findMany({
+        where: { tenantId, type: 'ORDER_CHARGE', createdAt: { gte: fourteenDaysAgo } },
+        select: { createdAt: true, delta: true },
+      }),
+      prisma.orderItem.groupBy({
+        by: ['name'],
+        where: { order: { tenantId, status: { in: ['COMPLETED', 'DELIVERED'] }, createdAt: { gte: last30DaysStart } } },
+        _sum: { qty: true, total: true },
+      }),
+      prisma.fiscalEvent.findMany({
+        where: { tenantId, eventType: 'FISCAL_SUCCESS', createdAtMs: { gte: last30DaysStart } },
+        select: { items: true },
+      }),
+    ]);
+
+    // 14-day, 3-channel revenue series — zero-filled like revenueByDay above.
+    const sellgramByDate: Record<string, number> = {};
+    for (const o of sellgramOrders14d) {
+      const d = o.createdAt.toISOString().slice(0, 10);
+      sellgramByDate[d] = (sellgramByDate[d] ?? 0) + Number(o.total);
+    }
+    const posByDate: Record<string, number> = {};
+    for (const e of posEvents14d) {
+      const d = e.createdAtMs.toISOString().slice(0, 10);
+      // FiscalEvent.totalAmount is tiyin (1/100 UZS) — confirmed against
+      // real production rows while building the POS Analytics screen.
+      posByDate[d] = (posByDate[d] ?? 0) + Math.round((e.totalAmount || 0) / 100);
+    }
+    const b2bByDate: Record<string, number> = {};
+    for (const l of b2bLedger14d) {
+      const d = l.createdAt.toISOString().slice(0, 10);
+      b2bByDate[d] = (b2bByDate[d] ?? 0) + Number(l.delta);
+    }
+    const revenueChart: { date: string; sellgram: number; pos: number; b2b: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      revenueChart.push({
+        date: d,
+        sellgram: sellgramByDate[d] ?? 0,
+        pos: posByDate[d] ?? 0,
+        b2b: b2bByDate[d] ?? 0,
+      });
+    }
+
+    // Top 5 products across all channels — merges OrderItem (sellgram+b2b,
+    // grouped by name at the DB level) with FiscalEvent.items (POS, raw
+    // Json parsed in JS via pickItemField). Matched by product name since
+    // FiscalEvent items carry no productId to join on.
+    const productMap = new Map<string, { name: string; qty: number; amount: number }>();
+    for (const g of orderItemGroups30d) {
+      const prev = productMap.get(g.name) || { name: g.name, qty: 0, amount: 0 };
+      prev.qty += Number(g._sum.qty) || 0;
+      prev.amount += Number(g._sum.total) || 0;
+      productMap.set(g.name, prev);
+    }
+    for (const fe of fiscalEventsForItems30d) {
+      const items = Array.isArray(fe.items) ? (fe.items as any[]) : [];
+      for (const item of items) {
+        const name = String(pickItemField(item, ['name', 'title', 'productName']) ?? 'Unknown');
+        // qty is fixed-point ×1000 (docs/POS_SYNC_API.md items; confirmed
+        // against real production FiscalEvent rows — e.g. "qty": 2000 = 2
+        // units), price/total are tiyin.
+        const qty = Number(pickItemField(item, ['qty', 'quantity']) ?? 0) / 1000;
+        const amount = Number(pickItemField(item, ['sum', 'total', 'amount']) ?? 0) / 100;
+        const prev = productMap.get(name) || { name, qty: 0, amount: 0 };
+        prev.qty += qty;
+        prev.amount += amount;
+        productMap.set(name, prev);
+      }
+    }
+    const topProducts = Array.from(productMap.values())
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+
+    const posStatus = posDeviceList.map((d) => ({
+      name: d.name,
+      online: !!d.lastSeenAt && d.lastSeenAt.getTime() >= onlineCutoff.getTime(),
+      lastSeenAt: d.lastSeenAt,
+    }));
+
+    const recentOrdersOut = recentTelegramOrders.map((o: any) => ({
+      id: o.id,
+      orderNumber: o.orderNumber,
+      total: Number(o.total),
+      status: o.status,
+      createdAt: o.createdAt,
+      customer: o.customer ? { firstName: o.customer.firstName } : null,
+      items: (o.items || []).map((i: any) => ({ name: i.name, qty: i.qty })),
+    }));
+
+    const sellgramRevenueToday = Number(sellgramRevenueTodayAgg._sum.total) || 0;
+    const sellgramRevenueMonth = Number(sellgramRevenueMonthAgg._sum.total) || 0;
+    const posRevenueToday = Math.round((Number(posRevenueTodayAgg._sum.totalAmount) || 0) / 100);
+    const posRevenueMonth = Math.round((Number(posRevenueMonthAgg._sum.totalAmount) || 0) / 100);
+    const b2bRevenueToday = Number(b2bRevenueTodayAgg._sum.delta) || 0;
+    const b2bRevenueMonth = Number(b2bRevenueMonthAgg._sum.delta) || 0;
+
     return {
       success: true,
       data: {
+        // ── back-compat — unchanged shape, unchanged queries above ──
         orders: { total: totalOrders, today: todayOrders, week: weekOrders, completed: completedOrders, pending: pendingOrders },
         revenue: {
           today: Number(todayRevenue._sum.total) || 0,
@@ -458,6 +637,35 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           count: reviewStats._count.rating,
         },
         revenueByDay,
+
+        // ── new multi-channel data ──
+        summary: {
+          revenueToday: sellgramRevenueToday + posRevenueToday + b2bRevenueToday,
+          revenueMonth: sellgramRevenueMonth + posRevenueMonth + b2bRevenueMonth,
+          revenueByChannel: { sellgram: sellgramRevenueToday, pos: posRevenueToday, b2b: b2bRevenueToday },
+        },
+        sellgram: {
+          ordersToday: sellgramOrdersToday,
+          ordersPending: sellgramOrdersPending,
+          ordersMonth: sellgramOrdersMonth,
+          revenueMonth: sellgramRevenueMonth,
+        },
+        pos: {
+          devicesOnline: posDevicesOnline,
+          devicesTotal: posDevicesTotal,
+          shiftsToday: posShiftsToday,
+          receiptsToday: posReceiptsToday,
+          revenueToday: posRevenueToday,
+        },
+        b2b: {
+          counterpartiesActive: b2bCounterpartiesActive,
+          totalDebt: Number(b2bTotalDebtAgg._sum.currentDebt) || 0,
+          ordersMonth: b2bOrdersMonth,
+        },
+        revenueChart,
+        topProducts,
+        recentOrders: recentOrdersOut,
+        posStatus,
       },
       reportLimits,
       reportAccess: getReportAccess(reportLimits),
