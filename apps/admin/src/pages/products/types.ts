@@ -33,6 +33,8 @@ export interface CategoryAttribute {
 export interface Category {
   id: string;
   name: string;
+  parentId?: string | null;
+  sortOrder?: number;
   attributes?: CategoryAttribute[];
 }
 
