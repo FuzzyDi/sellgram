@@ -406,6 +406,22 @@ export const adminApi = {
   updatePosSettings: (storeId: string, settings: Record<string, unknown>) =>
     request<any>('/pos-devices/settings', { method: 'PUT', body: JSON.stringify({ storeId, settings }) }),
 
+  getPosShifts: (params: { storeId: string; deviceId?: string; limit?: number; cursor?: string }) => {
+    const qs = new URLSearchParams({ storeId: params.storeId });
+    if (params.deviceId) qs.set('deviceId', params.deviceId);
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.cursor) qs.set('cursor', params.cursor);
+    return request<any>(`/pos-shifts?${qs.toString()}`);
+  },
+  getPosReceipts: (params: { storeId: string; deviceId?: string; shiftNumber?: number; limit?: number; cursor?: string }) => {
+    const qs = new URLSearchParams({ storeId: params.storeId });
+    if (params.deviceId) qs.set('deviceId', params.deviceId);
+    if (params.shiftNumber !== undefined) qs.set('shiftNumber', String(params.shiftNumber));
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.cursor) qs.set('cursor', params.cursor);
+    return request<any>(`/pos-receipts?${qs.toString()}`);
+  },
+
   updateB2bSettings: (enabled: boolean) =>
     request<any>('/b2b-settings', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
 

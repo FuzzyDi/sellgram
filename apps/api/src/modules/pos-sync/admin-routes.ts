@@ -68,6 +68,21 @@ const posSettingsSchema = z.object({
   }),
 });
 
+const listShiftsQuerySchema = z.object({
+  storeId: z.string().min(1),
+  deviceId: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.string().min(1).optional(),
+});
+
+const listReceiptsQuerySchema = z.object({
+  storeId: z.string().min(1),
+  deviceId: z.string().min(1).optional(),
+  shiftNumber: z.coerce.number().int().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.string().min(1).optional(),
+});
+
 const posOperatorRoleSchema = z.enum(['CASHIER', 'SENIOR_CASHIER', 'ADMIN']);
 
 const listOperatorsQuerySchema = z.object({
@@ -367,6 +382,107 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       });
 
       return reply.status(200).send({ success: true, data: settings });
+    }
+  );
+
+  // Closed shifts (Z-reports) for the Shifts admin screen. SHIFT_CLOSED is
+  // the only eventType that represents a completed shift with a final
+  // zReportStatus — SHIFT_OPENED rows are the till's own append-only
+  // opening record and aren't shown here. Cursor pagination follows
+  // Prisma's native cursor+skip:1 scheme, keyed on `id` (unique) but still
+  // correctly resuming in closedAtMs DESC order — Prisma seeks by the
+  // cursor row's position in that ordering, not by literal id comparison.
+  fastify.get(
+    '/pos-shifts',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const query = listShiftsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({ success: false, error: query.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const shifts = await prisma.shiftEvent.findMany({
+        where: {
+          tenantId,
+          storeId: store.id,
+          eventType: 'SHIFT_CLOSED',
+          ...(query.data.deviceId ? { deviceId: query.data.deviceId } : {}),
+        },
+        select: {
+          id: true,
+          shiftNumber: true,
+          openedAtMs: true,
+          closedAtMs: true,
+          zReportStatus: true,
+          deviceId: true,
+          device: { select: { name: true } },
+        },
+        orderBy: { closedAtMs: 'desc' },
+        take: query.data.limit,
+        ...(query.data.cursor ? { cursor: { id: query.data.cursor }, skip: 1 } : {}),
+      });
+
+      const nextCursor = shifts.length === query.data.limit ? shifts[shifts.length - 1]!.id : null;
+
+      return reply.status(200).send({ success: true, data: { items: shifts, nextCursor } });
+    }
+  );
+
+  // Successfully fiscalized receipts for the Receipts admin screen.
+  // FISCAL_SUCCESS is the only eventType with a real, complete receipt
+  // (FISCAL_STARTED/FISCAL_FAILED/FISCAL_UNKNOWN don't carry a finished
+  // fiscalSign/fiscalQr). Same cursor pagination scheme as /pos-shifts,
+  // ordered by createdAtMs DESC.
+  fastify.get(
+    '/pos-receipts',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const query = listReceiptsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({ success: false, error: query.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const receipts = await prisma.fiscalEvent.findMany({
+        where: {
+          tenantId,
+          storeId: store.id,
+          eventType: 'FISCAL_SUCCESS',
+          ...(query.data.deviceId ? { deviceId: query.data.deviceId } : {}),
+          ...(query.data.shiftNumber !== undefined ? { shiftNumber: query.data.shiftNumber } : {}),
+        },
+        select: {
+          id: true,
+          localReceiptId: true,
+          receiptNumber: true,
+          receiptType: true,
+          totalAmount: true,
+          currency: true,
+          payments: true,
+          items: true,
+          fiscalStatus: true,
+          fiscalQr: true,
+          fiscalSign: true,
+          createdAtMs: true,
+          shiftNumber: true,
+          deviceId: true,
+          device: { select: { name: true } },
+        },
+        orderBy: { createdAtMs: 'desc' },
+        take: query.data.limit,
+        ...(query.data.cursor ? { cursor: { id: query.data.cursor }, skip: 1 } : {}),
+      });
+
+      const nextCursor = receipts.length === query.data.limit ? receipts[receipts.length - 1]!.id : null;
+
+      return reply.status(200).send({ success: true, data: { items: receipts, nextCursor } });
     }
   );
 
