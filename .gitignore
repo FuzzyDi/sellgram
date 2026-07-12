@@ -7,3 +7,5 @@ coverage/
 .DS_Store
 deploy/production/.monitor/
 deploy/production/.env.prod
+packages/prisma/import-*.ts
+packages/prisma/update-*.ts
