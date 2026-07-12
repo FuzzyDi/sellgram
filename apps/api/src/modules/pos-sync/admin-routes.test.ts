@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
-    shiftEvent: { findMany: vi.fn() },
+    shiftEvent: { findMany: vi.fn(), count: vi.fn() },
     fiscalEvent: { findMany: vi.fn() },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
@@ -536,6 +536,87 @@ describe('pos-sync.admin-routes', () => {
       mocks.prisma.store.findFirst.mockResolvedValue(null);
       const app = await buildApp();
       const response = await app.inject({ method: 'GET', url: '/pos-receipts?storeId=store-foreign' });
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.fiscalEvent.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  describe('GET /pos-analytics', () => {
+    it('aggregates shifts, receipts, byDay, byPayment and topProducts', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.shiftEvent.count.mockResolvedValue(3);
+      mocks.prisma.shiftEvent.findMany.mockResolvedValue([
+        { openedAtMs: new Date('2026-07-01T08:00:00Z'), closedAtMs: new Date('2026-07-01T16:00:00Z') },
+        { openedAtMs: new Date('2026-07-01T08:00:00Z'), closedAtMs: new Date('2026-07-01T12:00:00Z') },
+      ]);
+      mocks.prisma.fiscalEvent.findMany.mockResolvedValue([
+        {
+          receiptType: 'SALE', totalAmount: 10000, createdAtMs: new Date('2026-07-01T10:00:00Z'),
+          payments: [{ type: 'CASH', sum: 10000 }],
+          items: [{ name: 'Coffee', qty: 2, sum: 10000 }],
+        },
+        {
+          receiptType: 'REFUND', totalAmount: 5000, createdAtMs: new Date('2026-07-01T11:00:00Z'),
+          payments: [{ method: 'CARD', amount: 5000 }],
+          items: [{ title: 'Coffee', quantity: 1, total: 5000 }],
+        },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-analytics?storeId=store-1&period=today' });
+
+      expect(response.statusCode).toBe(200);
+      const { data } = response.json();
+      expect(data.shifts).toEqual({ total: 3, completed: 2, avgDuration: 360 });
+      expect(data.receipts).toEqual({ total: 2, sales: 1, refunds: 1, totalAmount: 15000, avgAmount: 7500 });
+      expect(data.byPayment).toEqual(
+        expect.arrayContaining([
+          { method: 'CASH', amount: 10000, count: 1 },
+          { method: 'CARD', amount: 5000, count: 1 },
+        ])
+      );
+      expect(data.topProducts).toEqual([{ name: 'Coffee', qty: 3, amount: 15000 }]);
+      expect(Array.isArray(data.byDay)).toBe(true);
+      expect(data.byDay.length).toBeGreaterThan(0);
+      await app.close();
+    });
+
+    it('returns 400 for an invalid period', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-analytics?storeId=store-1&period=decade' });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('returns 400 for period=custom without from/to', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-analytics?storeId=store-1&period=custom' });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('accepts period=custom with a from/to range', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.shiftEvent.count.mockResolvedValue(0);
+      mocks.prisma.shiftEvent.findMany.mockResolvedValue([]);
+      mocks.prisma.fiscalEvent.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/pos-analytics?storeId=store-1&period=custom&from=2026-06-01&to=2026-06-30',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.receipts.total).toBe(0);
+      await app.close();
+    });
+
+    it('returns 404 for a store belonging to another tenant', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-analytics?storeId=store-foreign' });
       expect(response.statusCode).toBe(404);
       expect(mocks.prisma.fiscalEvent.findMany).not.toHaveBeenCalled();
       await app.close();
