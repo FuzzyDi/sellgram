@@ -490,10 +490,8 @@ plan to revisit it once real usage data exists.
    does **not** touch `CounterpartyLedger`/`Counterparty.currentDebt` (a
    completely separate system) — the actual debt is unaffected — but it
    leaves `Order.paymentStatus` showing "paid" for an order that is
-   actually still owed. Deferred as a follow-up, not blocking §13 step 5:
-   needs its own fix (e.g. a salesChannel check in the webhook route, or a
-   different `paymentMethod` value that the webhook route doesn't attempt
-   to match at all).
+   actually still owed. **Fixed in PR #56: MANUAL_TRANSFER webhook now
+   requires webhookSecret, returns 401 if absent.**
 
 ## 13. Recommended implementation order for next session
 
