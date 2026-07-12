@@ -83,6 +83,49 @@ const listReceiptsQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
 });
 
+const posAnalyticsQuerySchema = z
+  .object({
+    storeId: z.string().min(1),
+    period: z.enum(['today', 'week', 'month', 'custom']).default('today'),
+    from: z.string().min(1).optional(),
+    to: z.string().min(1).optional(),
+  })
+  .refine((v) => v.period !== 'custom' || (v.from && v.to), {
+    message: 'from and to are required when period=custom',
+  });
+
+// today/week/month are rolling windows ending "now", not calendar-aligned
+// (matches modules/analytics/routes.ts's own "last N days" convention,
+// which this endpoint otherwise mirrors) — custom uses the caller's own
+// from/to, with `to` pushed to end-of-day so a date-only string like
+// "2026-07-01" is treated as inclusive of that whole day.
+function resolvePeriodRange(period: string, from?: string, to?: string): { start: Date; end: Date } {
+  const now = new Date();
+  if (period === 'custom') {
+    const start = new Date(from!);
+    const end = new Date(to!);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new Error('INVALID_DATE_RANGE');
+    }
+    end.setUTCHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  const days = period === 'week' ? 7 : period === 'month' ? 30 : 1;
+  const start = new Date(now.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+  start.setUTCHours(0, 0, 0, 0);
+  return { start, end: now };
+}
+
+// items/payments are stored as unconstrained Json (z.record(z.unknown())
+// on the wire, docs/POS_SYNC_API.md — see fiscalEventSchema in
+// pos-sync/routes.ts) — no fixed field names guaranteed, so aggregation
+// below picks the most plausible key aliases a till might send. Same
+// reasoning/alias list as PosReceipts.tsx's client-side `pick()` helper.
+function pickField(obj: any, keys: string[]): any {
+  for (const k of keys) if (obj?.[k] !== undefined && obj[k] !== null) return obj[k];
+  return undefined;
+}
+
 const posOperatorRoleSchema = z.enum(['CASHIER', 'SENIOR_CASHIER', 'ADMIN']);
 
 const listOperatorsQuerySchema = z.object({
@@ -483,6 +526,120 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const nextCursor = receipts.length === query.data.limit ? receipts[receipts.length - 1]!.id : null;
 
       return reply.status(200).send({ success: true, data: { items: receipts, nextCursor } });
+    }
+  );
+
+  // Aggregate analytics for the Analytics admin screen — shifts + receipts
+  // summary, revenue-by-day series, payment-method breakdown, top products.
+  // All aggregation happens in JS rather than SQL: items/payments are
+  // unconstrained Json (see pickField's comment above), so there's no
+  // column to GROUP BY at the database level.
+  fastify.get(
+    '/pos-analytics',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const query = posAnalyticsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({ success: false, error: query.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      let range: { start: Date; end: Date };
+      try {
+        range = resolvePeriodRange(query.data.period, query.data.from, query.data.to);
+      } catch {
+        return reply.status(400).send({ success: false, error: 'Invalid from/to date' });
+      }
+
+      const [openedCount, closedShifts, receipts] = await Promise.all([
+        prisma.shiftEvent.count({
+          where: { tenantId, storeId: store.id, eventType: 'SHIFT_OPENED', openedAtMs: { gte: range.start, lte: range.end } },
+        }),
+        prisma.shiftEvent.findMany({
+          where: { tenantId, storeId: store.id, eventType: 'SHIFT_CLOSED', closedAtMs: { gte: range.start, lte: range.end } },
+          select: { openedAtMs: true, closedAtMs: true },
+        }),
+        prisma.fiscalEvent.findMany({
+          where: { tenantId, storeId: store.id, eventType: 'FISCAL_SUCCESS', createdAtMs: { gte: range.start, lte: range.end } },
+          select: { receiptType: true, totalAmount: true, payments: true, items: true, createdAtMs: true },
+        }),
+      ]);
+
+      const durationsMinutes = closedShifts
+        .filter((s) => s.openedAtMs && s.closedAtMs)
+        .map((s) => (s.closedAtMs!.getTime() - s.openedAtMs!.getTime()) / 60000);
+      const avgDuration = durationsMinutes.length
+        ? Math.round(durationsMinutes.reduce((a, b) => a + b, 0) / durationsMinutes.length)
+        : 0;
+
+      const sales = receipts.filter((r) => r.receiptType === 'SALE').length;
+      const refunds = receipts.filter((r) => r.receiptType === 'REFUND').length;
+      const totalAmount = receipts.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
+      const avgAmount = receipts.length ? Math.round(totalAmount / receipts.length) : 0;
+
+      // Zero-fill every day in the range so the chart has a continuous
+      // x-axis, same convention as modules/analytics/routes.ts's
+      // fetchRevenueSeries.
+      const byDateMap: Record<string, { amount: number; count: number }> = {};
+      for (const r of receipts) {
+        const date = r.createdAtMs.toISOString().slice(0, 10);
+        if (!byDateMap[date]) byDateMap[date] = { amount: 0, count: 0 };
+        byDateMap[date].amount += r.totalAmount || 0;
+        byDateMap[date].count += 1;
+      }
+      const byDay: { date: string; amount: number; count: number }[] = [];
+      const totalDays = Math.max(1, Math.round((range.end.getTime() - range.start.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+      const startDay = new Date(range.start);
+      startDay.setUTCHours(0, 0, 0, 0);
+      for (let i = 0; i < totalDays; i++) {
+        const d = new Date(startDay.getTime() + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        byDay.push({ date: d, ...(byDateMap[d] || { amount: 0, count: 0 }) });
+      }
+
+      const byPaymentMap: Record<string, { amount: number; count: number }> = {};
+      for (const r of receipts) {
+        const payments = Array.isArray(r.payments) ? r.payments : [];
+        for (const p of payments as any[]) {
+          const method = String(pickField(p, ['type', 'method', 'paymentType']) ?? 'UNKNOWN');
+          const amount = Number(pickField(p, ['sum', 'amount', 'total']) ?? 0);
+          if (!byPaymentMap[method]) byPaymentMap[method] = { amount: 0, count: 0 };
+          byPaymentMap[method].amount += amount;
+          byPaymentMap[method].count += 1;
+        }
+      }
+      const byPayment = Object.entries(byPaymentMap)
+        .map(([method, v]) => ({ method, ...v }))
+        .sort((a, b) => b.amount - a.amount);
+
+      const topProductsMap: Record<string, { name: string; qty: number; amount: number }> = {};
+      for (const r of receipts) {
+        const items = Array.isArray(r.items) ? r.items : [];
+        for (const item of items as any[]) {
+          const name = String(pickField(item, ['name', 'title', 'productName']) ?? 'Unknown');
+          const qty = Number(pickField(item, ['qty', 'quantity']) ?? 0);
+          const amount = Number(pickField(item, ['sum', 'total', 'amount']) ?? 0);
+          if (!topProductsMap[name]) topProductsMap[name] = { name, qty: 0, amount: 0 };
+          topProductsMap[name].qty += qty;
+          topProductsMap[name].amount += amount;
+        }
+      }
+      const topProducts = Object.values(topProductsMap)
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 10);
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          shifts: { total: openedCount, completed: closedShifts.length, avgDuration },
+          receipts: { total: receipts.length, sales, refunds, totalAmount, avgAmount },
+          byDay,
+          byPayment,
+          topProducts,
+        },
+      });
     }
   );
 

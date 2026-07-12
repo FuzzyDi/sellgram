@@ -75,6 +75,7 @@ export function PosPlanBlocked() {
 }
 
 const POS_TABS: { to: string; ru: string; uz: string }[] = [
+  { to: '/pos/analytics', ru: 'Аналитика', uz: 'Analitika' },
   { to: '/pos/devices', ru: 'Устройства', uz: 'Qurilmalar' },
   { to: '/pos/operators', ru: 'Кассиры', uz: 'Kassirlar' },
   { to: '/pos/shifts', ru: 'Смены', uz: 'Smenalar' },

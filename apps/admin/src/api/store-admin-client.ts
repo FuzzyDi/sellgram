@@ -421,6 +421,12 @@ export const adminApi = {
     if (params.cursor) qs.set('cursor', params.cursor);
     return request<any>(`/pos-receipts?${qs.toString()}`);
   },
+  getPosAnalytics: (params: { storeId: string; period: 'today' | 'week' | 'month' | 'custom'; from?: string; to?: string }) => {
+    const qs = new URLSearchParams({ storeId: params.storeId, period: params.period });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return request<any>(`/pos-analytics?${qs.toString()}`);
+  },
 
   updateB2bSettings: (enabled: boolean) =>
     request<any>('/b2b-settings', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
