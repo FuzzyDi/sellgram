@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    shiftEvent: { findMany: vi.fn() },
+    fiscalEvent: { findMany: vi.fn() },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
@@ -405,6 +407,138 @@ describe('pos-sync.admin-routes', () => {
         expect(mocks.prisma.posSettings.upsert).not.toHaveBeenCalled();
         await app.close();
       });
+    });
+  });
+
+  describe('GET /pos-shifts', () => {
+    it('lists closed shifts ordered by closedAtMs desc', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.shiftEvent.findMany.mockResolvedValue([
+        { id: 'sh-2', shiftNumber: 2, openedAtMs: new Date(), closedAtMs: new Date(), zReportStatus: 'OK', deviceId: 'dev-1', device: { name: 'Front till' } },
+        { id: 'sh-1', shiftNumber: 1, openedAtMs: new Date(), closedAtMs: new Date(), zReportStatus: 'FAILED', deviceId: 'dev-1', device: { name: 'Front till' } },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-1' });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.items).toHaveLength(2);
+      expect(body.data.nextCursor).toBeNull();
+      expect(mocks.prisma.shiftEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-1', storeId: 'store-1', eventType: 'SHIFT_CLOSED' }),
+          orderBy: { closedAtMs: 'desc' },
+          take: 25,
+        })
+      );
+      await app.close();
+    });
+
+    it('filters by deviceId when provided', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.shiftEvent.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-1&deviceId=dev-1' });
+
+      expect(mocks.prisma.shiftEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ deviceId: 'dev-1' }) })
+      );
+      await app.close();
+    });
+
+    it('paginates via cursor and returns nextCursor when a full page comes back', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.shiftEvent.findMany.mockResolvedValue(
+        Array.from({ length: 2 }, (_, i) => ({
+          id: `sh-${i}`, shiftNumber: i, openedAtMs: new Date(), closedAtMs: new Date(), zReportStatus: 'OK', deviceId: 'dev-1', device: { name: 'Till' },
+        }))
+      );
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-1&limit=2&cursor=sh-prev' });
+
+      expect(response.json().data.nextCursor).toBe('sh-1');
+      expect(mocks.prisma.shiftEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ cursor: { id: 'sh-prev' }, skip: 1, take: 2 })
+      );
+      await app.close();
+    });
+
+    it('returns 404 for a store belonging to another tenant', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-foreign' });
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.shiftEvent.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 when storeId is missing', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-shifts' });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+  });
+
+  describe('GET /pos-receipts', () => {
+    it('lists fiscalized receipts ordered by createdAtMs desc', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.fiscalEvent.findMany.mockResolvedValue([
+        { id: 'r-1', localReceiptId: 'l-1', receiptNumber: '1', receiptType: 'SALE', totalAmount: 15000, currency: 'UZS', payments: [], items: [], fiscalStatus: 'SUCCESS', fiscalQr: 'qr', fiscalSign: 'sign', createdAtMs: new Date(), shiftNumber: 1, deviceId: 'dev-1', device: { name: 'Front till' } },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-receipts?storeId=store-1' });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.items).toHaveLength(1);
+      expect(mocks.prisma.fiscalEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-1', storeId: 'store-1', eventType: 'FISCAL_SUCCESS' }),
+          orderBy: { createdAtMs: 'desc' },
+          take: 25,
+        })
+      );
+      await app.close();
+    });
+
+    it('filters by shiftNumber when provided', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.fiscalEvent.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/pos-receipts?storeId=store-1&shiftNumber=3' });
+
+      expect(mocks.prisma.fiscalEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ shiftNumber: 3 }) })
+      );
+      await app.close();
+    });
+
+    it('filters by deviceId when provided', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.fiscalEvent.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/pos-receipts?storeId=store-1&deviceId=dev-2' });
+
+      expect(mocks.prisma.fiscalEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ deviceId: 'dev-2' }) })
+      );
+      await app.close();
+    });
+
+    it('returns 404 for a store belonging to another tenant', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-receipts?storeId=store-foreign' });
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.fiscalEvent.findMany).not.toHaveBeenCalled();
+      await app.close();
     });
   });
 });
