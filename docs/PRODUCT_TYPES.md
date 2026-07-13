@@ -190,73 +190,79 @@ about whether it should be a stronger invariant: §10.
 
 ## 4. Rules schema
 
-`ProductType.rules` is a `Json` object, not a fixed set of columns.
-Documented shape (all keys optional; a key absent has the same meaning
-as its documented default, mirroring `PlatformPolicy.match`'s "loose bag"
-convention):
+**Revised after review with the Android team — this replaces the
+previous flat-object shape entirely, not an extension of it.**
+`ProductType.rules` is a `Json` **array** of explicit rule objects, not
+a bag of named booleans. A type can carry any number of independent
+rules; an absent `ruleId` simply means that restriction doesn't apply
+(the old schema's all-permissive defaults are now just "no rule entry
+for that concern," e.g. `STANDARD`'s `rules: []` — §7):
 
 ```json
-{
-  "ageConfirmation": false,
-  "minAge": 18,
-  "discountAllowed": true,
-  "returnAllowed": true,
-  "requireMarkCode": false,
-  "cashAllowed": true,
-  "timeLimited": false,
-  "timeFrom": "09:00",
-  "timeTo": "23:00",
-  "requireManagerApproval": false,
-  "customFlags": {}
-}
+[
+  {
+    "ruleId": "AGE_CONFIRMATION",
+    "severity": "BLOCK",
+    "channels": ["POS", "TELEGRAM"],
+    "params": { "minAge": 18 }
+  },
+  {
+    "ruleId": "TIME_RESTRICTION",
+    "severity": "BLOCK",
+    "channels": ["POS"],
+    "params": { "timeFrom": "09:00", "timeTo": "23:00", "timezone": "Asia/Tashkent" }
+  }
+]
 ```
 
-- `ageConfirmation` — the till must prompt the cashier to confirm the
-  buyer's age before completing the sale.
-- `minAge` — the age threshold to confirm against; only meaningful when
-  `ageConfirmation` is `true`.
-- `discountAllowed` — whether a discount can be applied to a line item
-  of this type at all (e.g. `WEIGHT`'s seed default is `false` — §7).
-- `returnAllowed` — whether a refund/return is permitted for this type.
-- `requireMarkCode` — the till must scan a marking code (КМ) before the
-  sale completes, independent of `Product.isMarked`/`markType` — a type
-  can require the scan as a *sale-time* rule even for goods whose
-  marking status is otherwise informational only.
-- `cashAllowed` — whether cash is an acceptable payment method for this
-  type. This is a per-type, till-enforced default; it does **not**
-  replace `PlatformPolicy`'s `PAYMENT`-scope, platform-wide cash bans
-  (§2) — a tenant could in principle set `cashAllowed: true` on their
-  own custom type while a `PlatformPolicy` row still blocks cash for the
-  matching category/type, since `PlatformPolicy` always wins (a tenant
-  can only tighten, never loosen, a platform rule —
-  `docs/POS_POLICY_ENGINE.md` §7).
-- `timeLimited` / `timeFrom` / `timeTo` — restrict the hours during
-  which this type can be sold at all (e.g. `ALCOHOL`'s seed default,
-  §7). `timeFrom`/`timeTo` are only meaningful when `timeLimited` is
-  `true`. See §10 for the open question on server time vs. device time.
-- `requireManagerApproval` — the sale needs a manager's confirmation
-  before completing, independent of any specific `PlatformPolicy`
-  `REQUIRE_MANAGER` severity rule (`docs/POS_POLICY_ENGINE.md` §3.1) —
-  a type-level default rather than a matched platform rule.
-- `customFlags` — an open bag for tenant- or future-specific flags that
-  don't yet warrant a named key, same purpose as `PosSettings.payload
-  .featureFlags` (`docs/POS_SYNC_API.md` §10).
+- `ruleId` — unique **within one type's `rules[]`**, not globally.
+  Fixed vocabulary agreed so far: `AGE_CONFIRMATION`,
+  `TIME_RESTRICTION`, `CASH_FORBIDDEN`, `DISCOUNT_FORBIDDEN`,
+  `RETURN_FORBIDDEN`, `MARK_CODE_REQUIRED` — a string, not an enum, same
+  "grows without a migration" reasoning as `ProductType.code` itself
+  (§3).
+- `severity` — `BLOCK` (the till must not let the sale proceed while
+  this rule is unresolved) or `WARN` (shown to the cashier, sale can
+  still proceed). Deliberately only two values, narrower than
+  `PlatformPolicy`'s five-value `PolicySeverity`
+  (`docs/POS_POLICY_ENGINE.md` §3.1) — a `ProductType` rule is a fixed
+  per-type default, not a matched platform policy with its own
+  escalation ladder.
+- `channels` — which sales channel(s) this rule applies to, e.g.
+  `["POS"]` for `TIME_RESTRICTION` (a Telegram order has no till clock
+  to enforce against) vs. `["POS", "TELEGRAM"]` for `AGE_CONFIRMATION`
+  (both channels need an age gate — this is what closes §10's former
+  open question on channel scope). Valid values today: `POS`,
+  `TELEGRAM`, matching `schema.prisma`'s `SalesChannel` enum values in
+  use for retail sale (`SalesChannel` also has `B2B`, not listed as a
+  rule channel yet — a B2B order is placed by a tenant-admin operator,
+  not a walk-in buyer, and none of the six `ruleId`s above have an
+  obvious B2B analog; left for a future revision if one comes up).
+- `params` — free-form, per-`ruleId` object:
+  - `AGE_CONFIRMATION`: `{ minAge: number }`.
+  - `TIME_RESTRICTION`: `{ timeFrom: "HH:mm", timeTo: "HH:mm", timezone: string }`
+    — `timezone` is an IANA name (`"Asia/Tashkent"`); §6 adds
+    `storeTimezone` as the store-level fallback a rule can omit this
+    and still resolve against.
+  - `CASH_FORBIDDEN`, `DISCOUNT_FORBIDDEN`, `RETURN_FORBIDDEN`,
+    `MARK_CODE_REQUIRED`: `{}` — the `ruleId` alone is the whole rule.
 
-**Inheritance.** A type with a `parentTypeId` does not repeat its
-parent's rules — the till (or, server-side, the catalog snapshot
-builder, §6) computes the **merged** rule object: parent's `rules` as
-the base, overlaid with the child's own `rules` keys (a key present on
-the child always wins; a key the child omits falls through to the
-parent's value; a key present on neither falls through to the
-documented default above). `BEER` (parent `ALCOHOL`, §7) inherits
-`ageConfirmation`/`minAge`/`timeLimited`/`timeFrom`/`timeTo` from
-`ALCOHOL` without repeating them, and can still override any one of
-those keys, or add its own, without touching `ALCOHOL`'s row. Only one
-level of inheritance is described here (child overlays parent); nothing
-in the data model caps `parentTypeId` chains to one level, but multi-
-level merge order (grandparent → parent → child) is left to the
-implementation session (§11) to confirm against a real multi-level type
-before committing to a precise merge algorithm.
+**Inheritance.** A child type (`parentTypeId` set) inherits its
+parent's `rules[]` **in full** — it may *add* a rule whose `ruleId` the
+parent doesn't have, and it may *tighten* a `ruleId` it shares with the
+parent, but it can never remove or silently drop a parent rule. Same
+"a tenant can only tighten, never loosen, a platform rule" invariant
+already enforced structurally for `PlatformPolicy`
+(`docs/POS_POLICY_ENGINE.md` §7), applied one level down: **when parent
+and child both define the same `ruleId` at different severities, the
+merged result uses `BLOCK`** — whichever of the two specified it,
+`BLOCK` always wins over `WARN` for that `ruleId`. `BEER` (parent
+`ALCOHOL`, §7) inherits `ALCOHOL`'s `AGE_CONFIRMATION` and
+`TIME_RESTRICTION` entries unchanged and may append its own additional
+`ruleId`s without touching `ALCOHOL`'s row. As before, only one level
+of inheritance is worked through here by example; a multi-level
+`parentTypeId` chain's exact merge order is still left to the
+implementation session (§11) to confirm.
 
 ## 5. Barcode prefix matching
 
@@ -291,6 +297,31 @@ for it either. There is nothing currently working to migrate away from;
 documented at §10 (which was never implemented) rather than replacing a
 live mechanism. §9 below reflects this.
 
+### 5.1 Rule evaluation order at the till
+
+Agreed with the Android team as the fixed order a till checks things in
+once a product (and therefore its resolved type, if any) is known —
+each stage can fail before the next is ever reached:
+
+1. **Baseline till validation** — shift is open, the product is active,
+   weight/marking-code capture happens where the resolved type requires
+   it. Nothing `ProductType`-specific; this is the till's existing
+   pre-sale validation, unchanged by this document.
+2. **`productTypeRules`** — the merged, type-derived rule array (§4)
+   evaluated as local, product-scoped restrictions.
+3. **`PlatformPolicy`/`policies.rules`** — the centralized,
+   platform-wide restrictions (`docs/POS_POLICY_ENGINE.md` §3.1),
+   evaluated after type rules, not instead of them — a product can be
+   blocked by either layer independently, and a platform rule always
+   wins if it's stricter (§2/§4).
+4. **Payment-sensitive checks repeat at the payment step** — a rule
+   whose outcome depends on the tender chosen (`CASH_FORBIDDEN`, or a
+   `PlatformPolicy` `PAYMENT`-scope rule) is evaluated again once the
+   cashier selects a payment method, not only once at step 2/3 — a sale
+   that started as "card, allowed" and pivots to cash mid-transaction
+   must not slip through on a check that only ran before the tender was
+   chosen.
+
 ## 6. `CatalogSnapshot` integration
 
 Each entry in the snapshot's `products[]` array (`docs/POS_SYNC_API.md`
@@ -303,7 +334,10 @@ selects `vatRate`/`vatExempt`/`markType`/`isMarked`/`mxikCode`/
 ```json
 {
   "productTypeCode": "ALCOHOL",
-  "productTypeRules": { "ageConfirmation": true, "minAge": 18, "timeLimited": true, "timeFrom": "09:00", "timeTo": "23:00" },
+  "productTypeRules": [
+    { "ruleId": "AGE_CONFIRMATION", "severity": "BLOCK", "channels": ["POS", "TELEGRAM"], "params": { "minAge": 18 } },
+    { "ruleId": "TIME_RESTRICTION", "severity": "BLOCK", "channels": ["POS"], "params": { "timeFrom": "09:00", "timeTo": "23:00", "timezone": "Asia/Tashkent" } }
+  ],
   "weightMode": "PIECE",
   "barcodePrefixes": []
 }
@@ -312,9 +346,10 @@ selects `vatRate`/`vatExempt`/`markType`/`isMarked`/`mxikCode`/
 - `productTypeCode` — `null` when the product has no `productTypeId`.
   Same "absent means unconfigured" convention as every other optional
   field in this snapshot.
-- `productTypeRules` — the **merged** rule object (§4), computed once at
+- `productTypeRules` — the **merged rule array** (§4 — array, not
+  object, as of the Android-team revision), computed once at
   snapshot-build time so the till never has to walk `parentTypeId`
-  itself. `{}` when `productTypeCode` is `null`.
+  itself. `[]` when `productTypeCode` is `null`.
 - `weightMode` — sourced from `ProductType.weightMode` when a type is
   assigned; a product with no type falls back to deriving it from the
   existing `Product.isByWeight`/`isWeightedPiece` pair (`PIECE_WEIGHT`
@@ -330,6 +365,42 @@ selects `vatRate`/`vatExempt`/`markType`/`isMarked`/`mxikCode`/
   per-product duplication, is left open for §11 step 4 to settle against
   real snapshot-size constraints).
 
+**`storeTimezone`.** `TIME_RESTRICTION`'s `params.timezone` (§4) is
+per-rule, but a store needs a default independent of any one rule —
+resolved with the Android team as an additive field on
+`GET /pos/v1/settings`'s response (`docs/POS_SYNC_API.md` §10), at the
+top level of the `settings` object (a sibling of `taxProfile`/
+`paymentMethods`/etc., not nested inside any one rule):
+`"storeTimezone": "Asia/Tashkent"`. A rule's own `params.timezone`
+overrides `storeTimezone` when present; `storeTimezone` is what a rule
+that omits `timezone` (or any till-side check with no specific rule
+context, e.g. §5.1 step 1's baseline validation) falls back to. This is
+a change to the `POS_SYNC_API.md` §10 contract tracked here because it
+is motivated entirely by `TIME_RESTRICTION` — implementing it is listed
+under §11.
+
+### 6.1 Triggered rule id namespace
+
+`triggeredRuleIds` (`SaleEvent`/`FiscalEvent`'s additive
+policy-engine fields — `docs/POS_POLICY_ENGINE.md` §8) records which
+rule(s) fired for a given sale/fiscal event. With two independent rule
+sources now feeding it — a type's own `rules[]` (§4) and
+`PlatformPolicy` (`docs/POS_POLICY_ENGINE.md` §3.1) — a bare `ruleId`
+or `PlatformPolicy.id` is no longer enough for Cloud-side audit to tell
+which system a triggered id came from. Agreed namespace, a colon-
+prefixed source tag on every entry:
+
+- `productType:AGE_CONFIRMATION` — a rule from a product's resolved
+  `ProductType.rules[]` (the `ruleId` value itself, §4).
+- `policy:NO_CASH_FOR_TOBACCO_ALCOHOL` — a rule from `PlatformPolicy`
+  (an application-level code for the policy, not literally
+  `PlatformPolicy.id`, which is an opaque cuid unsuitable for a
+  human-readable audit trail).
+
+This is purely an event-logging convention — it does not change how
+either rule source is evaluated or merged (§4, §5.1), only how Cloud
+labels the outcome once a sale/fiscal event reports it.
+
 ## 7. Predefined system types (seed)
 
 Seven `isSystem: true` rows, seeded the same way
@@ -339,15 +410,24 @@ here, `(scope, severity)` there), safe to run repeatedly, not a Prisma
 `upsert` since `code`'s `@unique` didn't exist until this migration
 lands:
 
-| `code` | `parentTypeId` | `weightMode` | `barcodePrefixes` | `markType` | notable `rules` |
+| `code` | `parentTypeId` | `weightMode` | `barcodePrefixes` | `markType` | notable `rules[]` entries |
 |---|---|---|---|---|---|
-| `STANDARD` | — | `PIECE` | `[]` | — | all defaults (§4) — the type an unassigned/ordinary product effectively behaves as |
-| `ALCOHOL` | — | `PIECE` | `[]` | `ALCOHOL` | `ageConfirmation: true, minAge: 18, timeLimited: true, timeFrom: "09:00", timeTo: "23:00"` |
-| `TOBACCO` | — | `PIECE` | `[]` | `TOBACCO` | `ageConfirmation: true, minAge: 18` |
-| `BEER` | `ALCOHOL` | `PIECE` | `[]` | `BEER` | none of its own — inherits age/time from `ALCOHOL` (§4) |
-| `WEIGHT` | — | `WEIGHT` | `["22"]` | — | `discountAllowed: false` |
-| `PIECE_WEIGHT` | — | `PIECE_WEIGHT` | `["23"]` | — | all defaults |
-| `DRUGS` | — | `PIECE` | `[]` | `DRUGS` | `requireMarkCode: true` |
+| `STANDARD` | — | `PIECE` | `[]` | — | `[]` — the type an unassigned/ordinary product effectively behaves as |
+| `ALCOHOL` | — | `PIECE` | `[]` | `ALCOHOL` | `AGE_CONFIRMATION` (BLOCK, POS+TELEGRAM, minAge 18); `TIME_RESTRICTION` (BLOCK, POS, 09:00–23:00 Asia/Tashkent) |
+| `TOBACCO` | — | `PIECE` | `[]` | `TOBACCO` | `AGE_CONFIRMATION` (BLOCK, POS+TELEGRAM, minAge 18) |
+| `BEER` | `ALCOHOL` | `PIECE` | `[]` | `BEER` | none of its own — inherits `AGE_CONFIRMATION` + `TIME_RESTRICTION` from `ALCOHOL` (§4) |
+| `WEIGHT` | — | `WEIGHT` | `["22"]` | — | `DISCOUNT_FORBIDDEN` (BLOCK, POS+TELEGRAM) |
+| `PIECE_WEIGHT` | — | `PIECE_WEIGHT` | `["23"]` | — | `[]` |
+| `DRUGS` | — | `PIECE` | `[]` | `DRUGS` | `MARK_CODE_REQUIRED` (BLOCK, POS) |
+
+Severities and channels above follow directly from the old flat
+schema's intent for each type (a hard `true`/`false` becomes `BLOCK`;
+`TIME_RESTRICTION`'s channel scope is the Android-team-agreed example
+from §4) — only `ALCOHOL`'s exact rule shape was explicitly worked
+through with the Android team; `WEIGHT`/`DRUGS`/`TOBACCO`'s channel
+assignments are this document's own reasonable carry-over, not
+separately confirmed, and worth a second look in the implementation
+session (§11).
 
 `STANDARD` is listed explicitly (not left implicit as "no type
 assigned") so a tenant can deliberately assign it — distinguishing "this
@@ -403,23 +483,22 @@ question ("should every product eventually have a type") is settled.
 
 ## 10. Open questions
 
-1. **Age confirmation on Sellgram, or POS only?** `ageConfirmation`
-   (§4) is framed as a till-side prompt throughout this document. Does
-   an `ALCOHOL`/`TOBACCO` product sold through the Sellgram
-   Telegram/miniapp channel need the same confirmation, and if so, at
-   what point in that channel's checkout flow — a question this
-   document does not resolve, since Sellgram order flow has no
-   equivalent of a cashier prompt today.
-2. **Time-limited sales — server clock or device clock?** `timeFrom`/
-   `timeTo` (§4) assume *a* clock; whether the till evaluates against
-   its own local time (consistent with offline-first operation,
-   `docs/POS_SYNC_API.md` §16, since a device may be offline exactly
-   when a time check matters) or a server-issued time (more resistant
-   to a till's clock being wrong or deliberately altered) is unresolved.
-   Local-device time is the more consistent choice given the existing
-   offline-first posture, but the regulatory stakes of getting an
-   alcohol/tobacco time restriction wrong argue for server time —
-   needs a decision, not just a default, before `timeLimited` ships.
+1. **Age confirmation on Sellgram, or POS only? Resolved.** Rules are
+   now channel-aware via `channels[]` (§4) instead of applying
+   uniformly wherever evaluated — `AGE_CONFIRMATION` explicitly lists
+   `["POS", "TELEGRAM"]` in the worked example (§4, §7), so a product
+   sold through the Sellgram Telegram/miniapp channel gets the same age
+   gate as POS by putting `TELEGRAM` in that rule's `channels[]`,
+   opted into per-rule rather than assumed. Where exactly in Sellgram's
+   checkout flow that confirmation happens is still an implementation
+   detail for §11, not an open design question anymore.
+2. **Time-limited sales — server clock or device clock? Resolved.**
+   Local store time — `TIME_RESTRICTION`'s `params.timezone` (§4), with
+   `storeTimezone` on `GET /pos/v1/settings` (§6) as the store-level
+   default a rule can omit and still resolve against. This keeps the
+   check evaluable while a device is offline (consistent with
+   offline-first operation, `docs/POS_SYNC_API.md` §16) rather than
+   depending on a server round-trip at the moment of sale.
 3. **Are tenant custom types visible in the catalog snapshot the same
    way system types are?** §6 does not distinguish `isSystem` when
    describing `productTypeCode`/`productTypeRules` — presumably a
