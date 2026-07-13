@@ -14,6 +14,7 @@ export interface Product {
   unit?: string | null;
   isByWeight?: boolean;
   isWeightedPiece?: boolean;
+  productTypeId?: string | null;
   pluCode?: string | null;
   pricePerKg?: number | null;
   price: number;
@@ -22,6 +23,16 @@ export interface Product {
   isActive: boolean;
   category?: { id: string; name: string };
   images?: { id: string; url: string }[];
+}
+
+// docs/PRODUCT_TYPES.md §11 — read-only for tenants, loaded from
+// GET /api/store-admin/product-types (enabled types only).
+export interface ProductType {
+  id: string;
+  code: string;
+  name: string;
+  weightMode: 'PIECE' | 'WEIGHT' | 'PIECE_WEIGHT';
+  markType: string | null;
 }
 
 export interface CategoryAttribute {
@@ -89,6 +100,10 @@ export interface FormData {
   pluCode: string;
   categoryId: string;
   isActive: boolean;
+  // '' = unassigned. Selecting a type only hints markType/unit at
+  // selection time (useProductForm.ts's selectProductType) — it never
+  // locks either field against further manual editing.
+  productTypeId: string;
 }
 
 export const emptyForm: FormData = {
@@ -108,4 +123,5 @@ export const emptyForm: FormData = {
   pluCode: '',
   categoryId: '',
   isActive: true,
+  productTypeId: '',
 };

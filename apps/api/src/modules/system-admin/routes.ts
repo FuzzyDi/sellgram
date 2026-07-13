@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { verifySystemToken, type SystemJwtPayload } from '../../lib/system-jwt.js';
 import policyRoutes from './policy-routes.js';
+import productTypeRoutes from './product-type-routes.js';
 import {
   systemAdminActivityQuerySchema,
   systemAdminCreateInvoiceSchema,
@@ -78,6 +79,7 @@ async function authenticateSystem(request: FastifyRequest, reply: FastifyReply) 
 
 export default async function systemAdminRoutes(fastify: FastifyInstance) {
   await fastify.register(policyRoutes);
+  await fastify.register(productTypeRoutes);
 
   fastify.post('/auth/login', {
     config: {

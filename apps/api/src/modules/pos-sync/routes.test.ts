@@ -721,7 +721,7 @@ describe('pos-sync.routes', () => {
       await app.close();
     });
 
-    it('serves empty eight-key defaults, empty printTemplates, and version 1 for all three counters when no PosSettings row exists — but still includes enabled platform rules', async () => {
+    it('serves empty eight-key defaults plus storeTimezone, empty printTemplates, and version 1 for all three counters when no PosSettings row exists — but still includes enabled platform rules', async () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
@@ -752,6 +752,8 @@ describe('pos-sync.routes', () => {
         offlineLimits: {},
         roundingRules: {},
         featureFlags: {},
+        // §6 — hardcoded for UZ; a sibling of the other settings keys.
+        storeTimezone: 'Asia/Tashkent',
       });
       expect(body.data.printTemplates).toEqual({});
       // §6 — "An unconfigured store's policies.rules is never empty in

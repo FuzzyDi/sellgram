@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
-import type { Category, NoticeTone, Product } from './types';
+import type { Category, NoticeTone, Product, ProductType } from './types';
 
 // Product list state: filters, pagination, selection, bulk actions.
 // Independent from the create/edit form's own state (useProductForm).
@@ -9,6 +9,7 @@ export function useProducts(showNotice: (tone: NoticeTone, message: string) => v
   const { tr } = useAdminI18n();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -63,6 +64,19 @@ export function useProducts(showNotice: (tone: NoticeTone, message: string) => v
     void loadCategories();
   }, [loadCategories]);
 
+  const loadProductTypes = useCallback(async () => {
+    try {
+      const data = await adminApi.getProductTypes();
+      setProductTypes(Array.isArray(data) ? data : data.items || []);
+    } catch {
+      setProductTypes([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadProductTypes();
+  }, [loadProductTypes]);
+
   const handleBulkAction = useCallback(
     async (action: 'activate' | 'deactivate') => {
       const ids = Array.from(selected);
@@ -99,9 +113,9 @@ export function useProducts(showNotice: (tone: NoticeTone, message: string) => v
   };
 
   return {
-    products, categories, total, loading, loadError,
+    products, categories, productTypes, total, loading, loadError,
     search, setSearch, selectedCategory, setSelectedCategory, activeFilter, setActiveFilter,
     page, setPage, totalPages, selected, setSelected, bulking,
-    loadProducts, loadCategories, handleBulkAction, toggleSelect, toggleSelectAll,
+    loadProducts, loadCategories, loadProductTypes, handleBulkAction, toggleSelect, toggleSelectAll,
   };
 }

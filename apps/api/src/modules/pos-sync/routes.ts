@@ -715,6 +715,12 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         };
     const printTemplates = stored ? (stored.printTemplates as Record<string, unknown>) : {};
 
+    // §6 — storeTimezone lives at the top level of `settings`, a sibling
+    // of taxProfile/paymentMethods/etc. Hardcoded to Asia/Tashkent for
+    // now (single-country deployment); may become a per-store setting
+    // later without changing this field's position in the contract.
+    (settings as Record<string, unknown>).storeTimezone = 'Asia/Tashkent';
+
     // §7 — the wire Rule shape flattens `extra` onto the rule object
     // itself rather than nesting it; `source` is always server-assigned
     // from the table this row came from (PlatformPolicy has no `source`
