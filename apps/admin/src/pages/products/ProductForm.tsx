@@ -8,7 +8,7 @@ import Input from '../../components/Input';
 import Select from '../../components/Select';
 import ProductVariantsSection from './ProductVariantsSection';
 import BarcodesSection from './BarcodesSection';
-import type { Category, FormData as ProductFormData, NoticeTone } from './types';
+import type { Category, FormData as ProductFormData, NoticeTone, ProductType } from './types';
 import { buildCategoryHierarchy } from '../../lib/category-tree';
 
 // docs/POS_SYNC_API.md §10/§12 — the (vatRate, vatExempt) pair collapses
@@ -42,6 +42,8 @@ interface ProductFormProps {
   error: string;
   saving: boolean;
   categories: Category[];
+  productTypes: ProductType[];
+  onSelectProductType: (typeId: string) => void;
   showCatForm: boolean;
   onToggleCatForm: () => void;
   catName: string;
@@ -60,6 +62,7 @@ interface ProductFormProps {
 
 export default function ProductForm({
   editingId, form, updateForm, error, saving, categories,
+  productTypes, onSelectProductType,
   showCatForm, onToggleCatForm, catName, setCatName, onCreateCategory,
   onSubmit, onClose,
   editImages, uploading, fileInputRef, onUploadImages, onRemoveImage,
@@ -147,6 +150,21 @@ export default function ProductForm({
               <option value="">{tr('— не указано —', '— belgilanmagan —')}</option>
             </Select>
           </div>
+
+          <Select
+            label={tr('Тип товара', 'Mahsulot turi')}
+            value={form.productTypeId}
+            onChange={(e) => onSelectProductType(e.target.value)}
+            helpText={tr(
+              'Подставляет маркировку и ед. измерения — можно изменить вручную',
+              "Markirovka va o'lchov birligini taklif qiladi — qo'lda o'zgartirish mumkin"
+            )}
+          >
+            <option value="">{tr('— не указан —', '— belgilanmagan —')}</option>
+            {productTypes.map((type) => (
+              <option key={type.id} value={type.id}>{type.name}</option>
+            ))}
+          </Select>
 
           {isWeightUnit && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

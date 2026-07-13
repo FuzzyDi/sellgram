@@ -327,6 +327,15 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
             where: { isActive: true },
             select: { id: true, name: true, sku: true, price: true, stockQty: true },
           },
+          // docs/PRODUCT_TYPES.md §6 — productTypeId is the FK read
+          // directly off Product (used to walk the parent chain via
+          // typesById below); the nested productType select covers the
+          // fields read straight from the assigned type without needing
+          // the chain (code/weightMode/barcodePrefixes).
+          productTypeId: true,
+          productType: {
+            select: { code: true, rules: true, weightMode: true, barcodePrefixes: true, parentTypeId: true },
+          },
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -336,6 +345,55 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         select: { id: true, name: true, slug: true, sortOrder: true, parentId: true },
         orderBy: { sortOrder: 'asc' },
       });
+
+      // Bulk-fetched once (global, small — 7 seed rows plus whatever
+      // tenant-custom types exist) so mergeRules can walk a
+      // parentTypeId chain of any depth without a query per product.
+      // ProductType.rules is unconstrained Json (docs/PRODUCT_TYPES.md
+      // §4) — cast through `any` rather than typing every ruleId shape.
+      const allProductTypes = await prisma.productType.findMany({
+        select: { id: true, rules: true, parentTypeId: true },
+      });
+      const typesById = new Map(allProductTypes.map((t) => [t.id, t]));
+
+      // docs/PRODUCT_TYPES.md §4 inheritance: child overlays parent by
+      // ruleId, BLOCK always wins over WARN for a shared ruleId, parent
+      // rules the child doesn't mention pass through unchanged. Walks
+      // root-to-leaf (reversed after collecting leaf-to-root) so a
+      // later, more-specific entry in the chain is what actually
+      // overrides an earlier, less-specific one below.
+      function mergeRules(productTypeId: string | null | undefined): any[] {
+        if (!productTypeId) return [];
+        const chain: any[][] = [];
+        let current = typesById.get(productTypeId);
+        const visited = new Set<string>();
+        while (current) {
+          chain.push(Array.isArray(current.rules) ? (current.rules as any[]) : []);
+          if (!current.parentTypeId || visited.has(current.parentTypeId)) break;
+          visited.add(current.parentTypeId);
+          current = typesById.get(current.parentTypeId);
+        }
+        chain.reverse(); // root first, leaf (the product's own type) last
+
+        const merged = new Map<string, any>();
+        for (const ruleArr of chain) {
+          for (const rule of ruleArr) {
+            const existing = merged.get(rule.ruleId);
+            // A less-specific ancestor already blocking this ruleId
+            // can't be loosened to WARN by a more-specific descendant.
+            merged.set(rule.ruleId, existing?.severity === 'BLOCK' ? { ...rule, severity: 'BLOCK' } : rule);
+          }
+        }
+        return Array.from(merged.values());
+      }
+
+      const productsForSnapshot = products.map(({ productType, ...product }) => ({
+        ...product,
+        productTypeCode: productType?.code ?? null,
+        productTypeRules: mergeRules(product.productTypeId),
+        weightMode: productType?.weightMode ?? (product.isByWeight ? 'WEIGHT' : product.isWeightedPiece ? 'PIECE_WEIGHT' : 'PIECE'),
+        barcodePrefixes: productType?.barcodePrefixes ?? [],
+      }));
 
       const last = await prisma.catalogSnapshot.findFirst({
         where: { tenantId, storeId: store.id },
@@ -352,7 +410,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           // barcodes/uzProfiles have no backing model yet (Barcode/
           // ProductUzProfile, docs/SBGCLOUD_ARCHITECTURE.md §12) — stored
           // empty so the payload shape matches docs/POS_SYNC_API.md §9.
-          payload: { categories, products, barcodes: [], uzProfiles: [] } as any,
+          payload: { categories, products: productsForSnapshot, barcodes: [], uzProfiles: [] } as any,
         },
         select: { id: true, version: true, createdAt: true },
       });

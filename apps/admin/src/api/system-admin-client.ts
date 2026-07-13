@@ -135,4 +135,16 @@ export const systemApi = {
     match: Record<string, unknown>; message: { ru: string; uz: string }; extra?: Record<string, unknown> | null;
   }>) => systemRequest<any>(`/platform-policies/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deletePlatformPolicy: (id: string) => systemRequest<any>(`/platform-policies/${id}`, { method: 'DELETE' }),
+
+  // Product types (docs/PRODUCT_TYPES.md §11)
+  productTypes: () => systemRequest<any[]>('/product-types'),
+  createProductType: (payload: {
+    code: string; name: string; description?: string; parentTypeId?: string | null;
+    weightMode: string; barcodePrefixes: string[]; markType?: string | null;
+    rules: unknown[]; enabled: boolean; sortOrder: number;
+  }) => systemRequest<any>('/product-types', { method: 'POST', body: JSON.stringify(payload) }),
+  updateProductType: (id: string, patch: Partial<{
+    name: string; description: string | null; enabled: boolean; rules: unknown[]; sortOrder: number;
+  }>) => systemRequest<any>(`/product-types/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteProductType: (id: string) => systemRequest<any>(`/product-types/${id}`, { method: 'DELETE' }),
 };

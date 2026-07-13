@@ -365,10 +365,67 @@ model Product {
   markingCodes       ProductMarkingCode[]
   barcodes           ProductBarcode[]
 
+  productTypeId String?
+  productType   ProductType? @relation(fields: [productTypeId], references: [id], onDelete: SetNull)
+
   @@index([tenantId])
   @@index([tenantId, categoryId])
   @@index([tenantId, isActive])
   @@map("products")
+}
+
+// ============================================================
+// PRODUCT TYPES (docs/PRODUCT_TYPES.md)
+// ============================================================
+
+enum WeightMode {
+  PIECE
+  WEIGHT
+  PIECE_WEIGHT
+}
+
+// Global, not tenant-scoped (docs/PRODUCT_TYPES.md §2) — managed via
+// System Admin. A tenant's only write path is assigning an EXISTING
+// type to a Product, or creating its own isSystem=false type as a
+// declared extension of one (§2 exception, not implemented in this
+// pass — see product-type-routes.ts).
+model ProductType {
+  id          String  @id @default(cuid())
+  // "STANDARD"/"ALCOHOL"/"TOBACCO"/etc. — String, not an enum, so a new
+  // type is a row insert through System Admin, not a migration (§3).
+  code        String  @unique
+  name        String
+  description String?
+  // Hierarchy — e.g. BEER inherits ALCOHOL's rules (§4). Same
+  // self-relation shape as Category.parentId/children.
+  parentTypeId String?
+  parentType   ProductType?  @relation("ProductTypeTree", fields: [parentTypeId], references: [id])
+  childTypes   ProductType[] @relation("ProductTypeTree")
+
+  weightMode      WeightMode @default(PIECE)
+  barcodePrefixes String[]   @default([])
+  // TOBACCO/ALCOHOL/BEER/DRUGS/... — correlates with Product.markType;
+  // assigning a ProductType writes this onto Product.markType directly.
+  markType String?
+  // Array of { ruleId, severity, channels, params } — docs/PRODUCT_TYPES.md
+  // §4. Json, not fixed columns, since the ruleId vocabulary is open by
+  // design (§4: "a new rule is a new ruleId value... never a schema
+  // change").
+  rules Json @default("[]")
+  // System types (§7 seed) can be disabled but never deleted — isSystem
+  // is a delete guard checked by the route handler, not a DB constraint.
+  isSystem  Boolean @default(false)
+  enabled   Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+
+  @@index([parentTypeId])
+  @@index([enabled])
+  @@map("product_types")
 }
 
 model ProductImage {

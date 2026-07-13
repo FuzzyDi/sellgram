@@ -145,6 +145,8 @@ export default function Products() {
           error={form.error}
           saving={form.saving}
           categories={list.categories}
+          productTypes={list.productTypes}
+          onSelectProductType={(typeId) => form.selectProductType(list.productTypes, typeId)}
           showCatForm={form.showCatForm}
           onToggleCatForm={() => form.setShowCatForm((prev) => !prev)}
           catName={form.catName}

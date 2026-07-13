@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { adminApi } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
 import { emptyForm } from './types';
-import type { FormData, NoticeTone, Product } from './types';
+import type { FormData, NoticeTone, Product, ProductType } from './types';
 
 // Derives the VAT Select's single value from the two underlying Product
 // columns (docs/POS_SYNC_API.md §10/§12; schema comment on Product).
@@ -91,6 +91,7 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       pluCode: fullProduct.pluCode || '',
       categoryId: fullProduct.category?.id || '',
       isActive: fullProduct.isActive,
+      productTypeId: fullProduct.productTypeId || '',
     });
 
     setEditingId(fullProduct.id);
@@ -168,6 +169,13 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
 
       if (form.categoryId) payload.categoryId = form.categoryId;
 
+      // docs/PRODUCT_TYPES.md §3.1 — the server (not this form) is what
+      // syncs markType/isByWeight/isWeightedPiece from the type when
+      // productTypeId is part of the write. null explicitly unassigns
+      // rather than being omitted, matching the vatOption/markType
+      // "always send a defined Select value" convention above.
+      payload.productTypeId = form.productTypeId || null;
+
       if (editingId) {
         await adminApi.updateProduct(editingId, payload);
       } else {
@@ -237,8 +245,34 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  // docs/PRODUCT_TYPES.md §11 step 7 — selecting a type is a hint, not a
+  // lock: it auto-fills markType and unit/isWeightedPiece once, at
+  // selection time, but the user can freely edit any of those fields
+  // afterward without the type selection reverting them (the server only
+  // re-syncs when productTypeId itself is part of a later save — §3.1).
+  // A separate handler from updateForm because it must set multiple
+  // fields from one Select change.
+  const selectProductType = useCallback((productTypes: ProductType[], typeId: string) => {
+    const type = productTypes.find((t) => t.id === typeId);
+    setForm((prev) => {
+      const next: FormData = { ...prev, productTypeId: typeId };
+      if (!type) return next;
+      next.markType = type.markType || '';
+      if (type.weightMode === 'WEIGHT') {
+        next.unit = 'кг';
+        next.isWeightedPiece = false;
+      } else if (type.weightMode === 'PIECE_WEIGHT') {
+        next.unit = 'кг';
+        next.isWeightedPiece = true;
+      }
+      // PIECE: leave unit/isWeightedPiece as the user already set them.
+      return next;
+    });
+  }, []);
+
   return {
     showForm, setShowForm, showCatForm, setShowCatForm, editingId, form, updateForm,
+    selectProductType,
     catName, setCatName, saving, error, editImages, uploading, fileInputRef,
     openCreate, openEdit, saveProduct, createCategory, uploadImages, removeImage,
   };

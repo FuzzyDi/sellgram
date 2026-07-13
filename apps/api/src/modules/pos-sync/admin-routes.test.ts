@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     deviceActivation: { create: vi.fn() },
     product: { findMany: vi.fn().mockResolvedValue([]) },
     category: { findMany: vi.fn().mockResolvedValue([]) },
+    productType: { findMany: vi.fn().mockResolvedValue([]) },
     catalogSnapshot: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
     posSettings: { upsert: vi.fn() },
     posOperator: {
@@ -46,6 +47,7 @@ describe('pos-sync.admin-routes', () => {
     vi.clearAllMocks();
     mocks.prisma.product.findMany.mockResolvedValue([]);
     mocks.prisma.category.findMany.mockResolvedValue([]);
+    mocks.prisma.productType.findMany.mockResolvedValue([]);
     mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue(null);
   });
 

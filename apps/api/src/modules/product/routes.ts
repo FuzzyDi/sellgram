@@ -31,6 +31,7 @@ const createProductSchema = z.object({
   unit: z.string().optional(),
   isByWeight: z.boolean().optional(),
   isWeightedPiece: z.boolean().optional(),
+  productTypeId: z.string().nullable().optional(),
   pluCode: z.string().optional(),
   pricePerKg: z.number().min(0).optional(),
   stockQty: z.number().int().min(0).default(0),
@@ -60,6 +61,7 @@ const updateProductSchema = z.object({
   unit: z.string().nullable().optional(),
   isByWeight: z.boolean().optional(),
   isWeightedPiece: z.boolean().optional(),
+  productTypeId: z.string().nullable().optional(),
   pluCode: z.string().nullable().optional(),
   pricePerKg: z.number().min(0).nullable().optional(),
   stockQty: z.number().int().min(0).optional(),
@@ -70,6 +72,18 @@ const updateProductSchema = z.object({
 
 export default async function productRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', fastify.authenticate);
+
+  // Product types (docs/PRODUCT_TYPES.md §11) — global, read-only for
+  // tenants. Only enabled types are exposed; disabling a type in System
+  // Admin hides it from this list without deleting it or unassigning it
+  // from products that already reference it.
+  fastify.get('/product-types', async () => {
+    const data = await prisma.productType.findMany({
+      where: { enabled: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return { success: true, data };
+  });
 
   // List products
   fastify.get('/products', async (request, reply) => {
@@ -144,6 +158,23 @@ export default async function productRoutes(fastify: FastifyInstance) {
           return reply.status(400).send({ success: false, error: 'Invalid category' });
         }
       }
+
+      // docs/PRODUCT_TYPES.md §3.1 — assigning a productTypeId denormalizes
+      // markType/isByWeight/isWeightedPiece from the type onto the product
+      // in the same write, overriding any of those three fields also
+      // present in this same request body. Only fires when productTypeId
+      // is actually being assigned to a real type here, not on every save.
+      let typeSyncFields: { markType?: string | null; isByWeight?: boolean; isWeightedPiece?: boolean } = {};
+      if (body.productTypeId) {
+        const type = await prisma.productType.findUnique({ where: { id: body.productTypeId } });
+        if (!type) return reply.status(400).send({ success: false, error: 'Invalid product type' });
+        typeSyncFields = {
+          markType: type.markType,
+          isByWeight: type.weightMode !== 'PIECE',
+          isWeightedPiece: type.weightMode === 'PIECE_WEIGHT',
+        };
+      }
+
       const product = await prisma.product.create({
         data: {
           tenantId: request.tenantId!,
@@ -162,11 +193,13 @@ export default async function productRoutes(fastify: FastifyInstance) {
           unit: body.unit,
           isByWeight: body.isByWeight,
           isWeightedPiece: body.isWeightedPiece,
+          productTypeId: body.productTypeId ?? undefined,
           pluCode: body.pluCode,
           pricePerKg: body.pricePerKg,
           stockQty: body.stockQty,
           lowStockAlert: body.lowStockAlert,
           variants: body.variants ? { create: body.variants } : undefined,
+          ...typeSyncFields,
         },
         include: { variants: true, images: true },
       });
@@ -210,9 +243,25 @@ export default async function productRoutes(fastify: FastifyInstance) {
           return reply.status(400).send({ success: false, error: 'Invalid category' });
         }
       }
+
+      // §3.1 — same sync as create, only when productTypeId is present in
+      // this write (assigning null just unassigns, without touching the
+      // three synced fields — the sync is one-directional, not a standing
+      // invariant enforced on every save).
+      let typeSyncFields: { markType?: string | null; isByWeight?: boolean; isWeightedPiece?: boolean } = {};
+      if (body.productTypeId) {
+        const type = await prisma.productType.findUnique({ where: { id: body.productTypeId } });
+        if (!type) return reply.status(400).send({ success: false, error: 'Invalid product type' });
+        typeSyncFields = {
+          markType: type.markType,
+          isByWeight: type.weightMode !== 'PIECE',
+          isWeightedPiece: type.weightMode === 'PIECE_WEIGHT',
+        };
+      }
+
       const product = await prisma.product.updateMany({
         where: { id, tenantId: request.tenantId! },
-        data: body as any,
+        data: { ...body, ...typeSyncFields } as any,
       });
       if (product.count === 0) return reply.status(404).send({ success: false, error: 'Product not found' });
       return { success: true, message: 'Product updated' };

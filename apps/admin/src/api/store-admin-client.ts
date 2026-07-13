@@ -125,6 +125,8 @@ export const adminApi = {
     request<any>(`/products/${id}/stock`, { method: 'PATCH', body: JSON.stringify({ qty, ...opts }) }),
   getStockMovements: (params?: string) => request<any>(`/stock-movements${params ? '?' + params : ''}`),
 
+  getProductTypes: () => request<any>('/product-types'),
+
   getCategories: () => request<any>('/categories'),
   createCategory: (data: any) => request<any>('/categories', { method: 'POST', body: JSON.stringify(data) }),
   updateCategory: (id: string, data: any) => request<any>(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
