@@ -10,6 +10,7 @@ import Table, { type TableColumn } from '../../components/Table';
 import {
   usePosStores, isPlanBlockedError, PosPlanBlocked, PosSubNav, PosStoreSelect,
   POS_OPERATOR_ROLES, POS_OPERATOR_ROLE_BADGE, POS_OPERATOR_PERMISSIONS,
+  POS_OPERATOR_DEFAULT_PERMISSIONS,
   type PosOperatorRole,
 } from './pos-shared';
 
@@ -97,6 +98,21 @@ export default function PosOperators() {
       permissions: prev.permissions.includes(permission)
         ? prev.permissions.filter((p) => p !== permission)
         : [...prev.permissions, permission],
+    }));
+  }
+
+  // docs/POS_POLICY_ENGINE.md §14.6 — picking a role in the create form
+  // pre-fills the checkboxes with that role's default set; the admin can
+  // still tick/untick individual permissions afterward, this only seeds
+  // the starting point. Scoped to create only (!editId) — changing an
+  // existing operator's role does not silently overwrite whatever
+  // permissions[] they already had; the admin adjusts checkboxes by hand
+  // in that case.
+  function handleRoleChange(role: PosOperatorRole) {
+    setForm((prev) => ({
+      ...prev,
+      role,
+      permissions: editId ? prev.permissions : [...POS_OPERATOR_DEFAULT_PERMISSIONS[role]],
     }));
   }
 
@@ -273,7 +289,7 @@ export default function PosOperators() {
               <Select
                 label={tr('Роль', 'Rol')}
                 value={form.role}
-                onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value as PosOperatorRole }))}
+                onChange={(e) => handleRoleChange(e.target.value as PosOperatorRole)}
               >
                 {POS_OPERATOR_ROLES.map((r) => (
                   <option key={r.value} value={r.value}>{tr(r.ru, r.uz)}</option>
@@ -282,7 +298,7 @@ export default function PosOperators() {
 
               <div>
                 <p className="text-token-sm font-medium text-neutral-700 mb-1.5">{tr('Права', 'Huquqlar')}</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 max-h-[240px] overflow-y-auto pr-1">
                   {POS_OPERATOR_PERMISSIONS.map((p) => (
                     <label key={p} className="flex items-center gap-2 text-token-sm text-neutral-700">
                       <input
