@@ -6,6 +6,7 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import Table, { type TableColumn } from '../components/Table';
 import CustomerDrawer from './customers/CustomerDrawer';
+import CreateCustomerModal from './customers/CreateCustomerModal';
 
 export default function Customers() {
   const { tr } = useAdminI18n();
@@ -17,6 +18,8 @@ export default function Customers() {
   const [error, setError] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function handleExport() {
@@ -46,7 +49,7 @@ export default function Customers() {
       .then(setData)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, reloadTick]);
 
   const totalPages = useMemo(() => Math.max(1, data?.totalPages || 1), [data?.totalPages]);
 
@@ -128,6 +131,9 @@ export default function Customers() {
           >
             {exporting ? '⏳' : '⬇️'} CSV
           </Button>
+          <Button variant="primary" size="md" type="button" onClick={() => setShowCreate(true)}>
+            + {tr('Создать клиента', 'Mijoz yaratish')}
+          </Button>
         </Card>
 
         <Card className="overflow-hidden" style={{ padding: 0 }}>
@@ -166,6 +172,14 @@ export default function Customers() {
         <CustomerDrawer
           customerId={selectedId}
           onClose={() => setSelectedId(null)}
+          tr={tr}
+        />
+      )}
+
+      {showCreate && (
+        <CreateCustomerModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => setReloadTick((t) => t + 1)}
           tr={tr}
         />
       )}

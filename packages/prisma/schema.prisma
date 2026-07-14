@@ -565,15 +565,36 @@ model ProductMarkingCode {
 // ============================================================
 
 model Customer {
-  id            String   @id @default(cuid())
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  telegramId    BigInt
-  telegramUser  String?
-  firstName     String?
-  lastName      String?
-  languageCode  String?
-  phone         String?
+  id           String  @id @default(cuid())
+  tenantId     String
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Nullable (docs/CUSTOMER_LOYALTY.md §4) — a POS-registered buyer may
+  // never touch Telegram at all. @@unique([tenantId, telegramId]) below is
+  // unaffected: Postgres does not treat NULL = NULL in a unique index, so
+  // any number of POS-only customers can coexist with telegramId = NULL
+  // without a partial-index workaround (unlike CounterpartyPrice.variantId,
+  // docs/B2B_COUNTERPARTIES.md §5.2, where the same NULL behavior was a
+  // problem to work around — here it's exactly the wanted behavior).
+  telegramId   BigInt?
+  telegramUser String?
+  firstName    String?
+  lastName     String?
+  languageCode String?
+  phone        String?
+
+  // Loyalty-card identification (docs/CUSTOMER_LOYALTY.md §5/§8) —
+  // distinct from referralCode below, which stays exactly what it is
+  // today. "LC" + 6 digits, generated once (lib/loyalty-card.ts),
+  // globally unique the same way referralCode already is (not
+  // tenant-scoped uniqueness — same precedent, not a new pattern).
+  // loyaltyCardQr is presentation-only: the literal loyaltyCardNumber
+  // string, duplicated onto its own column so a till/bot can read one
+  // flat field without recomputing anything — the QR image itself is
+  // rendered client-side from this string, never generated or stored
+  // server-side as an image.
+  loyaltyCardNumber String? @unique
+  loyaltyCardQr     String?
+
   loyaltyPoints Int      @default(0)
   totalSpent    Decimal  @default(0) @db.Decimal(12, 2)
   ordersCount   Int      @default(0)
@@ -591,9 +612,22 @@ model Customer {
   broadcastRecipients BroadcastRecipient[]
   wishlistItems       WishlistItem[]
   addresses           CustomerAddress[]
+  // POS sale events attributed to this profile (docs/CUSTOMER_LOYALTY.md
+  // §7) — back-relation for SaleEvent.customerId below.
+  saleEvents          SaleEvent[]
+  // B2B bridge (docs/CUSTOMER_LOYALTY.md §9, resolving
+  // docs/B2B_COUNTERPARTIES.md §12 open question 1) — back-relation for
+  // Counterparty.customerId, singular (not an array) because that FK is
+  // @unique, same shape as the existing Supplier.counterparty back-relation
+  // for Counterparty.supplierId.
+  counterparty        Counterparty?
 
   @@unique([tenantId, telegramId])
   @@index([tenantId])
+  // Needed by GET /pos/v1/customer's phone lookup (docs/CUSTOMER_LOYALTY.md
+  // §5) — today's only index is tenantId alone, which would make a phone
+  // lookup a sequential scan.
+  @@index([tenantId, phone])
   @@map("customers")
 }
 
@@ -975,6 +1009,15 @@ model Counterparty {
   // required, never backfilled for existing Supplier rows.
   supplierId String?   @unique
   supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  // Optional bridge to a Sellgram/POS Customer profile — same shape as
+  // supplierId above (nullable, @unique, never required, never backfilled).
+  // Resolves docs/B2B_COUNTERPARTIES.md §12 open question 1
+  // (docs/CUSTOMER_LOYALTY.md §9): whether a B2B order accrues loyalty
+  // points onto the linked Customer is a per-tenant policy choice this
+  // field only makes possible, not a fixed answer.
+  customerId String?   @unique
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   // Cached running balance (docs/B2B_COUNTERPARTIES.md §7). Updated
   // atomically alongside every CounterpartyLedger row in the same
@@ -1420,8 +1463,17 @@ model SaleEvent {
   // actually implemented) — stored as an opaque blob, not a typed column.
   managerOverride  Json?
 
+  // Universal customer profile (docs/CUSTOMER_LOYALTY.md §7) — nullable,
+  // an anonymous POS sale remains fully valid with no customer attached.
+  // Same "silent-strip" warning this field exists to avoid also applies to
+  // the Zod saleEventSchema field and the tx.saleEvent.create() call in
+  // routes.ts — both must land alongside this column, not after it.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
   @@index([tenantId, storeId, localSaleId])
   @@index([tenantId, occurredAt])
+  @@index([customerId])
   @@map("sale_events")
 }
 

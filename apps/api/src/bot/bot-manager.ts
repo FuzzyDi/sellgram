@@ -7,6 +7,7 @@ import { getRedis } from '../lib/redis.js';
 import { getSystemSubscriptionReminderSettings, getSystemSoftMode } from '../modules/system-admin/service.js';
 import { updateOrderStatus } from '../modules/order/order.service.js';
 import { getEffectivePlan, planDowngradeThreshold } from '../lib/billing.js';
+import { generateLoyaltyCardNumber } from '../lib/loyalty-card.js';
 
 interface BotInstance {
   bot: Bot;
@@ -158,6 +159,7 @@ export async function registerBot(
       { command: 'start', description: '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0435\u043D\u044E' },
       { command: 'shop', description: '\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u0430\u0433\u0430\u0437\u0438\u043D' },
       { command: 'help', description: '\u041F\u043E\u043C\u043E\u0449\u044C' },
+      { command: 'card', description: '\u041C\u043E\u044F \u043A\u0430\u0440\u0442\u0430 \u043B\u043E\u044F\u043B\u044C\u043D\u043E\u0441\u0442\u0438' },
       { command: 'orders', description: '\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0435 \u0437\u0430\u043A\u0430\u0437\u044B (\u0430\u0434\u043C\u0438\u043D)' },
       { command: 'stats', description: '\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 (\u0430\u0434\u043C\u0438\u043D)' },
       { command: 'admin', description: '\u041F\u0440\u0438\u0432\u044F\u0437\u043A\u0430 \u0430\u0434\u043C\u0438\u043D\u0430: /admin CODE' },
@@ -226,6 +228,46 @@ export async function registerBot(
         },
       });
     }
+  });
+
+  // docs/CUSTOMER_LOYALTY.md §8/§13 step 6 — lazy loyaltyCardNumber
+  // generation, same precedent as the existing referralCode generation
+  // in apps/api/src/modules/bot/shop-api.ts (generated on first access
+  // that needs it, not eagerly at Customer creation). No QR image is
+  // rendered here — docs/CUSTOMER_LOYALTY.md §4 already scoped
+  // loyaltyCardQr as "presentation-only, the literal card number string";
+  // a scannable QR image is a miniapp screen (§8's own open item, no
+  // existing precedent to reuse), not something this text-only bot
+  // command produces.
+  bot.command('card', async (ctx) => {
+    if (!ctx.from) return;
+
+    let customer = await prisma.customer.findFirst({
+      where: { tenantId, telegramId: BigInt(ctx.from.id) },
+      select: { id: true, loyaltyCardNumber: true, loyaltyPoints: true },
+    });
+    if (!customer) {
+      await ctx.reply(tCtx(ctx, 'Отправьте /start, чтобы зарегистрироваться.', "Ro'yxatdan o'tish uchun /start yuboring."));
+      return;
+    }
+
+    if (!customer.loyaltyCardNumber) {
+      const loyaltyCardNumber = await generateLoyaltyCardNumber(prisma);
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: { loyaltyCardNumber, loyaltyCardQr: loyaltyCardNumber },
+        select: { id: true, loyaltyCardNumber: true, loyaltyPoints: true },
+      });
+    }
+
+    await ctx.reply(
+      tCtx(
+        ctx,
+        `\u{1F4B3} Ваша карта лояльности: *${customer.loyaltyCardNumber}*\n⭐ Баллов: ${customer.loyaltyPoints}\n\nПокажите этот номер кассиру на кассе.`,
+        `\u{1F4B3} Sizning sodiqlik kartangiz: *${customer.loyaltyCardNumber}*\n⭐ Ballar: ${customer.loyaltyPoints}\n\nBu raqamni kassaga ko'rsating.`
+      ),
+      { parse_mode: 'Markdown' }
+    );
   });
 
   bot.command('shop', async (ctx) => {

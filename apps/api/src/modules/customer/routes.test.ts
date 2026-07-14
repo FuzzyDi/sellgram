@@ -7,8 +7,10 @@ const mocks = vi.hoisted(() => ({
       findMany: vi.fn(),
       count: vi.fn(),
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       updateMany: vi.fn(),
       update: vi.fn(),
+      create: vi.fn(),
     },
     loyaltyTransaction: { create: vi.fn() },
     $transaction: vi.fn(),
@@ -65,6 +67,74 @@ describe('customer.routes', () => {
       const app = await buildApp();
       const response = await app.inject({ method: 'GET', url: '/customers?page=abc' });
       expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+  });
+
+  // ─── POST /customers — manual (POS-style) customer creation ───────────────
+  // docs/CUSTOMER_LOYALTY.md §10/§13 step 6.
+
+  describe('POST /customers', () => {
+    beforeEach(() => {
+      mocks.prisma.$transaction.mockImplementation(async (fn: any) => fn(mocks.prisma));
+      mocks.prisma.customer.findUnique.mockResolvedValue(null); // no loyaltyCardNumber collision
+    });
+
+    it('creates a customer with telegramId null and a generated loyaltyCardNumber', async () => {
+      mocks.prisma.customer.create.mockResolvedValue({
+        id: 'c-new', tenantId: 'tenant-1', telegramId: null, firstName: 'Alice', lastName: 'Smith',
+        phone: '+998901234567', loyaltyCardNumber: 'LC123456', loyaltyCardQr: 'LC123456',
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/customers',
+        payload: { name: 'Alice Smith', phone: '+998901234567' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.telegramId).toBeNull();
+      expect(body.data.loyaltyCardNumber).toBe('LC123456');
+      expect(mocks.prisma.customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenantId: 'tenant-1',
+            telegramId: null,
+            firstName: 'Alice',
+            lastName: 'Smith',
+            phone: '+998901234567',
+            loyaltyCardNumber: expect.stringMatching(/^LC\d{6}$/),
+          }),
+        })
+      );
+      await app.close();
+    });
+
+    it('is gated by permissionGuard(manageCustomers)', async () => {
+      mocks.prisma.customer.create.mockResolvedValue({ id: 'c-new' });
+      const app = await buildApp();
+      await app.inject({ method: 'POST', url: '/customers', payload: { name: 'Bob', phone: '+998900000000' } });
+      expect(mocks.permissionGuard).toHaveBeenCalledWith('manageCustomers');
+      await app.close();
+    });
+
+    it('returns 400 when name is missing', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'POST', url: '/customers', payload: { phone: '+998900000000' } });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.customer.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('splits a single-word name into firstName only, leaving lastName null', async () => {
+      mocks.prisma.customer.create.mockResolvedValue({ id: 'c-new' });
+      const app = await buildApp();
+      await app.inject({ method: 'POST', url: '/customers', payload: { name: 'Cher', phone: '+998900000001' } });
+      expect(mocks.prisma.customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ firstName: 'Cher', lastName: null }) })
+      );
       await app.close();
     });
   });

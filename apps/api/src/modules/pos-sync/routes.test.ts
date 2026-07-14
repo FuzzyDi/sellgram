@@ -15,6 +15,14 @@ const mocks = vi.hoisted(() => ({
     posOperator: { findMany: vi.fn().mockResolvedValue([]) },
     tenant: { findUnique: vi.fn().mockResolvedValue({ planExpiresAt: null, blockedAt: null }) },
     saleEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
+    customer: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+    },
+    loyaltyConfig: { findUnique: vi.fn().mockResolvedValue(null) },
+    loyaltyTransaction: { create: vi.fn().mockResolvedValue({}) },
     stockEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     product: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -919,6 +927,167 @@ describe('pos-sync.routes', () => {
     });
   });
 
+  // docs/CUSTOMER_LOYALTY.md §5/§13 step 2.
+  describe('GET /api/pos/v1/customer', () => {
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      // Explicit reset: vi.clearAllMocks() (outer beforeEach) clears call
+      // history but NOT a prior test's mockResolvedValue — without this,
+      // a later test in this block would silently inherit an earlier
+      // test's resolved value.
+      mocks.prisma.customer.findFirst.mockResolvedValue(null);
+      mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue(null);
+    });
+
+    it('finds a customer by loyaltyCard and returns loyaltyLevel from the tenant tier config', async () => {
+      mocks.prisma.customer.findFirst.mockResolvedValue({
+        id: 'cust-1', firstName: 'Alice', lastName: null, phone: '+998901234567',
+        telegramUser: null, loyaltyPoints: 1240, loyaltyCardNumber: 'LC000123', totalSpent: 600000,
+      });
+      mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ tiers: null });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/customer?loyaltyCard=LC000123',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data).toEqual(
+        expect.objectContaining({ id: 'cust-1', name: 'Alice', loyaltyCardNumber: 'LC000123', loyaltyLevel: 'Silver' })
+      );
+      expect(mocks.prisma.customer.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: 't-1', loyaltyCardNumber: 'LC000123' } })
+      );
+      await app.close();
+    });
+
+    it('finds a customer by phone', async () => {
+      mocks.prisma.customer.findFirst.mockResolvedValue({
+        id: 'cust-2', firstName: 'Bob', lastName: null, phone: '+998900000000',
+        telegramUser: null, loyaltyPoints: 0, loyaltyCardNumber: 'LC000456', totalSpent: 0,
+      });
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/customer?phone=%2B998900000000',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.customer.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: 't-1', phone: '+998900000000' } })
+      );
+      await app.close();
+    });
+
+    it('returns loyaltyLevel: null when the tenant has no LoyaltyConfig row at all', async () => {
+      mocks.prisma.customer.findFirst.mockResolvedValue({
+        id: 'cust-1', firstName: 'Alice', lastName: null, phone: null,
+        telegramUser: null, loyaltyPoints: 0, loyaltyCardNumber: 'LC000123', totalSpent: 0,
+      });
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/customer?loyaltyCard=LC000123',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.json().data.loyaltyLevel).toBeNull();
+      await app.close();
+    });
+
+    it('returns 404 CUSTOMER_NOT_FOUND when nothing matches', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/customer?loyaltyCard=LC999999',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error.code).toBe('CUSTOMER_NOT_FOUND');
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when neither phone nor loyaltyCard is given', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/customer',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.customer.findFirst).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 401 for a missing device key', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/customer?loyaltyCard=LC000123',
+        headers: { 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+  });
+
+  // docs/CUSTOMER_LOYALTY.md §5/§13 step 2.
+  describe('POST /api/pos/v1/customer', () => {
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.$transaction.mockImplementation(async (fn: any) => fn(mocks.prisma));
+      mocks.prisma.customer.findUnique.mockResolvedValue(null); // no loyaltyCardNumber collision
+    });
+
+    it('creates a customer with telegramId null and a generated loyaltyCardNumber', async () => {
+      mocks.prisma.customer.create.mockResolvedValue({
+        id: 'cust-new', firstName: 'Cher', lastName: null, phone: '+998901112233', loyaltyCardNumber: 'LC777777',
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/customer',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { name: 'Cher', phone: '+998901112233' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.loyaltyCardNumber).toBe('LC777777');
+      expect(mocks.prisma.customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenantId: 't-1',
+            telegramId: null,
+            firstName: 'Cher',
+            phone: '+998901112233',
+            loyaltyCardNumber: expect.stringMatching(/^LC\d{6}$/),
+          }),
+        })
+      );
+      await app.close();
+    });
+
+    it('returns 400 when phone is missing', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/customer',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { name: 'Cher' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.customer.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
   describe('POST /api/pos/v1/sale-events', () => {
     const validSaleEvent = {
       deviceId: 'dev-1',
@@ -955,6 +1124,13 @@ describe('pos-sync.routes', () => {
       mocks.prisma.stockLedgerEntry.create.mockResolvedValue({});
       mocks.prisma.stockMovement.create.mockResolvedValue({});
       mocks.prisma.$transaction.mockImplementation(async (fn: any) => fn(mocks.prisma));
+      // Explicit reset for the loyalty-accrual mocks (§7 below) — same
+      // "mockResolvedValue survives vi.clearAllMocks()" reasoning as the
+      // GET /api/pos/v1/customer block above; without this, a value left
+      // over from an earlier describe block would leak in here.
+      mocks.prisma.customer.findFirst.mockResolvedValue(null);
+      mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue(null);
+      mocks.prisma.customer.update.mockResolvedValue({});
     });
 
     it('ingests a SALE_COMPLETED event, derives stock ledger entries and moves live stockQty', async () => {
@@ -1337,6 +1513,127 @@ describe('pos-sync.routes', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
+    });
+
+    // docs/CUSTOMER_LOYALTY.md §7/§13 step 3/4.
+    describe('loyalty accrual (docs/CUSTOMER_LOYALTY.md §7)', () => {
+      it('accrues points and writes a LoyaltyTransaction when customerId is present and loyalty is enabled', async () => {
+        mocks.prisma.customer.findFirst.mockResolvedValue({ id: 'cust-1', totalSpent: 0, loyaltyPoints: 10 });
+        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({
+          isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null,
+        });
+        mocks.prisma.customer.update.mockResolvedValue({ loyaltyPoints: 35 });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/sale-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validSaleEvent, customerId: 'cust-1' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.customer.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'cust-1' },
+            data: expect.objectContaining({
+              loyaltyPoints: { increment: 25 },
+              totalSpent: { increment: 25000 },
+              ordersCount: { increment: 1 },
+            }),
+          })
+        );
+        expect(mocks.prisma.loyaltyTransaction.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ customerId: 'cust-1', tenantId: 't-1', type: 'EARN', points: 25, balanceAfter: 35 }),
+          })
+        );
+        await app.close();
+      });
+
+      it('stores customerId on the SaleEvent row even when accrual does not apply', async () => {
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/sale-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validSaleEvent, customerId: 'cust-1' },
+        });
+        expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ customerId: 'cust-1' }) })
+        );
+        // loyaltyConfig defaults to null in this describe block's outer
+        // mocks (no isEnabled row) — accrual must not run at all.
+        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
+        expect(mocks.prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
+      });
+
+      it('does not accrue when the sale has no customerId (anonymous sale)', async () => {
+        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/sale-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: validSaleEvent,
+        });
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ customerId: null }) })
+        );
+        expect(mocks.prisma.loyaltyConfig.findUnique).not.toHaveBeenCalled();
+        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
+      });
+
+      it('does not accrue when eventType/status does not derive stock (same gate as §11)', async () => {
+        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/sale-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validSaleEvent, customerId: 'cust-1', eventType: 'SALE_CREATED', idempotencyKey: 'dev-1:sale:SALE-000001:SALE_CREATED' },
+        });
+        expect(mocks.prisma.loyaltyConfig.findUnique).not.toHaveBeenCalled();
+        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
+      });
+
+      it('is naturally idempotent: a replay of an existing idempotencyKey never re-runs accrual', async () => {
+        // Same two-phase approach as the plain replay test above: deliver
+        // for real first to learn the exact payloadHash, then replay.
+        mocks.prisma.customer.findFirst.mockResolvedValue({ id: 'cust-1', totalSpent: 0, loyaltyPoints: 10 });
+        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
+        mocks.prisma.customer.update.mockResolvedValue({ loyaltyPoints: 35 });
+
+        const app = await buildApp();
+        const payloadWithCustomer = { ...validSaleEvent, customerId: 'cust-1' };
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/sale-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: payloadWithCustomer,
+        });
+        const storedHash = mocks.prisma.saleEvent.create.mock.calls[0][0].data.payloadHash;
+
+        vi.clearAllMocks();
+        mocks.prisma.posDevice.findUnique.mockResolvedValue({
+          id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+        });
+        mocks.prisma.saleEvent.findUnique.mockResolvedValue({ id: 'evt-1', payloadHash: storedHash, warnings: [] });
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/sale-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: payloadWithCustomer,
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.saleEvent.create).not.toHaveBeenCalled();
+        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
+        expect(mocks.prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
+        await app.close();
+      });
     });
   });
 

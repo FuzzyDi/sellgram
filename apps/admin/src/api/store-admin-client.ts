@@ -179,6 +179,8 @@ export const adminApi = {
 
   getCustomers: (params?: string) => request<any>(`/customers${params ? '?' + params : ''}`),
   getCustomer: (id: string) => request<any>(`/customers/${id}`),
+  createCustomer: (data: { name: string; phone: string }) =>
+    request<any>('/customers', { method: 'POST', body: JSON.stringify(data) }),
   downloadCustomersCsv: async () => {
     const token = localStorage.getItem('accessToken');
     const res = await fetch(`${ADMIN_API_BASE}/customers/export`, {

@@ -3,6 +3,8 @@ import { createHash, randomBytes } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { getLicenseStatus } from '../../lib/billing.js';
+import { generateLoyaltyCardNumber } from '../../lib/loyalty-card.js';
+import { DEFAULT_TIERS, computeTier } from '../loyalty/routes.js';
 import { resolveDevice } from './device-auth.js';
 import { sendAck, sendError, sendSuccess } from './envelope.js';
 
@@ -92,6 +94,20 @@ const catalogQuerySchema = z.object({
   sinceVersion: z.coerce.number().int().min(0).optional(),
 });
 
+// docs/CUSTOMER_LOYALTY.md §5 — both optional at the schema level; the
+// "at least one of the two" requirement is enforced in the handler
+// (matching a 400 VALIDATION_ERROR body, not a Zod .refine() message).
+const customerLookupQuerySchema = z.object({
+  phone: z.string().min(1).optional(),
+  loyaltyCard: z.string().min(1).optional(),
+});
+
+// docs/CUSTOMER_LOYALTY.md §5/§10/§13 step 2.
+const createPosCustomerSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().min(1),
+});
+
 // v1 checksum semantics (docs/POS_SYNC_API.md §9/§10): opaque — a device
 // compares checksums across fetches to detect torn downloads or identical
 // content; it does not independently re-derive the hash (no
@@ -131,6 +147,12 @@ const saleEventSchema = z.object({
   receiptNumber: z.number().int(),
   idempotencyKey: z.string().regex(/^[^:]+:sale:[^:]+:[A-Z_]+$/),
   occurredAt: z.string().min(1),
+  // docs/CUSTOMER_LOYALTY.md §7/§13 step 3 — nullable, anonymous sale
+  // stays valid with no customerId at all. This field MUST exist here —
+  // z.object() silently strips any key it doesn't declare (no
+  // .passthrough() on this schema), the exact class of bug
+  // docs/PRODUCT_TYPES.md §5 already caught once for weightBarcode.
+  customerId: z.string().min(1).optional(),
   items: z.array(saleItemSchema),
   payments: z.array(z.record(z.unknown())),
   totals: z.record(z.unknown()),
@@ -798,6 +820,110 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     );
   });
 
+  // docs/CUSTOMER_LOYALTY.md §5/§13 step 2 — cashier scans a card/QR or
+  // types a phone number before ringing up a sale. Same auth as every
+  // other /pos/v1/* route (resolveAuthenticatedDevice), tenant-scoped
+  // through device.tenantId, not a new mechanism.
+  fastify.get('/pos/v1/customer', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
+
+    const query = customerLookupQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid customer lookup query', request, {
+        issues: query.error.issues,
+      });
+    }
+    const { phone, loyaltyCard } = query.data;
+    if (!phone && !loyaltyCard) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'phone or loyaltyCard query parameter is required', request);
+    }
+
+    // loyaltyCardNumber is globally @unique (§4), so tenantId isn't
+    // strictly needed to disambiguate it — included anyway as a second,
+    // explicit isolation check, so a card belonging to a different
+    // tenant can never resolve through this device's lookup.
+    const customer = loyaltyCard
+      ? await prisma.customer.findFirst({ where: { tenantId: device.tenantId, loyaltyCardNumber: loyaltyCard } })
+      : await prisma.customer.findFirst({ where: { tenantId: device.tenantId, phone } });
+
+    if (!customer) {
+      return sendError(reply, 404, 'CUSTOMER_NOT_FOUND', 'No matching customer', request);
+    }
+
+    const loyaltyConfig = await prisma.loyaltyConfig.findUnique({ where: { tenantId: device.tenantId } });
+    const loyaltyLevel = loyaltyConfig
+      ? computeTier(Number(customer.totalSpent), (loyaltyConfig.tiers as any) ?? DEFAULT_TIERS).name
+      : null;
+
+    return sendSuccess(
+      reply,
+      200,
+      {
+        id: customer.id,
+        name: [customer.firstName, customer.lastName].filter(Boolean).join(' ') || null,
+        phone: customer.phone,
+        telegramUser: customer.telegramUser,
+        loyaltyPoints: customer.loyaltyPoints,
+        loyaltyCardNumber: customer.loyaltyCardNumber,
+        loyaltyLevel,
+      },
+      request
+    );
+  });
+
+  // docs/CUSTOMER_LOYALTY.md §5/§13 step 2 — cashier registers a buyer who
+  // has no Telegram account at all (the reason Customer.telegramId became
+  // nullable, §4). No storeId is written: Customer has never been
+  // store-scoped in this schema (tenantId only, same as every other
+  // Sellgram-created customer) — a POS-registered buyer is reachable from
+  // any store in the tenant, matching how a Telegram customer already is.
+  fastify.post('/pos/v1/customer', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
+
+    const body = createPosCustomerSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid customer', request, { issues: body.error.issues });
+    }
+
+    // A cashier-entered name has no first/last split at the till — first
+    // word becomes firstName (used everywhere else Customer.firstName is
+    // displayed), the rest (if any) becomes lastName; matches how
+    // GET /pos/v1/customer's `name` field is reassembled from the same
+    // two columns above.
+    const parts = body.data.name.trim().split(/\s+/);
+    const firstName = parts[0];
+    const lastName = parts.slice(1).join(' ') || null;
+
+    const customer = await prisma.$transaction(async (tx) => {
+      const loyaltyCardNumber = await generateLoyaltyCardNumber(tx);
+      return tx.customer.create({
+        data: {
+          tenantId: device.tenantId,
+          telegramId: null,
+          firstName,
+          lastName,
+          phone: body.data.phone,
+          loyaltyCardNumber,
+          loyaltyCardQr: loyaltyCardNumber,
+        },
+      });
+    });
+
+    return sendSuccess(
+      reply,
+      201,
+      {
+        id: customer.id,
+        name: [customer.firstName, customer.lastName].filter(Boolean).join(' '),
+        phone: customer.phone,
+        loyaltyCardNumber: customer.loyaltyCardNumber,
+      },
+      request
+    );
+  });
+
   fastify.post('/pos/v1/sale-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveAuthenticatedDevice(request, reply);
     if (!device) return;
@@ -942,6 +1068,10 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
             policiesVersion: body.data.policiesVersion,
             triggeredRuleIds: body.data.triggeredRuleIds,
             managerOverride: (body.data.managerOverride ?? null) as any,
+            // docs/CUSTOMER_LOYALTY.md §7/§13 step 3 — the Prisma-create
+            // side of the customerId field; see the schema comment above
+            // for why both sides must land together.
+            customerId: body.data.customerId ?? null,
           },
           select: { id: true },
         });
@@ -955,6 +1085,69 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
             note: `POS sale ${body.data.localSaleId}`,
           });
         }
+
+        // docs/CUSTOMER_LOYALTY.md §6/§7 — reuses the exact same gate as
+        // stock derivation above (derivesStock), not a separate one: a
+        // sale only "counts" for loyalty once it's SALE_COMPLETED with a
+        // completed/fiscalized status, same as stock. Idempotent for
+        // free, not via a second check — this code only ever runs on the
+        // create path; a replay of an existing idempotencyKey returns via
+        // respondForExistingEvent() above before reaching this
+        // transaction at all, so it can never double-accrue.
+        if (derivesStock && body.data.customerId) {
+          const loyaltyConfig = await tx.loyaltyConfig.findUnique({ where: { tenantId: device.tenantId } });
+          // `totals` is an intentionally opaque object in the wire
+          // contract (docs/pos-sync/schemas/sale-event.schema.json — no
+          // sub-shape defined); `totals.total` is the only convention
+          // this codebase has for it today (routes.test.ts's fixture).
+          // Read defensively — a missing/non-numeric total simply skips
+          // accrual for this sale rather than crashing the whole request,
+          // same accept-don't-reject posture as the stock-derivation
+          // warnings above.
+          const totalRaw = (body.data.totals as Record<string, unknown>)?.total;
+          const total = typeof totalRaw === 'number' && Number.isFinite(totalRaw) && totalRaw > 0 ? totalRaw : null;
+
+          if (loyaltyConfig?.isEnabled && total) {
+            const customer = await tx.customer.findFirst({
+              where: { id: body.data.customerId, tenantId: device.tenantId },
+              select: { id: true, totalSpent: true, loyaltyPoints: true },
+            });
+            if (customer) {
+              const tiers = (loyaltyConfig.tiers as any) ?? DEFAULT_TIERS;
+              const tier = computeTier(Number(customer.totalSpent), tiers);
+              const basePoints = Math.floor(total / loyaltyConfig.unitAmount) * loyaltyConfig.pointsPerUnit;
+              const pointsEarned = Math.floor(basePoints * tier.multiplier);
+              // Mirrors order.service.ts's Telegram accrual exactly,
+              // including its existing quirk of only touching
+              // totalSpent/ordersCount when pointsEarned > 0 — this
+              // reuses that logic on purpose (§6/§7: "reusing
+              // order.service.ts's accrual math... not duplicating it"),
+              // not a place to silently diverge from it.
+              if (pointsEarned > 0) {
+                const updatedCustomer = await tx.customer.update({
+                  where: { id: customer.id },
+                  data: {
+                    loyaltyPoints: { increment: pointsEarned },
+                    totalSpent: { increment: total },
+                    ordersCount: { increment: 1 },
+                  },
+                  select: { loyaltyPoints: true },
+                });
+                await tx.loyaltyTransaction.create({
+                  data: {
+                    customerId: customer.id,
+                    tenantId: device.tenantId,
+                    type: 'EARN',
+                    points: pointsEarned,
+                    balanceAfter: updatedCustomer.loyaltyPoints,
+                    description: `Loyalty points earned (${tier.name}) for POS receipt #${body.data.receiptNumber}`,
+                  },
+                });
+              }
+            }
+          }
+        }
+
         return created;
       });
     } catch (err: any) {
