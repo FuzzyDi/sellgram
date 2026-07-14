@@ -732,3 +732,79 @@ Purely additive, same guarantee as every other block in this document:
   store's `settings`/`printTemplates` already default today (§6) — not
   an error, not a breaking change to the response shape.
 
+### 14.6 Role permissions matrix (confirmed with Android team, 2026-07-14)
+
+**Numbering note:** the request that produced this subsection asked for
+it as "§14.1" — that number is already taken by §14.1 above (`PosOperator`
+— data model), and renumbering the existing 14.1–14.5 to make room would
+mean editing subsections this pass was explicitly told to leave alone.
+Filed as **§14.6**, appended after 14.5, instead.
+
+Three roles, `PosOperatorRole` enum (§14.1) unchanged:
+`CASHIER` / `SENIOR_CASHIER` / `ADMIN`. `PosOperator.permissions` (§14.1,
+`String[] @default([])`) is a flat list of permission-string constants;
+a till checks for a specific string's presence in that array, not the
+role alone — `role` and `permissions` are stored as two independent
+fields (§14.1's Prisma model), so the matrix below is the **agreed
+default** each role should start from, not a computed/derived value.
+
+**CASHIER:**
+
+```
+SHIFT_OPEN, SALE_CREATE, SALE_COMPLETE, REFUND_CREATE_OWN_OR_BY_RECEIPT,
+CUSTOMER_LOOKUP, CUSTOMER_CREATE, X_REPORT_PRINT, REPRINT_RECEIPT_COPY
+```
+
+**SENIOR_CASHIER** — everything CASHIER has, plus:
+
+```
+SHIFT_CLOSE, REFUND_APPROVE, REFUND_COMPLETE, DISCOUNT_APPLY,
+PRICE_OVERRIDE_LIMITED, CASH_IN, CASH_OUT, VIEW_SHIFT_TOTALS,
+RECOVERY_RECEIPTS
+```
+
+**ADMIN** — everything SENIOR_CASHIER has, plus:
+
+```
+POS_SETTINGS_EDIT, HARDWARE_SETTINGS_EDIT, OPERATOR_SWITCH,
+POLICY_VIEW, FORCE_SYNC, OUTBOX_REQUEUE, DEV_DIAGNOSTICS
+```
+
+**Key restrictions, confirmed with the Android team:**
+
+- `SHIFT_CLOSE` is never given to `CASHIER` — `SENIOR_CASHIER` or
+  `ADMIN` only. A cashier can open their own shift but cannot close it
+  unsupervised.
+- `REFUND_COMPLETE` requires `SENIOR_CASHIER` or `ADMIN`. Contrast with
+  `REFUND_CREATE_OWN_OR_BY_RECEIPT` (CASHIER-level) — a cashier can
+  *initiate* a refund for their own sale or against a presented receipt,
+  but completing it needs sign-off from a more senior role.
+- `POS_SETTINGS_EDIT` / `HARDWARE_SETTINGS_EDIT` — `ADMIN` only.
+- `DEV_DIAGNOSTICS` — `ADMIN` only, and only meaningful in a dev/test
+  build; a production till has no diagnostics surface for this
+  permission to gate.
+
+**Implementation status — planned, not yet live.** The paragraph this
+subsection was drafted from describes `POST /api/store-admin/pos-operators`
+auto-filling `permissions[]` from the chosen `role`, and `PATCH` being
+constrained to adding/removing permissions within that role's set. As of
+this writing, neither is true of the actual handlers
+(`apps/api/src/modules/pos-sync/admin-routes.ts`):
+
+- `createOperatorSchema` (`permissions: z.array(z.string()).default([])`)
+  and the `POST /pos-operators` handler write `permissions:
+  body.data.permissions` verbatim — an empty array if the caller omits
+  it, never a role-derived default set. `role` and `permissions` are
+  accepted as two fully independent inputs today.
+- `updateOperatorSchema`'s `permissions` field is an unconstrained
+  `z.array(z.string())` — `PATCH /pos-operators/:id` replaces the array
+  wholesale with whatever the caller sends, with no check against the
+  operator's `role` or against the matrix above. Nothing today stops a
+  `CASHIER`-role row from being `PATCH`ed to include `POS_SETTINGS_EDIT`.
+
+Turning the matrix above into actual server-side defaulting/validation
+— and deciding whether till-side enforcement (§14.3's `staff.operators[].
+permissions`) is the only enforcement layer, or whether store-admin
+writes should also validate against role — is follow-up work, not
+covered by this subsection.
+
