@@ -102,6 +102,11 @@ export default function CustomerDrawer({ customerId, onClose, tr }: CustomerDraw
                 {customer.phone && (
                   <div className="text-token-sm text-neutral-500">{customer.phone}</div>
                 )}
+                {customer.loyaltyCardNumber && (
+                  <div className="text-token-sm text-neutral-500 font-mono">
+                    {tr('Карта', 'Karta')}: {customer.loyaltyCardNumber}
+                  </div>
+                )}
                 <div className="text-token-xs text-neutral-400 mt-0.5">
                   {tr('С нами с', 'Biz bilan')}: {new Date(customer.createdAt).toLocaleDateString()}
                 </div>
@@ -222,6 +227,38 @@ export default function CustomerDrawer({ customerId, onClose, tr }: CustomerDraw
                 </div>
               )}
             </div>
+
+            {/* POS purchase history (docs/CUSTOMER_LOYALTY.md §10) — same
+                cross-channel idea as "Последние заказы" above, but for
+                SaleEvent rows attributed to this customer via
+                SaleEvent.customerId (§7). payload.totals is opaque Json
+                (§7's own warning about that field's shape) — read
+                defensively, same as the accrual code server-side. */}
+            {(customer.saleEvents || []).length > 0 && (
+              <div>
+                <div className="text-token-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">
+                  {tr('Покупки на кассе (POS)', 'Kassadagi xaridlar (POS)')}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {customer.saleEvents.map((e: any) => (
+                    <div key={e.id} className="bg-neutral-50 rounded-token-sm px-3 py-2.5 flex items-center justify-between gap-2">
+                      <div>
+                        <span className="font-semibold text-token-sm text-neutral-800">#{e.receiptNumber}</span>
+                        <span className="text-token-xs text-neutral-500 ml-2">{e.status}</span>
+                        <div className="text-token-xs text-neutral-400 mt-0.5">
+                          {new Date(e.occurredAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      {typeof e.payload?.totals?.total === 'number' && (
+                        <span className="font-semibold text-token-sm text-neutral-800 whitespace-nowrap">
+                          {Number(e.payload.totals.total).toLocaleString()} UZS
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Loyalty transaction history */}
             {(customer.loyaltyTxns || []).length > 0 && (

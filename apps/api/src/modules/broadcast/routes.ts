@@ -45,6 +45,10 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
 
     const where: any = { tenantId: request.tenantId!, botBlocked: false };
     if (segment) Object.assign(where, buildSegmentWhere(segment));
+    // Keep this preview count in agreement with the actual send filter
+    // below — otherwise a POS-only customer would inflate the "audience"
+    // number here and then never actually receive anything.
+    where.telegramId = { not: null };
 
     const count = await prisma.customer.count({ where });
     return { success: true, data: { count } };
@@ -106,6 +110,12 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
         recipientWhere = { tenantId: request.tenantId!, botBlocked: false };
         if (body.segmentFilter) Object.assign(recipientWhere, buildSegmentWhere(body.segmentFilter));
       }
+      // docs/CUSTOMER_LOYALTY.md §4 — telegramId is now nullable (a
+      // POS-only customer has none). A broadcast is Telegram-only by
+      // definition, so such a customer must never be selected as a
+      // recipient at all, not just null-guarded when sending — an
+      // explicit skip here, not a reactive check later.
+      recipientWhere.telegramId = { not: null };
 
       const recipients = await prisma.customer.findMany({
         where: recipientWhere,
@@ -137,7 +147,10 @@ export default async function broadcastRoutes(fastify: FastifyInstance) {
         storeId: body.storeId,
         recipients: recipients.map((r) => ({
           id: r.id,
-          telegramId: r.telegramId.toString(),
+          // Non-null by construction: recipientWhere.telegramId: { not:
+          // null } above already excluded every POS-only customer from
+          // this query — Prisma's generated type just can't express that.
+          telegramId: r.telegramId!.toString(),
           firstName: r.firstName,
         })),
         payload: { title: body.title, message: body.message },

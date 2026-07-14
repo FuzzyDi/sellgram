@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { generateLoyaltyCardNumber } from '../../lib/loyalty-card.js';
 
 const loyaltyAdjustSchema = z.object({
   points: z.number().int().refine((n) => n !== 0, { message: 'points must be non-zero' }),
@@ -18,6 +19,17 @@ const updateCustomerSchema = z.object({
   tags: z.array(z.string().max(50)).max(20).optional(),
   note: z.string().max(2000).nullable().optional(),
   phone: z.string().max(20).nullable().optional(),
+});
+
+// docs/CUSTOMER_LOYALTY.md §10/§13 step 6 — the tenant-admin counterpart
+// of POST /pos/v1/customer (pos-sync/routes.ts): same "register a buyer
+// with no Telegram account" need, but reachable from the admin UI's own
+// JWT auth instead of a POS device token. Not in the seeding request's
+// literal step list, but required for its own §5 "Создать клиента"
+// button to have anything valid to call.
+const createCustomerSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().min(1),
 });
 
 export default async function customerRoutes(fastify: FastifyInstance) {
@@ -53,13 +65,50 @@ export default async function customerRoutes(fastify: FastifyInstance) {
       prisma.customer.count({ where }),
     ]);
 
-    // Convert BigInt to string for JSON serialization
-    const serializedItems = items.map((c: any) => ({ ...c, telegramId: c.telegramId.toString() }));
+    // Convert BigInt to string for JSON serialization. telegramId is
+    // nullable (docs/CUSTOMER_LOYALTY.md §4 — a POS-only customer has
+    // none) — null stays null rather than crashing on .toString().
+    const serializedItems = items.map((c: any) => ({ ...c, telegramId: c.telegramId != null ? c.telegramId.toString() : null }));
 
     return {
       success: true,
       data: { items: serializedItems, total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
     };
+  });
+
+  // Manual customer creation — telegramId is never set here (a POS-only
+  // buyer has none, docs/CUSTOMER_LOYALTY.md §4), loyaltyCardNumber is
+  // always generated (same helper as POST /pos/v1/customer, §5/§8).
+  fastify.post('/customers', { preHandler: [permissionGuard('manageCustomers')] }, async (request, reply) => {
+    let body: z.infer<typeof createCustomerSchema>;
+    try {
+      body = createCustomerSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    // Same first-word/rest split as POST /pos/v1/customer — no separate
+    // first/last name inputs in this pass either.
+    const parts = body.name.trim().split(/\s+/);
+    const firstName = parts[0];
+    const lastName = parts.slice(1).join(' ') || null;
+
+    const customer = await prisma.$transaction(async (tx) => {
+      const loyaltyCardNumber = await generateLoyaltyCardNumber(tx);
+      return tx.customer.create({
+        data: {
+          tenantId: request.tenantId!,
+          telegramId: null,
+          firstName,
+          lastName,
+          phone: body.phone,
+          loyaltyCardNumber,
+          loyaltyCardQr: loyaltyCardNumber,
+        },
+      });
+    });
+
+    return { success: true, data: { ...customer, telegramId: null } };
   });
 
   fastify.get('/customers/:id', async (request, reply) => {
@@ -69,10 +118,22 @@ export default async function customerRoutes(fastify: FastifyInstance) {
       include: {
         orders: { orderBy: { createdAt: 'desc' }, take: 10 },
         loyaltyTxns: { orderBy: { createdAt: 'desc' }, take: 20 },
+        // docs/CUSTOMER_LOYALTY.md §10 — cross-channel purchase history:
+        // Sellgram orders above, POS sale events here. `payload` carries
+        // `totals`/`items` as opaque Json (§7) — left for the admin UI to
+        // read defensively, same as the accrual code in pos-sync/routes.ts.
+        saleEvents: {
+          orderBy: { occurredAt: 'desc' },
+          take: 10,
+          select: { id: true, receiptNumber: true, occurredAt: true, status: true, payload: true },
+        },
       },
     });
     if (!customer) return reply.status(404).send({ success: false, error: 'Customer not found' });
-    return { success: true, data: { ...customer, telegramId: customer.telegramId.toString() } };
+    return {
+      success: true,
+      data: { ...customer, telegramId: customer.telegramId != null ? customer.telegramId.toString() : null },
+    };
   });
 
   fastify.patch('/customers/:id', { preHandler: [permissionGuard('manageCustomers')] }, async (request, reply) => {
@@ -112,7 +173,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
           c.id,
           `"${(c.firstName || '').replace(/"/g, '""')}"`,
           `"${(c.lastName || '').replace(/"/g, '""')}"`,
-          c.telegramUser ? `@${c.telegramUser}` : c.telegramId.toString(),
+          c.telegramUser ? `@${c.telegramUser}` : (c.telegramId != null ? c.telegramId.toString() : ''),
           c.phone || '',
           c.ordersCount ?? 0,
           c.totalSpent ?? 0,
