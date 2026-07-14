@@ -277,7 +277,7 @@ describe('pos-sync.admin-routes', () => {
     });
 
     describe('POST /pos-operators', () => {
-      it('creates an operator and bumps PosSettings.staffVersion for the store', async () => {
+      it('creates an operator with explicit permissions verbatim, not the role default', async () => {
         mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
         mocks.prisma.posOperator.create.mockResolvedValue({
           id: 'op-1', tenantId: 'tenant-1', storeId: 'store-1', name: 'Alice', role: 'CASHIER', permissions: [], active: true,
@@ -307,6 +307,52 @@ describe('pos-sync.admin-routes', () => {
             create: expect.objectContaining({ tenantId: 'tenant-1', storeId: 'store-1' }),
           })
         );
+        await app.close();
+      });
+
+      // docs/POS_POLICY_ENGINE.md §14.6.
+      it('defaults permissions to DEFAULT_PERMISSIONS[role] when permissions is omitted', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.posOperator.create.mockResolvedValue({ id: 'op-2' });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/pos-operators',
+          payload: { storeId: 'store-1', name: 'Bob', role: 'SENIOR_CASHIER' },
+        });
+
+        expect(mocks.prisma.posOperator.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              role: 'SENIOR_CASHIER',
+              permissions: expect.arrayContaining([
+                'SHIFT_OPEN', 'SHIFT_CLOSE', 'REFUND_APPROVE', 'CASH_IN', 'CASH_OUT',
+              ]),
+            }),
+          })
+        );
+        // SENIOR_CASHIER must not pick up ADMIN-only permissions.
+        const created = mocks.prisma.posOperator.create.mock.calls[0][0].data.permissions;
+        expect(created).not.toContain('POS_SETTINGS_EDIT');
+        expect(created).not.toContain('DEV_DIAGNOSTICS');
+        await app.close();
+      });
+
+      it('defaults permissions to DEFAULT_PERMISSIONS[role] when permissions is an explicit empty array', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.posOperator.create.mockResolvedValue({ id: 'op-3' });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/pos-operators',
+          payload: { storeId: 'store-1', name: 'Cher', role: 'ADMIN', permissions: [] },
+        });
+
+        const created = mocks.prisma.posOperator.create.mock.calls[0][0].data.permissions;
+        expect(created).toContain('DEV_DIAGNOSTICS');
+        expect(created).toContain('SHIFT_OPEN');
         await app.close();
       });
 
@@ -340,10 +386,10 @@ describe('pos-sync.admin-routes', () => {
     });
 
     describe('PATCH /pos-operators/:id', () => {
-      it('updates an operator belonging to the tenant and bumps staffVersion', async () => {
+      it('updates non-role/permissions fields and bumps staffVersion, leaving permissions untouched', async () => {
         mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1', storeId: 'store-1' });
         mocks.prisma.posOperator.update.mockResolvedValue({
-          id: 'op-1', name: 'Alice B.', role: 'SENIOR_CASHIER', permissions: [], active: true,
+          id: 'op-1', name: 'Alice B.', role: 'CASHIER', permissions: [], active: true,
         });
         mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 3 });
 
@@ -351,15 +397,54 @@ describe('pos-sync.admin-routes', () => {
         const response = await app.inject({
           method: 'PATCH',
           url: '/pos-operators/op-1',
-          payload: { name: 'Alice B.', role: 'SENIOR_CASHIER' },
+          payload: { name: 'Alice B.' },
         });
 
         expect(response.statusCode).toBe(200);
         expect(mocks.prisma.posOperator.update).toHaveBeenCalledWith(
-          expect.objectContaining({ where: { id: 'op-1' }, data: { name: 'Alice B.', role: 'SENIOR_CASHIER' } })
+          expect.objectContaining({ where: { id: 'op-1' }, data: { name: 'Alice B.' } })
         );
         expect(mocks.prisma.posSettings.upsert).toHaveBeenCalledWith(
           expect.objectContaining({ where: { storeId: 'store-1' }, update: { staffVersion: { increment: 1 } } })
+        );
+        await app.close();
+      });
+
+      // docs/POS_POLICY_ENGINE.md §14.6.
+      it('re-derives permissions from DEFAULT_PERMISSIONS[newRole] when role changes with no explicit permissions', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1', storeId: 'store-1' });
+        mocks.prisma.posOperator.update.mockResolvedValue({ id: 'op-1' });
+        mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 3 });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PATCH',
+          url: '/pos-operators/op-1',
+          payload: { name: 'Alice B.', role: 'SENIOR_CASHIER' },
+        });
+
+        const data = mocks.prisma.posOperator.update.mock.calls[0][0].data;
+        expect(data.role).toBe('SENIOR_CASHIER');
+        expect(data.permissions).toContain('SHIFT_CLOSE');
+        expect(data.permissions).toContain('CASH_IN');
+        expect(data.permissions).not.toContain('POS_SETTINGS_EDIT');
+        await app.close();
+      });
+
+      it('does not override an explicitly provided permissions[] even when role also changes', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1', storeId: 'store-1' });
+        mocks.prisma.posOperator.update.mockResolvedValue({ id: 'op-1' });
+        mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 3 });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PATCH',
+          url: '/pos-operators/op-1',
+          payload: { role: 'ADMIN', permissions: ['CUSTOM_ONLY'] },
+        });
+
+        expect(mocks.prisma.posOperator.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { role: 'ADMIN', permissions: ['CUSTOM_ONLY'] } })
         );
         await app.close();
       });

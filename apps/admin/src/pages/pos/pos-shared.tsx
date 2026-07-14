@@ -143,12 +143,64 @@ export const POS_OPERATOR_ROLE_BADGE: Record<PosOperatorRole, 'neutral' | 'warni
   ADMIN: 'danger',
 };
 
-// docs/POS_POLICY_ENGINE.md §14 permission vocabulary for PosOperator.permissions.
+// docs/POS_POLICY_ENGINE.md §14.6 — full confirmed permission vocabulary
+// for PosOperator.permissions, grouped by the role that first grants
+// each one (CASHIER's 8, then SENIOR_CASHIER's additional 9, then
+// ADMIN's additional 7), same order as the §14.6 table itself.
 export const POS_OPERATOR_PERMISSIONS = [
   'SHIFT_OPEN',
-  'SHIFT_CLOSE',
   'SALE_CREATE',
   'SALE_COMPLETE',
-  'REFUND_CREATE',
+  'REFUND_CREATE_OWN_OR_BY_RECEIPT',
+  'CUSTOMER_LOOKUP',
+  'CUSTOMER_CREATE',
+  'X_REPORT_PRINT',
+  'REPRINT_RECEIPT_COPY',
+  'SHIFT_CLOSE',
+  'REFUND_APPROVE',
   'REFUND_COMPLETE',
+  'DISCOUNT_APPLY',
+  'PRICE_OVERRIDE_LIMITED',
+  'CASH_IN',
+  'CASH_OUT',
+  'VIEW_SHIFT_TOTALS',
+  'RECOVERY_RECEIPTS',
+  'POS_SETTINGS_EDIT',
+  'HARDWARE_SETTINGS_EDIT',
+  'OPERATOR_SWITCH',
+  'POLICY_VIEW',
+  'FORCE_SYNC',
+  'OUTBOX_REQUEUE',
+  'DEV_DIAGNOSTICS',
 ] as const;
+
+// Mirrors apps/api/src/modules/pos-sync/admin-routes.ts's server-side
+// DEFAULT_PERMISSIONS exactly (§14.6) — used client-side to pre-fill the
+// permission checkboxes when a role is picked in the operator form
+// (PosOperators.tsx), so the admin sees the default set immediately
+// instead of it only appearing after a round-trip to the server.
+export const POS_OPERATOR_DEFAULT_PERMISSIONS: Record<PosOperatorRole, string[]> = {
+  CASHIER: [
+    'SHIFT_OPEN', 'SALE_CREATE', 'SALE_COMPLETE',
+    'REFUND_CREATE_OWN_OR_BY_RECEIPT', 'CUSTOMER_LOOKUP',
+    'CUSTOMER_CREATE', 'X_REPORT_PRINT', 'REPRINT_RECEIPT_COPY',
+  ],
+  SENIOR_CASHIER: [
+    'SHIFT_OPEN', 'SALE_CREATE', 'SALE_COMPLETE',
+    'REFUND_CREATE_OWN_OR_BY_RECEIPT', 'CUSTOMER_LOOKUP',
+    'CUSTOMER_CREATE', 'X_REPORT_PRINT', 'REPRINT_RECEIPT_COPY',
+    'SHIFT_CLOSE', 'REFUND_APPROVE', 'REFUND_COMPLETE',
+    'DISCOUNT_APPLY', 'PRICE_OVERRIDE_LIMITED', 'CASH_IN',
+    'CASH_OUT', 'VIEW_SHIFT_TOTALS', 'RECOVERY_RECEIPTS',
+  ],
+  ADMIN: [
+    'SHIFT_OPEN', 'SALE_CREATE', 'SALE_COMPLETE',
+    'REFUND_CREATE_OWN_OR_BY_RECEIPT', 'CUSTOMER_LOOKUP',
+    'CUSTOMER_CREATE', 'X_REPORT_PRINT', 'REPRINT_RECEIPT_COPY',
+    'SHIFT_CLOSE', 'REFUND_APPROVE', 'REFUND_COMPLETE',
+    'DISCOUNT_APPLY', 'PRICE_OVERRIDE_LIMITED', 'CASH_IN',
+    'CASH_OUT', 'VIEW_SHIFT_TOTALS', 'RECOVERY_RECEIPTS',
+    'POS_SETTINGS_EDIT', 'HARDWARE_SETTINGS_EDIT', 'OPERATOR_SWITCH',
+    'POLICY_VIEW', 'FORCE_SYNC', 'OUTBOX_REQUEUE', 'DEV_DIAGNOSTICS',
+  ],
+};

@@ -128,6 +128,40 @@ function pickField(obj: any, keys: string[]): any {
 
 const posOperatorRoleSchema = z.enum(['CASHIER', 'SENIOR_CASHIER', 'ADMIN']);
 
+// docs/POS_POLICY_ENGINE.md §14.6 — each role's full permission set,
+// SENIOR_CASHIER/ADMIN each including everything the role below them
+// has (spelled out per-role, not computed by concatenation, so this
+// constant reads the same as the §14.6 table it was transcribed from).
+// Used to default permissions[] on create (below) and to re-derive it
+// on a role change (PATCH below) — not enforced as a ceiling on what a
+// tenant can otherwise set (§14.6 already flags that as a separate,
+// not-yet-implemented open item).
+const DEFAULT_PERMISSIONS: Record<string, string[]> = {
+  CASHIER: [
+    'SHIFT_OPEN', 'SALE_CREATE', 'SALE_COMPLETE',
+    'REFUND_CREATE_OWN_OR_BY_RECEIPT', 'CUSTOMER_LOOKUP',
+    'CUSTOMER_CREATE', 'X_REPORT_PRINT', 'REPRINT_RECEIPT_COPY',
+  ],
+  SENIOR_CASHIER: [
+    'SHIFT_OPEN', 'SALE_CREATE', 'SALE_COMPLETE',
+    'REFUND_CREATE_OWN_OR_BY_RECEIPT', 'CUSTOMER_LOOKUP',
+    'CUSTOMER_CREATE', 'X_REPORT_PRINT', 'REPRINT_RECEIPT_COPY',
+    'SHIFT_CLOSE', 'REFUND_APPROVE', 'REFUND_COMPLETE',
+    'DISCOUNT_APPLY', 'PRICE_OVERRIDE_LIMITED', 'CASH_IN',
+    'CASH_OUT', 'VIEW_SHIFT_TOTALS', 'RECOVERY_RECEIPTS',
+  ],
+  ADMIN: [
+    'SHIFT_OPEN', 'SALE_CREATE', 'SALE_COMPLETE',
+    'REFUND_CREATE_OWN_OR_BY_RECEIPT', 'CUSTOMER_LOOKUP',
+    'CUSTOMER_CREATE', 'X_REPORT_PRINT', 'REPRINT_RECEIPT_COPY',
+    'SHIFT_CLOSE', 'REFUND_APPROVE', 'REFUND_COMPLETE',
+    'DISCOUNT_APPLY', 'PRICE_OVERRIDE_LIMITED', 'CASH_IN',
+    'CASH_OUT', 'VIEW_SHIFT_TOTALS', 'RECOVERY_RECEIPTS',
+    'POS_SETTINGS_EDIT', 'HARDWARE_SETTINGS_EDIT', 'OPERATOR_SWITCH',
+    'POLICY_VIEW', 'FORCE_SYNC', 'OUTBOX_REQUEUE', 'DEV_DIAGNOSTICS',
+  ],
+};
+
 const listOperatorsQuerySchema = z.object({
   storeId: z.string().min(1),
 });
@@ -740,13 +774,22 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const store = await prisma.store.findFirst({ where: { id: body.data.storeId, tenantId }, select: { id: true } });
       if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
 
+      // §14.6 — an omitted permissions[] already defaults to [] via
+      // createOperatorSchema; an explicitly empty array from the caller
+      // is indistinguishable from "omitted" at this point and gets the
+      // same treatment — either way, fall back to the role's default set
+      // rather than creating an operator with no permissions at all.
+      const permissions = body.data.permissions.length > 0
+        ? body.data.permissions
+        : DEFAULT_PERMISSIONS[body.data.role];
+
       const operator = await prisma.posOperator.create({
         data: {
           tenantId,
           storeId: store.id,
           name: body.data.name,
           role: body.data.role,
-          permissions: body.data.permissions,
+          permissions,
           active: body.data.active,
         },
       });
@@ -772,9 +815,22 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const existing = await prisma.posOperator.findFirst({ where: { id, tenantId }, select: { id: true, storeId: true } });
       if (!existing) return reply.status(404).send({ success: false, error: 'Operator not found' });
 
+      // §14.6 — updateOperatorSchema has no .default() on permissions
+      // (unlike create above), so "omitted" and "explicitly []" are
+      // still distinguishable here: body.data.permissions is undefined
+      // only when the caller didn't send the key at all. A role change
+      // with no explicit permissions in the same request re-derives
+      // permissions from the new role's default set; an explicit
+      // permissions[] in the request (even []) always wins and is left
+      // untouched, same as every other field in this partial update.
+      const data =
+        body.data.role !== undefined && body.data.permissions === undefined
+          ? { ...body.data, permissions: DEFAULT_PERMISSIONS[body.data.role] }
+          : body.data;
+
       const operator = await prisma.posOperator.update({
         where: { id: existing.id },
-        data: body.data,
+        data,
       });
       await bumpStaffVersion(tenantId, existing.storeId);
 
