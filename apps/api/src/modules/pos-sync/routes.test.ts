@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
       findFirst: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({ stockQty: 0 }),
     },
+    productType: { findMany: vi.fn().mockResolvedValue([]) },
     productVariant: {
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(null),
@@ -640,6 +641,175 @@ describe('pos-sync.routes', () => {
       });
 
       expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+  });
+
+  describe('GET /api/pos/v1/products/search', () => {
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.product.findMany.mockResolvedValue([]);
+      mocks.prisma.productType.findMany.mockResolvedValue([]);
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue(null);
+    });
+
+    const sampleProduct = {
+      id: 'p-1', name: 'Cola 0.5L', sku: 'COLA-05', price: 12000, currency: 'UZS',
+      stockQty: 10, categoryId: 'c-1', vatRate: null, vatExempt: false, markType: null,
+      isMarked: false, mxikCode: '01234567890123456', packageCode: null, unit: 'шт',
+      isByWeight: false, isWeightedPiece: false, pluCode: null, pricePerKg: null,
+      updatedAt: new Date('2026-07-01T00:00:00Z'),
+      barcodes: [{ id: 'b-1', barcode: '4780000000017', type: 'EAN13', isDefault: true, unitQty: 1, variantId: null }],
+      variants: [],
+      productTypeId: null,
+      productType: null,
+    };
+
+    it('returns 400 when q is shorter than 2 characters', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/products/search?q=a',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      expect(mocks.prisma.product.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 when q is missing entirely', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/products/search',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('returns 401 for a missing device key', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/products/search?q=cola',
+        headers: { 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+
+    it('searches by name/sku/mxikCode (ILIKE) and exact barcode, scoped to the tenant and active products only', async () => {
+      mocks.prisma.product.findMany.mockResolvedValue([sampleProduct]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/products/search?q=cola&limit=10',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            tenantId: 't-1',
+            isActive: true,
+            OR: [
+              { name: { contains: 'cola', mode: 'insensitive' } },
+              { sku: { contains: 'cola', mode: 'insensitive' } },
+              { mxikCode: { contains: 'cola', mode: 'insensitive' } },
+              { barcodes: { some: { tenantId: 't-1', barcode: 'cola' } } },
+            ],
+          },
+          take: 10,
+        })
+      );
+      const body = response.json();
+      expect(body.data.products).toHaveLength(1);
+      expect(body.data.products[0]).toMatchObject({
+        id: 'p-1', name: 'Cola 0.5L', sku: 'COLA-05',
+        productTypeCode: null, productTypeRules: [], weightMode: 'PIECE', barcodePrefixes: [],
+      });
+      expect(body.data.products[0].barcodes).toEqual(sampleProduct.barcodes);
+      await app.close();
+    });
+
+    it('defaults limit to 20 when not provided, caps at 50', async () => {
+      const app = await buildApp();
+      await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/products/search?q=cola',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 20 }));
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/products/search?q=cola&limit=999',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('derives productTypeCode/productTypeRules/weightMode/barcodePrefixes the same way CatalogSnapshot does', async () => {
+      mocks.prisma.product.findMany.mockResolvedValue([{
+        ...sampleProduct,
+        isByWeight: true,
+        productTypeId: 'pt-1',
+        productType: { code: 'WEIGHT', rules: [], weightMode: 'WEIGHT', barcodePrefixes: ['22'], parentTypeId: null },
+      }]);
+      mocks.prisma.productType.findMany.mockResolvedValue([
+        { id: 'pt-1', rules: [{ ruleId: 'WEIGHT_REQUIRED', severity: 'BLOCK', channels: ['POS'] }], parentTypeId: null },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/products/search?q=cola',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      const product = response.json().data.products[0];
+      expect(product.productTypeCode).toBe('WEIGHT');
+      expect(product.productTypeRules).toEqual([{ ruleId: 'WEIGHT_REQUIRED', severity: 'BLOCK', channels: ['POS'] }]);
+      expect(product.weightMode).toBe('WEIGHT');
+      expect(product.barcodePrefixes).toEqual(['22']);
+      // The raw nested productType object is stripped, matching
+      // admin-routes.ts's snapshot shape (flat fields only).
+      expect(product.productType).toBeUndefined();
+      await app.close();
+    });
+
+    it('returns catalogVersion from the latest CatalogSnapshot for the device store', async () => {
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ version: 7 });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/products/search?q=cola',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(response.json().data.catalogVersion).toBe(7);
+      expect(mocks.prisma.catalogSnapshot.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: 't-1', storeId: 's-1' } })
+      );
+      await app.close();
+    });
+
+    it('returns catalogVersion: 0 when the store has no snapshot yet', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/products/search?q=cola',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.json().data.catalogVersion).toBe(0);
       await app.close();
     });
   });
