@@ -318,6 +318,14 @@ const fiscalEventSchema = z.object({
   originalReceiptNumber: z.union([z.string(), z.number()]).nullable().optional(),
   totalAmount: z.number(),
   currency: z.string().min(1),
+  // docs/CUSTOMER_LOYALTY.md §7 (revised) — loyalty accrual's identity
+  // source, moved here from SaleEvent. This field MUST exist here —
+  // z.object() silently strips any key it doesn't declare (no
+  // .passthrough() on this schema), same class of bug docs/PRODUCT_TYPES
+  // .md §5 already caught once for weightBarcode. Same
+  // min(1).optional() shape as saleEventSchema's customerId above, for
+  // consistency — an empty-string id is as meaningless here as there.
+  customerId: z.string().min(1).optional(),
   payments: z.array(z.record(z.unknown())),
   items: z.array(z.record(z.unknown())),
   createdAtMs: z.number(),
@@ -363,6 +371,91 @@ const commandAckSchema = z.object({
 
 function toStringOrNull(value: string | number | null | undefined): string | null {
   return value === null || value === undefined ? null : String(value);
+}
+
+type FiscalLoyaltySource = {
+  id: string;
+  eventType: string;
+  receiptType: string | null;
+  fiscalStatus: string;
+  customerId: string | null;
+  totalAmount: number;
+  receiptNumber: string | null;
+};
+
+// docs/CUSTOMER_LOYALTY.md §7 (revised) — POS loyalty accrual, now keyed
+// off a FISCAL_SUCCESS fiscal event rather than a SALE_COMPLETED sale
+// event (see the fiscal-events handler's comment for why). Reuses
+// order.service.ts's accrual math verbatim (tier lookup, unitAmount/
+// pointsPerUnit, the "only touch totalSpent/ordersCount when
+// pointsEarned > 0" quirk) — not a place to silently diverge from it.
+// Called from a try/catch at the call site; this function itself does
+// not swallow errors — a caller relying on it to also handle its own
+// failures would be a bug.
+async function accrueFiscalLoyalty(fiscalEvent: FiscalLoyaltySource, tenantId: string): Promise<void> {
+  if (
+    fiscalEvent.eventType !== 'FISCAL_SUCCESS' ||
+    fiscalEvent.receiptType !== 'SALE' ||
+    fiscalEvent.fiscalStatus !== 'SUCCESS' ||
+    !fiscalEvent.customerId
+  ) {
+    return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Idempotency: guards both a genuine duplicate FISCAL_SUCCESS row for
+    // the same receipt and the P2002-replay path in the route handler
+    // (which re-runs this function against the same already-accrued row
+    // after a crash between the original create and its accrual step).
+    const alreadyAccrued = await tx.loyaltyTransaction.findFirst({
+      where: { sourceType: 'POS_FISCAL', sourceId: fiscalEvent.id },
+      select: { id: true },
+    });
+    if (alreadyAccrued) return;
+
+    const loyaltyConfig = await tx.loyaltyConfig.findUnique({ where: { tenantId } });
+    if (!loyaltyConfig?.isEnabled) return;
+
+    // Tiyin → UZS (docs/CUSTOMER_LOYALTY.md §7) — unlike sale-events'
+    // opaque totals.total, FiscalEvent.totalAmount is a real, typed Int
+    // column, no defensive extraction needed.
+    const total = fiscalEvent.totalAmount / 100;
+    if (!(total > 0)) return;
+
+    const customer = await tx.customer.findFirst({
+      where: { id: fiscalEvent.customerId!, tenantId },
+      select: { id: true, totalSpent: true, loyaltyPoints: true },
+    });
+    if (!customer) return;
+
+    const tiers = (loyaltyConfig.tiers as any) ?? DEFAULT_TIERS;
+    const tier = computeTier(Number(customer.totalSpent), tiers);
+    const basePoints = Math.floor(total / loyaltyConfig.unitAmount) * loyaltyConfig.pointsPerUnit;
+    const pointsEarned = Math.floor(basePoints * tier.multiplier);
+    if (pointsEarned <= 0) return;
+
+    const updatedCustomer = await tx.customer.update({
+      where: { id: customer.id },
+      data: {
+        loyaltyPoints: { increment: pointsEarned },
+        totalSpent: { increment: total },
+        ordersCount: { increment: 1 },
+      },
+      select: { loyaltyPoints: true },
+    });
+    await tx.loyaltyTransaction.create({
+      data: {
+        customerId: customer.id,
+        tenantId,
+        type: 'EARN',
+        points: pointsEarned,
+        balanceAfter: updatedCustomer.loyaltyPoints,
+        sourceType: 'POS_FISCAL',
+        sourceId: fiscalEvent.id,
+        description: `Loyalty points earned (${tier.name}) for POS receipt #${fiscalEvent.receiptNumber ?? '?'}`,
+      },
+    });
+  });
 }
 
 // Moderate baseline for device polling endpoints — generous enough that
@@ -1086,67 +1179,11 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           });
         }
 
-        // docs/CUSTOMER_LOYALTY.md §6/§7 — reuses the exact same gate as
-        // stock derivation above (derivesStock), not a separate one: a
-        // sale only "counts" for loyalty once it's SALE_COMPLETED with a
-        // completed/fiscalized status, same as stock. Idempotent for
-        // free, not via a second check — this code only ever runs on the
-        // create path; a replay of an existing idempotencyKey returns via
-        // respondForExistingEvent() above before reaching this
-        // transaction at all, so it can never double-accrue.
-        if (derivesStock && body.data.customerId) {
-          const loyaltyConfig = await tx.loyaltyConfig.findUnique({ where: { tenantId: device.tenantId } });
-          // `totals` is an intentionally opaque object in the wire
-          // contract (docs/pos-sync/schemas/sale-event.schema.json — no
-          // sub-shape defined); `totals.total` is the only convention
-          // this codebase has for it today (routes.test.ts's fixture).
-          // Read defensively — a missing/non-numeric total simply skips
-          // accrual for this sale rather than crashing the whole request,
-          // same accept-don't-reject posture as the stock-derivation
-          // warnings above.
-          const totalRaw = (body.data.totals as Record<string, unknown>)?.total;
-          const total = typeof totalRaw === 'number' && Number.isFinite(totalRaw) && totalRaw > 0 ? totalRaw : null;
-
-          if (loyaltyConfig?.isEnabled && total) {
-            const customer = await tx.customer.findFirst({
-              where: { id: body.data.customerId, tenantId: device.tenantId },
-              select: { id: true, totalSpent: true, loyaltyPoints: true },
-            });
-            if (customer) {
-              const tiers = (loyaltyConfig.tiers as any) ?? DEFAULT_TIERS;
-              const tier = computeTier(Number(customer.totalSpent), tiers);
-              const basePoints = Math.floor(total / loyaltyConfig.unitAmount) * loyaltyConfig.pointsPerUnit;
-              const pointsEarned = Math.floor(basePoints * tier.multiplier);
-              // Mirrors order.service.ts's Telegram accrual exactly,
-              // including its existing quirk of only touching
-              // totalSpent/ordersCount when pointsEarned > 0 — this
-              // reuses that logic on purpose (§6/§7: "reusing
-              // order.service.ts's accrual math... not duplicating it"),
-              // not a place to silently diverge from it.
-              if (pointsEarned > 0) {
-                const updatedCustomer = await tx.customer.update({
-                  where: { id: customer.id },
-                  data: {
-                    loyaltyPoints: { increment: pointsEarned },
-                    totalSpent: { increment: total },
-                    ordersCount: { increment: 1 },
-                  },
-                  select: { loyaltyPoints: true },
-                });
-                await tx.loyaltyTransaction.create({
-                  data: {
-                    customerId: customer.id,
-                    tenantId: device.tenantId,
-                    type: 'EARN',
-                    points: pointsEarned,
-                    balanceAfter: updatedCustomer.loyaltyPoints,
-                    description: `Loyalty points earned (${tier.name}) for POS receipt #${body.data.receiptNumber}`,
-                  },
-                });
-              }
-            }
-          }
-        }
+        // Loyalty accrual moved to POST /pos/v1/fiscal-events (see that
+        // handler below) — a receipt is only "real" once fiscalized
+        // (FISCAL_SUCCESS/fiscalStatus SUCCESS), which this event's own
+        // SALE_COMPLETED status cannot guarantee on its own.
+        // docs/CUSTOMER_LOYALTY.md §7 (revised).
 
         return created;
       });
@@ -1290,8 +1327,13 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     }
 
     const payloadHash = checksumOf(body.data);
+    // Captured across both branches below (fresh create vs. P2002 replay)
+    // so loyalty accrual (further down) always has a real row to work
+    // from, whichever path produced it.
+    let savedEvent;
+    let isNewlyCreated = true;
     try {
-      await prisma.fiscalEvent.create({
+      savedEvent = await prisma.fiscalEvent.create({
         data: {
           tenantId: device.tenantId,
           storeId: device.storeId,
@@ -1332,6 +1374,10 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           policiesVersion: body.data.policiesVersion,
           triggeredRuleIds: body.data.triggeredRuleIds,
           managerOverride: (body.data.managerOverride ?? null) as any,
+          // docs/CUSTOMER_LOYALTY.md §7 (revised) — the Prisma-create side
+          // of the customerId field; see the Zod schema comment above for
+          // why both sides must land together.
+          customerId: body.data.customerId ?? null,
         },
       });
     } catch (err: any) {
@@ -1342,12 +1388,39 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       // of endpoints, and a device only ever retries with the same body
       // (durable outbox, §7), so silently no-op-ing the duplicate is safe.
       if (err?.code === 'P2002') {
-        return sendAck(reply, 200, request);
+        isNewlyCreated = false;
+        // Re-fetch the row a retry collided with — needed below so a
+        // retry that arrives *after* the original request crashed before
+        // reaching accrual still gets a chance to accrue exactly once
+        // (the sourceType/sourceId check inside accrueFiscalLoyalty
+        // makes a second attempt on an already-accrued row a no-op).
+        savedEvent = await prisma.fiscalEvent.findUnique({
+          where: { deviceId_eventId: { deviceId: device.id, eventId: body.data.eventId } },
+        });
+      } else {
+        throw err;
       }
-      throw err;
     }
 
-    return sendAck(reply, 201, request);
+    // docs/CUSTOMER_LOYALTY.md §7 (revised, per Android's confirmed §14.6
+    // enforcement pass) — loyalty accrual now keys off FISCAL_SUCCESS, not
+    // SALE_COMPLETED: a receipt is only "real" once fiscalized, which a
+    // sale event's own status can't guarantee on its own. Isolated in its
+    // own try/catch, deliberately outside the fiscalEvent.create() above —
+    // a failure here must never turn an already-stored fiscal event into
+    // an error response to the till.
+    if (savedEvent) {
+      try {
+        await accrueFiscalLoyalty(savedEvent, device.tenantId);
+      } catch (err: any) {
+        request.log.error(
+          { err, fiscalEventId: savedEvent.id, tenantId: device.tenantId },
+          'pos-sync: loyalty accrual failed for fiscal event'
+        );
+      }
+    }
+
+    return sendAck(reply, isNewlyCreated ? 201 : 200, request);
   });
 
   fastify.post('/pos/v1/shift-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {

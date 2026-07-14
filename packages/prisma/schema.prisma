@@ -615,6 +615,10 @@ model Customer {
   // POS sale events attributed to this profile (docs/CUSTOMER_LOYALTY.md
   // §7) — back-relation for SaleEvent.customerId below.
   saleEvents          SaleEvent[]
+  // POS fiscal events attributed to this profile — back-relation for
+  // FiscalEvent.customerId below (loyalty accrual now lives there, not
+  // on SaleEvent — see the schema comment on FiscalEvent.customerId).
+  fiscalEvents        FiscalEvent[]
   // B2B bridge (docs/CUSTOMER_LOYALTY.md §9, resolving
   // docs/B2B_COUNTERPARTIES.md §12 open question 1) — back-relation for
   // Counterparty.customerId, singular (not an array) because that FK is
@@ -905,11 +909,21 @@ model LoyaltyTransaction {
   points       Int
   balanceAfter Int
   orderId      String?
+  // Idempotency key for non-Order accrual sources — e.g. POS fiscal
+  // events (sourceType: 'POS_FISCAL', sourceId: FiscalEvent.id).
+  // Deliberately separate from orderId above rather than overloading it
+  // with a non-Order id: orderId stays exactly what it already means for
+  // the existing Sellgram accrual path (order.service.ts), untouched.
+  sourceType   String?
+  sourceId     String?
   description  String?
   createdAt    DateTime       @default(now())
 
   @@index([customerId, createdAt(sort: Desc)])
   @@index([tenantId])
+  // Duplicate-accrual guard for a given source event, checked before
+  // writing a new EARN row (pos-sync/routes.ts's fiscal-events handler).
+  @@index([sourceType, sourceId])
   @@map("loyalty_transactions")
 }
 
@@ -1583,11 +1597,20 @@ model FiscalEvent {
   triggeredRuleIds String[] @default([])
   managerOverride  Json?
 
+  // Loyalty accrual now lives here, not on SaleEvent — a receipt is only
+  // "real" once fiscalized (FISCAL_SUCCESS/fiscalStatus SUCCESS), which
+  // SaleEvent's own SALE_COMPLETED status cannot guarantee on its own.
+  // Nullable — an anonymous POS sale remains fully valid with no
+  // customer attached, same convention as SaleEvent.customerId.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
   @@unique([deviceId, eventId])
   @@index([deviceId, localReceiptId])
   @@index([deviceId, receiptNumber])
   @@index([deviceId, receiptType, idempotencyKey])
   @@index([deviceId, shiftNumber])
+  @@index([customerId])
   @@map("fiscal_events")
 }
 

@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
       update: vi.fn(),
     },
     loyaltyConfig: { findUnique: vi.fn().mockResolvedValue(null) },
-    loyaltyTransaction: { create: vi.fn().mockResolvedValue({}) },
+    loyaltyTransaction: { create: vi.fn().mockResolvedValue({}), findFirst: vi.fn().mockResolvedValue(null) },
     stockEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     product: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => ({
     },
     stockLedgerEntry: { createMany: vi.fn().mockResolvedValue({ count: 0 }), create: vi.fn().mockResolvedValue({}) },
     stockMovement: { create: vi.fn().mockResolvedValue({}) },
-    fiscalEvent: { create: vi.fn().mockResolvedValue({}) },
+    fiscalEvent: { create: vi.fn().mockResolvedValue({}), findUnique: vi.fn().mockResolvedValue(null) },
     shiftEvent: { create: vi.fn().mockResolvedValue({}) },
     cloudCommand: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -1515,125 +1515,28 @@ describe('pos-sync.routes', () => {
       await app.close();
     });
 
-    // docs/CUSTOMER_LOYALTY.md §7/§13 step 3/4.
-    describe('loyalty accrual (docs/CUSTOMER_LOYALTY.md §7)', () => {
-      it('accrues points and writes a LoyaltyTransaction when customerId is present and loyalty is enabled', async () => {
-        mocks.prisma.customer.findFirst.mockResolvedValue({ id: 'cust-1', totalSpent: 0, loyaltyPoints: 10 });
-        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({
-          isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null,
-        });
-        mocks.prisma.customer.update.mockResolvedValue({ loyaltyPoints: 35 });
-
-        const app = await buildApp();
-        const response = await app.inject({
-          method: 'POST',
-          url: '/api/pos/v1/sale-events',
-          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
-          payload: { ...validSaleEvent, customerId: 'cust-1' },
-        });
-
-        expect(response.statusCode).toBe(201);
-        expect(mocks.prisma.customer.update).toHaveBeenCalledWith(
-          expect.objectContaining({
-            where: { id: 'cust-1' },
-            data: expect.objectContaining({
-              loyaltyPoints: { increment: 25 },
-              totalSpent: { increment: 25000 },
-              ordersCount: { increment: 1 },
-            }),
-          })
-        );
-        expect(mocks.prisma.loyaltyTransaction.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            data: expect.objectContaining({ customerId: 'cust-1', tenantId: 't-1', type: 'EARN', points: 25, balanceAfter: 35 }),
-          })
-        );
-        await app.close();
+    // docs/CUSTOMER_LOYALTY.md §7 (revised) — loyalty accrual moved to
+    // POST /pos/v1/fiscal-events (its own describe block below). This is
+    // a narrow regression guard: sale-events must never accrue again,
+    // even though it still stores customerId on the row itself (§7's
+    // customer-identification purpose for that field is unchanged).
+    it('does not accrue loyalty itself (moved to fiscal-events, §7 revised)', async () => {
+      mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validSaleEvent, customerId: 'cust-1' },
       });
-
-      it('stores customerId on the SaleEvent row even when accrual does not apply', async () => {
-        const app = await buildApp();
-        await app.inject({
-          method: 'POST',
-          url: '/api/pos/v1/sale-events',
-          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
-          payload: { ...validSaleEvent, customerId: 'cust-1' },
-        });
-        expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
-          expect.objectContaining({ data: expect.objectContaining({ customerId: 'cust-1' }) })
-        );
-        // loyaltyConfig defaults to null in this describe block's outer
-        // mocks (no isEnabled row) — accrual must not run at all.
-        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
-        expect(mocks.prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
-      });
-
-      it('does not accrue when the sale has no customerId (anonymous sale)', async () => {
-        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
-        const app = await buildApp();
-        const response = await app.inject({
-          method: 'POST',
-          url: '/api/pos/v1/sale-events',
-          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
-          payload: validSaleEvent,
-        });
-        expect(response.statusCode).toBe(201);
-        expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
-          expect.objectContaining({ data: expect.objectContaining({ customerId: null }) })
-        );
-        expect(mocks.prisma.loyaltyConfig.findUnique).not.toHaveBeenCalled();
-        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
-      });
-
-      it('does not accrue when eventType/status does not derive stock (same gate as §11)', async () => {
-        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
-        const app = await buildApp();
-        await app.inject({
-          method: 'POST',
-          url: '/api/pos/v1/sale-events',
-          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
-          payload: { ...validSaleEvent, customerId: 'cust-1', eventType: 'SALE_CREATED', idempotencyKey: 'dev-1:sale:SALE-000001:SALE_CREATED' },
-        });
-        expect(mocks.prisma.loyaltyConfig.findUnique).not.toHaveBeenCalled();
-        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
-      });
-
-      it('is naturally idempotent: a replay of an existing idempotencyKey never re-runs accrual', async () => {
-        // Same two-phase approach as the plain replay test above: deliver
-        // for real first to learn the exact payloadHash, then replay.
-        mocks.prisma.customer.findFirst.mockResolvedValue({ id: 'cust-1', totalSpent: 0, loyaltyPoints: 10 });
-        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
-        mocks.prisma.customer.update.mockResolvedValue({ loyaltyPoints: 35 });
-
-        const app = await buildApp();
-        const payloadWithCustomer = { ...validSaleEvent, customerId: 'cust-1' };
-        await app.inject({
-          method: 'POST',
-          url: '/api/pos/v1/sale-events',
-          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
-          payload: payloadWithCustomer,
-        });
-        const storedHash = mocks.prisma.saleEvent.create.mock.calls[0][0].data.payloadHash;
-
-        vi.clearAllMocks();
-        mocks.prisma.posDevice.findUnique.mockResolvedValue({
-          id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
-        });
-        mocks.prisma.saleEvent.findUnique.mockResolvedValue({ id: 'evt-1', payloadHash: storedHash, warnings: [] });
-
-        const response = await app.inject({
-          method: 'POST',
-          url: '/api/pos/v1/sale-events',
-          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
-          payload: payloadWithCustomer,
-        });
-
-        expect(response.statusCode).toBe(201);
-        expect(mocks.prisma.saleEvent.create).not.toHaveBeenCalled();
-        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
-        expect(mocks.prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
-        await app.close();
-      });
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.saleEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ customerId: 'cust-1' }) })
+      );
+      expect(mocks.prisma.loyaltyConfig.findUnique).not.toHaveBeenCalled();
+      expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
+      expect(mocks.prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
+      await app.close();
     });
   });
 
@@ -1922,6 +1825,15 @@ describe('pos-sync.routes', () => {
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
       mocks.prisma.fiscalEvent.create.mockResolvedValue({});
+      mocks.prisma.fiscalEvent.findUnique.mockResolvedValue(null);
+      mocks.prisma.$transaction.mockImplementation(async (fn: any) => fn(mocks.prisma));
+      // Explicit reset — mockResolvedValue survives vi.clearAllMocks(), so
+      // without this a value left over from an earlier describe block
+      // (sale-events, GET/POST /customer) would leak in here.
+      mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue(null);
+      mocks.prisma.customer.findFirst.mockResolvedValue(null);
+      mocks.prisma.customer.update.mockResolvedValue({});
+      mocks.prisma.loyaltyTransaction.findFirst.mockResolvedValue(null);
     });
 
     it('ingests a FISCAL_SUCCESS event with the simplified ack envelope', async () => {
@@ -2137,6 +2049,190 @@ describe('pos-sync.routes', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
+    });
+
+    // docs/CUSTOMER_LOYALTY.md §7 (revised) — accrual moved here from
+    // sale-events, keyed off FISCAL_SUCCESS + receiptType SALE +
+    // fiscalStatus SUCCESS, since a receipt is only "real" once fiscalized.
+    describe('loyalty accrual (docs/CUSTOMER_LOYALTY.md §7, revised)', () => {
+      it('accrues points and writes a LoyaltyTransaction sourced from the fiscal event', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-1', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'SUCCESS',
+          customerId: 'cust-1', totalAmount: 1250000, receiptNumber: '20260704-0001-0001',
+        });
+        mocks.prisma.customer.findFirst.mockResolvedValue({ id: 'cust-1', totalSpent: 0, loyaltyPoints: 10 });
+        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({
+          isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null,
+        });
+        mocks.prisma.customer.update.mockResolvedValue({ loyaltyPoints: 35 });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, customerId: 'cust-1' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        // 1250000 tiyin / 100 = 12500 UZS → floor(12500/1000)*1 = 12 points.
+        expect(mocks.prisma.customer.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'cust-1' },
+            data: expect.objectContaining({
+              loyaltyPoints: { increment: 12 },
+              totalSpent: { increment: 12500 },
+              ordersCount: { increment: 1 },
+            }),
+          })
+        );
+        expect(mocks.prisma.loyaltyTransaction.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              customerId: 'cust-1', tenantId: 't-1', type: 'EARN', points: 12, balanceAfter: 35,
+              sourceType: 'POS_FISCAL', sourceId: 'fisc-1',
+            }),
+          })
+        );
+        await app.close();
+      });
+
+      it('does not accrue when customerId is absent (anonymous sale)', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-2', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'SUCCESS',
+          customerId: null, totalAmount: 500000, receiptNumber: '1',
+        });
+        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: validFiscalEvent,
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.loyaltyConfig.findUnique).not.toHaveBeenCalled();
+        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('does not accrue for a REFUND receipt', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-3', eventType: 'FISCAL_SUCCESS', receiptType: 'REFUND', fiscalStatus: 'SUCCESS',
+          customerId: 'cust-1', totalAmount: 500000, receiptNumber: '1',
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, receiptType: 'REFUND', customerId: 'cust-1' },
+        });
+
+        expect(mocks.prisma.loyaltyConfig.findUnique).not.toHaveBeenCalled();
+        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('does not accrue when fiscalStatus is not SUCCESS', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-4', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'PENDING',
+          customerId: 'cust-1', totalAmount: 500000, receiptNumber: '1',
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, fiscalStatus: 'PENDING', customerId: 'cust-1' },
+        });
+
+        expect(mocks.prisma.loyaltyConfig.findUnique).not.toHaveBeenCalled();
+        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('skips accrual when a LoyaltyTransaction already exists for this fiscal event (idempotency)', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-5', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'SUCCESS',
+          customerId: 'cust-1', totalAmount: 500000, receiptNumber: '1',
+        });
+        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
+        mocks.prisma.loyaltyTransaction.findFirst.mockResolvedValue({ id: 'ltx-existing' });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, customerId: 'cust-1' },
+        });
+
+        expect(mocks.prisma.loyaltyTransaction.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { sourceType: 'POS_FISCAL', sourceId: 'fisc-5' } })
+        );
+        expect(mocks.prisma.customer.update).not.toHaveBeenCalled();
+        expect(mocks.prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('re-attempts accrual on a P2002 replay, using the row found via findUnique', async () => {
+        mocks.prisma.fiscalEvent.create.mockRejectedValue(Object.assign(new Error('unique violation'), { code: 'P2002' }));
+        mocks.prisma.fiscalEvent.findUnique.mockResolvedValue({
+          id: 'fisc-6', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'SUCCESS',
+          customerId: 'cust-1', totalAmount: 500000, receiptNumber: '1',
+        });
+        mocks.prisma.customer.findFirst.mockResolvedValue({ id: 'cust-1', totalSpent: 0, loyaltyPoints: 0 });
+        mocks.prisma.loyaltyConfig.findUnique.mockResolvedValue({ isEnabled: true, unitAmount: 1000, pointsPerUnit: 1, tiers: null });
+        mocks.prisma.customer.update.mockResolvedValue({ loyaltyPoints: 5 });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, customerId: 'cust-1' },
+        });
+
+        expect(response.statusCode).toBe(200); // replay ack, not a new create
+        expect(mocks.prisma.fiscalEvent.findUnique).toHaveBeenCalledWith({
+          where: { deviceId_eventId: { deviceId: 'dev-1', eventId: validFiscalEvent.eventId } },
+        });
+        expect(mocks.prisma.loyaltyTransaction.create).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ sourceId: 'fisc-6' }) })
+        );
+        await app.close();
+      });
+
+      it('logs the error and still returns success when accrual throws', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-7', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'SUCCESS',
+          customerId: 'cust-1', totalAmount: 500000, receiptNumber: '1',
+        });
+        mocks.prisma.loyaltyConfig.findUnique.mockRejectedValue(new Error('db exploded'));
+
+        const lines: string[] = [];
+        const stream = new Writable({ write(chunk, _enc, cb) { lines.push(chunk.toString()); cb(); } });
+        const app = await buildApp({ logger: { level: 'error', stream } });
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, customerId: 'cust-1' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(response.json()).toEqual({ success: true, requestId: expect.any(String) });
+        const errorLine = lines.find((l) => l.includes('loyalty accrual failed'));
+        expect(errorLine).toBeTruthy();
+        expect(errorLine).toContain('fisc-7');
+        await app.close();
+      });
     });
   });
 
