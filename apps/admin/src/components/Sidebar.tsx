@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Package, Boxes, Users, BarChart2, Settings as SettingsIcon, CreditCard, Briefcase, ChevronDown, ChevronUp, type LucideIcon,
+  LayoutDashboard, Package, Boxes, Users, BarChart2, Settings as SettingsIcon, CreditCard, Briefcase, ChevronDown, ChevronUp, ShoppingCart, Truck, Tag, FileText, HelpCircle, type LucideIcon,
 } from 'lucide-react';
 import { useAdminI18n, type Key } from '../i18n';
 
@@ -40,8 +40,14 @@ const WORKSPACE_LINKS: NavLink[] = [
   { to: '/', label: 'dashboard', icon: LayoutDashboard },
   { to: '/products', label: 'catalog', perm: 'manageCatalog', icon: Package },
   { to: '/stock', label: 'stock', perm: 'manageCatalog', icon: Boxes },
+  { to: '/procurement', label: 'procurement', perm: 'manageCatalog', icon: ShoppingCart },
+  { to: '/suppliers', label: 'suppliers', perm: 'manageCatalog', icon: Truck },
+  { to: '/categories', label: 'categories', perm: 'manageCatalog', icon: Tag },
   { to: '/customers', label: 'customers', perm: 'manageCustomers', icon: Users },
   { to: '/reports', label: 'reports', perm: 'viewReports', icon: BarChart2 },
+  { to: '/billing', label: 'billing', perm: 'manageBilling', icon: CreditCard },
+  { to: '/audit-log', label: 'audit_log', perm: 'manageSettings', icon: FileText },
+  { to: '/help', label: 'help', icon: HelpCircle },
   { to: '/settings', label: 'team_settings', icon: SettingsIcon },
 ];
 

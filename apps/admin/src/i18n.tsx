@@ -32,6 +32,11 @@ const dict = {
     b2b: 'B2B/\u041e\u043f\u0442',
     promo_codes: '\u041f\u0440\u043e\u043c\u043e\u043a\u043e\u0434\u044b',
     banners: '\u0411\u0430\u043d\u043d\u0435\u0440\u044b',
+    // Matches TopBar.tsx's existing '/billing' title, which uses the
+    // 'plans' key for the same page \u2014 kept in sync so the sidebar label
+    // and the page's own title never disagree.
+    billing: '\u0422\u0430\u0440\u0438\u0444\u044b',
+    audit_log: '\u0416\u0443\u0440\u043d\u0430\u043b \u0430\u0443\u0434\u0438\u0442\u0430',
   },
   uz: {
     dashboard: 'Boshqaruv paneli',
@@ -60,6 +65,8 @@ const dict = {
     b2b: 'B2B/Optom',
     promo_codes: 'Promokodlar',
     banners: 'Bannerlar',
+    billing: 'Tariflar',
+    audit_log: 'Audit jurnali',
   },
 } as const;
 
