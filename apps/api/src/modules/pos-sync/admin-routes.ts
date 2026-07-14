@@ -4,6 +4,7 @@ import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { fetchProductTypesById, deriveProductTypeFields } from './product-type-rules.js';
 
 const ACTIVATION_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 const ACTIVATION_CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
@@ -380,53 +381,13 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         orderBy: { sortOrder: 'asc' },
       });
 
-      // Bulk-fetched once (global, small — 7 seed rows plus whatever
-      // tenant-custom types exist) so mergeRules can walk a
-      // parentTypeId chain of any depth without a query per product.
-      // ProductType.rules is unconstrained Json (docs/PRODUCT_TYPES.md
-      // §4) — cast through `any` rather than typing every ruleId shape.
-      const allProductTypes = await prisma.productType.findMany({
-        select: { id: true, rules: true, parentTypeId: true },
-      });
-      const typesById = new Map(allProductTypes.map((t) => [t.id, t]));
-
-      // docs/PRODUCT_TYPES.md §4 inheritance: child overlays parent by
-      // ruleId, BLOCK always wins over WARN for a shared ruleId, parent
-      // rules the child doesn't mention pass through unchanged. Walks
-      // root-to-leaf (reversed after collecting leaf-to-root) so a
-      // later, more-specific entry in the chain is what actually
-      // overrides an earlier, less-specific one below.
-      function mergeRules(productTypeId: string | null | undefined): any[] {
-        if (!productTypeId) return [];
-        const chain: any[][] = [];
-        let current = typesById.get(productTypeId);
-        const visited = new Set<string>();
-        while (current) {
-          chain.push(Array.isArray(current.rules) ? (current.rules as any[]) : []);
-          if (!current.parentTypeId || visited.has(current.parentTypeId)) break;
-          visited.add(current.parentTypeId);
-          current = typesById.get(current.parentTypeId);
-        }
-        chain.reverse(); // root first, leaf (the product's own type) last
-
-        const merged = new Map<string, any>();
-        for (const ruleArr of chain) {
-          for (const rule of ruleArr) {
-            const existing = merged.get(rule.ruleId);
-            // A less-specific ancestor already blocking this ruleId
-            // can't be loosened to WARN by a more-specific descendant.
-            merged.set(rule.ruleId, existing?.severity === 'BLOCK' ? { ...rule, severity: 'BLOCK' } : rule);
-          }
-        }
-        return Array.from(merged.values());
-      }
-
+      // docs/PRODUCT_TYPES.md §4/§6 — shared with routes.ts's
+      // product-search endpoint (product-type-rules.ts), not a local
+      // copy anymore.
+      const typesById = await fetchProductTypesById();
       const productsForSnapshot = products.map(({ productType, ...product }) => ({
         ...product,
-        productTypeCode: productType?.code ?? null,
-        productTypeRules: mergeRules(product.productTypeId),
-        weightMode: productType?.weightMode ?? (product.isByWeight ? 'WEIGHT' : product.isWeightedPiece ? 'PIECE_WEIGHT' : 'PIECE'),
-        barcodePrefixes: productType?.barcodePrefixes ?? [],
+        ...deriveProductTypeFields(product, productType, typesById),
       }));
 
       const last = await prisma.catalogSnapshot.findFirst({

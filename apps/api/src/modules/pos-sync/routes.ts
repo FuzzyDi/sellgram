@@ -5,6 +5,7 @@ import prisma from '../../lib/prisma.js';
 import { getLicenseStatus } from '../../lib/billing.js';
 import { generateLoyaltyCardNumber } from '../../lib/loyalty-card.js';
 import { DEFAULT_TIERS, computeTier } from '../loyalty/routes.js';
+import { fetchProductTypesById, deriveProductTypeFields } from './product-type-rules.js';
 import { resolveDevice } from './device-auth.js';
 import { sendAck, sendError, sendSuccess } from './envelope.js';
 
@@ -92,6 +93,11 @@ const catalogQuerySchema = z.object({
   // Accepted but inert in v1 — delta sync is out of scope, `full` is
   // always true (docs/POS_SYNC_API.md §9).
   sinceVersion: z.coerce.number().int().min(0).optional(),
+});
+
+const productSearchQuerySchema = z.object({
+  q: z.string().min(2),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
 // docs/CUSTOMER_LOYALTY.md §5 — both optional at the schema level; the
@@ -764,6 +770,104 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         checksum: checksumOf(body),
         full: true,
         ...body,
+      },
+      request
+    );
+  });
+
+  // On-demand product search for the till — a cashier typing a partial
+  // name/SKU/ИКПУ code or scanning a barcode the local catalog snapshot
+  // doesn't resolve. Same device auth as every other /pos/v1/* route;
+  // same per-product shape as CatalogSnapshot's products[] (§9) —
+  // deliberately identical field-for-field (built from the same select +
+  // product-type-rules.ts helpers as admin-routes.ts's snapshot builder)
+  // so a till can reuse one product-rendering code path regardless of
+  // whether a row came from the snapshot or from this endpoint.
+  fastify.get('/pos/v1/products/search', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
+
+    const query = productSearchQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid search query', request, {
+        issues: query.error.issues,
+      });
+    }
+    const { q, limit } = query.data;
+
+    const products = await prisma.product.findMany({
+      where: {
+        tenantId: device.tenantId,
+        isActive: true,
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { sku: { contains: q, mode: 'insensitive' } },
+          { mxikCode: { contains: q, mode: 'insensitive' } },
+          // Exact match, not ILIKE — a scanned barcode is either the
+          // right one or it isn't, unlike a typed name/SKU fragment.
+          { barcodes: { some: { tenantId: device.tenantId, barcode: q } } },
+        ],
+      },
+      take: limit,
+      orderBy: { name: 'asc' },
+      // Field-for-field identical to admin-routes.ts's CatalogSnapshot
+      // product select — see that handler's comments for why each field
+      // is here (VAT/marking, weighted-goods, barcodes/variants).
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        price: true,
+        currency: true,
+        stockQty: true,
+        categoryId: true,
+        vatRate: true,
+        vatExempt: true,
+        markType: true,
+        isMarked: true,
+        mxikCode: true,
+        packageCode: true,
+        unit: true,
+        isByWeight: true,
+        isWeightedPiece: true,
+        pluCode: true,
+        pricePerKg: true,
+        updatedAt: true,
+        barcodes: {
+          select: { id: true, barcode: true, type: true, isDefault: true, unitQty: true, variantId: true },
+        },
+        variants: {
+          where: { isActive: true },
+          select: { id: true, name: true, sku: true, price: true, stockQty: true },
+        },
+        productTypeId: true,
+        productType: {
+          select: { code: true, rules: true, weightMode: true, barcodePrefixes: true, parentTypeId: true },
+        },
+      },
+    });
+
+    const typesById = await fetchProductTypesById();
+    const results = products.map(({ productType, ...product }) => ({
+      ...product,
+      ...deriveProductTypeFields(product, productType, typesById),
+    }));
+
+    // Same "unconfigured store" convention as GET /pos/v1/settings (§6)
+    // — no snapshot yet is 0, not an error; the search results
+    // themselves are still perfectly usable without one.
+    const lastSnapshot = await prisma.catalogSnapshot.findFirst({
+      where: { tenantId: device.tenantId, storeId: device.storeId },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+
+    return sendSuccess(
+      reply,
+      200,
+      {
+        products: results,
+        catalogVersion: lastSnapshot?.version ?? 0,
       },
       request
     );
