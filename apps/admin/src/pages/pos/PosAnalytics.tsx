@@ -80,7 +80,20 @@ export default function PosAnalytics() {
 
   const topProductsColumns: TableColumn<any>[] = [
     { key: 'name', header: tr('Товар', 'Mahsulot'), render: (row) => row.name },
-    { key: 'qty', header: tr('Кол-во', 'Soni'), align: 'right', render: (row) => row.qty.toLocaleString('ru-RU') },
+    {
+      key: 'qty',
+      header: tr('Кол-во', 'Soni'),
+      align: 'right',
+      // GET /pos-analytics already converts a weighted product's qty to
+      // кг (admin-routes.ts's topProducts aggregation) — this just
+      // displays that unit alongside the number, with the same 3-decimal
+      // formatting for кг that PosReceipts.tsx's formatItemQty uses.
+      render: (row) => {
+        const unit = row.unit || 'шт';
+        const qtyDisplay = unit === 'кг' ? Number(row.qty).toFixed(3) : row.qty.toLocaleString('ru-RU');
+        return `${qtyDisplay} ${unit}`;
+      },
+    },
     { key: 'amount', header: tr('Сумма', 'Summa'), align: 'right', render: (row) => formatUzs(row.amount) },
   ];
 

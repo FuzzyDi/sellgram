@@ -667,21 +667,41 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         .map(([method, v]) => ({ method, ...v }))
         .sort((a, b) => b.amount - a.amount);
 
-      const topProductsMap: Record<string, { name: string; qty: number; amount: number }> = {};
+      // A weighted item's fiscal qty is stored in grams (same convention
+      // flagged in PosReceipts.tsx's formatItemQty) — accumulated here in
+      // that raw native unit per product name, same as before, so summing
+      // across receipts for one product never mixes a kg-item's grams
+      // with a piece-item's count mid-sum. unit is captured once per
+      // group, at the same point name/qty/amount already are.
+      const topProductsMap: Record<string, { name: string; qty: number; amount: number; unit: string }> = {};
       for (const r of receipts) {
         const items = Array.isArray(r.items) ? r.items : [];
         for (const item of items as any[]) {
           const name = String(pickField(item, ['name', 'title', 'productName']) ?? 'Unknown');
           const qty = Number(pickField(item, ['qty', 'quantity']) ?? 0);
           const amount = Number(pickField(item, ['sum', 'total', 'amount']) ?? 0);
-          if (!topProductsMap[name]) topProductsMap[name] = { name, qty: 0, amount: 0 };
+          const unit = pickField(item, ['unit']) ?? 'шт';
+          if (!topProductsMap[name]) topProductsMap[name] = { name, qty: 0, amount: 0, unit };
           topProductsMap[name].qty += qty;
           topProductsMap[name].amount += amount;
         }
       }
+      // Ranking stays on the raw accumulated qty (unchanged from before)
+      // — converting to display units only after slicing to the top 10,
+      // so the "which 10 products" selection isn't affected by this fix.
+      const WEIGHT_KG_UNITS = ['кг', 'KG', 'kg'];
       const topProducts = Object.values(topProductsMap)
         .sort((a, b) => b.qty - a.qty)
-        .slice(0, 10);
+        .slice(0, 10)
+        .map((p) => {
+          const isKg = WEIGHT_KG_UNITS.includes(p.unit);
+          return {
+            name: p.name,
+            qty: isKg ? Number((p.qty / 1000).toFixed(3)) : p.qty,
+            amount: p.amount,
+            unit: isKg ? 'кг' : p.unit,
+          };
+        });
 
       return reply.status(200).send({
         success: true,

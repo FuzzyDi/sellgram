@@ -663,9 +663,44 @@ describe('pos-sync.admin-routes', () => {
           { method: 'CARD', amount: 5000, count: 1 },
         ])
       );
-      expect(data.topProducts).toEqual([{ name: 'Coffee', qty: 3, amount: 15000 }]);
+      // No unit on either item → defaults to 'шт', qty summed as-is.
+      expect(data.topProducts).toEqual([{ name: 'Coffee', qty: 3, amount: 15000, unit: 'шт' }]);
       expect(Array.isArray(data.byDay)).toBe(true);
       expect(data.byDay.length).toBeGreaterThan(0);
+      await app.close();
+    });
+
+    // Weighted-item qty conversion fix — grams accumulate in the native
+    // unit across receipts, converted to кг only in the final top-10 slice.
+    it('converts a кг-unit product\'s accumulated qty from grams to кг with 3 decimals', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.shiftEvent.count.mockResolvedValue(0);
+      mocks.prisma.shiftEvent.findMany.mockResolvedValue([]);
+      mocks.prisma.fiscalEvent.findMany.mockResolvedValue([
+        {
+          receiptType: 'SALE', totalAmount: 24500, createdAtMs: new Date('2026-07-01T10:00:00Z'),
+          payments: [{ type: 'CASH', sum: 24500 }],
+          items: [
+            { name: 'Bananas', qty: 1234, unit: 'кг', sum: 14500 },
+            { name: 'Bananas', qty: 500, unit: 'KG', sum: 5000 },
+            { name: 'Water bottle', qty: 2, unit: 'шт', sum: 5000 },
+          ],
+        },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-analytics?storeId=store-1&period=today' });
+
+      expect(response.statusCode).toBe(200);
+      const { data } = response.json();
+      // (1234 + 500) g summed in native units first, THEN /1000 once —
+      // not each occurrence divided independently and re-summed.
+      expect(data.topProducts).toEqual(
+        expect.arrayContaining([
+          { name: 'Bananas', qty: 1.734, amount: 19500, unit: 'кг' },
+          { name: 'Water bottle', qty: 2, amount: 5000, unit: 'шт' },
+        ])
+      );
       await app.close();
     });
 
