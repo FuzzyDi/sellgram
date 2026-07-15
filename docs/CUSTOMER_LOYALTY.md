@@ -439,6 +439,18 @@ already prevents the sale from reaching `SALE_COMPLETED` at all, so
 there is no case where a blocked sale needs a separate loyalty-specific
 guard.
 
+**Known limitation — Refund loyalty reversal (зафиксировано 2026-07-15):**
+Текущая реализация сторнирует базовые баллы
+(`floor(total/unitAmount)*pointsPerUnit`) без учёта tier multiplier.
+Если клиент получил 2× Gold tier бонус при продаже, при возврате
+списывается только базовая сумма — разница остаётся у клиента.
+
+**Roadmap fix:** при возврате находить исходный `LoyaltyTransaction` по
+`originalReceiptNumber`/`originalLocalReceiptId` → сторнировать
+фактически начисленный `points` (не пересчитывать формулой). Это
+требует сохранения связи refund `FiscalEvent` → original SALE
+`FiscalEvent` → original `LoyaltyTransaction`.
+
 ## 8. Sellgram integration
 
 Current behavior (§3.1, corrected from the seeding request's "at first
