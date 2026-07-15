@@ -381,12 +381,15 @@ function toStringOrNull(value: string | number | null | undefined): string | nul
 
 type FiscalLoyaltySource = {
   id: string;
+  deviceId: string;
   eventType: string;
   receiptType: string | null;
   fiscalStatus: string;
   customerId: string | null;
   totalAmount: number;
   receiptNumber: string | null;
+  originalLocalReceiptId: string | null;
+  originalReceiptNumber: string | null;
 };
 
 // docs/CUSTOMER_LOYALTY.md §7 (revised) — POS loyalty accrual, now keyed
@@ -459,6 +462,136 @@ async function accrueFiscalLoyalty(fiscalEvent: FiscalLoyaltySource, tenantId: s
         sourceType: 'POS_FISCAL',
         sourceId: fiscalEvent.id,
         description: `Loyalty points earned (${tier.name}) for POS receipt #${fiscalEvent.receiptNumber ?? '?'}`,
+      },
+    });
+  });
+}
+
+// Android may not always send customerId on a REFUND event (the
+// cashier didn't re-scan a card for a return) — fall back to the
+// original SALE receipt's customerId via originalLocalReceiptId/
+// originalReceiptNumber, both of which the device already sends for a
+// refund (docs/POS_SYNC_API.md fiscal-events contract). Scoped to the
+// same device: the (deviceId, localReceiptId)/(deviceId, receiptNumber)
+// indexes on FiscalEvent (schema.prisma) exist for exactly this lookup.
+// localReceiptId is preferred when present — it's the more precise,
+// deterministic key; receiptNumber is the fallback for a refund that
+// only carries the fiscal receipt number.
+async function resolveCustomerIdForRefund(
+  fiscalEvent: Pick<FiscalLoyaltySource, 'deviceId' | 'originalLocalReceiptId' | 'originalReceiptNumber'>
+): Promise<string | null> {
+  if (fiscalEvent.originalLocalReceiptId) {
+    const original = await prisma.fiscalEvent.findFirst({
+      where: {
+        deviceId: fiscalEvent.deviceId,
+        receiptType: 'SALE',
+        eventType: 'FISCAL_SUCCESS',
+        localReceiptId: fiscalEvent.originalLocalReceiptId,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { customerId: true },
+    });
+    if (original?.customerId) return original.customerId;
+  }
+  if (fiscalEvent.originalReceiptNumber) {
+    const original = await prisma.fiscalEvent.findFirst({
+      where: {
+        deviceId: fiscalEvent.deviceId,
+        receiptType: 'SALE',
+        eventType: 'FISCAL_SUCCESS',
+        receiptNumber: fiscalEvent.originalReceiptNumber,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { customerId: true },
+    });
+    if (original?.customerId) return original.customerId;
+  }
+  return null;
+}
+
+// docs/CUSTOMER_LOYALTY.md §7 — reverses the loyalty points a refunded
+// sale's original purchase would have earned. Sibling to
+// accrueFiscalLoyalty above, same call-site try/catch, same
+// "customerId must exist" and "loyalty must be enabled" gates — the one
+// structural difference is customerId can come from the refund event
+// itself OR, if absent, from the original sale via
+// resolveCustomerIdForRefund.
+//
+// Deliberately uses the same *base* formula as accrual
+// (floor(total/unitAmount)*pointsPerUnit) WITHOUT the tier multiplier —
+// this is the literal formula given for this reversal, not an
+// oversight: the customer's tier at refund time can differ from their
+// tier when the sale was originally rung up (totalSpent has likely
+// moved since), so re-deriving "what tier-adjusted amount was earned
+// back then" isn't something this function attempts. A more precise
+// alternative — looking up the original POS_FISCAL LoyaltyTransaction's
+// actual `points` value by sourceId — is not implemented here since it
+// wasn't asked for; flagged as a known limitation, not silently fixed.
+async function reverseFiscalLoyaltyForRefund(fiscalEvent: FiscalLoyaltySource, tenantId: string): Promise<void> {
+  if (
+    fiscalEvent.eventType !== 'FISCAL_SUCCESS' ||
+    fiscalEvent.receiptType !== 'REFUND' ||
+    fiscalEvent.fiscalStatus !== 'SUCCESS'
+  ) {
+    return;
+  }
+
+  const customerId = fiscalEvent.customerId ?? (await resolveCustomerIdForRefund(fiscalEvent));
+  if (!customerId) return;
+
+  await prisma.$transaction(async (tx) => {
+    // Idempotency — same sourceId-per-event pattern as accrual, distinct
+    // sourceType so an EARN row for a sale and an ADJUST row for its
+    // refund (different fiscalEvent.id each) never collide, and this
+    // check can never mistake "already accrued" for "already reversed".
+    const alreadyReversed = await tx.loyaltyTransaction.findFirst({
+      where: { sourceType: 'POS_FISCAL_REFUND', sourceId: fiscalEvent.id },
+      select: { id: true },
+    });
+    if (alreadyReversed) return;
+
+    const loyaltyConfig = await tx.loyaltyConfig.findUnique({ where: { tenantId } });
+    if (!loyaltyConfig?.isEnabled) return;
+
+    const total = fiscalEvent.totalAmount / 100;
+    if (!(total > 0)) return;
+
+    // Only loyaltyPoints is reversed here — totalSpent/ordersCount (both
+    // incremented by accrueFiscalLoyalty) are deliberately left alone,
+    // matching the literal scope of this task ("сторнирование баллов
+    // лояльности"). A refunded sale therefore still counts toward tier
+    // progression permanently — a known asymmetry with the accrual side,
+    // not something this function silently corrects.
+    const customer = await tx.customer.findFirst({
+      where: { id: customerId, tenantId },
+      select: { id: true, loyaltyPoints: true },
+    });
+    if (!customer) return;
+
+    const basePoints = Math.floor(total / loyaltyConfig.unitAmount) * loyaltyConfig.pointsPerUnit;
+    if (basePoints <= 0) return;
+
+    // Never go negative — clamp the deduction to whatever balance the
+    // customer actually has left, rather than letting a refund on a
+    // since-spent balance push loyaltyPoints below zero.
+    const pointsToDeduct = Math.min(basePoints, customer.loyaltyPoints);
+    if (pointsToDeduct <= 0) return;
+
+    const updatedCustomer = await tx.customer.update({
+      where: { id: customer.id },
+      data: { loyaltyPoints: { decrement: pointsToDeduct } },
+      select: { loyaltyPoints: true },
+    });
+    await tx.loyaltyTransaction.create({
+      data: {
+        customerId: customer.id,
+        tenantId,
+        type: 'ADJUST',
+        points: -pointsToDeduct,
+        balanceAfter: updatedCustomer.loyaltyPoints,
+        sourceType: 'POS_FISCAL_REFUND',
+        sourceId: fiscalEvent.id,
+        description: `Loyalty points reversed for POS refund #${fiscalEvent.receiptNumber ?? '?'}`,
       },
     });
   });
@@ -1512,14 +1645,18 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     // sale event's own status can't guarantee on its own. Isolated in its
     // own try/catch, deliberately outside the fiscalEvent.create() above —
     // a failure here must never turn an already-stored fiscal event into
-    // an error response to the till.
+    // an error response to the till. Both accrual (SALE) and reversal
+    // (REFUND) are called unconditionally — each self-guards on
+    // receiptType and no-ops immediately for the other case, so exactly
+    // one of the two ever does real work for a given event.
     if (savedEvent) {
       try {
         await accrueFiscalLoyalty(savedEvent, device.tenantId);
+        await reverseFiscalLoyaltyForRefund(savedEvent, device.tenantId);
       } catch (err: any) {
         request.log.error(
           { err, fiscalEventId: savedEvent.id, tenantId: device.tenantId },
-          'pos-sync: loyalty accrual failed for fiscal event'
+          'pos-sync: loyalty accrual/reversal failed for fiscal event'
         );
       }
     }
