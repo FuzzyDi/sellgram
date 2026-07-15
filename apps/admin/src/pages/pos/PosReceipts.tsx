@@ -42,6 +42,32 @@ function pick(obj: any, keys: string[]): any {
   return undefined;
 }
 
+// A weighted item's fiscal `qty` is stored in grams (the till weighs and
+// reports the raw gram count, same convention as Product.pricePerKg on
+// the catalog side) — a kg-unit item showing "1500" instead of "1.500 кг"
+// is that raw gram figure with no unit conversion applied, not a real
+// 1500-of-something sale. Exact-string unit matching, not case-folded
+// beyond the literal кг/KG/kg and г/G/g forms actually seen on the wire.
+const WEIGHT_KG_UNITS = ['кг', 'KG', 'kg'];
+const WEIGHT_G_UNITS = ['г', 'G', 'g'];
+
+function formatItemQty(item: any): string {
+  const qty = pick(item, ['qty', 'quantity']);
+  if (qty === undefined) return '—';
+  const unit = pick(item, ['unit']);
+  if (WEIGHT_KG_UNITS.includes(unit)) return `${(Number(qty) / 1000).toFixed(3)} кг`;
+  if (WEIGHT_G_UNITS.includes(unit)) return `${qty} г`;
+  return String(qty);
+}
+
+function formatItemPrice(item: any): string {
+  const price = pick(item, ['price', 'unitPrice']);
+  if (price === undefined) return '—';
+  const unit = pick(item, ['unit']);
+  if (WEIGHT_KG_UNITS.includes(unit)) return `${price}/кг`;
+  return String(price);
+}
+
 function ReceiptItemsTable({ items }: { items: any[] }) {
   const { tr } = useAdminI18n();
   if (!items?.length) return <p className="text-token-sm text-neutral-500">{tr('Нет позиций', "Pozitsiyalar yo'q")}</p>;
@@ -59,8 +85,8 @@ function ReceiptItemsTable({ items }: { items: any[] }) {
         {items.map((item, i) => (
           <tr key={i} className="border-b border-neutral-100 last:border-0">
             <td className="py-1.5 pr-2 text-neutral-800">{pick(item, ['name', 'title', 'productName']) ?? '—'}</td>
-            <td className="py-1.5 px-2 text-right text-neutral-600">{pick(item, ['qty', 'quantity']) ?? '—'}</td>
-            <td className="py-1.5 px-2 text-right text-neutral-600">{pick(item, ['price', 'unitPrice']) ?? '—'}</td>
+            <td className="py-1.5 px-2 text-right text-neutral-600">{formatItemQty(item)}</td>
+            <td className="py-1.5 px-2 text-right text-neutral-600">{formatItemPrice(item)}</td>
             <td className="py-1.5 pl-2 text-right font-semibold text-neutral-800">{pick(item, ['sum', 'total', 'amount']) ?? '—'}</td>
           </tr>
         ))}
