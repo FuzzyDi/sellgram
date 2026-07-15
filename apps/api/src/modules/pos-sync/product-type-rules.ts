@@ -70,7 +70,14 @@ export function deriveProductTypeFields(
   return {
     productTypeCode: productType?.code ?? null,
     productTypeRules: mergeProductTypeRules(product.productTypeId, typesById),
-    weightMode: productType?.weightMode ?? (product.isByWeight ? 'WEIGHT' : product.isWeightedPiece ? 'PIECE_WEIGHT' : 'PIECE'),
+    // isWeightedPiece checked first — it's the more specific case
+    // ("штучно-весовой") and, per the schema comment on
+    // Product.isWeightedPiece, is only ever meaningful when isByWeight
+    // is also true. Checking isByWeight first made PIECE_WEIGHT
+    // unreachable: every valid isWeightedPiece=true row also has
+    // isByWeight=true, so the old order short-circuited to WEIGHT before
+    // isWeightedPiece was ever consulted.
+    weightMode: productType?.weightMode ?? (product.isWeightedPiece ? 'PIECE_WEIGHT' : product.isByWeight ? 'WEIGHT' : 'PIECE'),
     barcodePrefixes: productType?.barcodePrefixes ?? [],
   };
 }

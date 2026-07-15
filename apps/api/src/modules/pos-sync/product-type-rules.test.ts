@@ -86,14 +86,23 @@ describe('deriveProductTypeFields', () => {
 
   it('derives weightMode from isByWeight/isWeightedPiece when unassigned', () => {
     expect(deriveProductTypeFields({ productTypeId: null, isByWeight: true, isWeightedPiece: false }, null, new Map()).weightMode).toBe('WEIGHT');
-    // isByWeight is checked before isWeightedPiece (short-circuits to
-    // 'WEIGHT' regardless) — this is the original, already-shipped
-    // admin-routes.ts precedence, not something this extraction changed.
-    // isWeightedPiece only reaches 'PIECE_WEIGHT' when isByWeight itself
-    // is false, which in practice never happens for a genuinely
-    // weighted-piece product (isWeightedPiece is only meaningful when
-    // isByWeight is true — schema comment on Product.isWeightedPiece).
     expect(deriveProductTypeFields({ productTypeId: null, isByWeight: false, isWeightedPiece: true }, null, new Map()).weightMode).toBe('PIECE_WEIGHT');
+    expect(deriveProductTypeFields({ productTypeId: null, isByWeight: false, isWeightedPiece: false }, null, new Map()).weightMode).toBe('PIECE');
+  });
+
+  // Regression test: isWeightedPiece must be checked before isByWeight.
+  // Per the schema comment on Product.isWeightedPiece, it's only ever
+  // meaningful when isByWeight is also true — so a real "штучно-весовой"
+  // product always has both flags set, and checking isByWeight first
+  // would short-circuit to 'WEIGHT' before isWeightedPiece is ever
+  // consulted, making 'PIECE_WEIGHT' unreachable in practice.
+  it('prefers PIECE_WEIGHT over WEIGHT when both isByWeight and isWeightedPiece are true', () => {
+    const fields = deriveProductTypeFields(
+      { productTypeId: null, isByWeight: true, isWeightedPiece: true },
+      null,
+      new Map()
+    );
+    expect(fields.weightMode).toBe('PIECE_WEIGHT');
   });
 
   it('sources code/weightMode/barcodePrefixes from the assigned ProductType when present', () => {
