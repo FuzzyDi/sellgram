@@ -421,23 +421,25 @@ that doesn't happen again: the schema field and the Prisma column must
 land in the same PR, not schema-first-code-later.
 
 **Accrual timing** — not "after successful fiscalization" in the
-vague sense the seeding request used; the existing precedent to copy
-is the *stock-derivation* gate already documented in
-`pos-sync/routes.ts` (`§11: only SALE_COMPLETED with a completed/
-fiscalized status derives stock`) — loyalty accrual for a POS sale
-should fire on that exact same condition
-(`eventType === 'SALE_COMPLETED' && status ∈ {COMPLETED, FISCALIZED}`),
-not on `FISCAL_STARTED` or any earlier, reversible stage. Reuses
-`order.service.ts`'s accrual math (§3.3, §6) against
-`SaleEvent.payload`'s total instead of `Order.total`, gated the same
-way on `loyaltyConfig.isEnabled && customerId != null`.
+vague sense the seeding request used; loyalty accrual for a POS sale
+fires on `FiscalEvent`'s `FISCAL_SUCCESS` with `receiptType ===
+'SALE'` and `fiscalStatus === 'SUCCESS'` (`pos-sync/routes.ts`'s
+`accrueFiscalLoyalty()`) — a revision from this document's original
+plan to reuse the *stock-derivation* gate on `SaleEvent`/
+`SALE_COMPLETED` (`§11: only SALE_COMPLETED with a completed/
+fiscalized status derives stock`), since a receipt is only truly
+"real" once actually fiscalized, which `SaleEvent`'s own status field
+cannot guarantee on its own. Reuses `order.service.ts`'s accrual math
+(§3.3, §6) against `FiscalEvent.totalAmount` (tiyin → UZS) instead of
+`SaleEvent.payload`'s total or `Order.total`, gated the same way on
+`loyaltyConfig.isEnabled && customerId != null`.
 
 **`triggeredRuleIds` interaction** — none. Loyalty accrual is
 independent of `docs/POS_POLICY_ENGINE.md`'s rule engine and
 `docs/PRODUCT_TYPES.md`'s per-type rules; a `BLOCK`-severity rule
-already prevents the sale from reaching `SALE_COMPLETED` at all, so
-there is no case where a blocked sale needs a separate loyalty-specific
-guard.
+already prevents the sale from ever reaching fiscalization
+(`FISCAL_SUCCESS`) at all, so there is no case where a blocked sale
+needs a separate loyalty-specific guard.
 
 **Known limitation — Refund loyalty reversal (зафиксировано 2026-07-15):**
 Текущая реализация сторнирует базовые баллы
