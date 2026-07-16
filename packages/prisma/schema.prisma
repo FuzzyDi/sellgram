@@ -1608,12 +1608,25 @@ model FiscalEvent {
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
+  // Which cashier rang up this receipt (docs/POS_POLICY_ENGINE.md §14.1).
+  // Nullable — a device/store without PIN-auth enabled has no operator to
+  // attach. operatorName/operatorRole are a snapshot of PosOperator.name/
+  // role at the moment of the fiscal event, not a live join — a later
+  // rename or role change on the PosOperator row must not rewrite history
+  // on receipts already fiscalized (same reasoning as this model's other
+  // snapshot-not-reference fields).
+  operatorId   String?
+  operator     PosOperator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+  operatorName String?
+  operatorRole String?
+
   @@unique([deviceId, eventId])
   @@index([deviceId, localReceiptId])
   @@index([deviceId, receiptNumber])
   @@index([deviceId, receiptType, idempotencyKey])
   @@index([deviceId, shiftNumber])
   @@index([customerId])
+  @@index([operatorId])
   @@map("fiscal_events")
 }
 
@@ -1783,6 +1796,8 @@ model PosOperator {
   pinSalt       String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+
+  fiscalEvents FiscalEvent[]
 
   @@index([tenantId, storeId])
   @@map("pos_operators")
