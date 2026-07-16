@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
     stockMovement: { create: vi.fn().mockResolvedValue({}) },
     fiscalEvent: { create: vi.fn().mockResolvedValue({}), findUnique: vi.fn().mockResolvedValue(null), findFirst: vi.fn().mockResolvedValue(null) },
     shiftEvent: { create: vi.fn().mockResolvedValue({}) },
+    posOperatorEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     cloudCommand: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
@@ -2704,6 +2705,173 @@ describe('pos-sync.routes', () => {
         payload: validShiftEvent,
       });
       expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+  });
+
+  describe('POST /api/pos/v1/operator-events', () => {
+    const validOperatorEvent = {
+      eventType: 'OPERATOR_LOGIN',
+      operatorId: 'op-1',
+      actorId: null,
+      idempotencyKey: 'code-1:operator:audit-1:OPERATOR_LOGIN',
+      createdAt: 1732000000000,
+      payload: { method: 'PIN' },
+    };
+
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.posOperatorEvent.findUnique.mockResolvedValue(null);
+      mocks.prisma.posOperatorEvent.create.mockResolvedValue({
+        id: 'opevt-1', eventType: 'OPERATOR_LOGIN', createdAt: new Date('2026-07-16T00:00:00Z'),
+      });
+    });
+
+    it('ingests an OPERATOR_LOGIN event and folds createdAt into payload.deviceCreatedAtMs', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/operator-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validOperatorEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(typeof body.requestId).toBe('string');
+      expect(body.data).toEqual({
+        id: 'opevt-1', eventType: 'OPERATOR_LOGIN', createdAt: '2026-07-16T00:00:00.000Z',
+      });
+      expect(mocks.prisma.posOperatorEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: 't-1',
+          storeId: 's-1',
+          deviceId: 'dev-1',
+          eventType: 'OPERATOR_LOGIN',
+          operatorId: 'op-1',
+          actorId: null,
+          idempotencyKey: validOperatorEvent.idempotencyKey,
+          payload: { method: 'PIN', deviceCreatedAtMs: 1732000000000 },
+        }),
+        select: { id: true, eventType: true, createdAt: true },
+      });
+      // The client-sent createdAt must never land on the row's own
+      // createdAt column — that stays server-controlled (@default(now())).
+      expect(mocks.prisma.posOperatorEvent.create.mock.calls[0][0].data.createdAt).toBeUndefined();
+      await app.close();
+    });
+
+    it('accepts OPERATOR_LOCK with a null operatorId', async () => {
+      mocks.prisma.posOperatorEvent.create.mockResolvedValue({
+        id: 'opevt-2', eventType: 'OPERATOR_LOCK', createdAt: new Date('2026-07-16T00:00:00Z'),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/operator-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: {
+          ...validOperatorEvent,
+          eventType: 'OPERATOR_LOCK',
+          operatorId: null,
+          idempotencyKey: 'code-1:operator:audit-2:OPERATOR_LOCK',
+          payload: { reason: 'IDLE_TIMEOUT' },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.posOperatorEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ eventType: 'OPERATOR_LOCK', operatorId: null }) })
+      );
+      await app.close();
+    });
+
+    it('replays a duplicate idempotencyKey with the stored result and no new create', async () => {
+      mocks.prisma.posOperatorEvent.findUnique.mockResolvedValue({
+        id: 'opevt-1', eventType: 'OPERATOR_LOGIN', createdAt: new Date('2026-07-16T00:00:00Z'),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/operator-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validOperatorEvent,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({
+        id: 'opevt-1', eventType: 'OPERATOR_LOGIN', createdAt: '2026-07-16T00:00:00.000Z',
+      });
+      expect(mocks.prisma.posOperatorEvent.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('resolves a concurrent P2002 race by returning the winning row instead of erroring', async () => {
+      mocks.prisma.posOperatorEvent.create.mockRejectedValue(
+        Object.assign(new Error('unique violation'), { code: 'P2002' })
+      );
+      mocks.prisma.posOperatorEvent.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'opevt-1', eventType: 'OPERATOR_LOGIN', createdAt: new Date('2026-07-16T00:00:00Z') });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/operator-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validOperatorEvent,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({
+        id: 'opevt-1', eventType: 'OPERATOR_LOGIN', createdAt: '2026-07-16T00:00:00.000Z',
+      });
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR for an unrecognized eventType', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/operator-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validOperatorEvent, eventType: 'OPERATOR_TELEPORTED' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      expect(mocks.prisma.posOperatorEvent.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR for a malformed idempotencyKey', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/operator-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validOperatorEvent, idempotencyKey: 'not-the-right-shape' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 401 without an Authorization header', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/operator-events',
+        headers: { 'x-device-code': 'code-1' },
+        payload: validOperatorEvent,
+      });
+      expect(response.statusCode).toBe(401);
+      expect(mocks.prisma.posOperatorEvent.create).not.toHaveBeenCalled();
       await app.close();
     });
   });

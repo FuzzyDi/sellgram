@@ -1311,3 +1311,117 @@ settings=3;policies=2;printTemplates=1;staff=1
 Matches §10's "opaque, compare-only" semantics for `checksum` — this is
 simply what that opaque string actually looked like for this store at
 this moment, not a format guarantee for other stores or future versions.
+
+## 24. Operator Events
+
+Operator audit trail — lock/login/switch and failed/blocked PIN attempts
+at the till (PIN auth: §14.3, `PosOperator.pinRequired`). Purely an
+append-only audit log: it never derives any other row (no ledger, no
+sale, no shift) the way sale/stock events do.
+
+```
+POST /api/pos/v1/operator-events
+```
+
+Same auth (§4) and idempotency (§5) as fiscal/shift events — a device
+posts one event per operator-lifecycle occurrence.
+
+**Required fields:**
+
+```json
+{
+  "eventType": "OPERATOR_LOCK|OPERATOR_LOGIN|OPERATOR_SWITCH|OPERATOR_PIN_FAILED|OPERATOR_PIN_BLOCKED",
+  "operatorId": "string|null",
+  "actorId": "string|null",
+  "idempotencyKey": "string",
+  "createdAt": 1732000000000,
+  "payload": {}
+}
+```
+
+**Event types:**
+
+- `OPERATOR_LOCK` — till locked (screen returned to the operator-selection
+  / PIN-entry screen), whether from an explicit lock action or an idle
+  timeout. `operatorId` is typically `null` here — nobody is logged in
+  once the till is locked.
+- `OPERATOR_LOGIN` — an operator successfully authenticated (PIN or
+  PIN-less, per `pinRequired`). `operatorId` is the operator who logged
+  in.
+- `OPERATOR_SWITCH` — one operator handed the till to another without an
+  intervening lock (e.g. a supervisor override). `operatorId` is the
+  incoming operator; `actorId` is the outgoing operator who authorized the
+  switch.
+- `OPERATOR_PIN_FAILED` — a PIN attempt did not match. `operatorId` is the
+  operator the PIN was entered against, if the till can identify who was
+  being attempted (e.g. selected from a roster first); `null` if the till
+  only has a raw PIN with no operator context yet.
+- `OPERATOR_PIN_BLOCKED` — the till locally rate-limited further PIN
+  attempts after repeated `OPERATOR_PIN_FAILED` events (device-local
+  lockout policy, not enforced by Cloud). Reported so the audit trail
+  shows the block, not just the failures leading up to it.
+
+`operatorId` and `actorId` are plain, unvalidated strings — same
+accept-don't-reject principle as §18: an id Cloud doesn't recognize is
+still stored as-is (the event already happened at the till), not
+rejected.
+
+**`idempotencyKey` format:**
+
+```
+<deviceCode>:operator:<localAuditId>:<EVENT_TYPE>
+```
+
+`localAuditId` is the till's own local audit-log row id for the event
+being reported — stable across retries of the same occurrence, unique
+per new occurrence, mirroring §11/§12/§13's `<deviceCode>:<domain>:<id>:<TYPE>`
+convention.
+
+**`createdAt`:** the till's own event time (ms since epoch, same
+convention as this document's other `*AtMs`-shaped fields). This is
+carried into the stored event's `payload.deviceCreatedAtMs` — it is
+*not* written to the event's own Cloud-side `createdAt` timestamp, which
+always reflects when Cloud received and stored the event. Keeping the
+row's own `createdAt` server-controlled (rather than client-settable)
+means the audit trail's own timeline can't be backdated by a device;
+`payload.deviceCreatedAtMs` still preserves the till's reported time for
+anyone who needs it.
+
+**Payload examples:**
+
+```json
+// OPERATOR_LOCK
+{ "reason": "IDLE_TIMEOUT", "deviceCreatedAtMs": 1732000000000 }
+
+// OPERATOR_LOGIN
+{ "method": "PIN", "deviceCreatedAtMs": 1732000000000 }
+
+// OPERATOR_SWITCH
+{ "reason": "SUPERVISOR_OVERRIDE", "deviceCreatedAtMs": 1732000000000 }
+
+// OPERATOR_PIN_FAILED
+{ "attemptNumber": 2, "deviceCreatedAtMs": 1732000000000 }
+
+// OPERATOR_PIN_BLOCKED
+{ "blockedForSeconds": 60, "deviceCreatedAtMs": 1732000000000 }
+```
+
+`payload` beyond `deviceCreatedAtMs` is free-form and till-defined — Cloud
+stores it opaquely, same as every other `Json @default("{}")` payload
+column in this document.
+
+**Response (`201` on first receipt, `200` on replay — same envelope as
+§11/§13, no `warnings`, since there is nothing here that can reference an
+unrecognized product/variant):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "string",
+    "eventType": "string",
+    "createdAt": "datetime"
+  },
+  "requestId": "string"
+}
+```

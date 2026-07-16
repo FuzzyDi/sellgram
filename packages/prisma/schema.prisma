@@ -148,6 +148,7 @@ model Tenant {
   stockEvents        StockEvent[]
   fiscalEvents       FiscalEvent[]
   shiftEvents        ShiftEvent[]
+  posOperatorEvents  PosOperatorEvent[]
   cloudCommands      CloudCommand[]
   counterparties     Counterparty[]
   counterpartyLedger CounterpartyLedger[]
@@ -242,6 +243,7 @@ model Store {
   fiscalEvents     FiscalEvent[]
   shiftEvents      ShiftEvent[]
   posOperators     PosOperator[]
+  posOperatorEvents PosOperatorEvent[]
 
   @@index([tenantId])
   @@map("stores")
@@ -1381,6 +1383,7 @@ model PosDevice {
   stockEvents StockEvent[]
   fiscalEvents FiscalEvent[]
   shiftEvents  ShiftEvent[]
+  posOperatorEvents PosOperatorEvent[]
   cloudCommands CloudCommand[]
 
   @@unique([tenantId, deviceCode])
@@ -1783,6 +1786,42 @@ model PosOperator {
 
   @@index([tenantId, storeId])
   @@map("pos_operators")
+}
+
+// docs/POS_SYNC_API.md §24 — operator audit trail: lock/login/switch and
+// failed/blocked PIN attempts (docs/POS_POLICY_ENGINE.md §14.1). Same
+// append-only, idempotent-ingest shape as ShiftEvent/FiscalEvent above,
+// not a variant of either — this is its own event stream, not a
+// sub-type of a shift or fiscal receipt lifecycle.
+model PosOperatorEvent {
+  id       String    @id @default(cuid())
+  tenantId String
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId  String
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  deviceId String
+  device   PosDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  // OPERATOR_LOCK/OPERATOR_LOGIN/OPERATOR_SWITCH/OPERATOR_PIN_FAILED/
+  // OPERATOR_PIN_BLOCKED (docs/POS_SYNC_API.md §24) — String, not an
+  // enum, same "grows without a migration" reasoning as every other
+  // free-form eventType-shaped field already in this file
+  // (FiscalEvent.fiscalStatus/printStatus).
+  eventType String
+  // Deliberately plain strings, no @relation to PosOperator — an
+  // operator-lock event can have no operatorId at all (nobody was
+  // logged in when the till locked), and accept-don't-reject
+  // (docs/POS_SYNC_API.md §18) already means this module never rejects
+  // an event for referencing an id Cloud doesn't recognize.
+  operatorId String?
+  actorId    String?
+  idempotencyKey String
+  payload    Json    @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@unique([deviceId, idempotencyKey])
+  @@index([tenantId, deviceId])
+  @@index([tenantId, operatorId])
+  @@map("pos_operator_events")
 }
 
 // ============================================================

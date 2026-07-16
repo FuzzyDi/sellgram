@@ -80,6 +80,7 @@ const POS_TABS: { to: string; ru: string; uz: string }[] = [
   { to: '/pos/operators', ru: 'Кассиры', uz: 'Kassirlar' },
   { to: '/pos/shifts', ru: 'Смены', uz: 'Smenalar' },
   { to: '/pos/receipts', ru: 'Чеки', uz: 'Cheklar' },
+  { to: '/pos/operator-events', ru: 'События', uz: 'Hodisalar' },
   { to: '/pos/settings', ru: 'Настройки', uz: 'Sozlamalar' },
 ];
 
