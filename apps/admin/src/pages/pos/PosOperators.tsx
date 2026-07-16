@@ -345,7 +345,7 @@ export default function PosOperators() {
                         checked={form.permissions.includes(p)}
                         onChange={() => togglePermission(p)}
                       />
-                      {permissionLabel(p)} <span className="text-token-xs text-neutral-400">({p})</span>
+                      {permissionLabel(p)}
                     </label>
                   ))}
                 </div>
