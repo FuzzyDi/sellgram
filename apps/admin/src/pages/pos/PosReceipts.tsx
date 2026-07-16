@@ -21,6 +21,17 @@ const RECEIPT_TYPE_BADGE: Record<string, BadgeVariant> = {
   REFUND: 'danger',
 };
 
+// operatorRole is the till's own free-form snapshot string
+// (docs/POS_POLICY_ENGINE.md §14.1) — lowercase/underscore convention as
+// sent by the device, distinct from PosOperator.role's uppercase enum
+// (POS_OPERATOR_ROLES in pos-shared.tsx), so it gets its own small label
+// map rather than reusing that one.
+const OPERATOR_ROLE_LABEL: Record<string, [string, string]> = {
+  cashier: ['Кассир', 'Kassir'],
+  senior_cashier: ['Старший кассир', 'Katta kassir'],
+  admin: ['Администратор', 'Administrator'],
+};
+
 // fiscalStatus is a free-form string on the wire (docs/POS_SYNC_API.md
 // §12/§703) — no fixed enum to map exactly, so this is a best-effort
 // heuristic on common substrings rather than a literal lookup table.
@@ -137,6 +148,22 @@ function ReceiptDetailModal({ receipt, onClose, locale, tr }: {
           </div>
           <ReceiptItemsTable items={receipt.items} />
         </div>
+
+        {receipt.operatorName && (
+          <div className="mb-4">
+            <div className="text-token-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1.5">
+              {tr('Кассир', 'Kassir')}
+            </div>
+            <div className="rounded-token-md border border-neutral-200 bg-neutral-50 px-3 py-2.5 flex justify-between gap-3 text-token-sm">
+              <span className="font-semibold text-neutral-800">{receipt.operatorName}</span>
+              <span className="text-neutral-500">
+                {receipt.operatorRole
+                  ? tr(...(OPERATOR_ROLE_LABEL[receipt.operatorRole] || [receipt.operatorRole, receipt.operatorRole]))
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="mb-4">
           <div className="text-token-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1.5">
@@ -300,6 +327,11 @@ export default function PosReceipts() {
       key: 'device',
       header: tr('Устройство', 'Qurilma'),
       render: (r) => r.device?.name || '—',
+    },
+    {
+      key: 'operatorName',
+      header: tr('Кассир', 'Kassir'),
+      render: (r) => r.operatorName || '—',
     },
     {
       key: 'totalAmount',

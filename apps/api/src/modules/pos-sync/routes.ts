@@ -332,6 +332,16 @@ const fiscalEventSchema = z.object({
   // min(1).optional() shape as saleEventSchema's customerId above, for
   // consistency — an empty-string id is as meaningless here as there.
   customerId: z.string().min(1).optional(),
+  // docs/POS_POLICY_ENGINE.md §14.1 — which cashier rang up this receipt.
+  // Same "must be declared or z.object() silently strips it" reasoning as
+  // customerId just above (both sides — Zod schema and Prisma create —
+  // land in the same PR, per the CUSTOMER_LOYALTY.md §7 lesson).
+  // operatorName/operatorRole are the till's own snapshot of the
+  // operator's name/role at the moment of the sale, not re-derived from
+  // PosOperator server-side.
+  operatorId: z.string().min(1).optional(),
+  operatorName: z.string().optional(),
+  operatorRole: z.string().optional(),
   payments: z.array(z.record(z.unknown())),
   items: z.array(z.record(z.unknown())),
   createdAtMs: z.number(),
@@ -1661,6 +1671,11 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           // of the customerId field; see the Zod schema comment above for
           // why both sides must land together.
           customerId: body.data.customerId ?? null,
+          // docs/POS_POLICY_ENGINE.md §14.1 — same both-sides-together
+          // reasoning as customerId just above.
+          operatorId: body.data.operatorId ?? null,
+          operatorName: body.data.operatorName ?? null,
+          operatorRole: body.data.operatorRole ?? null,
         },
       });
     } catch (err: any) {
