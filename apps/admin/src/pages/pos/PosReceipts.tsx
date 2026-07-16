@@ -65,7 +65,7 @@ const WEIGHT_G_UNITS = ['г', 'G', 'g'];
 function formatItemQty(item: any): string {
   const qty = pick(item, ['qty', 'quantity']);
   if (qty === undefined) return '—';
-  const unit = pick(item, ['unit']);
+  const unit = pick(item, ["unit", "unitCode"]);
   if (WEIGHT_KG_UNITS.includes(unit)) return `${(Number(qty) / 1000).toFixed(3)} кг`;
   if (WEIGHT_G_UNITS.includes(unit)) return `${qty} г`;
   return String(qty);
@@ -74,7 +74,7 @@ function formatItemQty(item: any): string {
 function formatItemPrice(item: any): string {
   const price = pick(item, ['price', 'unitPrice']);
   if (price === undefined) return '—';
-  const unit = pick(item, ['unit']);
+  const unit = pick(item, ["unit", "unitCode"]);
   if (WEIGHT_KG_UNITS.includes(unit)) return `${price}/кг`;
   return String(price);
 }
