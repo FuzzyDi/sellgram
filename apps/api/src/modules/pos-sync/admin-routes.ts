@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { randomInt } from 'crypto';
+import { randomInt, randomBytes, createHash } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
@@ -167,12 +167,19 @@ const listOperatorsQuerySchema = z.object({
   storeId: z.string().min(1),
 });
 
+// docs/POS_POLICY_ENGINE.md §14.1 — 4-6 digit PIN, plaintext accepted
+// only at the API boundary to be hashed immediately (hashPin() below);
+// never stored, never echoed back in any response.
+const pinSchema = z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits');
+
 const createOperatorSchema = z.object({
   storeId: z.string().min(1),
   name: z.string().min(1).max(200),
   role: posOperatorRoleSchema,
   permissions: z.array(z.string()).default([]),
   active: z.boolean().default(true),
+  pin: pinSchema.optional(),
+  pinRequired: z.boolean().optional(),
 });
 
 const updateOperatorSchema = z
@@ -181,8 +188,40 @@ const updateOperatorSchema = z
     role: posOperatorRoleSchema,
     permissions: z.array(z.string()),
     active: z.boolean(),
+    pin: pinSchema,
+    pinRequired: z.boolean(),
   })
   .partial();
+
+// Never selected/returned alongside pinHashSha256/pinSalt in any API
+// response — those two columns are server-side-only (schema comment on
+// PosOperator.pinHashSha256). pinRequired is the only PIN-related field
+// a client (admin UI or till) ever needs or gets.
+const OPERATOR_SAFE_SELECT = {
+  id: true,
+  tenantId: true,
+  storeId: true,
+  name: true,
+  role: true,
+  permissions: true,
+  active: true,
+  pinRequired: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+// docs/POS_POLICY_ENGINE.md §14.1. SHA-256 of a per-operator random salt
+// + the plaintext PIN — the plaintext itself only ever exists in the
+// request body for the duration of the handler that calls this, never
+// persisted. See the schema comment on PosOperator.pinHashSha256 for
+// why this hash+salt pair must never be shipped to a till (GET
+// /pos/v1/settings sends pinRequired only, not these) or returned from
+// any admin-facing response (OPERATOR_SAFE_SELECT above excludes both).
+function hashPin(pin: string): { pinHashSha256: string; pinSalt: string } {
+  const pinSalt = randomBytes(16).toString('hex');
+  const pinHashSha256 = createHash('sha256').update(pinSalt + pin).digest('hex');
+  return { pinHashSha256, pinSalt };
+}
 
 // Bumps PosSettings.staffVersion for this store on every PosOperator
 // create/update/delete (docs/POS_POLICY_ENGINE.md §14/§5) — same
@@ -736,6 +775,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const operators = await prisma.posOperator.findMany({
         where: { tenantId, storeId: store.id },
         orderBy: { name: 'asc' },
+        select: OPERATOR_SAFE_SELECT,
       });
 
       return reply.status(200).send({ success: true, data: operators });
@@ -764,6 +804,18 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         ? body.data.permissions
         : DEFAULT_PERMISSIONS[body.data.role];
 
+      // §14.1 — a plaintext pin, if present, is hashed immediately and
+      // never itself passed to Prisma (no `pin` column exists). Present
+      // pin wins over an explicit pinRequired: true (the point of
+      // supplying a pin is to require it); pinRequired alone (no pin)
+      // is honored as given — e.g. flagging an operator as
+      // pin-required ahead of the PIN itself being set later.
+      const pinFields = body.data.pin
+        ? { ...hashPin(body.data.pin), pinRequired: true }
+        : body.data.pinRequired !== undefined
+          ? { pinRequired: body.data.pinRequired }
+          : {};
+
       const operator = await prisma.posOperator.create({
         data: {
           tenantId,
@@ -772,7 +824,9 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           role: body.data.role,
           permissions,
           active: body.data.active,
+          ...pinFields,
         },
+        select: OPERATOR_SAFE_SELECT,
       });
       await bumpStaffVersion(tenantId, store.id);
 
@@ -796,6 +850,12 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const existing = await prisma.posOperator.findFirst({ where: { id, tenantId }, select: { id: true, storeId: true } });
       if (!existing) return reply.status(404).send({ success: false, error: 'Operator not found' });
 
+      // pin/pinRequired are pulled out of the plain object here — `pin`
+      // in particular must never reach the Prisma `data` object below
+      // (no such column), and both need bespoke merge logic distinct
+      // from every other field's "present in body → overwrite" rule.
+      const { pin, pinRequired: bodyPinRequired, ...restBody } = body.data;
+
       // §14.6 — updateOperatorSchema has no .default() on permissions
       // (unlike create above), so "omitted" and "explicitly []" are
       // still distinguishable here: body.data.permissions is undefined
@@ -804,14 +864,55 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       // permissions from the new role's default set; an explicit
       // permissions[] in the request (even []) always wins and is left
       // untouched, same as every other field in this partial update.
-      const data =
-        body.data.role !== undefined && body.data.permissions === undefined
-          ? { ...body.data, permissions: DEFAULT_PERMISSIONS[body.data.role] }
-          : body.data;
+      const data: any =
+        restBody.role !== undefined && restBody.permissions === undefined
+          ? { ...restBody, permissions: DEFAULT_PERMISSIONS[restBody.role] }
+          : restBody;
+
+      // §14.1 — pin present → recompute hash+salt and force
+      // pinRequired: true. No pin but pinRequired explicitly given →
+      // update just that boolean, leaving any existing hash/salt alone
+      // (a PIN can be temporarily disabled without discarding it, and
+      // re-enabled later without the admin re-entering it). Neither
+      // field present → don't touch any of the three PIN columns at
+      // all, exactly the "PATCH without pin never touches the existing
+      // hash" requirement.
+      if (pin) {
+        Object.assign(data, hashPin(pin), { pinRequired: true });
+      } else if (bodyPinRequired !== undefined) {
+        data.pinRequired = bodyPinRequired;
+      }
 
       const operator = await prisma.posOperator.update({
         where: { id: existing.id },
         data,
+        select: OPERATOR_SAFE_SELECT,
+      });
+      await bumpStaffVersion(tenantId, existing.storeId);
+
+      return reply.status(200).send({ success: true, data: operator });
+    }
+  );
+
+  // §14.1 — explicit reset, distinct from PATCH {pinRequired: false}:
+  // that only toggles the requirement flag and leaves hash/salt intact
+  // (re-enabling later needs no re-entry); this clears the PIN
+  // entirely. A manager who suspects a PIN was compromised needs this,
+  // not the toggle.
+  fastify.delete(
+    '/pos-operators/:id/pin',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { id } = request.params as { id: string };
+
+      const existing = await prisma.posOperator.findFirst({ where: { id, tenantId }, select: { id: true, storeId: true } });
+      if (!existing) return reply.status(404).send({ success: false, error: 'Operator not found' });
+
+      const operator = await prisma.posOperator.update({
+        where: { id: existing.id },
+        data: { pinRequired: false, pinHashSha256: null, pinSalt: null },
+        select: OPERATOR_SAFE_SELECT,
       });
       await bumpStaffVersion(tenantId, existing.storeId);
 

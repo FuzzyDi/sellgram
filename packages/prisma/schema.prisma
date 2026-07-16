@@ -1765,6 +1765,19 @@ model PosOperator {
   role        PosOperatorRole
   permissions String[]        @default([])
   active      Boolean         @default(true)
+  // docs/POS_POLICY_ENGINE.md §14.1 — "a till authenticating a specific
+  // cashier by PIN/password against this list is future work" — this is
+  // that work. pinHashSha256/pinSalt ARE included in GET /pos/v1/settings's
+  // staff block, by design — offline-first requires the till to verify a
+  // PIN with no server round-trip. Deliberate tradeoff: a 4-6 digit PIN
+  // is brute-forceable from this pair given physical access to the
+  // device, but the threat model is "prevent a co-worker without this
+  // PIN from acting as this cashier," not "withstand a compromised
+  // till" — the cashier already has physical access to the device the
+  // PIN protects.
+  pinRequired   Boolean @default(false)
+  pinHashSha256 String?
+  pinSalt       String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 

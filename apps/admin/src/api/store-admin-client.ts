@@ -400,11 +400,15 @@ export const adminApi = {
     request<any>('/pos-devices/catalog-snapshot', { method: 'POST', body: JSON.stringify({ storeId }) }),
 
   getPosOperators: (storeId: string) => request<any>(`/pos-operators?storeId=${encodeURIComponent(storeId)}`),
-  createPosOperator: (data: { storeId: string; name: string; role: string; permissions?: string[]; active?: boolean }) =>
+  createPosOperator: (data: { storeId: string; name: string; role: string; permissions?: string[]; active?: boolean; pin?: string; pinRequired?: boolean }) =>
     request<any>('/pos-operators', { method: 'POST', body: JSON.stringify(data) }),
-  updatePosOperator: (id: string, data: { name?: string; role?: string; permissions?: string[]; active?: boolean }) =>
+  updatePosOperator: (id: string, data: { name?: string; role?: string; permissions?: string[]; active?: boolean; pin?: string; pinRequired?: boolean }) =>
     request<any>(`/pos-operators/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deletePosOperator: (id: string) => request<any>(`/pos-operators/${id}`, { method: 'DELETE' }),
+  // docs/POS_POLICY_ENGINE.md §14.1 — resets pinRequired/hash/salt,
+  // distinct from PATCH {pinRequired: false} which only toggles the
+  // requirement flag and leaves an existing PIN intact.
+  resetPosOperatorPin: (id: string) => request<any>(`/pos-operators/${id}/pin`, { method: 'DELETE' }),
 
   getPosSettings: (storeId: string) => request<any>(`/pos-devices/settings?storeId=${encodeURIComponent(storeId)}`),
   updatePosSettings: (storeId: string, settings: Record<string, unknown>) =>
