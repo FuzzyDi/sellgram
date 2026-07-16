@@ -175,6 +175,35 @@ export const POS_OPERATOR_PERMISSIONS = [
   'DEV_DIAGNOSTICS',
 ] as const;
 
+// Human-readable labels for POS_OPERATOR_PERMISSIONS — displayed instead
+// of the raw permission code in PosOperators.tsx's table and form.
+export const PERMISSION_LABELS: Record<string, { ru: string; uz: string }> = {
+  SHIFT_OPEN:                       { ru: 'Открыть смену',                 uz: 'Smenani ochish' },
+  SHIFT_CLOSE:                      { ru: 'Закрыть смену',                 uz: 'Smenani yopish' },
+  SALE_CREATE:                      { ru: 'Создать продажу',               uz: 'Sotuv yaratish' },
+  SALE_COMPLETE:                    { ru: 'Завершить продажу',             uz: 'Sotuvni yakunlash' },
+  REFUND_CREATE_OWN_OR_BY_RECEIPT:  { ru: 'Возврат по чеку',               uz: "Kvitansiya bo'yicha qaytarish" },
+  REFUND_APPROVE:                   { ru: 'Одобрить возврат',              uz: 'Qaytarishni tasdiqlash' },
+  REFUND_COMPLETE:                  { ru: 'Завершить возврат',             uz: 'Qaytarishni yakunlash' },
+  CUSTOMER_LOOKUP:                  { ru: 'Поиск клиента',                 uz: 'Mijozni qidirish' },
+  CUSTOMER_CREATE:                  { ru: 'Создать клиента',               uz: 'Mijoz yaratish' },
+  X_REPORT_PRINT:                   { ru: 'X-отчёт',                       uz: 'X-hisobot' },
+  REPRINT_RECEIPT_COPY:             { ru: 'Копия чека',                    uz: 'Kvitansiya nusxasi' },
+  DISCOUNT_APPLY:                   { ru: 'Применить скидку',              uz: "Chegirma qo'llash" },
+  PRICE_OVERRIDE_LIMITED:           { ru: 'Изменить цену',                 uz: "Narxni o'zgartirish" },
+  CASH_IN:                          { ru: 'Внесение наличных',             uz: 'Naqd kiritish' },
+  CASH_OUT:                         { ru: 'Изъятие наличных',              uz: 'Naqd chiqarish' },
+  VIEW_SHIFT_TOTALS:                { ru: 'Итоги смены',                   uz: 'Smena yakunlari' },
+  RECOVERY_RECEIPTS:                { ru: 'Восстановление чеков',          uz: 'Kvitansiyalarni tiklash' },
+  POS_SETTINGS_EDIT:                { ru: 'Настройки POS',                 uz: 'POS sozlamalari' },
+  HARDWARE_SETTINGS_EDIT:           { ru: 'Настройки оборудования',        uz: 'Uskunalar sozlamalari' },
+  OPERATOR_SWITCH:                  { ru: 'Смена оператора',               uz: 'Operatorni almashtirish' },
+  POLICY_VIEW:                      { ru: 'Просмотр политик',              uz: "Siyosatlarni ko'rish" },
+  FORCE_SYNC:                       { ru: 'Принудительная синхронизация',  uz: 'Majburiy sinxronizatsiya' },
+  OUTBOX_REQUEUE:                   { ru: 'Повторная отправка',            uz: 'Qayta yuborish' },
+  DEV_DIAGNOSTICS:                  { ru: 'Диагностика (dev)',             uz: 'Diagnostika (dev)' },
+};
+
 // Mirrors apps/api/src/modules/pos-sync/admin-routes.ts's server-side
 // DEFAULT_PERMISSIONS exactly (§14.6) — used client-side to pre-fill the
 // permission checkboxes when a role is picked in the operator form

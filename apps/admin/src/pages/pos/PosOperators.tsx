@@ -10,7 +10,7 @@ import Table, { type TableColumn } from '../../components/Table';
 import {
   usePosStores, isPlanBlockedError, PosPlanBlocked, PosSubNav, PosStoreSelect,
   POS_OPERATOR_ROLES, POS_OPERATOR_ROLE_BADGE, POS_OPERATOR_PERMISSIONS,
-  POS_OPERATOR_DEFAULT_PERMISSIONS,
+  POS_OPERATOR_DEFAULT_PERMISSIONS, PERMISSION_LABELS,
   type PosOperatorRole,
 } from './pos-shared';
 
@@ -58,6 +58,11 @@ export default function PosOperators() {
   function roleLabel(role: string) {
     const found = POS_OPERATOR_ROLES.find((r) => r.value === role);
     return found ? tr(found.ru, found.uz) : role;
+  }
+
+  function permissionLabel(permission: string) {
+    const found = PERMISSION_LABELS[permission];
+    return found ? tr(found.ru, found.uz) : permission;
   }
 
   async function loadOperators(targetStoreId: string) {
@@ -209,7 +214,7 @@ export default function PosOperators() {
           {(op.permissions || []).length === 0
             ? <span className="text-token-xs text-neutral-400">—</span>
             : op.permissions.map((p: string) => (
-              <span key={p} className="rounded-token-sm bg-neutral-100 px-1.5 py-0.5 text-token-xs text-neutral-600">{p}</span>
+              <span key={p} className="rounded-token-sm bg-neutral-100 px-1.5 py-0.5 text-token-xs text-neutral-600">{permissionLabel(p)}</span>
             ))}
         </div>
       ),
@@ -340,7 +345,7 @@ export default function PosOperators() {
                         checked={form.permissions.includes(p)}
                         onChange={() => togglePermission(p)}
                       />
-                      {p}
+                      {permissionLabel(p)} <span className="text-token-xs text-neutral-400">({p})</span>
                     </label>
                   ))}
                 </div>
