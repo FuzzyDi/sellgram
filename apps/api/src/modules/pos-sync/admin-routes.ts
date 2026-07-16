@@ -84,6 +84,13 @@ const listReceiptsQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
 });
 
+const listOperatorEventsQuerySchema = z.object({
+  storeId: z.string().min(1),
+  deviceId: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.string().min(1).optional(),
+});
+
 const posAnalyticsQuerySchema = z
   .object({
     storeId: z.string().min(1),
@@ -618,6 +625,65 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const nextCursor = receipts.length === query.data.limit ? receipts[receipts.length - 1]!.id : null;
 
       return reply.status(200).send({ success: true, data: { items: receipts, nextCursor } });
+    }
+  );
+
+  // Operator audit trail (docs/POS_SYNC_API.md §24) for the Events admin
+  // screen. Same cursor pagination scheme as /pos-shifts/-receipts,
+  // ordered by createdAt DESC. operatorId/actorId are plain strings with
+  // no Prisma @relation (schema.prisma's PosOperatorEvent comment —
+  // accept-don't-reject means an id Cloud doesn't recognize is still
+  // stored), so operator names are resolved with a second, batched query
+  // rather than a `select`-time join, and matched back onto each row here.
+  fastify.get(
+    '/pos-operator-events',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const query = listOperatorEventsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({ success: false, error: query.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const events = await prisma.posOperatorEvent.findMany({
+        where: {
+          tenantId,
+          storeId: store.id,
+          ...(query.data.deviceId ? { deviceId: query.data.deviceId } : {}),
+        },
+        select: {
+          id: true,
+          eventType: true,
+          operatorId: true,
+          actorId: true,
+          payload: true,
+          createdAt: true,
+          deviceId: true,
+          device: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: query.data.limit,
+        ...(query.data.cursor ? { cursor: { id: query.data.cursor }, skip: 1 } : {}),
+      });
+
+      const operatorIds = [...new Set(events.flatMap((e) => [e.operatorId, e.actorId]).filter((id): id is string => !!id))];
+      const operators = operatorIds.length
+        ? await prisma.posOperator.findMany({ where: { id: { in: operatorIds } }, select: { id: true, name: true } })
+        : [];
+      const operatorNameById = new Map(operators.map((o) => [o.id, o.name]));
+
+      const items = events.map((e) => ({
+        ...e,
+        operatorName: e.operatorId ? operatorNameById.get(e.operatorId) ?? null : null,
+        actorName: e.actorId ? operatorNameById.get(e.actorId) ?? null : null,
+      }));
+
+      const nextCursor = events.length === query.data.limit ? events[events.length - 1]!.id : null;
+
+      return reply.status(200).send({ success: true, data: { items, nextCursor } });
     }
   );
 

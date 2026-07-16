@@ -429,6 +429,13 @@ export const adminApi = {
     if (params.cursor) qs.set('cursor', params.cursor);
     return request<any>(`/pos-receipts?${qs.toString()}`);
   },
+  getPosOperatorEvents: (params: { storeId: string; deviceId?: string; limit?: number; cursor?: string }) => {
+    const qs = new URLSearchParams({ storeId: params.storeId });
+    if (params.deviceId) qs.set('deviceId', params.deviceId);
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.cursor) qs.set('cursor', params.cursor);
+    return request<any>(`/pos-operator-events?${qs.toString()}`);
+  },
   getPosAnalytics: (params: { storeId: string; period: 'today' | 'week' | 'month' | 'custom'; from?: string; to?: string }) => {
     const qs = new URLSearchParams({ storeId: params.storeId, period: params.period });
     if (params.from) qs.set('from', params.from);

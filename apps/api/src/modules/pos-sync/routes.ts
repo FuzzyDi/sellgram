@@ -369,6 +369,36 @@ const shiftEventSchema = z.object({
   rawShiftPayload: z.record(z.unknown()),
 });
 
+// docs/POS_SYNC_API.md §24 — operator audit trail.
+const operatorEventSchema = z.object({
+  eventType: z.enum([
+    'OPERATOR_LOCK',
+    'OPERATOR_LOGIN',
+    'OPERATOR_SWITCH',
+    'OPERATOR_PIN_FAILED',
+    'OPERATOR_PIN_BLOCKED',
+  ]),
+  // No @relation on the Prisma side (schema comment on
+  // PosOperatorEvent) — accept-don't-reject (§18) means an unrecognized
+  // id is still stored, not rejected. operatorId is nullable at the
+  // schema level for OPERATOR_LOCK specifically (nobody was logged in
+  // when the till locked); actorId is who *caused* the event (the
+  // outgoing operator for a SWITCH, for example).
+  operatorId: z.string().min(1).nullable().optional(),
+  actorId: z.string().min(1).nullable().optional(),
+  idempotencyKey: z.string().regex(/^[^:]+:operator:[^:]+:[A-Z_]+$/),
+  // Device-reported event time (ms since epoch) — same numeric-ms
+  // convention as this file's other *AtMs fields (createdAtMs/
+  // fiscalizedAtMs/openedAtMs). Deliberately NOT written to this row's
+  // own `createdAt` column (that stays Cloud's own, non-spoofable
+  // receipt timestamp, @default(now()) — see the route handler); folded
+  // into `payload` instead so it isn't lost, and isn't silently
+  // stripped either (the weightBarcode/SaleEvent.customerId class of
+  // mistake this codebase has hit twice already).
+  createdAt: z.number(),
+  payload: z.record(z.unknown()).optional(),
+});
+
 const commandAckSchema = z.object({
   status: z.enum(['DONE', 'FAILED', 'IGNORED', 'RETRY_LATER']),
   message: z.string().nullable().optional(),
@@ -1723,6 +1753,70 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     }
 
     return sendAck(reply, 201, request);
+  });
+
+  // docs/POS_SYNC_API.md §24 — operator audit trail (lock/login/switch,
+  // failed/blocked PIN attempts, docs/POS_POLICY_ENGINE.md §14.1). Uses
+  // the general envelope with a `data` object (unlike fiscal/shift-events'
+  // bare sendAck) — mirrors sale-events' find-existing-then-create
+  // idempotency shape, since a replay here also needs to return the same
+  // { id, eventType, createdAt } the original 201 did, not just an ack.
+  fastify.post('/pos/v1/operator-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
+
+    const body = operatorEventSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid operator event', request, {
+        issues: body.error.issues,
+      });
+    }
+
+    const findExisting = () =>
+      prisma.posOperatorEvent.findUnique({
+        where: { deviceId_idempotencyKey: { deviceId: device.id, idempotencyKey: body.data.idempotencyKey } },
+        select: { id: true, eventType: true, createdAt: true },
+      });
+
+    const existing = await findExisting();
+    if (existing) {
+      return sendSuccess(reply, 200, existing, request);
+    }
+
+    // §24 — deviceCreatedAtMs is the till's own event time, kept
+    // alongside whatever else the device sends; this row's own
+    // `createdAt` column stays Cloud's receipt timestamp
+    // (@default(now())), not overridable by the request (see the Zod
+    // schema comment above).
+    const payload = { ...(body.data.payload ?? {}), deviceCreatedAtMs: body.data.createdAt };
+
+    let event;
+    try {
+      event = await prisma.posOperatorEvent.create({
+        data: {
+          tenantId: device.tenantId,
+          storeId: device.storeId,
+          deviceId: device.id,
+          eventType: body.data.eventType,
+          operatorId: body.data.operatorId ?? null,
+          actorId: body.data.actorId ?? null,
+          idempotencyKey: body.data.idempotencyKey,
+          payload: payload as any,
+        },
+        select: { id: true, eventType: true, createdAt: true },
+      });
+    } catch (err: any) {
+      // Concurrent duplicate lost the unique-idempotencyKey race —
+      // resolve it exactly like a replay that arrived a moment later
+      // (same pattern as sale-events).
+      if (err?.code === 'P2002') {
+        const winner = await findExisting();
+        if (winner) return sendSuccess(reply, 200, winner, request);
+      }
+      throw err;
+    }
+
+    return sendSuccess(reply, 201, event, request);
   });
 
   // Response shape here is the real contract's literal
