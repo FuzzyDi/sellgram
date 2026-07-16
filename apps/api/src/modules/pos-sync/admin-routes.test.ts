@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { createHash } from 'crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -274,6 +275,21 @@ describe('pos-sync.admin-routes', () => {
         expect(mocks.prisma.posOperator.findMany).not.toHaveBeenCalled();
         await app.close();
       });
+
+      // docs/POS_POLICY_ENGINE.md §14.1.
+      it('selects pinRequired but never pinHashSha256/pinSalt', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.posOperator.findMany.mockResolvedValue([]);
+
+        const app = await buildApp();
+        await app.inject({ method: 'GET', url: '/pos-operators?storeId=store-1' });
+
+        const select = mocks.prisma.posOperator.findMany.mock.calls[0][0].select;
+        expect(select.pinRequired).toBe(true);
+        expect(select).not.toHaveProperty('pinHashSha256');
+        expect(select).not.toHaveProperty('pinSalt');
+        await app.close();
+      });
     });
 
     describe('POST /pos-operators', () => {
@@ -383,6 +399,83 @@ describe('pos-sync.admin-routes', () => {
         expect(mocks.prisma.posOperator.create).not.toHaveBeenCalled();
         await app.close();
       });
+
+      // docs/POS_POLICY_ENGINE.md §14.1.
+      describe('PIN', () => {
+        it('hashes a provided pin, forces pinRequired: true, and never returns pin/hash/salt', async () => {
+          mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+          mocks.prisma.posOperator.create.mockResolvedValue({ id: 'op-1' });
+
+          const app = await buildApp();
+          const response = await app.inject({
+            method: 'POST',
+            url: '/pos-operators',
+            payload: { storeId: 'store-1', name: 'Alice', role: 'CASHIER', pin: '1234' },
+          });
+
+          expect(response.statusCode).toBe(201);
+          const call = mocks.prisma.posOperator.create.mock.calls[0][0];
+          expect(call.data.pinRequired).toBe(true);
+          expect(call.data.pin).toBeUndefined();
+          expect(call.data.pinSalt).toMatch(/^[0-9a-f]{32}$/);
+          expect(call.data.pinHashSha256).toMatch(/^[0-9a-f]{64}$/);
+          // The hash is a real SHA-256 of salt+pin, not a placeholder.
+          const expectedHash = createHash('sha256').update(call.data.pinSalt + '1234').digest('hex');
+          expect(call.data.pinHashSha256).toBe(expectedHash);
+          // select never exposes the hash/salt back to the caller.
+          expect(call.select).not.toHaveProperty('pinHashSha256');
+          expect(call.select).not.toHaveProperty('pinSalt');
+          await app.close();
+        });
+
+        it('sets pinRequired alone (no hash/salt) when pinRequired is given without a pin', async () => {
+          mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+          mocks.prisma.posOperator.create.mockResolvedValue({ id: 'op-1' });
+
+          const app = await buildApp();
+          await app.inject({
+            method: 'POST',
+            url: '/pos-operators',
+            payload: { storeId: 'store-1', name: 'Alice', role: 'CASHIER', pinRequired: true },
+          });
+
+          const data = mocks.prisma.posOperator.create.mock.calls[0][0].data;
+          expect(data.pinRequired).toBe(true);
+          expect(data).not.toHaveProperty('pinHashSha256');
+          expect(data).not.toHaveProperty('pinSalt');
+          await app.close();
+        });
+
+        it('creates with no PIN fields at all when neither pin nor pinRequired is given', async () => {
+          mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+          mocks.prisma.posOperator.create.mockResolvedValue({ id: 'op-1' });
+
+          const app = await buildApp();
+          await app.inject({
+            method: 'POST',
+            url: '/pos-operators',
+            payload: { storeId: 'store-1', name: 'Alice', role: 'CASHIER' },
+          });
+
+          const data = mocks.prisma.posOperator.create.mock.calls[0][0].data;
+          expect(data).not.toHaveProperty('pinRequired');
+          expect(data).not.toHaveProperty('pinHashSha256');
+          expect(data).not.toHaveProperty('pinSalt');
+          await app.close();
+        });
+
+        it.each(['123', '1234567', 'abcd', ''])('rejects an invalid PIN %j with 400', async (pin) => {
+          const app = await buildApp();
+          const response = await app.inject({
+            method: 'POST',
+            url: '/pos-operators',
+            payload: { storeId: 'store-1', name: 'Alice', role: 'CASHIER', pin },
+          });
+          expect(response.statusCode).toBe(400);
+          expect(mocks.prisma.posOperator.create).not.toHaveBeenCalled();
+          await app.close();
+        });
+      });
     });
 
     describe('PATCH /pos-operators/:id', () => {
@@ -458,6 +551,106 @@ describe('pos-sync.admin-routes', () => {
           url: '/pos-operators/op-foreign',
           payload: { active: false },
         });
+
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.posOperator.update).not.toHaveBeenCalled();
+        expect(mocks.prisma.posSettings.upsert).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      // docs/POS_POLICY_ENGINE.md §14.1.
+      describe('PIN', () => {
+        it('hashes a new pin and forces pinRequired: true', async () => {
+          mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1', storeId: 'store-1' });
+          mocks.prisma.posOperator.update.mockResolvedValue({ id: 'op-1' });
+          mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 3 });
+
+          const app = await buildApp();
+          await app.inject({
+            method: 'PATCH',
+            url: '/pos-operators/op-1',
+            payload: { pin: '5678' },
+          });
+
+          const call = mocks.prisma.posOperator.update.mock.calls[0][0];
+          expect(call.data.pin).toBeUndefined();
+          expect(call.data.pinRequired).toBe(true);
+          expect(call.data.pinSalt).toMatch(/^[0-9a-f]{32}$/);
+          const expectedHash = createHash('sha256').update(call.data.pinSalt + '5678').digest('hex');
+          expect(call.data.pinHashSha256).toBe(expectedHash);
+          expect(call.select).not.toHaveProperty('pinHashSha256');
+          await app.close();
+        });
+
+        it('updates pinRequired alone, leaving hash/salt untouched, when no pin is given', async () => {
+          mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1', storeId: 'store-1' });
+          mocks.prisma.posOperator.update.mockResolvedValue({ id: 'op-1' });
+          mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 3 });
+
+          const app = await buildApp();
+          await app.inject({
+            method: 'PATCH',
+            url: '/pos-operators/op-1',
+            payload: { pinRequired: false },
+          });
+
+          expect(mocks.prisma.posOperator.update).toHaveBeenCalledWith(
+            expect.objectContaining({ data: { pinRequired: false } })
+          );
+          const data = mocks.prisma.posOperator.update.mock.calls[0][0].data;
+          expect(data).not.toHaveProperty('pinHashSha256');
+          expect(data).not.toHaveProperty('pinSalt');
+          await app.close();
+        });
+
+        it('touches no PIN column at all when neither pin nor pinRequired is given', async () => {
+          mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1', storeId: 'store-1' });
+          mocks.prisma.posOperator.update.mockResolvedValue({ id: 'op-1' });
+          mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 3 });
+
+          const app = await buildApp();
+          await app.inject({
+            method: 'PATCH',
+            url: '/pos-operators/op-1',
+            payload: { name: 'Alice B.' },
+          });
+
+          expect(mocks.prisma.posOperator.update).toHaveBeenCalledWith(
+            expect.objectContaining({ data: { name: 'Alice B.' } })
+          );
+          await app.close();
+        });
+      });
+    });
+
+    // docs/POS_POLICY_ENGINE.md §14.1.
+    describe('DELETE /pos-operators/:id/pin', () => {
+      it('resets pinRequired/hash/salt for an operator belonging to the tenant', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1', storeId: 'store-1' });
+        mocks.prisma.posOperator.update.mockResolvedValue({ id: 'op-1', pinRequired: false });
+        mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', staffVersion: 5 });
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'DELETE', url: '/pos-operators/op-1/pin' });
+
+        expect(response.statusCode).toBe(200);
+        expect(mocks.prisma.posOperator.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'op-1' },
+            data: { pinRequired: false, pinHashSha256: null, pinSalt: null },
+          })
+        );
+        expect(mocks.prisma.posSettings.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { storeId: 'store-1' }, update: { staffVersion: { increment: 1 } } })
+        );
+        await app.close();
+      });
+
+      it('returns 404 (tenant isolation) for an operator belonging to another tenant', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'DELETE', url: '/pos-operators/op-foreign/pin' });
 
         expect(response.statusCode).toBe(404);
         expect(mocks.prisma.posOperator.update).not.toHaveBeenCalled();

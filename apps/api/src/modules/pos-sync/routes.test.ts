@@ -1070,8 +1070,8 @@ describe('pos-sync.routes', () => {
       const body = response.json();
       expect(body.data.staff).toEqual({
         operators: [
-          { id: 'op-1', name: 'Alice', role: 'senior_cashier', permissions: ['void_sale'], active: true },
-          { id: 'op-2', name: 'Bob', role: 'admin', permissions: [], active: true },
+          { id: 'op-1', name: 'Alice', role: 'senior_cashier', permissions: ['void_sale'], active: true, pinHashSha256: null, pinSalt: null },
+          { id: 'op-2', name: 'Bob', role: 'admin', permissions: [], active: true, pinHashSha256: null, pinSalt: null },
         ],
       });
       // Query-level filter, not application-code filter, and store-scoped —
@@ -1080,8 +1080,46 @@ describe('pos-sync.routes', () => {
         expect.objectContaining({
           where: { tenantId: 't-1', storeId: 's-1', active: true },
           orderBy: { name: 'asc' },
+          select: expect.objectContaining({ pinRequired: true, pinHashSha256: true, pinSalt: true }),
         })
       );
+      await app.close();
+    });
+
+    // docs/POS_POLICY_ENGINE.md §14.1 — offline-first: the till verifies
+    // a PIN locally, with no server round-trip, so pinHashSha256/pinSalt
+    // travel with the rest of the staff roster (deliberate tradeoff, see
+    // the schema comment on PosOperator.pinRequired).
+    it('includes pinRequired, pinHashSha256, and pinSalt per operator for offline PIN verification', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
+      mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 1 });
+      mocks.prisma.platformPolicy.findMany.mockResolvedValue([]);
+      mocks.prisma.posOperator.findMany.mockResolvedValue([
+        {
+          id: 'op-1', name: 'Alice', role: 'CASHIER', permissions: [], active: true, pinRequired: true,
+          pinHashSha256: 'deadbeef', pinSalt: 'cafebabe',
+        },
+        {
+          id: 'op-2', name: 'Bob', role: 'CASHIER', permissions: [], active: true, pinRequired: false,
+          pinHashSha256: null, pinSalt: null,
+        },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/settings',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      const [op1, op2] = response.json().data.staff.operators;
+      expect(op1).toMatchObject({ pinRequired: true, pinHashSha256: 'deadbeef', pinSalt: 'cafebabe' });
+      // Backward compat: an operator with no PIN set gets pinRequired:
+      // false and both fields null, not omitted.
+      expect(op2).toMatchObject({ pinRequired: false, pinHashSha256: null, pinSalt: null });
       await app.close();
     });
 

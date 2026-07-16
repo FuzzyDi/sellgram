@@ -1045,7 +1045,10 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       prisma.posOperator.findMany({
         where: { tenantId: device.tenantId, storeId: device.storeId, active: true },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true, role: true, permissions: true, active: true },
+        select: {
+          id: true, name: true, role: true, permissions: true, active: true,
+          pinRequired: true, pinHashSha256: true, pinSalt: true,
+        },
       }),
     ]);
 
@@ -1126,6 +1129,19 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
             role: op.role.toLowerCase(),
             permissions: op.permissions,
             active: op.active,
+            // docs/POS_POLICY_ENGINE.md §14.1 — offline-first requirement:
+            // the till must be able to verify a cashier's PIN with no
+            // server round-trip, so the hash+salt pair travels with the
+            // rest of the staff roster instead of staying server-side.
+            // Deliberate tradeoff, not an oversight — a 4-6 digit PIN is
+            // brute-forceable from this pair given physical access to the
+            // device, but the threat model here is "prevent a co-worker
+            // without this PIN from acting as this cashier," not
+            // "withstand a compromised till," and the cashier already has
+            // physical access to the device the PIN protects.
+            pinRequired: op.pinRequired,
+            pinHashSha256: op.pinHashSha256 ?? null,
+            pinSalt: op.pinSalt ?? null,
           })),
         }
       : null;

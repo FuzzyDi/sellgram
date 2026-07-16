@@ -21,10 +21,18 @@ interface FormState {
   role: PosOperatorRole;
   permissions: string[];
   active: boolean;
+  // docs/POS_POLICY_ENGINE.md §14.1. `pin` is the plaintext the admin
+  // just typed — empty on every open, including edit (the server never
+  // sends the hash back, so there is nothing to prefill and no way to
+  // show "the current PIN"). An empty pin on submit means "leave
+  // whatever's stored alone", not "clear it" — that's what the
+  // separate reset action is for.
+  pinRequired: boolean;
+  pin: string;
 }
 
 function emptyForm(): FormState {
-  return { name: '', role: 'CASHIER', permissions: [], active: true };
+  return { name: '', role: 'CASHIER', permissions: [], active: true, pinRequired: false, pin: '' };
 }
 
 export default function PosOperators() {
@@ -88,6 +96,8 @@ export default function PosOperators() {
       role: op.role,
       permissions: Array.isArray(op.permissions) ? op.permissions : [],
       active: op.active,
+      pinRequired: Boolean(op.pinRequired),
+      pin: '',
     });
     setFormOpen(true);
   }
@@ -122,14 +132,23 @@ export default function PosOperators() {
     if (!canSave || !storeId) return;
     setSaving(true);
     try {
+      // pin is only ever sent when the admin actually typed one — an
+      // empty field means "don't touch the stored PIN" (edit) or "no
+      // PIN yet" (create), never "clear it" (that's resetPin below).
+      // pinRequired is always sent as a real toggle, independent of pin.
+      const pinFields: { pin?: string; pinRequired: boolean } = { pinRequired: form.pinRequired };
+      if (form.pin.trim()) pinFields.pin = form.pin.trim();
+
       if (editId) {
         await adminApi.updatePosOperator(editId, {
           name: form.name.trim(), role: form.role, permissions: form.permissions, active: form.active,
+          ...pinFields,
         });
         showNotice('success', tr('Кассир обновлён', 'Kassir yangilandi'));
       } else {
         await adminApi.createPosOperator({
           storeId, name: form.name.trim(), role: form.role, permissions: form.permissions, active: form.active,
+          ...pinFields,
         });
         showNotice('success', tr('Кассир добавлен', "Kassir qo'shildi"));
       }
@@ -148,6 +167,21 @@ export default function PosOperators() {
     try {
       await adminApi.deletePosOperator(id);
       showNotice('success', tr('Кассир удалён', "Kassir o'chirildi"));
+      await loadOperators(storeId);
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resetPin() {
+    if (!editId) return;
+    setSaving(true);
+    try {
+      await adminApi.resetPosOperatorPin(editId);
+      setForm((prev) => ({ ...prev, pinRequired: false, pin: '' }));
+      showNotice('success', tr('PIN сброшен', 'PIN tozalandi'));
       await loadOperators(storeId);
     } catch (err: any) {
       showNotice('error', err?.message || tr('Ошибка', 'Xatolik'));
@@ -320,6 +354,40 @@ export default function PosOperators() {
                 />
                 {tr('Активен', 'Faol')}
               </label>
+
+              <div className="border-t border-neutral-200 pt-3 flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-token-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={form.pinRequired}
+                    onChange={(e) => setForm((prev) => ({ ...prev, pinRequired: e.target.checked }))}
+                  />
+                  {tr('Требовать PIN', 'PIN talab qilinsin')}
+                </label>
+
+                {form.pinRequired && (
+                  <>
+                    <Input
+                      type="password"
+                      label={tr('PIN код', 'PIN kod')}
+                      value={form.pin}
+                      onChange={(e) => setForm((prev) => ({ ...prev, pin: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                      placeholder={editId ? tr('Оставьте пустым, чтобы не менять', "O'zgartirmaslik uchun bo'sh qoldiring") : '1234'}
+                      inputMode="numeric"
+                      autoComplete="off"
+                    />
+                    <p className="text-token-xs text-neutral-500 m-0">
+                      {tr('PIN хранится в зашифрованном виде', 'PIN shifrlangan holda saqlanadi')}
+                    </p>
+                  </>
+                )}
+
+                {editId && (
+                  <Button variant="ghost" size="sm" type="button" onClick={() => void resetPin()} disabled={saving}>
+                    {tr('Сбросить PIN', 'PIN-ni tozalash')}
+                  </Button>
+                )}
+              </div>
             </div>
 
             <div className="flex gap-2 justify-end mt-4">
