@@ -433,7 +433,12 @@ Per-key disposition of the current `PosSettings.payload` eight keys:
 the new block is confirmed complete — this document does not remove
 `paymentMethods` from the response at any point; that removal is
 `§9` step 7, explicitly gated on that confirmation, not on this
-document's implementation landing.
+document's implementation landing. **Отложено до подтверждения после
+стабильного APK на LANDI** — Android (2026-07-17): `paymentProviders`
+уже основной источник, `paymentMethods[]` используется как
+backward-compatible fallback для старых сборок; удаление ждёт явного
+подтверждения от Android-команды, что все устройства перешли на новый
+APK.
 
 ## 8. Admin UI changes
 
@@ -497,11 +502,12 @@ open a page with its own internal tab-switcher, not three new
    multi-device stores.
 6. **Admin UI:** "Оборудование" tab (§8) — `PosDeviceSettings` per
    selected device.
-7. **Deprecate `settings.paymentMethods[]`** from the `GET
-   /pos/v1/settings` response, only after explicit confirmation from
-   the Android team that the SBG Lite POS client has fully switched to
-   reading `settings.paymentProviders` — this step has no target date
-   in this document because that confirmation has not happened yet.
+7. **Deprecate `settings.paymentMethods[]`** — **отложено до подтверждения
+   после стабильного APK на LANDI.** Android (2026-07-17): `paymentProviders`
+   уже основной источник, `paymentMethods[]` используется как
+   backward-compatible fallback для старых сборок. Удалять из `GET
+   /settings` только после явного подтверждения от Android-команды что
+   все устройства на новом APK.
 
 ## 10. Open questions
 
