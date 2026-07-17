@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => ({
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({}),
+      count: vi.fn().mockResolvedValue(0),
     },
     $transaction: vi.fn(),
   },
@@ -407,6 +408,32 @@ describe('pos-sync.routes', () => {
       expect(body.data.catalogVersion).toBe(4);
       expect(body.data.settingsVersion).toBe(7);
       expect(body.data.hasCommands).toBe(false);
+      expect(body.data.pendingCommandsCount).toBe(0);
+      await app.close();
+    });
+
+    it('reports hasCommands: true and the real count when PENDING CloudCommand rows exist for this device', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.tenant.findUnique.mockResolvedValue({ planExpiresAt: null, blockedAt: null });
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ version: 4 });
+      mocks.prisma.posSettings.findUnique.mockResolvedValueOnce({ version: 7 });
+      mocks.prisma.cloudCommand.count.mockResolvedValueOnce(3);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/heartbeat',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validHeartbeatPayload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.hasCommands).toBe(true);
+      expect(body.data.pendingCommandsCount).toBe(3);
+      expect(mocks.prisma.cloudCommand.count).toHaveBeenCalledWith({ where: { deviceId: 'dev-1', status: 'PENDING' } });
       await app.close();
     });
 
@@ -3011,7 +3038,7 @@ describe('pos-sync.routes', () => {
       });
 
       expect(mocks.prisma.cloudCommand.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { deviceId: 'dev-1', tenantId: 't-1', status: 'PENDING' } })
+        expect.objectContaining({ where: { deviceId: 'dev-1', tenantId: 't-1', status: 'PENDING' }, take: 10 })
       );
       await app.close();
     });

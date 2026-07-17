@@ -392,7 +392,8 @@ cross-referencing the token.
     "licenseStatus": "ACTIVE|GRACE_PERIOD|EXPIRED|BLOCKED",
     "catalogVersion": 1,
     "settingsVersion": 1,
-    "hasCommands": false
+    "hasCommands": false,
+    "pendingCommandsCount": 0
   },
   "requestId": "string"
 }
@@ -415,7 +416,13 @@ cross-referencing the token.
 - `hasCommands: true` is a hint to poll `GET /commands` soon — it is a hint,
   not a push; the device is not required to act on it immediately, and its
   absence (or a stale `false`) must never be treated as a guarantee there
-  are no commands waiting.
+  are no commands waiting. Wired to `CloudCommand` (§15) as of this
+  revision: `pendingCommandsCount > 0` for this device.
+- `pendingCommandsCount` — the same count `hasCommands` is derived from,
+  exposed as a number rather than a boolean so a device (or an admin
+  looking at logs) can tell "a few" from "a backlog" without a separate
+  `GET /commands` call. Capped by nothing here — the cap is on `GET
+  /commands` itself (§15, 10 per poll), not on this count.
 
 ## 9. Catalog snapshot
 
@@ -841,11 +848,29 @@ byte-for-byte; adding fields here was deliberately avoided rather than
 }
 ```
 
-An empty `commands` array is a valid, normal response (no admin surface
-creates `CloudCommand` rows yet — see §21).
+An empty `commands` array is a valid, normal response. Capped at 10
+`PENDING` commands per poll, oldest first (`createdAt` ascending) — a
+device with more than 10 waiting simply sees the rest on its next poll
+after acking these; there is no dedicated "how many more are left"
+field (`GET /pos/v1/heartbeat`'s `pendingCommandsCount`, uncapped, is
+the closest thing to that).
 
 **Allowed command types (v1):** `PING`, `REFRESH_CATALOG`,
 `REFRESH_SETTINGS`, `SHOW_MESSAGE`.
+
+**Creation paths (store-admin, `/api/store-admin/*`, `permissionGuard('manageSettings')`):**
+
+- `POST /pos-devices/catalog-snapshot` and `PUT /pos-devices/settings`
+  each automatically queue `REFRESH_CATALOG`/`REFRESH_SETTINGS`
+  respectively for every `ACTIVE` device at that store — skipping a
+  device that already has a `PENDING` command of that same type, so a
+  device offline through several catalog edits in a row accumulates one
+  pending refresh, not one per edit.
+- `POST /pos-devices/commands` (`{ deviceId, type, payload? }`) sends any
+  of the four allowed types to one specific device directly — a manual
+  "ping this till" / "show this message" action, not deduplicated
+  against an existing `PENDING` command of the same type (an admin
+  explicitly asking twice gets two commands).
 
 **Forbidden for v1** — must never be added to the allowed list without a
 new major version *and* a re-review of §2:
@@ -1081,8 +1106,12 @@ requires it.
 
 **Flow E — cloud command delivery**
 
-1. Tenant admin (or an automated policy, out of scope here) triggers a
-   `REFRESH_CATALOG` command targeting a device.
+1. `POST /store-admin/pos-devices/catalog-snapshot` automatically queues
+   a `REFRESH_CATALOG` command for every `ACTIVE` device at that store
+   that doesn't already have one `PENDING` (`PUT
+   /store-admin/pos-devices/settings` does the same with
+   `REFRESH_SETTINGS`) — or a tenant admin sends one directly to a
+   single device via `POST /store-admin/pos-devices/commands`.
 2. Device's next heartbeat returns `hasCommands: true`.
 3. Device calls `GET /api/pos/v1/commands`, receives the command.
 4. Device acts on it locally (re-pulls the catalog snapshot) at a time of
@@ -1114,7 +1143,7 @@ work outside this document's scope (there is none left inside it).
 | `POST /activate` request | `activationCode`, `deviceFingerprint`, `deviceName`, `deviceType`, `appVersion` | **Closed** — all five fields accepted; `deviceName`/`deviceType` stored as `reportedDeviceName`/`reportedDeviceType`, separate from the admin-set `name`/`deviceType` | No gap. Fingerprint collision with another active device is logged, not rejected (§7). |
 | `POST /activate` response | `accessToken` + `refreshToken`, `catalogVersion`, `settingsVersion` | **Closed** — both tokens minted (hash-only, same pattern as before), `catalogVersion`/`settingsVersion` returned | No gap in shape. `refreshToken` is stored but unconsumed — still no `token/refresh` endpoint in code or in this contract, so `accessToken` remains long-lived in practice (§4). `settingsVersion` is a stable placeholder (`1`) pending `PosSettings` existing. |
 | `POST /heartbeat` request | Rich payload: `shiftState`, `unsyncedEvents`, `fiscal{}`, `printer{}`, `network{}` | **Closed** — full payload validated; mismatched `deviceId` rejected as `VALIDATION_ERROR`; degraded `fiscal`/`printer` status logged | No gap in validation. Payload fields (`shiftState`, `unsyncedEvents`, etc.) are validated and log-inspected but not persisted — no admin fleet-monitoring endpoint reads them yet, so there's nowhere to store them usefully. |
-| `POST /heartbeat` response | `licenseStatus`, `catalogVersion`, `settingsVersion`, `hasCommands` | **Closed** — `licenseStatus` derived via `getLicenseStatus()` (`apps/api/src/lib/billing.ts`) from `Tenant.planExpiresAt`/`Tenant.blockedAt`; `catalogVersion` from the latest snapshot | No gap in shape. `settingsVersion` (`1`) and `hasCommands` (`false`) are stable placeholders pending `PosSettings`/`CloudCommand` existing. `BLOCKED` only ever comes from explicit system-admin block/unblock — no automatic non-payment path sets it beyond what `EXPIRED` already covers. |
+| `POST /heartbeat` response | `licenseStatus`, `catalogVersion`, `settingsVersion`, `hasCommands` | **Closed** — `licenseStatus` derived via `getLicenseStatus()` (`apps/api/src/lib/billing.ts`) from `Tenant.planExpiresAt`/`Tenant.blockedAt`; `catalogVersion` from the latest snapshot; `settingsVersion` from the real `PosSettings.version` (was a stale note here — corrected, see the `GET /settings` row below, which already had this right); `hasCommands`/`pendingCommandsCount` from a real `CloudCommand.count()` for this device (§15), no longer the hardcoded `false` placeholder | No gap in shape. `BLOCKED` only ever comes from explicit system-admin block/unblock — no automatic non-payment path sets it beyond what `EXPIRED` already covers. |
 | `GET /catalog/snapshot` request | `storeId`, `sinceVersion` query params | **Closed** — `storeId` required and must match the device's own store (else `VALIDATION_ERROR`); `sinceVersion` accepted but inert | No gap. `sinceVersion` being inert matches this contract's own v1 stance (`full` is always `true`, delta sync out of scope). |
 | `GET /catalog/snapshot` response | Top-level `categories`/`products`/`barcodes`/`uzProfiles`, `checksum`, `full` | **Closed** — contract shape served; snapshot builder now stores categories alongside products; legacy `{ products }`-only snapshots served with empty arrays for the missing keys | No gap in shape. `barcodes`/`uzProfiles` are always `[]` pending the `Barcode`/`ProductUzProfile` models (§12). `checksum` is opaque in v1 (§9). |
 | `GET /settings` response | Versioned, structured (`taxProfile`, `paymentMethods`, `receiptTemplate`, `printerProfile`, `fiscalProfile`, `offlineLimits`, `roundingRules`, `featureFlags`) | **Closed** — backed by the new `PosSettings` model (store-scoped, `version` + `payload Json`), written via `PUT /store-admin/pos-devices/settings`; unconfigured stores get empty eight-key defaults at version 1 | No gap in shape. Nested shapes are whatever the admin stored — unconstrained by design pending a fiscal partner (§10). The old `currency`/`timezone` placeholder response is gone (not part of the contract body). `settingsVersion` in `/activate` and `/heartbeat` now reports the real `PosSettings.version`. |
@@ -1122,7 +1151,7 @@ work outside this document's scope (there is none left inside it).
 | Fiscal events | Real SBG Lite POS Android contract (§12): `FISCAL_STARTED/SUCCESS/FAILED/UNKNOWN`, rich receipt snapshot, `eventId`-keyed idempotency | **Closed** — `FiscalEvent` model (append-only, `@@unique([deviceId, eventId])`); flat `{success, requestId}` ack per the real contract; `FISCAL_UNKNOWN`/`FAILED` never rewritten to success | No gap. Auth mismatch resolved jointly with the Android team — see §4/§22 (dual-header, `deviceCode` origin still unconfirmed). Decoupled from `POST /sale-events` (§11) by design (§12 note); the two ingestion surfaces are not yet wired together. |
 | Shift events | Real contract (§13): `SHIFT_OPENED/CLOSED` only, `eventId`-keyed idempotency | **Closed** — `ShiftEvent` model, same idempotency/ack pattern as `FiscalEvent` | No gap. Same §4/§22 auth note applies. |
 | Stock movement events | `POST /stock-events` (§14) | **Closed** — `StockEvent` model (append-only, no FK on `productId` on purpose) + full §5 idempotency; known product derives a signed-delta `StockLedgerEntry` (`sourceType: 'StockEvent'`); unknown product stored with an `UNKNOWN_PRODUCT` warning, no ledger row | No gap. `POS_SALE` is rejected at the API — that reason code stays exclusive to sale-event derivation. |
-| Cloud commands | `GET /commands`, `POST /commands/:id/ack`, real contract's allowed list (§15) | **Closed** — `CloudCommand` model; `GET /commands` returns the real contract's literal flat shape (no `data`/`requestId`); ack validates `DONE/FAILED/IGNORED/RETRY_LATER` and enforces tenant/device isolation (404 on a foreign command) | No gap in the polling/ack surface. No admin UI creates `CloudCommand` rows yet — `GET /commands` will legitimately return `[]` until one exists. Heartbeat's `hasCommands` still hardcodes `false` (§8) — deliberately not wired to the new model, out of scope for this change (heartbeat logic was off-limits). Same §4/§22 auth note applies. |
+| Cloud commands | `GET /commands`, `POST /commands/:id/ack`, real contract's allowed list (§15) | **Closed** — `CloudCommand` model; `GET /commands` returns the real contract's literal flat shape (no `data`/`requestId`), capped at 10 `PENDING` per poll; ack validates `DONE/FAILED/IGNORED/RETRY_LATER` and enforces tenant/device isolation (404 on a foreign command). Rows are now created two ways: automatically (`POST /pos-devices/catalog-snapshot`/`PUT /pos-devices/settings` fan out `REFRESH_CATALOG`/`REFRESH_SETTINGS` to every `ACTIVE` device at the store, deduped against an existing `PENDING` command of the same type) and manually (`POST /pos-devices/commands`, any of the four types, one device, no dedup). Heartbeat's `hasCommands`/`pendingCommandsCount` now read this table for real (§8) — no longer hardcoded. | No gap in the polling/ack/creation surface. `GET /pos-devices` (admin fleet screen) also now returns each device's `pendingCommandsCount`, batched via one `groupBy`, not one query per device. Same §4/§22 auth note applies. |
 | Device auth (all endpoints) | `Authorization: Bearer` + `X-Device-Code`, checked as a pair, confirmed production flow with the Android team (§4) | **Closed** — every authenticated endpoint except `/activate` requires both; `X-Device-Code` missing → `400`, mismatched (valid token, wrong pairing) → `401` + logged security-warning (provided + expected `deviceCode`), via a shared `resolveAuthenticatedDevice()` helper. `deviceCode` required at `/activate`, unique per tenant, collision with another active device → `409 DEVICE_CODE_ALREADY_IN_USE`; canonical value echoed back in the activate response. | No gap — both mechanism and `deviceCode` origin are confirmed (§22 is now empty of open items on this topic). Still a breaking change for already-activated devices — see the Migration notice; the Android client itself is already ready. |
 | Idempotency | Required on every critical event, enforced Cloud-side | **Closed for every implemented event surface** — sale/stock-events use payload-hash reuse detection (409 on conflict); fiscal/shift-events use the real contract's `eventId`-keyed model (silent replay, no conflict code — see §12) | No gap. Fiscal/shift and sale/stock intentionally use two different (both real, both documented) idempotency shapes — see §5 vs §12 for why. |
 | Rate limiting | 5/min on activate, moderate baseline elsewhere | **Already matches** — implemented exactly as described in §19 | No gap. |
