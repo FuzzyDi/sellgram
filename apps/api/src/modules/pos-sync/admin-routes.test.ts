@@ -39,11 +39,25 @@ const mocks = vi.hoisted(() => ({
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
+  // docs/POS_SETTINGS_ARCHITECTURE.md §5 — same mocking convention as
+  // src/modules/store/service.test.ts uses for botToken encryption:
+  // real AES-256-GCM output has a random IV, so exact-value assertions
+  // on encryptSecrets' output need a deterministic stand-in.
+  encrypt: vi.fn((value: string) => `encrypted(${value})`),
+  decrypt: vi.fn((value: string) => `decrypted(${value})`),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../plugins/plan-guard.js', () => ({ planGuard: mocks.planGuard }));
 vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
+vi.mock('../../lib/encrypt.js', () => ({ encrypt: mocks.encrypt, decrypt: mocks.decrypt }));
+
+// A value shaped like apps/api/src/lib/encrypt.ts's real output
+// (iv:encrypted:tag, iv/tag each 32 hex chars) so encryptSecrets'
+// isEncryptedValue() check recognizes it as already-encrypted and
+// leaves it alone — used to stand in for a stored secret from a prior
+// (real) encryption, as opposed to legacy/never-encrypted plaintext.
+const FAKE_CIPHERTEXT = `${'a'.repeat(32)}:deadbeef:${'b'.repeat(32)}`;
 
 import posDeviceAdminRoutes from './admin-routes.js';
 
@@ -1183,6 +1197,29 @@ describe('pos-sync.admin-routes', () => {
         await app.close();
       });
 
+      it('encrypts secret-shaped config keys before create', async () => {
+        mocks.prisma.paymentTerminal.create.mockResolvedValue({
+          id: 'pt-3', storeId: 'store-1', deviceId: null, type: 'QR_UZQR', name: 'UzQR',
+          enabled: true, sortOrder: 0, config: { url: 'https://uzqr.uz', apiKey: 'encrypted(plain-key-123)' },
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/payment-terminals',
+          payload: { storeId: 'store-1', type: 'QR_UZQR', name: 'UzQR', config: { url: 'https://uzqr.uz', apiKey: 'plain-key-123' } },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.encrypt).toHaveBeenCalledWith('plain-key-123');
+        expect(mocks.prisma.paymentTerminal.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ config: { url: 'https://uzqr.uz', apiKey: 'encrypted(plain-key-123)' } }),
+        });
+        // Non-secret keys (url) pass through untouched.
+        expect(mocks.encrypt).not.toHaveBeenCalledWith('https://uzqr.uz');
+        await app.close();
+      });
+
       it('creates a device-level override after confirming the device belongs to this store', async () => {
         mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
         mocks.prisma.paymentTerminal.create.mockResolvedValue({
@@ -1247,13 +1284,13 @@ describe('pos-sync.admin-routes', () => {
       // response always masks secret keys to "••••••" (never the real
       // value). An untouched masked field must not overwrite the real
       // stored secret with that literal placeholder string.
-      it('preserves the existing stored value for a masked secret field left unchanged in the request', async () => {
+      it('preserves the existing stored (encrypted) value for a masked secret field left unchanged in the request', async () => {
         mocks.prisma.paymentTerminal.findFirst.mockResolvedValue({
-          id: 'pt-1', storeId: 'store-1', config: { url: 'https://uzqr.uz', apiKey: 'real-secret-value' },
+          id: 'pt-1', storeId: 'store-1', config: { url: 'https://uzqr.uz', apiKey: FAKE_CIPHERTEXT },
         });
         mocks.prisma.paymentTerminal.update.mockResolvedValue({
           id: 'pt-1', storeId: 'store-1', deviceId: null, type: 'QR_UZQR', name: 'UzQR',
-          enabled: true, sortOrder: 0, config: { url: 'https://uzqr.uz/v2', apiKey: 'real-secret-value' },
+          enabled: true, sortOrder: 0, config: { url: 'https://uzqr.uz/v2', apiKey: FAKE_CIPHERTEXT },
         });
 
         const app = await buildApp();
@@ -1268,20 +1305,50 @@ describe('pos-sync.admin-routes', () => {
         expect(response.statusCode).toBe(200);
         expect(mocks.prisma.paymentTerminal.update).toHaveBeenCalledWith({
           where: { id: 'pt-1' },
-          data: expect.objectContaining({ config: { url: 'https://uzqr.uz/v2', apiKey: 'real-secret-value' } }),
+          data: expect.objectContaining({ config: { url: 'https://uzqr.uz/v2', apiKey: FAKE_CIPHERTEXT } }),
         });
+        // Preserved verbatim, not re-encrypted — encrypt() never called
+        // for a value encryptSecrets already recognizes as ciphertext.
+        expect(mocks.encrypt).not.toHaveBeenCalled();
         // The response itself is still masked like every other admin-facing read.
         expect(response.json().data.config.apiKey).toBe('••••••');
         await app.close();
       });
 
-      it('writes a genuinely new secret value as given, not preserved', async () => {
+      // Merge now starts from existing.config, not just the PATCH body
+      // (admin-routes.ts comment on the merge step) — a key present in
+      // the stored config but omitted from this request must survive.
+      it('keeps a config key present in the stored config but omitted from the PATCH body', async () => {
         mocks.prisma.paymentTerminal.findFirst.mockResolvedValue({
-          id: 'pt-1', storeId: 'store-1', config: { apiKey: 'old-secret' },
+          id: 'pt-1', storeId: 'store-1', config: { url: 'https://uzqr.uz', retryCount: 5 },
         });
         mocks.prisma.paymentTerminal.update.mockResolvedValue({
           id: 'pt-1', storeId: 'store-1', deviceId: null, type: 'QR_UZQR', name: 'UzQR',
-          enabled: true, sortOrder: 0, config: { apiKey: 'brand-new-secret' },
+          enabled: true, sortOrder: 0, config: { url: 'https://uzqr.uz/v2', retryCount: 5 },
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PATCH',
+          url: '/payment-terminals/pt-1',
+          // retryCount omitted entirely — must not be dropped from storage.
+          payload: { config: { url: 'https://uzqr.uz/v2' } },
+        });
+
+        expect(mocks.prisma.paymentTerminal.update).toHaveBeenCalledWith({
+          where: { id: 'pt-1' },
+          data: expect.objectContaining({ config: { url: 'https://uzqr.uz/v2', retryCount: 5 } }),
+        });
+        await app.close();
+      });
+
+      it('encrypts a genuinely new secret value as given, not preserved', async () => {
+        mocks.prisma.paymentTerminal.findFirst.mockResolvedValue({
+          id: 'pt-1', storeId: 'store-1', config: { apiKey: FAKE_CIPHERTEXT },
+        });
+        mocks.prisma.paymentTerminal.update.mockResolvedValue({
+          id: 'pt-1', storeId: 'store-1', deviceId: null, type: 'QR_UZQR', name: 'UzQR',
+          enabled: true, sortOrder: 0, config: { apiKey: 'encrypted(brand-new-secret)' },
         });
 
         const app = await buildApp();
@@ -1292,9 +1359,10 @@ describe('pos-sync.admin-routes', () => {
         });
 
         expect(response.statusCode).toBe(200);
+        expect(mocks.encrypt).toHaveBeenCalledWith('brand-new-secret');
         expect(mocks.prisma.paymentTerminal.update).toHaveBeenCalledWith({
           where: { id: 'pt-1' },
-          data: expect.objectContaining({ config: { apiKey: 'brand-new-secret' } }),
+          data: expect.objectContaining({ config: { apiKey: 'encrypted(brand-new-secret)' } }),
         });
         await app.close();
       });

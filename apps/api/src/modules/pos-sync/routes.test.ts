@@ -51,9 +51,15 @@ const mocks = vi.hoisted(() => ({
     },
     $transaction: vi.fn(),
   },
+  // docs/POS_SETTINGS_ARCHITECTURE.md §5 — routes.ts imports
+  // decryptSecrets from admin-routes.js, which itself imports
+  // encrypt/decrypt; mocked here for the same determinism reasons as
+  // admin-routes.test.ts.
+  decrypt: vi.fn((value: string) => `decrypted(${value})`),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
+vi.mock('../../lib/encrypt.js', () => ({ encrypt: vi.fn((v: string) => v), decrypt: mocks.decrypt }));
 
 import posSyncRoutes from './routes.js';
 
@@ -1192,6 +1198,29 @@ describe('pos-sync.routes', () => {
         expect(response.json().data.settings.paymentProviders).toEqual({
           uzQr: { enabled: true, url: 'https://uzqr.uz', apiKey: 'secret', scope: 'STORE' },
         });
+        await app.close();
+      });
+
+      // docs/POS_SETTINGS_ARCHITECTURE.md §5 — the till needs the real
+      // working apiKey, so a stored (encrypted) secret must come back
+      // decrypted here, unlike every admin-facing response.
+      it('decrypts an encrypted apiKey before sending it to the device', async () => {
+        const ciphertext = `${'a'.repeat(32)}:deadbeef:${'b'.repeat(32)}`;
+        mocks.prisma.paymentTerminal.findMany
+          .mockResolvedValueOnce([
+            { type: 'QR_UZQR', deviceId: null, config: { url: 'https://uzqr.uz', apiKey: ciphertext } },
+          ])
+          .mockResolvedValueOnce([]);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(mocks.decrypt).toHaveBeenCalledWith(ciphertext);
+        expect(response.json().data.settings.paymentProviders.uzQr.apiKey).toBe(`decrypted(${ciphertext})`);
         await app.close();
       });
 
