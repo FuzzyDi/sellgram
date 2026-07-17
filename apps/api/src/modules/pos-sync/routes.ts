@@ -848,7 +848,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     }
 
     const now = new Date();
-    const [, tenant, latestSnapshot, storeSettings] = await Promise.all([
+    const [, tenant, latestSnapshot, storeSettings, pendingCommandsCount] = await Promise.all([
       // alertSentAt: null clears jobs/pos-device-monitor.ts's offline-alert
       // dedup flag the moment the device checks back in, so a device that
       // recovers and later drops offline again gets a fresh alert instead
@@ -867,6 +867,11 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         where: { storeId: device.storeId },
         select: { version: true },
       }),
+      // docs/POS_SYNC_API.md §8/§15 — CloudCommand now exists (§15's
+      // GET /commands + POST /commands/:id/ack), so hasCommands/
+      // pendingCommandsCount are real counts, not the hardcoded-false
+      // placeholder this used to be.
+      prisma.cloudCommand.count({ where: { deviceId: device.id, status: 'PENDING' } }),
     ]);
 
     return sendSuccess(
@@ -877,9 +882,11 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         licenseStatus: getLicenseStatus(tenant ?? { planExpiresAt: null, blockedAt: null }),
         catalogVersion: latestSnapshot?.version ?? 0,
         settingsVersion: storeSettings?.version ?? 1,
-        // Honest placeholder: no CloudCommand model yet
-        // (docs/SBGCLOUD_ARCHITECTURE.md §12).
-        hasCommands: false,
+        // §8 — a hint to poll GET /commands soon, not a push and not a
+        // guarantee (a stale false must never be read as "definitely no
+        // commands").
+        hasCommands: pendingCommandsCount > 0,
+        pendingCommandsCount,
       },
       request
     );
@@ -1910,6 +1917,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     const pending = await prisma.cloudCommand.findMany({
       where: { deviceId: device.id, tenantId: device.tenantId, status: 'PENDING' },
       orderBy: { createdAt: 'asc' },
+      take: 10,
       select: { id: true, type: true, payload: true, createdAt: true },
     });
 

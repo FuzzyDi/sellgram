@@ -160,6 +160,18 @@ export default function PosDevices() {
       header: tr('Последний heartbeat', 'Oxirgi heartbeat'),
       render: (d) => (d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString(locale) : '—'),
     },
+    {
+      key: 'pendingCommandsCount',
+      header: tr('Команды', 'Buyruqlar'),
+      // docs/POS_SYNC_API.md §15 — batched onto GET /pos-devices' own
+      // response server-side (admin-routes.ts), not a separate
+      // getPendingCommands round trip per device or per page load.
+      render: (d) => (
+        d.pendingCommandsCount > 0
+          ? <Badge variant="warning">{d.pendingCommandsCount}</Badge>
+          : <span className="text-token-xs text-neutral-400">—</span>
+      ),
+    },
   ];
 
   const noticeNode = notice ? (

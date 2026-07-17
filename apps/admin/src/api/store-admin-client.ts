@@ -398,6 +398,13 @@ export const adminApi = {
     request<any>('/pos-devices', { method: 'POST', body: JSON.stringify(data) }),
   createCatalogSnapshot: (storeId: string) =>
     request<any>('/pos-devices/catalog-snapshot', { method: 'POST', body: JSON.stringify({ storeId }) }),
+  // docs/POS_SYNC_API.md §15 — manual, admin-triggered command send for
+  // one device (distinct from the automatic REFRESH_CATALOG/
+  // REFRESH_SETTINGS fan-out that already happens on catalog-snapshot/
+  // settings writes). No UI wires this in yet — added for API symmetry;
+  // see the PosDevices.tsx summary for why.
+  sendPosDeviceCommand: (data: { deviceId: string; type: 'PING' | 'REFRESH_CATALOG' | 'REFRESH_SETTINGS' | 'SHOW_MESSAGE'; payload?: Record<string, unknown> }) =>
+    request<any>('/pos-devices/commands', { method: 'POST', body: JSON.stringify(data) }),
 
   getPosOperators: (storeId: string) => request<any>(`/pos-operators?storeId=${encodeURIComponent(storeId)}`),
   createPosOperator: (data: { storeId: string; name: string; role: string; permissions?: string[]; active?: boolean; pin?: string; pinRequired?: boolean }) =>

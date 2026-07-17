@@ -28,6 +28,19 @@ const catalogSnapshotSchema = z.object({
   storeId: z.string().min(1),
 });
 
+// docs/POS_SYNC_API.md §15 — the real contract's allowed command types
+// (CloudCommandType enum, packages/prisma/schema.prisma) — a manual,
+// admin-triggered send, distinct from fanOutCommandToActiveDevices'
+// automatic REFRESH_CATALOG/REFRESH_SETTINGS fan-out above (this one
+// targets exactly one device, any of the four types, and is never
+// deduped against an existing PENDING command of the same type — an
+// admin explicitly asking to PING a device twice gets two PING commands).
+const createCommandSchema = z.object({
+  deviceId: z.string().min(1),
+  type: z.enum(['PING', 'REFRESH_CATALOG', 'REFRESH_SETTINGS', 'SHOW_MESSAGE']),
+  payload: z.record(z.unknown()).default({}),
+});
+
 const listDevicesQuerySchema = z.object({
   storeId: z.string().min(1),
 });
@@ -291,6 +304,52 @@ async function bumpStaffVersion(tenantId: string, storeId: string) {
   });
 }
 
+// docs/POS_SYNC_API.md §15 — creates a PENDING CloudCommand of `type`
+// for every ACTIVE device at this store, skipping any device that
+// already has a PENDING command of the same `type` (a device offline
+// for a while must not accumulate ten redundant REFRESH_CATALOG
+// commands from ten separate catalog edits — one pending refresh is
+// enough to cover all of them once it finally polls). There is no
+// @@unique on CloudCommand for (deviceId, type, status) to let
+// `createMany`'s own `skipDuplicates` express this — that flag only
+// skips rows violating a real unique constraint, which doesn't exist
+// here — so the exclusion is a plain pre-query instead.
+async function fanOutCommandToActiveDevices(
+  tenantId: string,
+  storeId: string,
+  type: 'REFRESH_CATALOG' | 'REFRESH_SETTINGS',
+  payload: Record<string, unknown>
+) {
+  const activeDevices = await prisma.posDevice.findMany({
+    where: { tenantId, storeId, status: 'ACTIVE' },
+    select: { id: true },
+  });
+  if (activeDevices.length === 0) return;
+
+  const alreadyPending = await prisma.cloudCommand.findMany({
+    where: {
+      tenantId,
+      deviceId: { in: activeDevices.map((d) => d.id) },
+      type,
+      status: 'PENDING',
+    },
+    select: { deviceId: true },
+  });
+  const alreadyPendingDeviceIds = new Set(alreadyPending.map((c) => c.deviceId));
+  const targets = activeDevices.filter((d) => !alreadyPendingDeviceIds.has(d.id));
+  if (targets.length === 0) return;
+
+  await prisma.cloudCommand.createMany({
+    data: targets.map((d) => ({
+      tenantId,
+      deviceId: d.id,
+      type,
+      payload: payload as any,
+      status: 'PENDING' as const,
+    })),
+  });
+}
+
 // docs/POS_SETTINGS_ARCHITECTURE.md §5/§8 — exact-match key names only,
 // not alias-aware the way GET /pos/v1/settings' Android alias list is
 // (routes.ts §4 comment) — deliberately narrower here, since this is a
@@ -406,7 +465,61 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         orderBy: { createdAt: 'desc' },
       });
 
-      return reply.status(200).send({ success: true, data: devices });
+      // docs/POS_SYNC_API.md §15 — pending command count per device for
+      // the fleet screen (PosDevices.tsx), batched via groupBy rather
+      // than one cloudCommand.count() per device (no N+1, same
+      // discipline as GET /pos-operator-events' operator-name batch
+      // resolution).
+      const pendingCounts = devices.length
+        ? await prisma.cloudCommand.groupBy({
+            by: ['deviceId'],
+            where: { deviceId: { in: devices.map((d) => d.id) }, status: 'PENDING' },
+            _count: { id: true },
+          })
+        : [];
+      const pendingCountByDeviceId = new Map(pendingCounts.map((c) => [c.deviceId, c._count.id]));
+
+      const devicesWithCommandCounts = devices.map((d) => ({
+        ...d,
+        pendingCommandsCount: pendingCountByDeviceId.get(d.id) ?? 0,
+      }));
+
+      return reply.status(200).send({ success: true, data: devicesWithCommandCounts });
+    }
+  );
+
+  // docs/POS_SYNC_API.md §15 — manual, admin-triggered command send for
+  // one specific device (a "Ping this till" / "Show this message" button
+  // in the admin UI), distinct from fanOutCommandToActiveDevices' own
+  // automatic store-wide fan-out.
+  fastify.post(
+    '/pos-devices/commands',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const body = createCommandSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const device = await prisma.posDevice.findFirst({
+        where: { id: body.data.deviceId, tenantId },
+        select: { id: true },
+      });
+      if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
+
+      const command = await prisma.cloudCommand.create({
+        data: {
+          tenantId,
+          deviceId: device.id,
+          type: body.data.type,
+          payload: body.data.payload as any,
+          status: 'PENDING',
+        },
+        select: { id: true, deviceId: true, type: true, payload: true, status: true, createdAt: true },
+      });
+
+      return reply.status(201).send({ success: true, data: command });
     }
   );
 
@@ -518,6 +631,12 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         select: { id: true, version: true, createdAt: true },
       });
 
+      // docs/POS_SYNC_API.md §15 — a fresh snapshot is only useful once a
+      // device actually pulls it; a REFRESH_CATALOG command nudges an
+      // idle device to poll GET /pos/v1/catalog/snapshot sooner than its
+      // own periodic schedule, via heartbeat's pendingCommandsCount.
+      await fanOutCommandToActiveDevices(tenantId, store.id, 'REFRESH_CATALOG', { catalogVersion: snapshot.version });
+
       return reply.status(201).send({ success: true, data: snapshot });
     }
   );
@@ -584,6 +703,10 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         },
         select: { storeId: true, version: true, updatedAt: true },
       });
+
+      // docs/POS_SYNC_API.md §15 — same nudge as catalog-snapshot's
+      // REFRESH_CATALOG fan-out above, for settings.
+      await fanOutCommandToActiveDevices(tenantId, store.id, 'REFRESH_SETTINGS', { settingsVersion: settings.version });
 
       return reply.status(200).send({ success: true, data: settings });
     }

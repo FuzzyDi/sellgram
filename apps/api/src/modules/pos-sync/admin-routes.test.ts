@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     store: { findFirst: vi.fn() },
-    posDevice: { create: vi.fn(), findFirst: vi.fn() },
+    posDevice: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     deviceActivation: { create: vi.fn() },
     product: { findMany: vi.fn().mockResolvedValue([]) },
     category: { findMany: vi.fn().mockResolvedValue([]) },
@@ -27,6 +27,12 @@ const mocks = vi.hoisted(() => ({
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+    },
+    cloudCommand: {
+      findMany: vi.fn().mockResolvedValue([]),
+      groupBy: vi.fn().mockResolvedValue([]),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      create: vi.fn(),
     },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
@@ -183,6 +189,54 @@ describe('pos-sync.admin-routes', () => {
       expect(mocks.prisma.catalogSnapshot.create).not.toHaveBeenCalled();
       await app.close();
     });
+
+    // docs/POS_SYNC_API.md §15 — fanOutCommandToActiveDevices.
+    it('creates a REFRESH_CATALOG command for active devices without an existing PENDING one, skips the rest', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.catalogSnapshot.create.mockResolvedValue({ id: 'snap-1', version: 5, createdAt: new Date() });
+      mocks.prisma.posDevice.findMany.mockResolvedValue([
+        { id: 'dev-1' }, { id: 'dev-2' }, { id: 'dev-3' },
+      ]);
+      // dev-2 already has a PENDING REFRESH_CATALOG — must not get a second one.
+      mocks.prisma.cloudCommand.findMany.mockResolvedValue([{ deviceId: 'dev-2' }]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/pos-devices/catalog-snapshot',
+        payload: { storeId: 'store-1' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.posDevice.findMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', storeId: 'store-1', status: 'ACTIVE' },
+        select: { id: true },
+      });
+      expect(mocks.prisma.cloudCommand.createMany).toHaveBeenCalledWith({
+        data: [
+          { tenantId: 'tenant-1', deviceId: 'dev-1', type: 'REFRESH_CATALOG', payload: { catalogVersion: 5 }, status: 'PENDING' },
+          { tenantId: 'tenant-1', deviceId: 'dev-3', type: 'REFRESH_CATALOG', payload: { catalogVersion: 5 }, status: 'PENDING' },
+        ],
+      });
+      await app.close();
+    });
+
+    it('skips the CloudCommand fan-out entirely when the store has no active devices', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.catalogSnapshot.create.mockResolvedValue({ id: 'snap-1', version: 1, createdAt: new Date() });
+      mocks.prisma.posDevice.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/pos-devices/catalog-snapshot',
+        payload: { storeId: 'store-1' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.cloudCommand.createMany).not.toHaveBeenCalled();
+      await app.close();
+    });
   });
 
   describe('PUT /pos-devices/settings', () => {
@@ -249,6 +303,131 @@ describe('pos-sync.admin-routes', () => {
 
       expect(response.statusCode).toBe(404);
       expect(mocks.prisma.posSettings.upsert).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('creates a REFRESH_SETTINGS command for active devices without an existing PENDING one', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', version: 4, updatedAt: new Date() });
+      mocks.prisma.posDevice.findMany.mockResolvedValue([{ id: 'dev-1' }]);
+      mocks.prisma.cloudCommand.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/pos-devices/settings',
+        payload: { storeId: 'store-1', settings: validSettings },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.cloudCommand.createMany).toHaveBeenCalledWith({
+        data: [{ tenantId: 'tenant-1', deviceId: 'dev-1', type: 'REFRESH_SETTINGS', payload: { settingsVersion: 4 }, status: 'PENDING' }],
+      });
+      await app.close();
+    });
+  });
+
+  describe('GET /pos-devices', () => {
+    it('includes pendingCommandsCount per device, batched (not one query per device)', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.posDevice.findMany.mockResolvedValue([
+        { id: 'dev-1', name: 'Till 1', deviceType: 'till', status: 'ACTIVE', deviceCode: 'code-1', lastSeenAt: null, createdAt: new Date() },
+        { id: 'dev-2', name: 'Till 2', deviceType: 'till', status: 'ACTIVE', deviceCode: 'code-2', lastSeenAt: null, createdAt: new Date() },
+      ]);
+      mocks.prisma.cloudCommand.groupBy.mockResolvedValue([
+        { deviceId: 'dev-1', _count: { id: 3 } },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-devices?storeId=store-1' });
+
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.cloudCommand.groupBy).toHaveBeenCalledWith({
+        by: ['deviceId'],
+        where: { deviceId: { in: ['dev-1', 'dev-2'] }, status: 'PENDING' },
+        _count: { id: true },
+      });
+      const [dev1, dev2] = response.json().data;
+      expect(dev1.pendingCommandsCount).toBe(3);
+      // dev-2 has no groupBy row at all — must default to 0, not undefined.
+      expect(dev2.pendingCommandsCount).toBe(0);
+      await app.close();
+    });
+
+    it('returns 404 for a store belonging to another tenant', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-devices?storeId=store-foreign' });
+      expect(response.statusCode).toBe(404);
+      await app.close();
+    });
+  });
+
+  describe('POST /pos-devices/commands (docs/POS_SYNC_API.md §15 — manual send)', () => {
+    it('creates a PENDING command for a device belonging to this tenant', async () => {
+      mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+      mocks.prisma.cloudCommand.create.mockResolvedValue({
+        id: 'cmd-1', deviceId: 'dev-1', type: 'PING', payload: {}, status: 'PENDING', createdAt: new Date(),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/pos-devices/commands',
+        payload: { deviceId: 'dev-1', type: 'PING' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.cloudCommand.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ tenantId: 'tenant-1', deviceId: 'dev-1', type: 'PING', payload: {}, status: 'PENDING' }),
+        })
+      );
+      await app.close();
+    });
+
+    it('accepts an optional payload for SHOW_MESSAGE', async () => {
+      mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+      mocks.prisma.cloudCommand.create.mockResolvedValue({
+        id: 'cmd-1', deviceId: 'dev-1', type: 'SHOW_MESSAGE', payload: { text: 'Hi' }, status: 'PENDING', createdAt: new Date(),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/pos-devices/commands',
+        payload: { deviceId: 'dev-1', type: 'SHOW_MESSAGE', payload: { text: 'Hi' } },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.cloudCommand.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payload: { text: 'Hi' } }) })
+      );
+      await app.close();
+    });
+
+    it('returns 400 for an unrecognized type', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/pos-devices/commands',
+        payload: { deviceId: 'dev-1', type: 'REBOOT' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.cloudCommand.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 404 for a device belonging to another tenant', async () => {
+      mocks.prisma.posDevice.findFirst.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/pos-devices/commands',
+        payload: { deviceId: 'dev-foreign', type: 'PING' },
+      });
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.cloudCommand.create).not.toHaveBeenCalled();
       await app.close();
     });
   });
