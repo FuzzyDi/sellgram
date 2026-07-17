@@ -93,9 +93,17 @@ const posSettingsSchema = z.object({
 // Internals unconstrained (z.record(z.unknown())) — same "no existing
 // shape to inherit, shape settles with real usage" reasoning as
 // PosSettings.payload's own free-form keys.
+//
+// §10 (2026-07-18): both `pinpad` (lowercase, canonical on the wire —
+// GET /pos/v1/settings, routes.ts) and `pinPad` (the model's actual
+// Prisma column name, still accepted here for whatever admin UI build
+// hasn't picked up the rename) are accepted on write. Resolved to a
+// single value in the route handler below, not here — the schema's job
+// is only "accept either spelling," not "decide which one wins."
 const deviceSettingsSchema = z.object({
   printer: z.record(z.unknown()).nullable().optional(),
   scanner: z.record(z.unknown()).nullable().optional(),
+  pinpad: z.record(z.unknown()).nullable().optional(),
   pinPad: z.record(z.unknown()).nullable().optional(),
   scale: z.record(z.unknown()).nullable().optional(),
   display: z.record(z.unknown()).nullable().optional(),
@@ -842,10 +850,17 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const device = await prisma.posDevice.findFirst({ where: { id: deviceId, tenantId }, select: { id: true } });
       if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
 
+      // §10 — `pinpad` (canonical) wins if the caller sent it at all
+      // (checked by key presence, not truthiness — an explicit
+      // `pinpad: null` must still win over a stale `pinPad` value in
+      // the same body); falls back to `pinPad` only when `pinpad` is
+      // entirely absent. Either way, exactly one value reaches the
+      // model's own `pinPad` column — never a partial merge of both.
+      const pinPadValue = 'pinpad' in body.data ? body.data.pinpad : body.data.pinPad;
       const fields = {
         printer: body.data.printer as any,
         scanner: body.data.scanner as any,
-        pinPad: body.data.pinPad as any,
+        pinPad: pinPadValue as any,
         scale: body.data.scale as any,
         display: body.data.display as any,
       };

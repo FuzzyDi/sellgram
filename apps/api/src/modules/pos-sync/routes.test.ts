@@ -973,11 +973,15 @@ describe('pos-sync.routes', () => {
         // no PaymentTerminal rows at all (mocked paymentTerminal.findMany
         // returns [] by default in this suite).
         paymentProviders: {},
-        // docs/POS_SETTINGS_ARCHITECTURE.md §6 — all null when this
+        // docs/POS_SETTINGS_ARCHITECTURE.md §6/§10 — all null when this
         // device has no PosDeviceSettings row (mocked findUnique
-        // returns null by default in this suite).
-        hardware: { printer: null, scanner: null, pinPad: null, scale: null, display: null },
+        // returns null by default in this suite). deviceSettings is
+        // canonical; hardware is the deprecated alias, same object.
+        // pinpad is canonical, pinPad the deprecated alias within it.
+        deviceSettings: { printer: null, scanner: null, pinpad: null, pinPad: null, scale: null, display: null },
+        hardware: { printer: null, scanner: null, pinpad: null, pinPad: null, scale: null, display: null },
       });
+      expect(body.data.deviceSettingsVersion).toBe(0);
       expect(body.data.printTemplates).toEqual({});
       // §6 — "An unconfigured store's policies.rules is never empty in
       // practice": the platform rule is present even with no PosSettings
@@ -1259,7 +1263,7 @@ describe('pos-sync.routes', () => {
       });
     });
 
-    describe('settings.hardware (docs/POS_SETTINGS_ARCHITECTURE.md §6)', () => {
+    describe('settings.deviceSettings / settings.hardware (docs/POS_SETTINGS_ARCHITECTURE.md §6/§10)', () => {
       beforeEach(() => {
         mocks.prisma.posDevice.findUnique.mockResolvedValue({
           id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
@@ -1270,7 +1274,7 @@ describe('pos-sync.routes', () => {
         mocks.prisma.posOperator.findMany.mockResolvedValue([]);
       });
 
-      it('reports null for every field when this device has no PosDeviceSettings row', async () => {
+      it('reports null for every field, and deviceSettingsVersion: 0, when this device has no PosDeviceSettings row', async () => {
         mocks.prisma.posDeviceSettings.findUnique.mockResolvedValue(null);
 
         const app = await buildApp();
@@ -1280,19 +1284,23 @@ describe('pos-sync.routes', () => {
           headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         });
 
-        expect(response.json().data.settings.hardware).toEqual({
-          printer: null, scanner: null, pinPad: null, scale: null, display: null,
-        });
+        const expected = { printer: null, scanner: null, pinpad: null, pinPad: null, scale: null, display: null };
+        expect(response.json().data.settings.deviceSettings).toEqual(expected);
+        // hardware is a deprecated alias of the exact same object.
+        expect(response.json().data.settings.hardware).toEqual(expected);
+        expect(response.json().data.deviceSettingsVersion).toBe(0);
         await app.close();
       });
 
-      it('reports the configured hardware profile for this device, queried by deviceId', async () => {
+      it('reports the configured profile under both pinpad (canonical) and pinPad (deprecated alias), queried by deviceId', async () => {
+        const updatedAt = new Date('2026-07-18T12:00:00Z');
         mocks.prisma.posDeviceSettings.findUnique.mockResolvedValue({
           printer: { type: 'THERMAL', paperWidth: 58 },
           scanner: null,
           pinPad: { protocol: 'NEXGO', port: '/dev/ttyUSB0' },
           scale: null,
           display: null,
+          updatedAt,
         });
 
         const app = await buildApp();
@@ -1302,13 +1310,17 @@ describe('pos-sync.routes', () => {
           headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
         });
 
-        expect(response.json().data.settings.hardware).toEqual({
+        const expected = {
           printer: { type: 'THERMAL', paperWidth: 58 },
           scanner: null,
+          pinpad: { protocol: 'NEXGO', port: '/dev/ttyUSB0' },
           pinPad: { protocol: 'NEXGO', port: '/dev/ttyUSB0' },
           scale: null,
           display: null,
-        });
+        };
+        expect(response.json().data.settings.deviceSettings).toEqual(expected);
+        expect(response.json().data.settings.hardware).toEqual(expected);
+        expect(response.json().data.deviceSettingsVersion).toBe(Math.floor(updatedAt.getTime() / 1000));
         expect(mocks.prisma.posDeviceSettings.findUnique).toHaveBeenCalledWith(
           expect.objectContaining({ where: { deviceId: 'dev-1' } })
         );

@@ -550,6 +550,74 @@ intended shape; making it actually configurable needs both a schema
 change (add `weightBarcode: z.record(z.unknown()).optional()`) and a
 ninth panel in `PosSettings.tsx` — neither done here.
 
+**Note on the response example above:** it predates `settingsVersion`/
+`policiesVersion`/`staffVersion` and the `policies`/`printTemplates`/
+`staff` top-level blocks — those were added later and are documented in
+`docs/POS_POLICY_ENGINE.md` §6/§7, not duplicated here. §10.1 below adds
+one more top-level counter and two more `settings` keys on top of that
+later shape, not on top of the `{version, checksum, settings}` skeleton
+shown above.
+
+### 10.1 `settings.deviceSettings` / `settings.hardware` (renamed 2026-07-18)
+
+Additive to the response `docs/POS_POLICY_ENGINE.md` §6/§7 documents: a
+new top-level `deviceSettingsVersion` counter, and two new keys nested
+inside `settings` (a sibling of `paymentProviders`/`storeTimezone`/etc.,
+same placement reasoning as `docs/POS_SETTINGS_ARCHITECTURE.md` §6/§9
+step 5).
+
+```json
+{
+  "deviceSettingsVersion": 1752840000,
+  "settings": {
+    "deviceSettings": {
+      "printer": { "type": "THERMAL", "paperWidth": 58 },
+      "scanner": null,
+      "pinpad": { "protocol": "NEXGO", "port": "/dev/ttyUSB0" },
+      "pinPad": { "protocol": "NEXGO", "port": "/dev/ttyUSB0" },
+      "scale": null,
+      "display": null
+    },
+    "hardware": {
+      "printer": { "type": "THERMAL", "paperWidth": 58 },
+      "scanner": null,
+      "pinpad": { "protocol": "NEXGO", "port": "/dev/ttyUSB0" },
+      "pinPad": { "protocol": "NEXGO", "port": "/dev/ttyUSB0" },
+      "scale": null,
+      "display": null
+    }
+  }
+}
+```
+
+- **`settings.deviceSettings` is canonical.** `settings.hardware` is a
+  **deprecated alias of the exact same object** (not a second copy with
+  different values — `paymentProviders`/`paymentMethods`'s "add the new
+  name, never remove the old one until Android confirms it's switched"
+  posture, §4/§7, applied here too). No removal date for `hardware` yet;
+  that is gated on explicit Android confirmation, same as
+  `paymentMethods[]`'s own pending deprecation (§9 step 7 of
+  `docs/POS_SETTINGS_ARCHITECTURE.md`).
+- **Within the block, `pinpad` (lowercase) is canonical; `pinPad` is the
+  deprecated alias** — both keys carry the identical value. `PUT
+  /store-admin/pos-devices/:deviceId/settings` accepts either spelling on
+  write (`pinpad` wins if both are sent in the same request); the model's
+  own Prisma column is still named `pinPad` internally, unrelated to
+  which spelling a client uses on the wire.
+- Every field is `null` (not an absent key, not `{}`) when the device has
+  no `PosDeviceSettings` row, or no value set for that one field — same
+  "absent means unconfigured" convention as every other optional field
+  in this document.
+- **`deviceSettingsVersion`** — unlike `settingsVersion`/
+  `policiesVersion`/`staffVersion` (real counter columns or a computed
+  sum of counters, `docs/POS_POLICY_ENGINE.md` §6/§7), `PosDeviceSettings`
+  has no counter column of its own. `deviceSettingsVersion` is the row's
+  own `updatedAt`, truncated to whole seconds
+  (`Math.floor(updatedAt.getTime() / 1000)`) — `0`, not `1`, for a device
+  with no `PosDeviceSettings` row at all, since `0` can never collide
+  with a real Unix-seconds timestamp and so unambiguously means "nothing
+  configured yet."
+
 ## 11. Sale events
 
 ```

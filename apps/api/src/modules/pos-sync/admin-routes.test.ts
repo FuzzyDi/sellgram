@@ -1587,6 +1587,83 @@ describe('pos-sync.admin-routes', () => {
         await app.close();
       });
 
+      // §10 (2026-07-18) — both spellings accepted on write, resolved to
+      // the model's single pinPad column.
+      it('accepts pinpad (canonical, lowercase) and stores it under the pinPad column', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.upsert.mockResolvedValue({
+          printer: null, scanner: null, pinPad: { protocol: 'PAX', port: 'COM4' }, scale: null, display: null,
+          updatedAt: new Date(),
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-1/settings',
+          payload: { pinpad: { protocol: 'PAX', port: 'COM4' } },
+        });
+
+        const call = mocks.prisma.posDeviceSettings.upsert.mock.calls[0][0];
+        expect(call.update.pinPad).toEqual({ protocol: 'PAX', port: 'COM4' });
+        await app.close();
+      });
+
+      it('still accepts pinPad (deprecated spelling) when pinpad is absent', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.upsert.mockResolvedValue({
+          printer: null, scanner: null, pinPad: { protocol: 'NEXGO', port: 'COM5' }, scale: null, display: null,
+          updatedAt: new Date(),
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-1/settings',
+          payload: { pinPad: { protocol: 'NEXGO', port: 'COM5' } },
+        });
+
+        const call = mocks.prisma.posDeviceSettings.upsert.mock.calls[0][0];
+        expect(call.update.pinPad).toEqual({ protocol: 'NEXGO', port: 'COM5' });
+        await app.close();
+      });
+
+      it('prefers pinpad over pinPad when both are present in the same request', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.upsert.mockResolvedValue({
+          printer: null, scanner: null, pinPad: { protocol: 'INGENICO' }, scale: null, display: null,
+          updatedAt: new Date(),
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-1/settings',
+          payload: { pinpad: { protocol: 'INGENICO' }, pinPad: { protocol: 'STALE_VALUE' } },
+        });
+
+        const call = mocks.prisma.posDeviceSettings.upsert.mock.calls[0][0];
+        expect(call.update.pinPad).toEqual({ protocol: 'INGENICO' });
+        await app.close();
+      });
+
+      it('an explicit pinpad: null clears the section even if a stale pinPad is also sent', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.upsert.mockResolvedValue({
+          printer: null, scanner: null, pinPad: null, scale: null, display: null, updatedAt: new Date(),
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-1/settings',
+          payload: { pinpad: null, pinPad: { protocol: 'SHOULD_BE_IGNORED' } },
+        });
+
+        const call = mocks.prisma.posDeviceSettings.upsert.mock.calls[0][0];
+        expect(call.update.pinPad).toBeNull();
+        await app.close();
+      });
+
       it('returns 404 for a device belonging to another tenant', async () => {
         mocks.prisma.posDevice.findFirst.mockResolvedValue(null);
         const app = await buildApp();
