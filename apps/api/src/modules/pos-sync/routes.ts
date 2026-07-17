@@ -8,6 +8,14 @@ import { DEFAULT_TIERS, computeTier } from '../loyalty/routes.js';
 import { fetchProductTypesById, deriveProductTypeFields } from './product-type-rules.js';
 import { resolveDevice } from './device-auth.js';
 import { sendAck, sendError, sendSuccess } from './envelope.js';
+// docs/POS_SETTINGS_ARCHITECTURE.md §5 — PaymentTerminal.config secret
+// fields are encrypted at rest (admin-routes.ts encryptSecrets/
+// decryptSecrets); the till needs the real working apiKey, so this
+// device-facing endpoint decrypts before sending, unlike every
+// admin-facing response in admin-routes.ts, which masks instead.
+// Imported from admin-routes.ts rather than duplicated so both files
+// share one SECRET_CONFIG_KEYS list and one decrypt implementation.
+import { decryptSecrets } from './admin-routes.js';
 
 /**
  * POS Sync API — see docs/SBGCLOUD_ARCHITECTURE.md.
@@ -1234,7 +1242,10 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     for (const [type, terminal] of resolvedTerminalsByType) {
       const key = PAYMENT_TERMINAL_TYPE_TO_KEY[type];
       if (!key) continue;
-      const config = terminal.config && typeof terminal.config === 'object' ? (terminal.config as Record<string, unknown>) : {};
+      const rawConfig = terminal.config && typeof terminal.config === 'object' ? (terminal.config as Record<string, unknown>) : {};
+      // §5 — decrypt before sending to the device; see the import
+      // comment above for why this lives in admin-routes.ts.
+      const config = decryptSecrets(rawConfig);
       paymentProviders[key] = {
         enabled: true,
         ...config,

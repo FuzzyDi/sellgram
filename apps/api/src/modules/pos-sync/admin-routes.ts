@@ -4,6 +4,7 @@ import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { encrypt, decrypt } from '../../lib/encrypt.js';
 import { fetchProductTypesById, deriveProductTypeFields } from './product-type-rules.js';
 
 const ACTIVATION_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
@@ -383,7 +384,10 @@ async function fanOutCommandToActiveDevices(
 // device depends on. A provider config key spelled differently (e.g.
 // `secretKey`) is not masked by this list; widen it if that turns out
 // to matter in practice.
-const SECRET_CONFIG_KEYS = new Set(['apiKey', 'api_key', 'key', 'secret', 'password', 'token']);
+// Exported — decryptSecrets below is imported into pos-sync/routes.ts
+// (GET /pos/v1/settings) so it shares this exact key list rather than
+// a second, potentially-drifting copy.
+export const SECRET_CONFIG_KEYS = new Set(['apiKey', 'api_key', 'key', 'secret', 'password', 'token']);
 
 // GET /pos/v1/settings (a different file, pos-sync/routes.ts) sends
 // PaymentTerminal.config to the device in full — the till needs a
@@ -403,6 +407,61 @@ function maskSecrets(config: unknown): Record<string, unknown> {
 
 function maskTerminal<T extends { config: unknown }>(terminal: T): T {
   return { ...terminal, config: maskSecrets(terminal.config) };
+}
+
+// apps/api/src/lib/encrypt.ts's own output shape: `${iv}:${encrypted}:${tag}`
+// hex-joined, iv/tag each 16 raw bytes (32 hex chars), encrypted variable
+// length. Used both to skip re-encrypting an already-encrypted value
+// (encryptSecrets) and to decide whether a value is worth attempting to
+// decrypt at all (decryptSecrets) — a value that merely happens to
+// contain colons but isn't real ciphertext (or plaintext left over from
+// before this feature existed) never reaches decrypt().
+const ENCRYPTED_VALUE_PATTERN = /^[0-9a-f]{32}:[0-9a-f]+:[0-9a-f]{32}$/i;
+
+function isEncryptedValue(value: string): boolean {
+  return ENCRYPTED_VALUE_PATTERN.test(value);
+}
+
+// Encrypts every SECRET_CONFIG_KEYS value in `config` that is a
+// non-empty string — skipping any value already in encrypt.ts's
+// iv:encrypted:tag shape rather than encrypting it a second time. That
+// skip is what makes this safe to call on a config assembled by PATCH's
+// merge step below, which can legitimately contain a mix of freshly
+// admin-typed plaintext (needs encrypting) and values just carried over
+// verbatim from the existing stored (already encrypted) config — without
+// it, every PATCH would double-encrypt any secret the admin didn't touch.
+export function encryptSecrets(config: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...config };
+  for (const key of Object.keys(result)) {
+    if (!SECRET_CONFIG_KEYS.has(key)) continue;
+    const value = result[key];
+    if (typeof value !== 'string' || value === '' || isEncryptedValue(value)) continue;
+    result[key] = encrypt(value);
+  }
+  return result;
+}
+
+// Decrypts every SECRET_CONFIG_KEYS value that looks like ciphertext
+// (isEncryptedValue) — a value that doesn't match that shape (empty,
+// never-encrypted legacy plaintext, or a value that just happens to
+// contain colons) is returned unchanged, not passed to decrypt() at
+// all. Per-field try/catch: a value that matches the shape but fails to
+// actually decrypt (wrong key, corrupted data) must not take down the
+// whole GET /pos/v1/settings response for a device — it comes back
+// as-is rather than throwing.
+export function decryptSecrets(config: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...config };
+  for (const key of Object.keys(result)) {
+    if (!SECRET_CONFIG_KEYS.has(key)) continue;
+    const value = result[key];
+    if (typeof value !== 'string' || !isEncryptedValue(value)) continue;
+    try {
+      result[key] = decrypt(value);
+    } catch {
+      // Leave the (undecryptable) value as-is — see comment above.
+    }
+  }
+  return result;
 }
 
 /**
@@ -1404,7 +1463,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           name: body.data.name,
           enabled: body.data.enabled,
           sortOrder: body.data.sortOrder,
-          config: body.data.config as any,
+          config: encryptSecrets(body.data.config as Record<string, unknown>) as any,
         },
       });
 
@@ -1448,19 +1507,26 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       // Writing it verbatim would permanently overwrite the real secret
       // with "••••••". For any key in SECRET_CONFIG_KEYS whose incoming
       // value is still exactly the placeholder, keep the existing stored
-      // value for that key instead; any other value (the admin actually
-      // typed something) is written as given.
+      // (already-encrypted) value for that key instead; any other value
+      // (the admin actually typed something) is written as given, then
+      // encrypted below. Merge starts from `existing.config`, not just
+      // `incoming` — a key present in the stored config but omitted from
+      // this PATCH's body must survive, not be silently dropped.
       const data: any = { ...body.data };
       if (data.config) {
         const existingConfig = existing.config && typeof existing.config === 'object' ? (existing.config as Record<string, unknown>) : {};
         const incoming = data.config as Record<string, unknown>;
-        const merged: Record<string, unknown> = { ...incoming };
+        const merged: Record<string, unknown> = { ...existingConfig, ...incoming };
         for (const key of Object.keys(incoming)) {
           if (SECRET_CONFIG_KEYS.has(key) && incoming[key] === '••••••' && key in existingConfig) {
             merged[key] = existingConfig[key];
           }
         }
-        data.config = merged;
+        // encryptSecrets skips anything already in ciphertext shape —
+        // the placeholder-preserved values restored just above (already
+        // encrypted, carried over verbatim) pass through untouched here;
+        // only genuinely new plaintext the admin just typed gets encrypted.
+        data.config = encryptSecrets(merged);
       }
 
       const terminal = await prisma.paymentTerminal.update({
