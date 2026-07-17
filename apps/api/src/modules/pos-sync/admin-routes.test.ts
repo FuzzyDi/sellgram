@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     store: { findFirst: vi.fn() },
-    posDevice: { create: vi.fn() },
+    posDevice: { create: vi.fn(), findFirst: vi.fn() },
     deviceActivation: { create: vi.fn() },
     product: { findMany: vi.fn().mockResolvedValue([]) },
     category: { findMany: vi.fn().mockResolvedValue([]) },
@@ -21,6 +21,13 @@ const mocks = vi.hoisted(() => ({
     },
     shiftEvent: { findMany: vi.fn(), count: vi.fn() },
     fiscalEvent: { findMany: vi.fn() },
+    paymentTerminal: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
@@ -935,6 +942,153 @@ describe('pos-sync.admin-routes', () => {
       expect(response.statusCode).toBe(404);
       expect(mocks.prisma.fiscalEvent.findMany).not.toHaveBeenCalled();
       await app.close();
+    });
+  });
+
+  describe('PaymentTerminal CRUD (docs/POS_SETTINGS_ARCHITECTURE.md §9 step 4)', () => {
+    beforeEach(() => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+    });
+
+    describe('GET /payment-terminals', () => {
+      it('masks apiKey and similar secret keys in config, leaves other keys untouched', async () => {
+        mocks.prisma.paymentTerminal.findMany.mockResolvedValue([
+          {
+            id: 'pt-1', storeId: 'store-1', deviceId: null, type: 'QR_UZQR', name: 'UzQR',
+            enabled: true, sortOrder: 0,
+            config: { url: 'https://uzqr.uz', tin: '123456789', apiKey: 'super-secret', retryCount: 5 },
+          },
+        ]);
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'GET', url: '/payment-terminals?storeId=store-1' });
+
+        expect(response.statusCode).toBe(200);
+        const [terminal] = response.json().data;
+        expect(terminal.config).toEqual({
+          url: 'https://uzqr.uz', tin: '123456789', apiKey: '••••••', retryCount: 5,
+        });
+        await app.close();
+      });
+
+      it('returns 404 for a store belonging to another tenant', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue(null);
+        const app = await buildApp();
+        const response = await app.inject({ method: 'GET', url: '/payment-terminals?storeId=store-foreign' });
+        expect(response.statusCode).toBe(404);
+        await app.close();
+      });
+    });
+
+    describe('POST /payment-terminals', () => {
+      it('creates a store-level terminal (deviceId omitted) and masks the response', async () => {
+        mocks.prisma.paymentTerminal.create.mockResolvedValue({
+          id: 'pt-1', storeId: 'store-1', deviceId: null, type: 'CASH', name: 'Наличные',
+          enabled: true, sortOrder: 0, config: {},
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/payment-terminals',
+          payload: { storeId: 'store-1', type: 'CASH', name: 'Наличные' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.paymentTerminal.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ storeId: 'store-1', deviceId: null, type: 'CASH', name: 'Наличные', enabled: true, sortOrder: 0 }),
+        });
+        expect(mocks.prisma.posDevice.findFirst).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('creates a device-level override after confirming the device belongs to this store', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.paymentTerminal.create.mockResolvedValue({
+          id: 'pt-2', storeId: 'store-1', deviceId: 'dev-1', type: 'CASH', name: 'Наличные (касса 2)',
+          enabled: true, sortOrder: 0, config: {},
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/payment-terminals',
+          payload: { storeId: 'store-1', deviceId: 'dev-1', type: 'CASH', name: 'Наличные (касса 2)' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.posDevice.findFirst).toHaveBeenCalledWith({
+          where: { id: 'dev-1', storeId: 'store-1', tenantId: 'tenant-1' },
+          select: { id: true },
+        });
+        expect(response.json().data.deviceId).toBe('dev-1');
+        await app.close();
+      });
+
+      it('returns 404 when deviceId does not belong to this store', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/payment-terminals',
+          payload: { storeId: 'store-1', deviceId: 'dev-foreign', type: 'CASH', name: 'Наличные' },
+        });
+
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.paymentTerminal.create).not.toHaveBeenCalled();
+        await app.close();
+      });
+    });
+
+    describe('PATCH /payment-terminals/:id', () => {
+      it('updates a terminal and masks the response', async () => {
+        mocks.prisma.paymentTerminal.findFirst.mockResolvedValue({ id: 'pt-1', storeId: 'store-1' });
+        mocks.prisma.paymentTerminal.update.mockResolvedValue({
+          id: 'pt-1', storeId: 'store-1', deviceId: null, type: 'QR_UZQR', name: 'UzQR',
+          enabled: false, sortOrder: 0, config: { apiKey: 'super-secret' },
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'PATCH',
+          url: '/payment-terminals/pt-1',
+          payload: { enabled: false },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().data.config).toEqual({ apiKey: '••••••' });
+        await app.close();
+      });
+
+      it('returns 404 for a terminal belonging to another tenant', async () => {
+        mocks.prisma.paymentTerminal.findFirst.mockResolvedValue(null);
+        const app = await buildApp();
+        const response = await app.inject({ method: 'PATCH', url: '/payment-terminals/pt-foreign', payload: { enabled: false } });
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.paymentTerminal.update).not.toHaveBeenCalled();
+        await app.close();
+      });
+    });
+
+    describe('DELETE /payment-terminals/:id', () => {
+      it('deletes a terminal', async () => {
+        mocks.prisma.paymentTerminal.findFirst.mockResolvedValue({ id: 'pt-1' });
+        const app = await buildApp();
+        const response = await app.inject({ method: 'DELETE', url: '/payment-terminals/pt-1' });
+        expect(response.statusCode).toBe(200);
+        expect(mocks.prisma.paymentTerminal.delete).toHaveBeenCalledWith({ where: { id: 'pt-1' } });
+        await app.close();
+      });
+
+      it('returns 404 for a terminal belonging to another tenant', async () => {
+        mocks.prisma.paymentTerminal.findFirst.mockResolvedValue(null);
+        const app = await buildApp();
+        const response = await app.inject({ method: 'DELETE', url: '/payment-terminals/pt-foreign' });
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.paymentTerminal.delete).not.toHaveBeenCalled();
+        await app.close();
+      });
     });
   });
 });

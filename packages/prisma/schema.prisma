@@ -155,6 +155,7 @@ model Tenant {
   posOperators       PosOperator[]
   markingCodes       ProductMarkingCode[]
   barcodes           ProductBarcode[]
+  paymentTerminals   PaymentTerminal[]
 
   @@map("tenants")
 }
@@ -244,6 +245,7 @@ model Store {
   shiftEvents      ShiftEvent[]
   posOperators     PosOperator[]
   posOperatorEvents PosOperatorEvent[]
+  paymentTerminals PaymentTerminal[]
 
   @@index([tenantId])
   @@map("stores")
@@ -1385,6 +1387,7 @@ model PosDevice {
   shiftEvents  ShiftEvent[]
   posOperatorEvents PosOperatorEvent[]
   cloudCommands CloudCommand[]
+  paymentTerminals PaymentTerminal[]
 
   @@unique([tenantId, deviceCode])
   @@index([tenantId, storeId])
@@ -1752,6 +1755,50 @@ model PosSettings {
 
   @@index([tenantId])
   @@map("pos_settings")
+}
+
+// docs/POS_SETTINGS_ARCHITECTURE.md §3/§9 step 1 — Layer 3 of the
+// three-layer settings split: a store's configured payment methods,
+// broken out of PosSettings.payload.paymentMethods (a flat string[]
+// with nowhere to put provider config) into its own table. Store-scoped
+// by default (deviceId: null); a device-level row overrides the
+// store-level row of the same `type` for one till only (§3's
+// 2026-07-17 resolution, agreed with the Android team) — GET
+// /pos/v1/settings performs this merge server-side (§4), the till does
+// none of its own.
+model PaymentTerminal {
+  id       String  @id @default(cuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId  String
+  store    Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  // Nullable — null means this row is a store-level default; set means
+  // it overrides the store-level default of the same `type` for this
+  // device only (§3/§4). onDelete: SetNull (not Cascade) — deleting a
+  // device demotes what was its override back into having no override,
+  // it does not delete the store-level configuration underneath it.
+  deviceId String?
+  device   PosDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  // CASH / CARD_PINPAD / QR_UZQR / QR_PAYME / QR_CLICK / QR_STATIC /
+  // BANK_TRANSFER — String, not an enum, same "grows without a
+  // migration" reasoning as ProductType.code (docs/PRODUCT_TYPES.md §3)
+  // and every other open-vocabulary field in this schema.
+  type      String
+  name      String
+  enabled   Boolean  @default(true)
+  sortOrder Int      @default(0)
+  // Provider-specific (docs/POS_SETTINGS_ARCHITECTURE.md §3.2) — may
+  // contain secrets (apiKey). Sent to the device in full via GET
+  // /pos/v1/settings (the till needs a working key); masked in every
+  // admin-facing response (apps/api/src/modules/pos-sync/admin-routes.ts
+  // maskSecrets()).
+  config    Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storeId, enabled])
+  @@index([deviceId])
+  @@map("payment_terminals")
 }
 
 // ============================================================
