@@ -1046,6 +1046,28 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     );
   });
 
+  // docs/POS_SETTINGS_ARCHITECTURE.md §4 — PaymentTerminal.type → the
+  // camelCase key it appears under in settings.paymentProviders. A
+  // `type` with no entry here (a value the vocabulary grows to include
+  // later, §3's "String, not an enum" reasoning) is skipped rather than
+  // sent under some fallback key — an unrecognized key would be
+  // meaningless to a till that only knows the fixed set of aliases §4
+  // documents.
+  const PAYMENT_TERMINAL_TYPE_TO_KEY: Record<string, string> = {
+    CASH: 'cash',
+    CARD_PINPAD: 'cardPinpad',
+    QR_UZQR: 'uzQr',
+    QR_PAYME: 'payme',
+    QR_CLICK: 'click',
+    QR_STATIC: 'qrStatic',
+    // docs/POS_SYNC_API.md §23.1 — Demo Store Tashkent's real recorded
+    // paymentMethods uses this exact type, distinct from QR_STATIC
+    // above (not folded into it — the two are different real values,
+    // not a typo of each other).
+    QR_STATIC_MANUAL: 'qrStaticManual',
+    BANK_TRANSFER: 'bankTransfer',
+  };
+
   fastify.get('/pos/v1/settings', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveAuthenticatedDevice(request, reply);
     if (!device) return;
@@ -1055,7 +1077,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     // versioned blocks. Fetched in parallel: PosSettings (tenant-scoped,
     // may not exist yet), the global PlatformPolicyVersion counter, and
     // enabled PlatformPolicy rows (also global, never tenant-scoped).
-    const [stored, platformPolicyVersion, platformPolicies, operators] = await Promise.all([
+    const [stored, platformPolicyVersion, platformPolicies, operators, storeTerminals, deviceTerminals] = await Promise.all([
       prisma.posSettings.findUnique({
         where: { storeId: device.storeId },
         select: {
@@ -1090,6 +1112,17 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           pinRequired: true, pinHashSha256: true, pinSalt: true,
         },
       }),
+      // docs/POS_SETTINGS_ARCHITECTURE.md §3/§4 — store-level defaults
+      // (deviceId IS NULL) for this device's store.
+      prisma.paymentTerminal.findMany({
+        where: { storeId: device.storeId, deviceId: null, enabled: true },
+        select: { type: true, config: true, deviceId: true },
+      }),
+      // §4 — this device's own overrides, if any.
+      prisma.paymentTerminal.findMany({
+        where: { deviceId: device.id, enabled: true },
+        select: { type: true, config: true, deviceId: true },
+      }),
     ]);
 
     // A store that has never configured POS settings still gets a valid,
@@ -1115,6 +1148,38 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     // now (single-country deployment); may become a per-store setting
     // later without changing this field's position in the contract.
     (settings as Record<string, unknown>).storeTimezone = 'Asia/Tashkent';
+
+    // docs/POS_SETTINGS_ARCHITECTURE.md §4 — server-side store/device
+    // merge, resolved 2026-07-17 with the Android team: the till
+    // performs none of this itself, it only ever sees the flattened
+    // result below. Store-level rows first, then device-level rows
+    // overwrite by `type` (Map insertion order doesn't matter here,
+    // only that device rows are set second so they win). Existing
+    // settings.paymentMethods (the old flat-array shape, §1) is left
+    // completely untouched above — this is purely additive, sent
+    // alongside it (§7 backward-compat).
+    const resolvedTerminalsByType = new Map<string, { config: unknown; deviceId: string | null }>();
+    for (const terminal of storeTerminals) resolvedTerminalsByType.set(terminal.type, terminal);
+    for (const terminal of deviceTerminals) resolvedTerminalsByType.set(terminal.type, terminal);
+
+    const paymentProviders: Record<string, unknown> = {};
+    for (const [type, terminal] of resolvedTerminalsByType) {
+      const key = PAYMENT_TERMINAL_TYPE_TO_KEY[type];
+      if (!key) continue;
+      const config = terminal.config && typeof terminal.config === 'object' ? (terminal.config as Record<string, unknown>) : {};
+      paymentProviders[key] = {
+        enabled: true,
+        ...config,
+        // §4 — which layer this device's active configuration for this
+        // type actually came from: STORE (the store-wide default) or
+        // DEVICE (this specific till has its own override). Not
+        // derived from `config` — sourced from the resolved row's own
+        // deviceId, set above by which of the two findMany results
+        // last wrote this `type` into the map.
+        scope: terminal.deviceId ? 'DEVICE' : 'STORE',
+      };
+    }
+    (settings as Record<string, unknown>).paymentProviders = paymentProviders;
 
     // §7 — the wire Rule shape flattens `extra` onto the rule object
     // itself rather than nesting it; `source` is always server-assigned

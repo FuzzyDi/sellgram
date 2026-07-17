@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => ({
     fiscalEvent: { create: vi.fn().mockResolvedValue({}), findUnique: vi.fn().mockResolvedValue(null), findFirst: vi.fn().mockResolvedValue(null) },
     shiftEvent: { create: vi.fn().mockResolvedValue({}) },
     posOperatorEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
+    paymentTerminal: { findMany: vi.fn().mockResolvedValue([]) },
     cloudCommand: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
@@ -933,6 +934,10 @@ describe('pos-sync.routes', () => {
         featureFlags: {},
         // §6 — hardcoded for UZ; a sibling of the other settings keys.
         storeTimezone: 'Asia/Tashkent',
+        // docs/POS_SETTINGS_ARCHITECTURE.md §4 — empty when the store has
+        // no PaymentTerminal rows at all (mocked paymentTerminal.findMany
+        // returns [] by default in this suite).
+        paymentProviders: {},
       });
       expect(body.data.printTemplates).toEqual({});
       // §6 — "An unconfigured store's policies.rules is never empty in
@@ -1122,6 +1127,74 @@ describe('pos-sync.routes', () => {
       // false and both fields null, not omitted.
       expect(op2).toMatchObject({ pinRequired: false, pinHashSha256: null, pinSalt: null });
       await app.close();
+    });
+
+    // docs/POS_SETTINGS_ARCHITECTURE.md §4 — server-side store/device
+    // merge for settings.paymentProviders.
+    describe('settings.paymentProviders (docs/POS_SETTINGS_ARCHITECTURE.md §4)', () => {
+      beforeEach(() => {
+        mocks.prisma.posDevice.findUnique.mockResolvedValue({
+          id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+        });
+        mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
+        mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 1 });
+        mocks.prisma.platformPolicy.findMany.mockResolvedValue([]);
+        mocks.prisma.posOperator.findMany.mockResolvedValue([]);
+      });
+
+      it('builds paymentProviders from store-level terminals with scope STORE', async () => {
+        mocks.prisma.paymentTerminal.findMany
+          .mockResolvedValueOnce([
+            { type: 'QR_UZQR', deviceId: null, config: { url: 'https://uzqr.uz', apiKey: 'secret' } },
+          ])
+          .mockResolvedValueOnce([]);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(response.json().data.settings.paymentProviders).toEqual({
+          uzQr: { enabled: true, url: 'https://uzqr.uz', apiKey: 'secret', scope: 'STORE' },
+        });
+        await app.close();
+      });
+
+      it('a device-level terminal overrides a store-level terminal of the same type, scope DEVICE', async () => {
+        mocks.prisma.paymentTerminal.findMany
+          .mockResolvedValueOnce([{ type: 'CASH', deviceId: null, config: { note: 'store default' } }])
+          .mockResolvedValueOnce([{ type: 'CASH', deviceId: 'dev-1', config: { note: 'this till only' } }]);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(response.json().data.settings.paymentProviders).toEqual({
+          cash: { enabled: true, note: 'this till only', scope: 'DEVICE' },
+        });
+        await app.close();
+      });
+
+      it('skips a type with no known paymentProviders key', async () => {
+        mocks.prisma.paymentTerminal.findMany
+          .mockResolvedValueOnce([{ type: 'SOME_FUTURE_TYPE', deviceId: null, config: {} }])
+          .mockResolvedValueOnce([]);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(response.json().data.settings.paymentProviders).toEqual({});
+        await app.close();
+      });
     });
 
     it('returns 401 for a missing device key', async () => {

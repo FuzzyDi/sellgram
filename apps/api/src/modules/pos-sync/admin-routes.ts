@@ -91,6 +91,39 @@ const listOperatorEventsQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
 });
 
+const listPaymentTerminalsQuerySchema = z.object({
+  storeId: z.string().min(1),
+});
+
+// docs/POS_SETTINGS_ARCHITECTURE.md §3 — `type` stays a free string here
+// too (not re-validated against the seven documented values), same
+// "grows without a migration" reasoning the schema comment on
+// PaymentTerminal.type already gives. deviceId nullable/optional: absent
+// or explicit null both mean "store-level default" (§4); a device
+// override is created by setting it to a real device id, checked
+// against this store server-side below (never trusted from the client
+// alone).
+const createPaymentTerminalSchema = z.object({
+  storeId: z.string().min(1),
+  deviceId: z.string().min(1).nullable().optional(),
+  type: z.string().min(1),
+  name: z.string().min(1).max(200),
+  enabled: z.boolean().default(true),
+  sortOrder: z.number().int().default(0),
+  config: z.record(z.unknown()).default({}),
+});
+
+const updatePaymentTerminalSchema = z
+  .object({
+    deviceId: z.string().min(1).nullable(),
+    type: z.string().min(1),
+    name: z.string().min(1).max(200),
+    enabled: z.boolean(),
+    sortOrder: z.number().int(),
+    config: z.record(z.unknown()),
+  })
+  .partial();
+
 const posAnalyticsQuerySchema = z
   .object({
     storeId: z.string().min(1),
@@ -256,6 +289,35 @@ async function bumpStaffVersion(tenantId: string, storeId: string) {
     },
     update: { staffVersion: { increment: 1 } },
   });
+}
+
+// docs/POS_SETTINGS_ARCHITECTURE.md §5/§8 — exact-match key names only,
+// not alias-aware the way GET /pos/v1/settings' Android alias list is
+// (routes.ts §4 comment) — deliberately narrower here, since this is a
+// display-masking convenience for the admin UI, not a wire contract a
+// device depends on. A provider config key spelled differently (e.g.
+// `secretKey`) is not masked by this list; widen it if that turns out
+// to matter in practice.
+const SECRET_CONFIG_KEYS = new Set(['apiKey', 'api_key', 'key', 'secret', 'password', 'token']);
+
+// GET /pos/v1/settings (a different file, pos-sync/routes.ts) sends
+// PaymentTerminal.config to the device in full — the till needs a
+// working key to call the payment provider itself. Every ADMIN-facing
+// response in *this* file must never do that: secrets are replaced with
+// a fixed placeholder, never partially shown, never logged. Top-level
+// keys only — every config shape documented in
+// docs/POS_SETTINGS_ARCHITECTURE.md §3.2 is flat, not nested.
+function maskSecrets(config: unknown): Record<string, unknown> {
+  if (!config || typeof config !== 'object') return {};
+  const masked: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(config as Record<string, unknown>)) {
+    masked[key] = SECRET_CONFIG_KEYS.has(key) ? '••••••' : value;
+  }
+  return masked;
+}
+
+function maskTerminal<T extends { config: unknown }>(terminal: T): T {
+  return { ...terminal, config: maskSecrets(terminal.config) };
 }
 
 /**
@@ -1001,6 +1063,128 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
 
       await prisma.posOperator.delete({ where: { id: existing.id } });
       await bumpStaffVersion(tenantId, existing.storeId);
+
+      return reply.status(200).send({ success: true, data: { id: existing.id } });
+    }
+  );
+
+  // docs/POS_SETTINGS_ARCHITECTURE.md §9 step 4 — store-admin CRUD for
+  // PaymentTerminal. Every response here goes through maskTerminal()
+  // (defined above) — unlike GET /pos/v1/settings (pos-sync/routes.ts),
+  // which sends config to a device in full, this is an admin-facing
+  // surface and must never echo a secret back readable.
+  fastify.get(
+    '/payment-terminals',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const query = listPaymentTerminalsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({ success: false, error: query.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const terminals = await prisma.paymentTerminal.findMany({
+        where: { tenantId, storeId: store.id },
+        orderBy: [{ sortOrder: 'asc' }, { type: 'asc' }],
+      });
+
+      return reply.status(200).send({ success: true, data: terminals.map(maskTerminal) });
+    }
+  );
+
+  fastify.post(
+    '/payment-terminals',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const body = createPaymentTerminalSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: body.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      // §3 — a device-level override must actually belong to this
+      // store; same "server decides trust-sensitive associations"
+      // posture already used for storeId above and throughout this
+      // file (e.g. POST /pos-operators).
+      if (body.data.deviceId) {
+        const device = await prisma.posDevice.findFirst({
+          where: { id: body.data.deviceId, storeId: store.id, tenantId },
+          select: { id: true },
+        });
+        if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
+      }
+
+      const terminal = await prisma.paymentTerminal.create({
+        data: {
+          tenantId,
+          storeId: store.id,
+          deviceId: body.data.deviceId ?? null,
+          type: body.data.type,
+          name: body.data.name,
+          enabled: body.data.enabled,
+          sortOrder: body.data.sortOrder,
+          config: body.data.config as any,
+        },
+      });
+
+      return reply.status(201).send({ success: true, data: maskTerminal(terminal) });
+    }
+  );
+
+  fastify.patch(
+    '/payment-terminals/:id',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { id } = request.params as { id: string };
+      const body = updatePaymentTerminalSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      // Tenant isolation: a terminal that exists but belongs to a
+      // different tenant must not leak as "found" — 404, not 403 (same
+      // as every other PATCH/DELETE in this file).
+      const existing = await prisma.paymentTerminal.findFirst({
+        where: { id, tenantId },
+        select: { id: true, storeId: true },
+      });
+      if (!existing) return reply.status(404).send({ success: false, error: 'Payment terminal not found' });
+
+      if (body.data.deviceId) {
+        const device = await prisma.posDevice.findFirst({
+          where: { id: body.data.deviceId, storeId: existing.storeId, tenantId },
+          select: { id: true },
+        });
+        if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
+      }
+
+      const terminal = await prisma.paymentTerminal.update({
+        where: { id: existing.id },
+        data: body.data as any,
+      });
+
+      return reply.status(200).send({ success: true, data: maskTerminal(terminal) });
+    }
+  );
+
+  fastify.delete(
+    '/payment-terminals/:id',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { id } = request.params as { id: string };
+
+      const existing = await prisma.paymentTerminal.findFirst({ where: { id, tenantId }, select: { id: true } });
+      if (!existing) return reply.status(404).send({ success: false, error: 'Payment terminal not found' });
+
+      await prisma.paymentTerminal.delete({ where: { id: existing.id } });
 
       return reply.status(200).send({ success: true, data: { id: existing.id } });
     }
