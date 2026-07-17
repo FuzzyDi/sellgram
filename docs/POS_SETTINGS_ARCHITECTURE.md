@@ -113,6 +113,12 @@ model PaymentTerminal {
   tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   storeId  String
   store    Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  // Nullable — null means this row is a store-level default, applying to
+  // every device at storeId that has no device-level override for the
+  // same `type` (§4's merge logic). Set means this row overrides the
+  // store-level default for one specific till only.
+  deviceId String?
+  device   PosDevice? @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   // CASH / CARD_PINPAD / QR_UZQR / QR_PAYME / QR_CLICK / QR_STATIC /
   // BANK_TRANSFER — String, not an enum, same "grows without a
   // migration" reasoning as ProductType.code (docs/PRODUCT_TYPES.md §3)
@@ -129,14 +135,23 @@ model PaymentTerminal {
   updatedAt DateTime @updatedAt
 
   @@index([storeId, enabled])
+  @@index([deviceId])
   @@map("payment_terminals")
 }
 ```
 
-Store-scoped (`storeId`, not `deviceId`) — every device at a store sees
-the same terminal list. Whether a terminal instead needs to be
-device-scoped (a till with its own dedicated card pinpad, distinct from
-another till's) is an open question, not resolved here (§10 item 2).
+**Resolved 2026-07-17, agreed with the Android team (§10 item 2 no
+longer open):** `PaymentTerminal` is store-scoped by default with an
+optional device-level override, not purely store-scoped as this
+document originally specified. A store-level row (`deviceId: null`)
+applies to every device at that store; a device-level row (`deviceId`
+set) overrides the store-level row of the same `type` for that one till
+only. Cloud resolves this into a single flat object per device before
+the till ever sees it — the till performs no merge logic of its own
+(§4). `PosDevice` needs the matching back-relation,
+`paymentTerminals PaymentTerminal[]`, for this explicit relation to be
+schema-valid — same requirement §6 already notes for
+`PosDeviceSettings`.
 
 ### 3.1 Boundary with `StorePaymentMethod`
 
@@ -227,7 +242,12 @@ that exists right now.
         "apiKey": "***",
         "connectTimeoutSeconds": 3,
         "responseTimeoutSeconds": 10,
-        "retryCount": 5
+        "retryCount": 5,
+        "scope": "STORE",
+        "terminalId": "...",
+        "terminalName": "...",
+        "terminalCode": "...",
+        "externalDeviceId": "..."
       },
       "cardPinpad": {
         "enabled": false
@@ -239,13 +259,40 @@ that exists right now.
 
 `settings.paymentProviders` is keyed by a camelCase alias of
 `PaymentTerminal.type` (`uzQr` for `QR_UZQR`, `cardPinpad` for
-`CARD_PINPAD`), one entry per **enabled** terminal at the store, built
-by the route handler from `PaymentTerminal` rows at request time — not
-a stored column anywhere; same "computed at read time from a normalized
-table" approach `GET /pos/v1/settings` already uses for `policies.rules`
-(merging `PlatformPolicy` + `PosSettings.tenantPolicyRules`,
-`routes.ts:1124`-`1157`) and `staff` (from `PosOperator` rows,
-`routes.ts:1164`-`1187`).
+`CARD_PINPAD`), one entry per **enabled** terminal **resolved for this
+device**, built by the route handler from `PaymentTerminal` rows at
+request time — not a stored column anywhere; same "computed at read
+time from a normalized table" approach `GET /pos/v1/settings` already
+uses for `policies.rules` (merging `PlatformPolicy` +
+`PosSettings.tenantPolicyRules`, `routes.ts:1124`-`1157`) and `staff`
+(from `PosOperator` rows, `routes.ts:1164`-`1187`).
+
+**Store/device merge — resolved 2026-07-17, agreed with the Android
+team.** The till performs no merge of its own; `GET /pos/v1/settings`
+already contains the final, resolved result for the requesting device.
+The route handler builds it in this fixed order:
+
+1. Fetch store-level `PaymentTerminal` rows for the requesting device's
+   `storeId` (`deviceId IS NULL`).
+2. Fetch device-level `PaymentTerminal` rows for the requesting device
+   (`deviceId` = the authenticated device's id, §3).
+3. For each `type` present in both sets, the device-level row wins —
+   its `config`/`enabled`/`name` fully replace the store-level row's,
+   not a field-by-field merge of the two.
+4. The combined, per-type result becomes `settings.paymentProviders` —
+   one flat object, keyed by type, with no trace of which layer each
+   entry came from except the `scope` field below.
+
+`scope` — `"STORE"` or `"DEVICE"` — added to every entry in
+`paymentProviders` so a debugging admin (or the Android team) can tell
+which layer a given device's active configuration actually came from,
+without needing a separate admin-UI lookup. `terminalId`/
+`terminalName`/`terminalCode`/`externalDeviceId` are the resolved
+`PaymentTerminal` row's own identity, included **optionally** — present
+when the underlying provider integration needs a stable id to bind
+against on its own side (e.g. a UzQR terminal registered under a
+specific `terminalCode` with the provider); not every `type` needs
+them, and no `type`'s `config` shape (§3.2) requires them today.
 
 **`apiKey` is sent to the device unmasked** (§5) — the `"***"` in the
 example above stands for "a real secret value," not a literal masking
@@ -469,15 +516,16 @@ open a page with its own internal tab-switcher, not three new
    cost," "encrypt just the secret-shaped keys within it," or "rely on
    Postgres-level encryption at rest and leave the column itself
    plaintext" is left to the implementation session.
-2. **Does `PaymentTerminal` need to be device-scoped, not just
-   store-scoped, for stores where different tills have different
-   terminals?** §3 scopes it to `storeId` only, matching the brief for
-   this document exactly as given — but the same problem this document
-   solves for `printerProfile` (one profile, many devices, §1) could
-   recur here: two tills with two physically different card pinpads at
-   one store have no way to configure that under a store-scoped model.
-   Not resolved — a real gap, not an oversight, since the brief's given
-   `PaymentTerminal` schema (§3) has no `deviceId` column at all.
+2. **Device-scoped `PaymentTerminal`: resolved — agreed with the
+   Android team 2026-07-17.** `deviceId` is nullable on
+   `PaymentTerminal` (§3): `null` is a store-level default, set is a
+   device-level override. Cloud performs the merge (store default +
+   device override, device wins per `type`) server-side before the till
+   ever sees it — `GET /pos/v1/settings` already contains the resolved
+   result (§4); the till does no merge logic of its own. A `scope`
+   field (`"STORE"` | `"DEVICE"`) on each entry in
+   `settings.paymentProviders` shows which layer that entry's active
+   configuration came from (§4).
 3. **Does `weightBarcode` (`docs/POS_SYNC_API.md` §10 — never actually
    persisted, per that section's own caveat and `docs/PRODUCT_TYPES.md`
    §5's confirmation) belong in `PosDeviceSettings` (as part of
