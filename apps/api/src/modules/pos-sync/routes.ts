@@ -409,17 +409,14 @@ const operatorEventSchema = z.object({
   payload: z.record(z.unknown()).optional(),
 });
 
-// docs/POS_SYNC_API.md §25 — universal payment-provider event stream.
-// **Interpretation note on eventType, flagged since the source list was
-// given as compressed shorthand** ("PAYMENT_INITIATED/PENDING/
-// CONFIRMED/REJECTED/CANCELLED/AMBIGUOUS/PAYMENT_REFUND_INITIATED/
-// REFUND_CONFIRMED/REFUND_REJECTED/PROVIDER_REJECTED_CONFIRMED/
-// RECOVERY_FAILED_RETRYABLE"): read here as six PAYMENT_-prefixed
-// values, three PAYMENT_REFUND_-prefixed values, and two standalone
-// values already spelled in full — eleven total. If the real Android
-// contract uses different full spellings, this is a one-line fix, not
-// a design change — nothing else in this endpoint depends on the exact
-// strings beyond this enum.
+// docs/POS_SYNC_API.md §25/§25.3 — universal payment-provider event
+// stream. eventType vocabulary confirmed with the Android team
+// 2026-07-17 (§25.3) — all eleven values are PAYMENT_-prefixed,
+// including PAYMENT_PROVIDER_REJECTED_CONFIRMED and
+// PAYMENT_RECOVERY_FAILED_RETRYABLE, which an earlier, unconfirmed
+// reading of a compressed shorthand list had gotten wrong (missing the
+// PAYMENT_ prefix on those two only) — fixed here to match the
+// confirmed contract.
 const paymentEventSchema = z.object({
   eventId: z.string().min(1),
   eventType: z.enum([
@@ -432,8 +429,8 @@ const paymentEventSchema = z.object({
     'PAYMENT_REFUND_INITIATED',
     'PAYMENT_REFUND_CONFIRMED',
     'PAYMENT_REFUND_REJECTED',
-    'PROVIDER_REJECTED_CONFIRMED',
-    'RECOVERY_FAILED_RETRYABLE',
+    'PAYMENT_PROVIDER_REJECTED_CONFIRMED',
+    'PAYMENT_RECOVERY_FAILED_RETRYABLE',
   ]),
   aggregateType: z.string().min(1),
   aggregateId: z.string().min(1),

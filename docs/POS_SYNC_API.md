@@ -1545,7 +1545,7 @@ in this endpoint's design depends on the exact strings.
 - `PAYMENT_REFUND_CONFIRMED` — the provider confirmed the refund
   completed.
 - `PAYMENT_REFUND_REJECTED` — the provider declined the refund attempt.
-- `PROVIDER_REJECTED_CONFIRMED` — a recovery/reconciliation outcome: the
+- `PAYMENT_PROVIDER_REJECTED_CONFIRMED` — a recovery/reconciliation outcome: the
   till initially received a rejection from the provider, but a later
   check (the till's own retry/reconciliation logic, out of scope for
   this endpoint) found the payment was actually confirmed after all.
@@ -1554,7 +1554,7 @@ in this endpoint's design depends on the exact strings.
   this one went through an anomalous path — same "append, never
   rewrite history" principle as `FiscalEvent`'s `FISCAL_UNKNOWN`→
   `FISCAL_SUCCESS` recovery flow (§12).
-- `RECOVERY_FAILED_RETRYABLE` — the till attempted to resolve an
+- `PAYMENT_RECOVERY_FAILED_RETRYABLE` — the till attempted to resolve an
   ambiguous or failed payment (a status check against the provider) and
   that resolution attempt itself failed, but in a way the till considers
   worth retrying rather than a terminal failure.
@@ -1567,30 +1567,65 @@ still sent explicitly rather than derived from `eventType`, same
 `paymentMethod` duplicating `provider`, schema comment on
 `PosPaymentEvent.paymentMethod`).
 
-### 25.3 UzQR event mapping (illustrative — not yet confirmed)
+### 25.3 UzQR event mapping (confirmed with the Android team 2026-07-17)
 
-**Unlike the fiscal/shift/commands contract (§12/§13/§15, confirmed
-against a real Android exchange), UzQR's own callback/webhook event
-names have not been confirmed against a real integration in this
-repository.** The table below is this document's best-effort mapping
-from UzQR's typical invoice-lifecycle callbacks to the universal
-`eventType` vocabulary above, written to make the shape of the mapping
-concrete — treat every UzQR-side name in the left column as provisional
-until checked against a real UzQR integration test.
+**Android-internal event name → Cloud canonical `eventType`:**
 
-| UzQR callback (provisional) | Universal `eventType` | `provider` | `operation` |
-|---|---|---|---|
-| `invoice.created` | `PAYMENT_INITIATED` | `UZQR` | `SALE` |
-| `invoice.waiting_payment` | `PAYMENT_PENDING` | `UZQR` | `SALE` |
-| `invoice.paid` | `PAYMENT_CONFIRMED` | `UZQR` | `SALE` |
-| `invoice.declined` / `invoice.expired` | `PAYMENT_REJECTED` | `UZQR` | `SALE` |
-| `invoice.cancelled` | `PAYMENT_CANCELLED` | `UZQR` | `SALE` |
-| status check timed out / no callback received | `PAYMENT_AMBIGUOUS` | `UZQR` | `SALE` |
-| `refund.created` | `PAYMENT_REFUND_INITIATED` | `UZQR` | `REFUND` |
-| `refund.completed` | `PAYMENT_REFUND_CONFIRMED` | `UZQR` | `REFUND` |
-| `refund.declined` | `PAYMENT_REFUND_REJECTED` | `UZQR` | `REFUND` |
-| reconciliation check finds a previously-declined invoice actually paid | `PROVIDER_REJECTED_CONFIRMED` | `UZQR` | `SALE` |
-| reconciliation check itself fails (network/5xx) | `RECOVERY_FAILED_RETRYABLE` | `UZQR` | `SALE` or `REFUND` |
+| Android internal | Cloud canonical `eventType` |
+|---|---|
+| `PAYMENT_INVOICE_CREATED` | `PAYMENT_INITIATED` |
+| `PAYMENT_STATUS_PENDING` | `PAYMENT_PENDING` |
+| `PAYMENT_CONFIRMED` | `PAYMENT_CONFIRMED` |
+| `PAYMENT_REJECTED` | `PAYMENT_REJECTED` |
+| `PAYMENT_CANCELLED` | `PAYMENT_CANCELLED` |
+| `PAYMENT_AMBIGUOUS` | `PAYMENT_AMBIGUOUS` |
+| `PAYMENT_PROVIDER_REJECTED_CONFIRMED` | `PAYMENT_PROVIDER_REJECTED_CONFIRMED` |
+| `PAYMENT_RECOVERY_FAILED_RETRYABLE` | `PAYMENT_RECOVERY_FAILED_RETRYABLE` |
+| `PAYMENT_SALE_CREATED` | *not a canonical event* — see below |
+
+**`PAYMENT_SALE_CREATED` is not sent as its own `eventType`.** It is
+folded into a `PAYMENT_CONFIRMED` event: `eventType: "PAYMENT_CONFIRMED"`
+with `localState: "SALE_CREATED"` recorded in `rawProviderStatus` (or
+`payload`, for a future endpoint revision that adds a top-level
+`payload` field) — the sale-creation moment is real information worth
+keeping, but it is a sub-state of "the payment is confirmed," not a
+distinct point in the payment lifecycle Cloud needs to track on its own.
+
+**Resolved:** an earlier revision of this document flagged a mismatch
+here — `apps/api/src/modules/pos-sync/routes.ts`'s `paymentEventSchema`
+briefly accepted `PROVIDER_REJECTED_CONFIRMED`/`RECOVERY_FAILED_RETRYABLE`
+(no `PAYMENT_` prefix), not matching the confirmed canonical names above.
+The Zod enum, the `PosPaymentEvent.eventType` schema comment, and this
+document are now all aligned on the `PAYMENT_`-prefixed names.
+
+**Semantics (confirmed with the Android team):**
+
+- `PAYMENT_INITIATED` — an invoice/payment intent was created with the
+  provider. No confirmation either way yet.
+- `PAYMENT_PENDING` — the provider has not yet confirmed the payment.
+- `PAYMENT_CONFIRMED` — the provider confirmed the payment succeeded.
+  This is a payment-provider fact only — it says nothing about whether
+  the receipt was fiscalized (§25.1's division of responsibility).
+- `PAYMENT_AMBIGUOUS` — the provider's response was contradictory (e.g.
+  a `providerPaymentId` is present, indicating a completed transaction,
+  but the response also carries a rejection). **This blocks
+  auto-fiscalization** — an ambiguous payment event must not be treated
+  as confirmed by anything downstream that would trigger printing a
+  receipt; it requires resolution first (either a later
+  `PAYMENT_PROVIDER_REJECTED_CONFIRMED`/further status check, or manual
+  operator judgment).
+- `PAYMENT_PROVIDER_REJECTED_CONFIRMED` — an operator manually confirmed
+  that a payment must be treated as **not** successful, resolving an
+  ambiguous or disputed state by human judgment rather than an automatic
+  provider callback. Despite the name reading like a success outcome
+  (`_CONFIRMED`), this specifically means the rejection is confirmed —
+  the naming is the provider's, kept as-is rather than renamed for
+  Cloud-side clarity, so device and Cloud logs stay directly comparable.
+- `PAYMENT_CANCELLED` — the invoice was cancelled (by the cashier, the
+  customer, or a timeout at the till) before resolution.
+- `PAYMENT_RECOVERY_FAILED_RETRYABLE` — an attempt to recover/resolve an
+  ambiguous or failed payment did not complete, but in a way that is
+  expected to be retried rather than treated as a terminal failure.
 
 `providerInvoiceId` is UzQR's own invoice id (the `aggregateId` example
 in §25.4 below, `"UZQR:INV-000001"`, embeds it); `providerPaymentId` is
@@ -1604,7 +1639,7 @@ here precisely because they don't exist yet at `PAYMENT_INITIATED` time.
 ```json
 {
   "eventId": "string (client UUID)",
-  "eventType": "PAYMENT_INITIATED|PAYMENT_PENDING|PAYMENT_CONFIRMED|PAYMENT_REJECTED|PAYMENT_CANCELLED|PAYMENT_AMBIGUOUS|PAYMENT_REFUND_INITIATED|PAYMENT_REFUND_CONFIRMED|PAYMENT_REFUND_REJECTED|PROVIDER_REJECTED_CONFIRMED|RECOVERY_FAILED_RETRYABLE",
+  "eventType": "PAYMENT_INITIATED|PAYMENT_PENDING|PAYMENT_CONFIRMED|PAYMENT_REJECTED|PAYMENT_CANCELLED|PAYMENT_AMBIGUOUS|PAYMENT_REFUND_INITIATED|PAYMENT_REFUND_CONFIRMED|PAYMENT_REFUND_REJECTED|PAYMENT_PROVIDER_REJECTED_CONFIRMED|PAYMENT_RECOVERY_FAILED_RETRYABLE",
   "aggregateType": "PAYMENT",
   "aggregateId": "UZQR:INV-000001",
   "schemaVersion": 1,

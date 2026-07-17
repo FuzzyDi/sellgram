@@ -14,15 +14,16 @@ type NoticeTone = 'success' | 'error';
 const PAGE_SIZE = 25;
 
 // docs/POS_SYNC_API.md §25 — applies to both `eventType` (PAYMENT_*/
-// PAYMENT_REFUND_*/PROVIDER_REJECTED_CONFIRMED/RECOVERY_FAILED_RETRYABLE)
-// and the plain `status` field (CONFIRMED/REJECTED/PENDING/CANCELLED/
-// AMBIGUOUS) with the same substring rule, since both columns need a
-// color and only four color buckets were specified. REJECTED is checked
-// first so PROVIDER_REJECTED_CONFIRMED (contains both REJECTED and
+// PAYMENT_REFUND_*/PAYMENT_PROVIDER_REJECTED_CONFIRMED/
+// PAYMENT_RECOVERY_FAILED_RETRYABLE) and the plain `status` field
+// (CONFIRMED/REJECTED/PENDING/CANCELLED/AMBIGUOUS) with the same
+// substring rule, since both columns need a color and only four color
+// buckets were specified. REJECTED is checked first so
+// PAYMENT_PROVIDER_REJECTED_CONFIRMED (contains both REJECTED and
 // CONFIRMED) reads as danger, not success — not explicitly specified in
 // the brief for this component, a judgment call flagged here rather than
-// silently made. RECOVERY_FAILED_RETRYABLE and *_INITIATED aren't
-// covered by the brief's four buckets either; failed→danger,
+// silently made. PAYMENT_RECOVERY_FAILED_RETRYABLE and *_INITIATED
+// aren't covered by the brief's four buckets either; failed→danger,
 // initiated→falls through to the neutral default (nothing has gone
 // wrong yet, nothing is confirmed yet).
 function paymentBadgeVariant(value: string): BadgeVariant {

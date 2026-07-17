@@ -1701,7 +1701,9 @@ model PosPaymentEvent {
   eventId        String
   // PAYMENT_INITIATED/PENDING/CONFIRMED/REJECTED/CANCELLED/AMBIGUOUS/
   // PAYMENT_REFUND_INITIATED/REFUND_CONFIRMED/REFUND_REJECTED/
-  // PROVIDER_REJECTED_CONFIRMED/RECOVERY_FAILED_RETRYABLE — String, not
+  // PAYMENT_PROVIDER_REJECTED_CONFIRMED/PAYMENT_RECOVERY_FAILED_RETRYABLE
+  // (docs/POS_SYNC_API.md §25.3, confirmed with the Android team
+  // 2026-07-17 — all eleven values are PAYMENT_-prefixed) — String, not
   // an enum, same "grows without a migration" reasoning as every other
   // open-vocabulary eventType field in this schema (FiscalEvent.
   // fiscalStatus, PosOperatorEvent.eventType).
