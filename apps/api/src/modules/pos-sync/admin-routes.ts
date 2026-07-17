@@ -82,6 +82,24 @@ const posSettingsSchema = z.object({
   }),
 });
 
+// docs/POS_SETTINGS_ARCHITECTURE.md §6 — device-scoped hardware
+// profiles. Every key optional/nullable and independently omittable —
+// the admin UI saves one section at a time (§4), so a PUT typically
+// carries only one key. Prisma's own "an undefined value in `data`
+// means don't touch this column" behavior (not custom merge logic in
+// the route handler) is what makes an omitted key leave the existing
+// stored value alone; an explicit `null` clears that one section.
+// Internals unconstrained (z.record(z.unknown())) — same "no existing
+// shape to inherit, shape settles with real usage" reasoning as
+// PosSettings.payload's own free-form keys.
+const deviceSettingsSchema = z.object({
+  printer: z.record(z.unknown()).nullable().optional(),
+  scanner: z.record(z.unknown()).nullable().optional(),
+  pinPad: z.record(z.unknown()).nullable().optional(),
+  scale: z.record(z.unknown()).nullable().optional(),
+  display: z.record(z.unknown()).nullable().optional(),
+});
+
 const listShiftsQuerySchema = z.object({
   storeId: z.string().min(1),
   deviceId: z.string().min(1).optional(),
@@ -715,6 +733,70 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       // docs/POS_SYNC_API.md §15 — same nudge as catalog-snapshot's
       // REFRESH_CATALOG fan-out above, for settings.
       await fanOutCommandToActiveDevices(tenantId, store.id, 'REFRESH_SETTINGS', { settingsVersion: settings.version });
+
+      return reply.status(200).send({ success: true, data: settings });
+    }
+  );
+
+  // docs/POS_SETTINGS_ARCHITECTURE.md §6/§9 step 5 — device-scoped
+  // hardware profiles, sibling of /pos-devices/settings (store-scoped)
+  // above but keyed on a specific device, not a store. Read returns
+  // `null` for every field on a device that has never been configured
+  // (no row created just to read it) — same "reading doesn't create"
+  // posture as GET /pos-devices/settings not creating a PosSettings row.
+  fastify.get(
+    '/pos-devices/:deviceId/settings',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { deviceId } = request.params as { deviceId: string };
+
+      const device = await prisma.posDevice.findFirst({ where: { id: deviceId, tenantId }, select: { id: true } });
+      if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
+
+      const settings = await prisma.posDeviceSettings.findUnique({
+        where: { deviceId: device.id },
+        select: { printer: true, scanner: true, pinPad: true, scale: true, display: true, updatedAt: true },
+      });
+
+      return reply.status(200).send({
+        success: true,
+        data: settings ?? { printer: null, scanner: null, pinPad: null, scale: null, display: null, updatedAt: null },
+      });
+    }
+  );
+
+  // Upsert — same shape as PUT /pos-devices/settings above (create on
+  // first write, update thereafter), but per-section: only keys present
+  // in the body are written (schema comment on deviceSettingsSchema).
+  fastify.put(
+    '/pos-devices/:deviceId/settings',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { deviceId } = request.params as { deviceId: string };
+      const body = deviceSettingsSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const device = await prisma.posDevice.findFirst({ where: { id: deviceId, tenantId }, select: { id: true } });
+      if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
+
+      const fields = {
+        printer: body.data.printer as any,
+        scanner: body.data.scanner as any,
+        pinPad: body.data.pinPad as any,
+        scale: body.data.scale as any,
+        display: body.data.display as any,
+      };
+
+      const settings = await prisma.posDeviceSettings.upsert({
+        where: { deviceId: device.id },
+        create: { deviceId: device.id, ...fields },
+        update: fields,
+        select: { printer: true, scanner: true, pinPad: true, scale: true, display: true, updatedAt: true },
+      });
 
       return reply.status(200).send({ success: true, data: settings });
     }

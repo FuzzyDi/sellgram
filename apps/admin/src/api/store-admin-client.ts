@@ -421,6 +421,13 @@ export const adminApi = {
   updatePosSettings: (storeId: string, settings: Record<string, unknown>) =>
     request<any>('/pos-devices/settings', { method: 'PUT', body: JSON.stringify({ storeId, settings }) }),
 
+  // docs/POS_SETTINGS_ARCHITECTURE.md §6/§9 step 6 — device-scoped
+  // hardware profile (printer/scanner/pinPad/scale/display). Distinct
+  // from getPosSettings/updatePosSettings above, which are store-scoped.
+  getPosDeviceSettings: (deviceId: string) => request<any>(`/pos-devices/${deviceId}/settings`),
+  updatePosDeviceSettings: (deviceId: string, data: { printer?: Record<string, unknown> | null; scanner?: Record<string, unknown> | null; pinPad?: Record<string, unknown> | null; scale?: Record<string, unknown> | null; display?: Record<string, unknown> | null }) =>
+    request<any>(`/pos-devices/${deviceId}/settings`, { method: 'PUT', body: JSON.stringify(data) }),
+
   getPosShifts: (params: { storeId: string; deviceId?: string; limit?: number; cursor?: string }) => {
     const qs = new URLSearchParams({ storeId: params.storeId });
     if (params.deviceId) qs.set('deviceId', params.deviceId);

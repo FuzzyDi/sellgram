@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
     posOperatorEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     posPaymentEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     paymentTerminal: { findMany: vi.fn().mockResolvedValue([]) },
+    posDeviceSettings: { findUnique: vi.fn().mockResolvedValue(null) },
     cloudCommand: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
@@ -966,6 +967,10 @@ describe('pos-sync.routes', () => {
         // no PaymentTerminal rows at all (mocked paymentTerminal.findMany
         // returns [] by default in this suite).
         paymentProviders: {},
+        // docs/POS_SETTINGS_ARCHITECTURE.md §6 — all null when this
+        // device has no PosDeviceSettings row (mocked findUnique
+        // returns null by default in this suite).
+        hardware: { printer: null, scanner: null, pinPad: null, scale: null, display: null },
       });
       expect(body.data.printTemplates).toEqual({});
       // §6 — "An unconfigured store's policies.rules is never empty in
@@ -1221,6 +1226,63 @@ describe('pos-sync.routes', () => {
         });
 
         expect(response.json().data.settings.paymentProviders).toEqual({});
+        await app.close();
+      });
+    });
+
+    describe('settings.hardware (docs/POS_SETTINGS_ARCHITECTURE.md §6)', () => {
+      beforeEach(() => {
+        mocks.prisma.posDevice.findUnique.mockResolvedValue({
+          id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+        });
+        mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
+        mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ version: 1 });
+        mocks.prisma.platformPolicy.findMany.mockResolvedValue([]);
+        mocks.prisma.posOperator.findMany.mockResolvedValue([]);
+      });
+
+      it('reports null for every field when this device has no PosDeviceSettings row', async () => {
+        mocks.prisma.posDeviceSettings.findUnique.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(response.json().data.settings.hardware).toEqual({
+          printer: null, scanner: null, pinPad: null, scale: null, display: null,
+        });
+        await app.close();
+      });
+
+      it('reports the configured hardware profile for this device, queried by deviceId', async () => {
+        mocks.prisma.posDeviceSettings.findUnique.mockResolvedValue({
+          printer: { type: 'THERMAL', paperWidth: 58 },
+          scanner: null,
+          pinPad: { protocol: 'NEXGO', port: '/dev/ttyUSB0' },
+          scale: null,
+          display: null,
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(response.json().data.settings.hardware).toEqual({
+          printer: { type: 'THERMAL', paperWidth: 58 },
+          scanner: null,
+          pinPad: { protocol: 'NEXGO', port: '/dev/ttyUSB0' },
+          scale: null,
+          display: null,
+        });
+        expect(mocks.prisma.posDeviceSettings.findUnique).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { deviceId: 'dev-1' } })
+        );
         await app.close();
       });
     });
