@@ -1454,3 +1454,228 @@ unrecognized product/variant):**
   "requestId": "string"
 }
 ```
+
+## 25. Payment Events
+
+A universal, provider-agnostic event stream for what a payment provider
+(UzQR, a card pinpad, Payme, Click, a static QR code, a bank transfer,
+or cash) reports about a transaction — was it confirmed, rejected,
+still pending, cancelled, or left in an ambiguous state the till
+couldn't resolve on its own.
+
+```
+POST /api/pos/v1/payment-events
+```
+
+Same auth (§4) as every other event endpoint. Idempotent via
+`@@unique([deviceId, idempotencyKey])` — a replay of `idempotencyKey`
+returns the **same stored result** at `200`, exactly as first recorded
+at `201`; it does not re-run anything or return a different value.
+`eventId` (a client-generated UUID) travels alongside `idempotencyKey`
+for correlation/reporting only, the same non-dedup role it plays on
+`FiscalEvent` (§12) — `idempotencyKey` is this endpoint's actual dedup
+key, not `eventId`.
+
+### 25.1 Payment events vs. fiscal events — division of responsibility
+
+**These are two separate streams, not two views of the same fact, and
+neither is a superset of the other:**
+
+- **`PosPaymentEvent` (this section) is the payment *provider's* side of
+  a transaction** — did UzQR (or the pinpad, or Payme...) actually
+  confirm the money moved? This can exist with **no** fiscal receipt at
+  all (a payment confirmed, then the till fails to fiscalize it — a real
+  failure mode `FiscalEvent`'s own `FISCAL_UNKNOWN`/`FISCAL_FAILED`
+  states already anticipate, §12) — and, going the other direction, a
+  `CASH` provider payment event may exist for a sale that fiscalizes
+  perfectly normally, since cash has no external provider confirmation
+  step to report on but is still reported here for a complete payment
+  history.
+- **`FiscalEvent` (§12) is the fiscal *receipt's* side** — was a receipt
+  printed and sent to OFD? It carries the full item/payment snapshot at
+  fiscalization time, not a payment-provider correlation.
+- **Correlation between the two is by convention (`aggregateId`,
+  `providerInvoiceId`, `saleId`/`fiscalReceiptId`), not a foreign key.**
+  Neither model has a Prisma `@relation` to the other — same
+  "shared vocabulary, not a schema coupling" posture already used
+  between `ProductType` and `PlatformPolicy` (`docs/PRODUCT_TYPES.md`
+  §2) and between `PaymentTerminal` and `StorePaymentMethod`
+  (`docs/POS_SETTINGS_ARCHITECTURE.md` §3.1). A single sale can have
+  **one `PosPaymentEvent` row and one `FiscalEvent` row that never
+  reference each other in the schema**, only in the values an admin
+  report happens to match up.
+- A sale is never blocked or gated by this endpoint — same "narrow,
+  non-blocking channel" principle already stated for `CloudCommand`
+  (schema comment on that model) and the accept-don't-reject posture of
+  §18: a payment event is always accepted and stored as reported, even
+  if its `aggregateId`/`saleId` doesn't match anything Cloud recognizes
+  yet (the till's own local state is authoritative for what actually
+  happened; Cloud's job here is recording, not validating).
+
+### 25.2 `eventType`
+
+**Eleven values — read from a compressed shorthand in the source spec
+for this endpoint, not independently confirmed against the Android
+client source the way §12's fiscal event types were (that section's own
+header notes those were "snapshotted from a real ... terminal
+exchange"; these were not).** If the real contract spells any of these
+differently, only this list and the Zod schema in
+`apps/api/src/modules/pos-sync/routes.ts` need to change — nothing else
+in this endpoint's design depends on the exact strings.
+
+- `PAYMENT_INITIATED` — the till started a payment attempt with the
+  provider (e.g. sent a UzQR invoice-creation request, or prompted for a
+  card tap). No money has moved yet.
+- `PAYMENT_PENDING` — the provider acknowledged the attempt but hasn't
+  confirmed or rejected it yet (e.g. waiting on the customer to scan/pay
+  a UzQR invoice, or on the card network to respond).
+- `PAYMENT_CONFIRMED` — the provider confirmed the payment succeeded.
+  The till's own local sale/receipt flow proceeds from here.
+- `PAYMENT_REJECTED` — the provider explicitly declined the payment
+  (insufficient funds, card declined, invoice expired, etc.).
+- `PAYMENT_CANCELLED` — the payment attempt was cancelled before
+  resolution (cashier cancelled at the till, or the customer backed out).
+- `PAYMENT_AMBIGUOUS` — the till could not determine the outcome (e.g. a
+  network timeout after sending the request, provider status unknown).
+  Same "don't guess, report the ambiguity" spirit as `FiscalEvent`'s
+  `FISCAL_UNKNOWN` (§12) — a human or a later recovery event resolves it,
+  Cloud never infers a status here.
+- `PAYMENT_REFUND_INITIATED` — a refund attempt started against a
+  previously confirmed payment.
+- `PAYMENT_REFUND_CONFIRMED` — the provider confirmed the refund
+  completed.
+- `PAYMENT_REFUND_REJECTED` — the provider declined the refund attempt.
+- `PROVIDER_REJECTED_CONFIRMED` — a recovery/reconciliation outcome: the
+  till initially received a rejection from the provider, but a later
+  check (the till's own retry/reconciliation logic, out of scope for
+  this endpoint) found the payment was actually confirmed after all.
+  Reported as its own distinct value rather than silently rewritten
+  into a plain `PAYMENT_CONFIRMED`, so the audit trail preserves that
+  this one went through an anomalous path — same "append, never
+  rewrite history" principle as `FiscalEvent`'s `FISCAL_UNKNOWN`→
+  `FISCAL_SUCCESS` recovery flow (§12).
+- `RECOVERY_FAILED_RETRYABLE` — the till attempted to resolve an
+  ambiguous or failed payment (a status check against the provider) and
+  that resolution attempt itself failed, but in a way the till considers
+  worth retrying rather than a terminal failure.
+
+`operation` is `SALE` or `REFUND` — which side of the transaction this
+event belongs to, independent of `eventType` (a `PAYMENT_REFUND_*`
+`eventType` always pairs with `operation: REFUND`, but `operation` is
+still sent explicitly rather than derived from `eventType`, same
+"accept what the till reports, don't re-derive it" posture as
+`paymentMethod` duplicating `provider`, schema comment on
+`PosPaymentEvent.paymentMethod`).
+
+### 25.3 UzQR event mapping (illustrative — not yet confirmed)
+
+**Unlike the fiscal/shift/commands contract (§12/§13/§15, confirmed
+against a real Android exchange), UzQR's own callback/webhook event
+names have not been confirmed against a real integration in this
+repository.** The table below is this document's best-effort mapping
+from UzQR's typical invoice-lifecycle callbacks to the universal
+`eventType` vocabulary above, written to make the shape of the mapping
+concrete — treat every UzQR-side name in the left column as provisional
+until checked against a real UzQR integration test.
+
+| UzQR callback (provisional) | Universal `eventType` | `provider` | `operation` |
+|---|---|---|---|
+| `invoice.created` | `PAYMENT_INITIATED` | `UZQR` | `SALE` |
+| `invoice.waiting_payment` | `PAYMENT_PENDING` | `UZQR` | `SALE` |
+| `invoice.paid` | `PAYMENT_CONFIRMED` | `UZQR` | `SALE` |
+| `invoice.declined` / `invoice.expired` | `PAYMENT_REJECTED` | `UZQR` | `SALE` |
+| `invoice.cancelled` | `PAYMENT_CANCELLED` | `UZQR` | `SALE` |
+| status check timed out / no callback received | `PAYMENT_AMBIGUOUS` | `UZQR` | `SALE` |
+| `refund.created` | `PAYMENT_REFUND_INITIATED` | `UZQR` | `REFUND` |
+| `refund.completed` | `PAYMENT_REFUND_CONFIRMED` | `UZQR` | `REFUND` |
+| `refund.declined` | `PAYMENT_REFUND_REJECTED` | `UZQR` | `REFUND` |
+| reconciliation check finds a previously-declined invoice actually paid | `PROVIDER_REJECTED_CONFIRMED` | `UZQR` | `SALE` |
+| reconciliation check itself fails (network/5xx) | `RECOVERY_FAILED_RETRYABLE` | `UZQR` | `SALE` or `REFUND` |
+
+`providerInvoiceId` is UzQR's own invoice id (the `aggregateId` example
+in §25.4 below, `"UZQR:INV-000001"`, embeds it); `providerPaymentId` is
+whatever transaction/RRN id UzQR returns once paid — both are optional
+here precisely because they don't exist yet at `PAYMENT_INITIATED` time.
+
+### 25.4 Payload schema
+
+**Required fields:**
+
+```json
+{
+  "eventId": "string (client UUID)",
+  "eventType": "PAYMENT_INITIATED|PAYMENT_PENDING|PAYMENT_CONFIRMED|PAYMENT_REJECTED|PAYMENT_CANCELLED|PAYMENT_AMBIGUOUS|PAYMENT_REFUND_INITIATED|PAYMENT_REFUND_CONFIRMED|PAYMENT_REFUND_REJECTED|PROVIDER_REJECTED_CONFIRMED|RECOVERY_FAILED_RETRYABLE",
+  "aggregateType": "PAYMENT",
+  "aggregateId": "UZQR:INV-000001",
+  "schemaVersion": 1,
+  "idempotencyKey": "string",
+  "provider": "UZQR|PINPAD|PAYME|CLICK|QR_STATIC|BANK_TRANSFER|CASH",
+  "paymentMethod": "string (duplicates provider, §25.2)",
+  "operation": "SALE|REFUND",
+  "status": "CONFIRMED|REJECTED|PENDING|CANCELLED|AMBIGUOUS",
+  "amount": 2500000,
+  "currency": "UZS"
+}
+```
+
+`amount` is in tiyin (UZS's smallest unit — 1 UZS = 100 tiyin), same
+"smallest currency unit, no floats" convention `totalAmount` already
+uses elsewhere in this document.
+
+**Optional fields**, all nullable and independently omittable — absent
+means unknown/not-yet-available at the time this particular event fired,
+not zero or empty:
+
+```json
+{
+  "providerPaymentId": "rrn or transactionId from the provider",
+  "providerInvoiceId": "invoiceId from the provider",
+  "providerRefundId": "refundId, only present on a refund event",
+  "saleId": "local saleId at the till",
+  "refundId": "local refundId at the till",
+  "fiscalReceiptId": "correlates with FiscalEvent, §25.1 — not a foreign key",
+  "terminalId": "physical fiscal-module id",
+  "shiftId": 1,
+  "cashierId": "PosOperator.id snapshot, §25.1 same reasoning as FiscalEvent.operatorId",
+  "cashierName": "string",
+  "cashierRole": "string",
+  "createdAtMs": 1732000000000,
+  "updatedAtMs": 1732000002000,
+  "completedAtMs": 1732000005000,
+  "reason": "string — rejection/cancellation reason",
+  "rawProviderStatus": { "code": "00", "message": "OK" }
+}
+```
+
+`createdAtMs`/`updatedAtMs`/`completedAtMs` are the till's own reported
+times (ms since epoch, this document's standard `*Ms` convention) —
+stored as-is on this row's own `createdAtMs`/`updatedAtMs`/
+`completedAtMs` columns, which is a deliberate difference from
+`PosOperatorEvent` (§24): that model keeps its own `createdAt`
+server-controlled and folds the device's reported time into `payload`
+instead, because an operator audit trail's own timeline must not be
+device-spoofable. A payment event has no equivalent tamper concern —
+the till's reported timing *is* the fact being recorded, not a
+security-sensitive receipt timestamp — so it is trusted and stored
+directly; this row's separate, always-server-set `createdAt` column
+(no `Ms` suffix) is Cloud's own receipt time, exactly like every other
+event model in this document.
+
+`rawProviderStatus` is stored byte-for-byte, never validated beyond
+"is this an object" — same treatment as `FiscalEvent.rawDaemonResponse`
+(§12).
+
+**Response (`201` on first receipt, `200` on replay):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "string",
+    "eventType": "string",
+    "status": "string",
+    "createdAt": "datetime"
+  },
+  "requestId": "string"
+}
+```

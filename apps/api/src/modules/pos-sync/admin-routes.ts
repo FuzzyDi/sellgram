@@ -104,6 +104,14 @@ const listOperatorEventsQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
 });
 
+const listPaymentEventsQuerySchema = z.object({
+  storeId: z.string().min(1),
+  deviceId: z.string().min(1).optional(),
+  provider: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.string().min(1).optional(),
+});
+
 const listPaymentTerminalsQuerySchema = z.object({
   storeId: z.string().min(1),
 });
@@ -872,6 +880,68 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const nextCursor = events.length === query.data.limit ? events[events.length - 1]!.id : null;
 
       return reply.status(200).send({ success: true, data: { items, nextCursor } });
+    }
+  );
+
+  // Payment-provider events (docs/POS_SYNC_API.md §25) for the Payments
+  // admin screen. Same cursor pagination scheme as /pos-shifts/-receipts/
+  // -operator-events, ordered by createdAt DESC. cashierName/cashierRole
+  // are already a stored snapshot on the row itself (schema comment on
+  // PosPaymentEvent) — unlike /pos-operator-events, no second batched
+  // query is needed here to resolve a name.
+  fastify.get(
+    '/pos-payment-events',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const query = listPaymentEventsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({ success: false, error: query.error.errors[0]?.message ?? 'Invalid input' });
+      }
+
+      const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
+      if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
+
+      const events = await prisma.posPaymentEvent.findMany({
+        where: {
+          tenantId,
+          storeId: store.id,
+          ...(query.data.deviceId ? { deviceId: query.data.deviceId } : {}),
+          ...(query.data.provider ? { provider: query.data.provider } : {}),
+        },
+        select: {
+          id: true,
+          eventType: true,
+          aggregateId: true,
+          provider: true,
+          paymentMethod: true,
+          operation: true,
+          status: true,
+          amount: true,
+          currency: true,
+          providerPaymentId: true,
+          providerInvoiceId: true,
+          providerRefundId: true,
+          saleId: true,
+          refundId: true,
+          fiscalReceiptId: true,
+          cashierId: true,
+          cashierName: true,
+          cashierRole: true,
+          reason: true,
+          rawProviderStatus: true,
+          createdAt: true,
+          deviceId: true,
+          device: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: query.data.limit,
+        ...(query.data.cursor ? { cursor: { id: query.data.cursor }, skip: 1 } : {}),
+      });
+
+      const nextCursor = events.length === query.data.limit ? events[events.length - 1]!.id : null;
+
+      return reply.status(200).send({ success: true, data: { items: events, nextCursor } });
     }
   );
 

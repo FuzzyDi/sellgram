@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
       createMany: vi.fn().mockResolvedValue({ count: 0 }),
       create: vi.fn(),
     },
+    posPaymentEvent: { findMany: vi.fn().mockResolvedValue([]) },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
@@ -1325,6 +1326,69 @@ describe('pos-sync.admin-routes', () => {
         expect(mocks.prisma.paymentTerminal.delete).not.toHaveBeenCalled();
         await app.close();
       });
+    });
+  });
+
+  describe('GET /pos-payment-events (docs/POS_SYNC_API.md §25)', () => {
+    beforeEach(() => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+    });
+
+    it('returns payment events for the store, cursor-paginated, newest first', async () => {
+      mocks.prisma.posPaymentEvent.findMany.mockResolvedValue([
+        {
+          id: 'payevt-1', eventType: 'PAYMENT_CONFIRMED', aggregateId: 'UZQR:INV-1', provider: 'UZQR',
+          paymentMethod: 'UZQR', operation: 'SALE', status: 'CONFIRMED', amount: 2500000, currency: 'UZS',
+          providerPaymentId: 'rrn-1', providerInvoiceId: 'inv-1', providerRefundId: null,
+          saleId: 'SALE-1', refundId: null, fiscalReceiptId: null,
+          cashierId: 'op-1', cashierName: 'Alice', cashierRole: 'cashier',
+          reason: null, rawProviderStatus: { code: '00' }, createdAt: new Date(), deviceId: 'dev-1',
+          device: { name: 'Till 1' },
+        },
+      ]);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-payment-events?storeId=store-1' });
+
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.posPaymentEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId: 'tenant-1', storeId: 'store-1' },
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+        })
+      );
+      expect(response.json().data.items).toHaveLength(1);
+      expect(response.json().data.items[0].provider).toBe('UZQR');
+      await app.close();
+    });
+
+    it('filters by deviceId and provider when given', async () => {
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/pos-payment-events?storeId=store-1&deviceId=dev-1&provider=UZQR' });
+
+      expect(mocks.prisma.posPaymentEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId: 'tenant-1', storeId: 'store-1', deviceId: 'dev-1', provider: 'UZQR' },
+        })
+      );
+      await app.close();
+    });
+
+    it('returns 404 for a store belonging to another tenant', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-payment-events?storeId=store-foreign' });
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.posPaymentEvent.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 when storeId is missing', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-payment-events' });
+      expect(response.statusCode).toBe(400);
+      await app.close();
     });
   });
 });

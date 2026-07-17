@@ -149,6 +149,7 @@ model Tenant {
   fiscalEvents       FiscalEvent[]
   shiftEvents        ShiftEvent[]
   posOperatorEvents  PosOperatorEvent[]
+  posPaymentEvents   PosPaymentEvent[]
   cloudCommands      CloudCommand[]
   counterparties     Counterparty[]
   counterpartyLedger CounterpartyLedger[]
@@ -245,6 +246,7 @@ model Store {
   shiftEvents      ShiftEvent[]
   posOperators     PosOperator[]
   posOperatorEvents PosOperatorEvent[]
+  posPaymentEvents  PosPaymentEvent[]
   paymentTerminals PaymentTerminal[]
 
   @@index([tenantId])
@@ -1386,6 +1388,7 @@ model PosDevice {
   fiscalEvents FiscalEvent[]
   shiftEvents  ShiftEvent[]
   posOperatorEvents PosOperatorEvent[]
+  posPaymentEvents PosPaymentEvent[]
   cloudCommands CloudCommand[]
   paymentTerminals PaymentTerminal[]
 
@@ -1668,6 +1671,97 @@ model ShiftEvent {
   @@unique([deviceId, eventId])
   @@index([deviceId, shiftNumber])
   @@map("shift_events")
+}
+
+// docs/POS_SYNC_API.md §25 — a universal payment-provider event stream
+// (UzQR/pinpad/Payme/Click/QR_STATIC/bank transfer/cash), deliberately
+// separate from FiscalEvent above: this records the payment provider's
+// side of a transaction (was the money actually confirmed by UzQR?),
+// FiscalEvent records the fiscal receipt's side (was it printed/OFD'd?)
+// — a single sale can have one of each, correlated by aggregateId/
+// providerInvoiceId, not merged into one model. Idempotency follows
+// PosOperatorEvent's shape (@@unique([deviceId, idempotencyKey]),
+// find-existing-then-create at the route level), not FiscalEvent's
+// eventId-keyed one — this stream's dedup key is documented in
+// docs/POS_SYNC_API.md §25 as idempotencyKey, not eventId, per the
+// contract this model was built against.
+model PosPaymentEvent {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId        String
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  deviceId       String
+  device         PosDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  // Client-generated UUID for this delivery — stored for correlation/
+  // reporting only, same "not the dedup key" role eventId plays on
+  // FiscalEvent's neighbor-but-different scheme; idempotencyKey below is
+  // this model's actual dedup key (schema comment above).
+  eventId        String
+  // PAYMENT_INITIATED/PENDING/CONFIRMED/REJECTED/CANCELLED/AMBIGUOUS/
+  // PAYMENT_REFUND_INITIATED/REFUND_CONFIRMED/REFUND_REJECTED/
+  // PROVIDER_REJECTED_CONFIRMED/RECOVERY_FAILED_RETRYABLE — String, not
+  // an enum, same "grows without a migration" reasoning as every other
+  // open-vocabulary eventType field in this schema (FiscalEvent.
+  // fiscalStatus, PosOperatorEvent.eventType).
+  eventType      String
+  aggregateType  String
+  aggregateId    String
+  schemaVersion  Int       @default(1)
+  idempotencyKey String
+
+  // UZQR/PINPAD/PAYME/CLICK/QR_STATIC/BANK_TRANSFER/CASH — String, same
+  // open-vocabulary reasoning as eventType above; correlates with (but
+  // does not FK to) PaymentTerminal.type
+  // (docs/POS_SETTINGS_ARCHITECTURE.md §3) — a payment event is reported
+  // by provider name, not by which specific PaymentTerminal row served
+  // it, so there is no direct relation here.
+  provider       String
+  // Duplicates provider — kept as its own column because the Android
+  // contract sends both and Cloud stores what it's given rather than
+  // deriving one from the other (accept-don't-reject, §18).
+  paymentMethod  String
+  operation      String
+  status         String
+
+  amount         Int
+  currency       String    @default("UZS")
+
+  providerPaymentId String?
+  providerInvoiceId String?
+  providerRefundId  String?
+
+  saleId         String?
+  refundId       String?
+  fiscalReceiptId String?
+
+  terminalId     String?
+  shiftId        Int?
+
+  // Snapshot of who was operating the till at the time of the payment
+  // event, not a live join to PosOperator — same reasoning as
+  // FiscalEvent.operatorName/operatorRole (docs/POS_POLICY_ENGINE.md
+  // §14.1): a later rename must not rewrite this event's history.
+  cashierId      String?
+  cashierName    String?
+  cashierRole    String?
+
+  createdAtMs    DateTime?
+  updatedAtMs    DateTime?
+  completedAtMs  DateTime?
+
+  reason         String?
+  rawProviderStatus Json?  @default("{}")
+
+  createdAt      DateTime  @default(now())
+
+  @@unique([deviceId, idempotencyKey])
+  @@index([tenantId, deviceId])
+  @@index([tenantId, aggregateId])
+  @@index([providerInvoiceId])
+  @@index([providerPaymentId])
+  @@map("pos_payment_events")
 }
 
 enum CloudCommandType {

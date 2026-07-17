@@ -409,6 +409,64 @@ const operatorEventSchema = z.object({
   payload: z.record(z.unknown()).optional(),
 });
 
+// docs/POS_SYNC_API.md §25 — universal payment-provider event stream.
+// **Interpretation note on eventType, flagged since the source list was
+// given as compressed shorthand** ("PAYMENT_INITIATED/PENDING/
+// CONFIRMED/REJECTED/CANCELLED/AMBIGUOUS/PAYMENT_REFUND_INITIATED/
+// REFUND_CONFIRMED/REFUND_REJECTED/PROVIDER_REJECTED_CONFIRMED/
+// RECOVERY_FAILED_RETRYABLE"): read here as six PAYMENT_-prefixed
+// values, three PAYMENT_REFUND_-prefixed values, and two standalone
+// values already spelled in full — eleven total. If the real Android
+// contract uses different full spellings, this is a one-line fix, not
+// a design change — nothing else in this endpoint depends on the exact
+// strings beyond this enum.
+const paymentEventSchema = z.object({
+  eventId: z.string().min(1),
+  eventType: z.enum([
+    'PAYMENT_INITIATED',
+    'PAYMENT_PENDING',
+    'PAYMENT_CONFIRMED',
+    'PAYMENT_REJECTED',
+    'PAYMENT_CANCELLED',
+    'PAYMENT_AMBIGUOUS',
+    'PAYMENT_REFUND_INITIATED',
+    'PAYMENT_REFUND_CONFIRMED',
+    'PAYMENT_REFUND_REJECTED',
+    'PROVIDER_REJECTED_CONFIRMED',
+    'RECOVERY_FAILED_RETRYABLE',
+  ]),
+  aggregateType: z.string().min(1),
+  aggregateId: z.string().min(1),
+  schemaVersion: z.number().int(),
+  idempotencyKey: z.string().min(1),
+  provider: z.string().min(1),
+  paymentMethod: z.string().min(1),
+  operation: z.string().min(1),
+  status: z.string().min(1),
+  amount: z.number().int(),
+  currency: z.string().min(1).optional(),
+  providerPaymentId: z.string().nullable().optional(),
+  providerInvoiceId: z.string().nullable().optional(),
+  providerRefundId: z.string().nullable().optional(),
+  saleId: z.string().nullable().optional(),
+  refundId: z.string().nullable().optional(),
+  fiscalReceiptId: z.string().nullable().optional(),
+  terminalId: z.string().nullable().optional(),
+  shiftId: z.number().int().nullable().optional(),
+  // Till's own snapshot of who was operating it — same reasoning as
+  // FiscalEvent.operatorName/operatorRole (docs/POS_POLICY_ENGINE.md
+  // §14.1): not re-derived from PosOperator server-side.
+  cashierId: z.string().nullable().optional(),
+  cashierName: z.string().nullable().optional(),
+  cashierRole: z.string().nullable().optional(),
+  // Numeric ms, same convention as this file's other *AtMs fields.
+  createdAtMs: z.number().nullable().optional(),
+  updatedAtMs: z.number().nullable().optional(),
+  completedAtMs: z.number().nullable().optional(),
+  reason: z.string().nullable().optional(),
+  rawProviderStatus: z.record(z.unknown()).nullable().optional(),
+});
+
 const commandAckSchema = z.object({
   status: z.enum(['DONE', 'FAILED', 'IGNORED', 'RETRY_LATER']),
   message: z.string().nullable().optional(),
@@ -1896,6 +1954,90 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       // Concurrent duplicate lost the unique-idempotencyKey race —
       // resolve it exactly like a replay that arrived a moment later
       // (same pattern as sale-events).
+      if (err?.code === 'P2002') {
+        const winner = await findExisting();
+        if (winner) return sendSuccess(reply, 200, winner, request);
+      }
+      throw err;
+    }
+
+    return sendSuccess(reply, 201, event, request);
+  });
+
+  // docs/POS_SYNC_API.md §25 — universal payment-provider event stream,
+  // separate from fiscal-events (payment provider's side of a
+  // transaction, not the fiscal receipt's side — see the schema comment
+  // on PosPaymentEvent for the split). Same find-existing-then-create
+  // idempotency shape as operator-events just above, keyed on
+  // @@unique([deviceId, idempotencyKey]) rather than fiscal/shift-events'
+  // eventId — a replay must return the same { id, eventType, status,
+  // createdAt } the original 201 did, not just a bare ack.
+  fastify.post('/pos/v1/payment-events', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
+
+    const body = paymentEventSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid payment event', request, {
+        issues: body.error.issues,
+      });
+    }
+
+    const findExisting = () =>
+      prisma.posPaymentEvent.findUnique({
+        where: { deviceId_idempotencyKey: { deviceId: device.id, idempotencyKey: body.data.idempotencyKey } },
+        select: { id: true, eventType: true, status: true, createdAt: true },
+      });
+
+    const existing = await findExisting();
+    if (existing) {
+      return sendSuccess(reply, 200, existing, request);
+    }
+
+    const toDate = (ms: number | null | undefined) => (ms != null ? new Date(ms) : null);
+
+    let event;
+    try {
+      event = await prisma.posPaymentEvent.create({
+        data: {
+          tenantId: device.tenantId,
+          storeId: device.storeId,
+          deviceId: device.id,
+          eventId: body.data.eventId,
+          eventType: body.data.eventType,
+          aggregateType: body.data.aggregateType,
+          aggregateId: body.data.aggregateId,
+          schemaVersion: body.data.schemaVersion,
+          idempotencyKey: body.data.idempotencyKey,
+          provider: body.data.provider,
+          paymentMethod: body.data.paymentMethod,
+          operation: body.data.operation,
+          status: body.data.status,
+          amount: body.data.amount,
+          currency: body.data.currency,
+          providerPaymentId: body.data.providerPaymentId ?? null,
+          providerInvoiceId: body.data.providerInvoiceId ?? null,
+          providerRefundId: body.data.providerRefundId ?? null,
+          saleId: body.data.saleId ?? null,
+          refundId: body.data.refundId ?? null,
+          fiscalReceiptId: body.data.fiscalReceiptId ?? null,
+          terminalId: body.data.terminalId ?? null,
+          shiftId: body.data.shiftId ?? null,
+          cashierId: body.data.cashierId ?? null,
+          cashierName: body.data.cashierName ?? null,
+          cashierRole: body.data.cashierRole ?? null,
+          createdAtMs: toDate(body.data.createdAtMs),
+          updatedAtMs: toDate(body.data.updatedAtMs),
+          completedAtMs: toDate(body.data.completedAtMs),
+          reason: body.data.reason ?? null,
+          rawProviderStatus: (body.data.rawProviderStatus ?? {}) as any,
+        },
+        select: { id: true, eventType: true, status: true, createdAt: true },
+      });
+    } catch (err: any) {
+      // Concurrent duplicate lost the unique-idempotencyKey race —
+      // resolve it exactly like a replay that arrived a moment later
+      // (same pattern as operator-events/sale-events).
       if (err?.code === 'P2002') {
         const winner = await findExisting();
         if (winner) return sendSuccess(reply, 200, winner, request);
