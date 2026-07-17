@@ -53,22 +53,27 @@ function pick(obj: any, keys: string[]): any {
   return undefined;
 }
 
-// A weighted item's fiscal `qty` is stored in grams (the till weighs and
-// reports the raw gram count, same convention as Product.pricePerKg on
-// the catalog side) — a kg-unit item showing "1500" instead of "1.500 кг"
-// is that raw gram figure with no unit conversion applied, not a real
-// 1500-of-something sale. Exact-string unit matching, not case-folded
-// beyond the literal кг/KG/kg and г/G/g forms actually seen on the wire.
+// The real Android fiscal contract (confirmed against production
+// fiscal_events, not the grams-only assumption this used to make):
+// EVERY item's `qty` is milli-units — always ÷1000, regardless of
+// whether the item is weighed or counted. A piece item reports
+// qty=1000/unitCode="шт"/isByWeight=false for "1 шт"; a weighed item
+// reports qty=1250/unitCode="кг"/isByWeight=true for "1.250 кг". There
+// is no separate gram-only encoding — WEIGHT_G_UNITS never appeared in
+// real data and is gone. Exact-string unit matching, not case-folded
+// beyond the literal кг/KG/kg forms actually seen on the wire.
 const WEIGHT_KG_UNITS = ['кг', 'KG', 'kg'];
-const WEIGHT_G_UNITS = ['г', 'G', 'g'];
 
 function formatItemQty(item: any): string {
   const qty = pick(item, ['qty', 'quantity']);
   if (qty === undefined) return '—';
   const unit = pick(item, ["unit", "unitCode"]);
-  if (WEIGHT_KG_UNITS.includes(unit)) return `${(Number(qty) / 1000).toFixed(3)} кг`;
-  if (WEIGHT_G_UNITS.includes(unit)) return `${qty} г`;
-  return String(qty);
+  const isByWeight = item?.isByWeight === true;
+  const displayQty = Number(qty) / 1000;
+  if (WEIGHT_KG_UNITS.includes(unit) || isByWeight) {
+    return `${displayQty.toFixed(3)} кг`;
+  }
+  return `${Number.isInteger(displayQty) ? displayQty : displayQty.toFixed(3)} шт`;
 }
 
 function formatItemPrice(item: any): string {
