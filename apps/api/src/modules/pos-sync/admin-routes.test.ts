@@ -1061,6 +1061,63 @@ describe('pos-sync.admin-routes', () => {
         await app.close();
       });
 
+      // docs/POS_SETTINGS_ARCHITECTURE.md §8 — the admin UI always sends
+      // back whatever config GET /payment-terminals showed it, and that
+      // response always masks secret keys to "••••••" (never the real
+      // value). An untouched masked field must not overwrite the real
+      // stored secret with that literal placeholder string.
+      it('preserves the existing stored value for a masked secret field left unchanged in the request', async () => {
+        mocks.prisma.paymentTerminal.findFirst.mockResolvedValue({
+          id: 'pt-1', storeId: 'store-1', config: { url: 'https://uzqr.uz', apiKey: 'real-secret-value' },
+        });
+        mocks.prisma.paymentTerminal.update.mockResolvedValue({
+          id: 'pt-1', storeId: 'store-1', deviceId: null, type: 'QR_UZQR', name: 'UzQR',
+          enabled: true, sortOrder: 0, config: { url: 'https://uzqr.uz/v2', apiKey: 'real-secret-value' },
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'PATCH',
+          url: '/payment-terminals/pt-1',
+          // url changed for real; apiKey sent back exactly as the UI
+          // displayed it (masked) — never edited by the admin.
+          payload: { config: { url: 'https://uzqr.uz/v2', apiKey: '••••••' } },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(mocks.prisma.paymentTerminal.update).toHaveBeenCalledWith({
+          where: { id: 'pt-1' },
+          data: expect.objectContaining({ config: { url: 'https://uzqr.uz/v2', apiKey: 'real-secret-value' } }),
+        });
+        // The response itself is still masked like every other admin-facing read.
+        expect(response.json().data.config.apiKey).toBe('••••••');
+        await app.close();
+      });
+
+      it('writes a genuinely new secret value as given, not preserved', async () => {
+        mocks.prisma.paymentTerminal.findFirst.mockResolvedValue({
+          id: 'pt-1', storeId: 'store-1', config: { apiKey: 'old-secret' },
+        });
+        mocks.prisma.paymentTerminal.update.mockResolvedValue({
+          id: 'pt-1', storeId: 'store-1', deviceId: null, type: 'QR_UZQR', name: 'UzQR',
+          enabled: true, sortOrder: 0, config: { apiKey: 'brand-new-secret' },
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'PATCH',
+          url: '/payment-terminals/pt-1',
+          payload: { config: { apiKey: 'brand-new-secret' } },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(mocks.prisma.paymentTerminal.update).toHaveBeenCalledWith({
+          where: { id: 'pt-1' },
+          data: expect.objectContaining({ config: { apiKey: 'brand-new-secret' } }),
+        });
+        await app.close();
+      });
+
       it('returns 404 for a terminal belonging to another tenant', async () => {
         mocks.prisma.paymentTerminal.findFirst.mockResolvedValue(null);
         const app = await buildApp();

@@ -1153,7 +1153,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       // as every other PATCH/DELETE in this file).
       const existing = await prisma.paymentTerminal.findFirst({
         where: { id, tenantId },
-        select: { id: true, storeId: true },
+        select: { id: true, storeId: true, config: true },
       });
       if (!existing) return reply.status(404).send({ success: false, error: 'Payment terminal not found' });
 
@@ -1165,9 +1165,32 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
       }
 
+      // The admin UI always sends back whatever config it displayed
+      // (docs/POS_SETTINGS_ARCHITECTURE.md §8), and GET /payment-terminals
+      // always masks secret-shaped keys to "••••••" (maskTerminal above)
+      // — so an untouched secret field round-trips back here as that
+      // literal placeholder, not the real value the UI was never given.
+      // Writing it verbatim would permanently overwrite the real secret
+      // with "••••••". For any key in SECRET_CONFIG_KEYS whose incoming
+      // value is still exactly the placeholder, keep the existing stored
+      // value for that key instead; any other value (the admin actually
+      // typed something) is written as given.
+      const data: any = { ...body.data };
+      if (data.config) {
+        const existingConfig = existing.config && typeof existing.config === 'object' ? (existing.config as Record<string, unknown>) : {};
+        const incoming = data.config as Record<string, unknown>;
+        const merged: Record<string, unknown> = { ...incoming };
+        for (const key of Object.keys(incoming)) {
+          if (SECRET_CONFIG_KEYS.has(key) && incoming[key] === '••••••' && key in existingConfig) {
+            merged[key] = existingConfig[key];
+          }
+        }
+        data.config = merged;
+      }
+
       const terminal = await prisma.paymentTerminal.update({
         where: { id: existing.id },
-        data: body.data as any,
+        data,
       });
 
       return reply.status(200).send({ success: true, data: maskTerminal(terminal) });

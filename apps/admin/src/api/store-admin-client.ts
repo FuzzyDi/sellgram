@@ -436,6 +436,16 @@ export const adminApi = {
     if (params.cursor) qs.set('cursor', params.cursor);
     return request<any>(`/pos-operator-events?${qs.toString()}`);
   },
+
+  // docs/POS_SETTINGS_ARCHITECTURE.md §3/§9 step 4 — PaymentTerminal
+  // CRUD. config in every response is masked server-side
+  // (admin-routes.ts maskSecrets()) — never a real apiKey/secret here.
+  getPaymentTerminals: (storeId: string) => request<any>(`/payment-terminals?storeId=${encodeURIComponent(storeId)}`),
+  createPaymentTerminal: (data: { storeId: string; deviceId?: string | null; type: string; name: string; enabled?: boolean; sortOrder?: number; config?: Record<string, unknown> }) =>
+    request<any>('/payment-terminals', { method: 'POST', body: JSON.stringify(data) }),
+  updatePaymentTerminal: (id: string, data: { deviceId?: string | null; type?: string; name?: string; enabled?: boolean; sortOrder?: number; config?: Record<string, unknown> }) =>
+    request<any>(`/payment-terminals/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deletePaymentTerminal: (id: string) => request<any>(`/payment-terminals/${id}`, { method: 'DELETE' }),
   getPosAnalytics: (params: { storeId: string; period: 'today' | 'week' | 'month' | 'custom'; from?: string; to?: string }) => {
     const qs = new URLSearchParams({ storeId: params.storeId, period: params.period });
     if (params.from) qs.set('from', params.from);
