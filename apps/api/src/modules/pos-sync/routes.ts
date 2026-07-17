@@ -1194,10 +1194,16 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         select: { type: true, config: true, deviceId: true },
       }),
       // docs/POS_SETTINGS_ARCHITECTURE.md §6 — this device's own
-      // hardware profile, if configured.
+      // hardware profile, if configured. updatedAt drives
+      // deviceSettingsVersion below — this model has no independent
+      // counter column, so the till uses the row's own last-write
+      // timestamp to notice a change, the same role `updatedAt`-derived
+      // versions play nowhere else in this file (every other *Version
+      // field here is a real counter column) — a deliberate, simpler
+      // choice for a device-scoped, single-row settings block.
       prisma.posDeviceSettings.findUnique({
         where: { deviceId: device.id },
-        select: { printer: true, scanner: true, pinPad: true, scale: true, display: true },
+        select: { printer: true, scanner: true, pinPad: true, scale: true, display: true, updatedAt: true },
       }),
     ]);
 
@@ -1261,20 +1267,34 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     (settings as Record<string, unknown>).paymentProviders = paymentProviders;
 
     // docs/POS_SETTINGS_ARCHITECTURE.md §6/§9 step 5 — settles that
-    // document's open placement question: hardware lives nested inside
-    // `settings`, a sibling of paymentProviders/storeTimezone/etc., not
-    // a top-level sibling of `settings` itself. `null` per-field (not
-    // an absent key, not an empty object) for a device with no
-    // PosDeviceSettings row at all or no value set for that one field —
-    // same "absent means unconfigured" convention as every other
-    // optional field in this response.
-    (settings as Record<string, unknown>).hardware = {
+    // document's open placement question: device settings live nested
+    // inside `settings`, a sibling of paymentProviders/storeTimezone/
+    // etc., not a top-level sibling of `settings` itself. `null`
+    // per-field (not an absent key, not an empty object) for a device
+    // with no PosDeviceSettings row at all or no value set for that one
+    // field — same "absent means unconfigured" convention as every
+    // other optional field in this response.
+    //
+    // §10 (renamed 2026-07-18): `deviceSettings` is canonical;
+    // `settings.hardware` is a deprecated alias of the exact same
+    // object, kept only for whatever already reads the old key — same
+    // "add the new name, never remove the old one until Android
+    // confirms it's switched" posture already established for
+    // paymentProviders/paymentMethods (§4/§7). Within the block,
+    // `pinpad` (lowercase) is canonical; `pinPad` is the deprecated
+    // alias — both carry the identical value, not two different
+    // fields. Neither alias has a removal date yet; that is gated on
+    // Android confirmation, not on this change landing.
+    const deviceSettingsBlock = {
       printer: deviceSettings?.printer ?? null,
       scanner: deviceSettings?.scanner ?? null,
+      pinpad: deviceSettings?.pinPad ?? null,
       pinPad: deviceSettings?.pinPad ?? null,
       scale: deviceSettings?.scale ?? null,
       display: deviceSettings?.display ?? null,
     };
+    (settings as Record<string, unknown>).deviceSettings = deviceSettingsBlock;
+    (settings as Record<string, unknown>).hardware = deviceSettingsBlock;
 
     // §7 — the wire Rule shape flattens `extra` onto the rule object
     // itself rather than nesting it; `source` is always server-assigned
@@ -1357,6 +1377,15 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         policiesVersion: (platformPolicyVersion?.version ?? 1) + (stored?.policiesVersion ?? 1),
         printTemplatesVersion: stored?.printTemplatesVersion ?? 1,
         staffVersion: stored?.staffVersion ?? 1,
+        // §6/§10 — PosDeviceSettings has no independent counter column
+        // (schema comment on the Promise.all entry above); the row's
+        // own updatedAt, truncated to whole seconds, stands in for one.
+        // 0 (not 1, unlike every real-counter *Version field above) for
+        // a device with no PosDeviceSettings row at all — 0 can never
+        // collide with a real Unix-seconds timestamp, so it
+        // unambiguously means "nothing configured yet" rather than
+        // "configured once, a long time ago."
+        deviceSettingsVersion: deviceSettings?.updatedAt ? Math.floor(deviceSettings.updatedAt.getTime() / 1000) : 0,
         settings,
         policies: { rules: [...platformRules, ...tenantRules] },
         printTemplates,
