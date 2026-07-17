@@ -443,6 +443,16 @@ export const adminApi = {
     if (params.cursor) qs.set('cursor', params.cursor);
     return request<any>(`/pos-operator-events?${qs.toString()}`);
   },
+  // docs/POS_SYNC_API.md §25 — payment-provider events (UzQR/pinpad/
+  // Payme/Click/etc.), separate stream from fiscal receipts.
+  getPosPaymentEvents: (params: { storeId: string; deviceId?: string; provider?: string; limit?: number; cursor?: string }) => {
+    const qs = new URLSearchParams({ storeId: params.storeId });
+    if (params.deviceId) qs.set('deviceId', params.deviceId);
+    if (params.provider) qs.set('provider', params.provider);
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.cursor) qs.set('cursor', params.cursor);
+    return request<any>(`/pos-payment-events?${qs.toString()}`);
+  },
 
   // docs/POS_SETTINGS_ARCHITECTURE.md §3/§9 step 4 — PaymentTerminal
   // CRUD. config in every response is masked server-side

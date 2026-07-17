@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => ({
     fiscalEvent: { create: vi.fn().mockResolvedValue({}), findUnique: vi.fn().mockResolvedValue(null), findFirst: vi.fn().mockResolvedValue(null) },
     shiftEvent: { create: vi.fn().mockResolvedValue({}) },
     posOperatorEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
+    posPaymentEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     paymentTerminal: { findMany: vi.fn().mockResolvedValue([]) },
     cloudCommand: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -2972,6 +2973,219 @@ describe('pos-sync.routes', () => {
       });
       expect(response.statusCode).toBe(401);
       expect(mocks.prisma.posOperatorEvent.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  describe('POST /api/pos/v1/payment-events', () => {
+    const validPaymentEvent = {
+      eventId: 'evt-uuid-1',
+      eventType: 'PAYMENT_CONFIRMED',
+      aggregateType: 'PAYMENT',
+      aggregateId: 'UZQR:INV-000001',
+      schemaVersion: 1,
+      idempotencyKey: 'code-1:payment:UZQR:INV-000001:PAYMENT_CONFIRMED',
+      provider: 'UZQR',
+      paymentMethod: 'UZQR',
+      operation: 'SALE',
+      status: 'CONFIRMED',
+      amount: 2500000,
+      currency: 'UZS',
+      providerPaymentId: 'rrn-1',
+      providerInvoiceId: 'inv-1',
+      saleId: 'SALE-000001',
+      terminalId: 'term-1',
+      shiftId: 1,
+      cashierId: 'op-1',
+      cashierName: 'Alice',
+      cashierRole: 'cashier',
+      createdAtMs: 1732000000000,
+      completedAtMs: 1732000005000,
+      rawProviderStatus: { code: '00', message: 'OK' },
+    };
+
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.posPaymentEvent.findUnique.mockResolvedValue(null);
+      mocks.prisma.posPaymentEvent.create.mockResolvedValue({
+        id: 'payevt-1', eventType: 'PAYMENT_CONFIRMED', status: 'CONFIRMED', createdAt: new Date('2026-07-18T00:00:00Z'),
+      });
+    });
+
+    it('ingests a PAYMENT_CONFIRMED event', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/payment-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validPaymentEvent,
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(typeof body.requestId).toBe('string');
+      expect(body.data).toEqual({
+        id: 'payevt-1', eventType: 'PAYMENT_CONFIRMED', status: 'CONFIRMED', createdAt: '2026-07-18T00:00:00.000Z',
+      });
+      expect(mocks.prisma.posPaymentEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: 't-1',
+          storeId: 's-1',
+          deviceId: 'dev-1',
+          eventId: 'evt-uuid-1',
+          eventType: 'PAYMENT_CONFIRMED',
+          aggregateType: 'PAYMENT',
+          aggregateId: 'UZQR:INV-000001',
+          idempotencyKey: validPaymentEvent.idempotencyKey,
+          provider: 'UZQR',
+          paymentMethod: 'UZQR',
+          operation: 'SALE',
+          status: 'CONFIRMED',
+          amount: 2500000,
+          currency: 'UZS',
+          providerPaymentId: 'rrn-1',
+          providerInvoiceId: 'inv-1',
+          providerRefundId: null,
+          saleId: 'SALE-000001',
+          refundId: null,
+          fiscalReceiptId: null,
+          terminalId: 'term-1',
+          shiftId: 1,
+          cashierId: 'op-1',
+          cashierName: 'Alice',
+          cashierRole: 'cashier',
+          createdAtMs: new Date(1732000000000),
+          updatedAtMs: null,
+          completedAtMs: new Date(1732000005000),
+          reason: null,
+          rawProviderStatus: { code: '00', message: 'OK' },
+        }),
+        select: { id: true, eventType: true, status: true, createdAt: true },
+      });
+      await app.close();
+    });
+
+    it('accepts a PAYMENT_REFUND_INITIATED event with minimal optional fields', async () => {
+      mocks.prisma.posPaymentEvent.create.mockResolvedValue({
+        id: 'payevt-2', eventType: 'PAYMENT_REFUND_INITIATED', status: 'PENDING', createdAt: new Date('2026-07-18T00:00:00Z'),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/payment-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: {
+          eventId: 'evt-uuid-2',
+          eventType: 'PAYMENT_REFUND_INITIATED',
+          aggregateType: 'PAYMENT',
+          aggregateId: 'UZQR:INV-000002',
+          schemaVersion: 1,
+          idempotencyKey: 'code-1:payment:UZQR:INV-000002:PAYMENT_REFUND_INITIATED',
+          provider: 'UZQR',
+          paymentMethod: 'UZQR',
+          operation: 'REFUND',
+          status: 'PENDING',
+          amount: 1000000,
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mocks.prisma.posPaymentEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ operation: 'REFUND', status: 'PENDING', currency: undefined }),
+        })
+      );
+      await app.close();
+    });
+
+    it('replays a duplicate idempotencyKey with the stored result and no new create', async () => {
+      mocks.prisma.posPaymentEvent.findUnique.mockResolvedValue({
+        id: 'payevt-1', eventType: 'PAYMENT_CONFIRMED', status: 'CONFIRMED', createdAt: new Date('2026-07-18T00:00:00Z'),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/payment-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validPaymentEvent,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({
+        id: 'payevt-1', eventType: 'PAYMENT_CONFIRMED', status: 'CONFIRMED', createdAt: '2026-07-18T00:00:00.000Z',
+      });
+      expect(mocks.prisma.posPaymentEvent.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('resolves a concurrent P2002 race by returning the winning row instead of erroring', async () => {
+      mocks.prisma.posPaymentEvent.create.mockRejectedValue(
+        Object.assign(new Error('unique violation'), { code: 'P2002' })
+      );
+      mocks.prisma.posPaymentEvent.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'payevt-1', eventType: 'PAYMENT_CONFIRMED', status: 'CONFIRMED', createdAt: new Date('2026-07-18T00:00:00Z') });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/payment-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validPaymentEvent,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({
+        id: 'payevt-1', eventType: 'PAYMENT_CONFIRMED', status: 'CONFIRMED', createdAt: '2026-07-18T00:00:00.000Z',
+      });
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR for an unrecognized eventType', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/payment-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: { ...validPaymentEvent, eventType: 'PAYMENT_TELEPORTED' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      expect(mocks.prisma.posPaymentEvent.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 VALIDATION_ERROR when a required field is missing', async () => {
+      const { amount: _omit, ...payload } = validPaymentEvent;
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/payment-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 401 without an Authorization header', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/payment-events',
+        headers: { 'x-device-code': 'code-1' },
+        payload: validPaymentEvent,
+      });
+      expect(response.statusCode).toBe(401);
+      expect(mocks.prisma.posPaymentEvent.create).not.toHaveBeenCalled();
       await app.close();
     });
   });
