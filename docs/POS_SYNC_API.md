@@ -597,13 +597,19 @@ step 5).
   posture, §4/§7, applied here too). No removal date for `hardware` yet;
   that is gated on explicit Android confirmation, same as
   `paymentMethods[]`'s own pending deprecation (§9 step 7 of
-  `docs/POS_SETTINGS_ARCHITECTURE.md`).
+  `docs/POS_SETTINGS_ARCHITECTURE.md`). **Deprecation планируется после
+  стабильного APK на LANDI (подтверждено Android-командой 2026-07-18)**
+  — `hardware` stays live until that confirmation lands, same gating as
+  every other deprecated alias in this document.
 - **Within the block, `pinpad` (lowercase) is canonical; `pinPad` is the
   deprecated alias** — both keys carry the identical value. `PUT
   /store-admin/pos-devices/:deviceId/settings` accepts either spelling on
   write (`pinpad` wins if both are sent in the same request); the model's
   own Prisma column is still named `pinPad` internally, unrelated to
-  which spelling a client uses on the wire.
+  which spelling a client uses on the wire. **Deprecation планируется
+  после стабильного APK на LANDI (подтверждено Android-командой
+  2026-07-18)** — `pinPad` stays live until that confirmation lands, same
+  gating as `hardware` above.
 - Every field is `null` (not an absent key, not `{}`) when the device has
   no `PosDeviceSettings` row, or no value set for that one field — same
   "absent means unconfigured" convention as every other optional field

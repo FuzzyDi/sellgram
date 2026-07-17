@@ -508,6 +508,14 @@ open a page with its own internal tab-switcher, not three new
    backward-compatible fallback для старых сборок. Удалять из `GET
    /settings` только после явного подтверждения от Android-команды что
    все устройства на новом APK.
+8. **Deprecate `settings.hardware` and `settings.deviceSettings.pinPad`**
+   (§6, renamed to `deviceSettings`/`pinpad` per `docs/POS_SYNC_API.md`
+   §10.1) — `settings.hardware` и `settings.deviceSettings.pinPad`:
+   deprecation после стабильного APK на LANDI. Android (2026-07-18):
+   `deviceSettings` используется как canonical, `hardware` только как
+   fallback. Same gating as step 7 — no removal date until the Android
+   team explicitly confirms every device reads `deviceSettings`/`pinpad`
+   instead of the deprecated `hardware`/`pinPad` aliases.
 
 ## 10. Open questions
 
