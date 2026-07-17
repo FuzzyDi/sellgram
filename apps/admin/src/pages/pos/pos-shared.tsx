@@ -83,6 +83,7 @@ const POS_TABS: { to: string; ru: string; uz: string }[] = [
   { to: '/pos/operator-events', ru: 'События', uz: 'Hodisalar' },
   { to: '/pos/payment-terminals', ru: 'Оплата', uz: "To'lov" },
   { to: '/pos/payment-events', ru: 'Платежи', uz: "To'lovlar tarixi" },
+  { to: '/pos/device-settings', ru: 'Оборудование', uz: 'Uskunalar' },
   { to: '/pos/settings', ru: 'Настройки', uz: 'Sozlamalar' },
 ];
 

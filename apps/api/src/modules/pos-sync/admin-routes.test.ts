@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
       create: vi.fn(),
     },
     posPaymentEvent: { findMany: vi.fn().mockResolvedValue([]) },
+    posDeviceSettings: { findUnique: vi.fn().mockResolvedValue(null), upsert: vi.fn() },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
@@ -1389,6 +1390,160 @@ describe('pos-sync.admin-routes', () => {
       const response = await app.inject({ method: 'GET', url: '/pos-payment-events' });
       expect(response.statusCode).toBe(400);
       await app.close();
+    });
+  });
+
+  describe('GET/PUT /pos-devices/:deviceId/settings (docs/POS_SETTINGS_ARCHITECTURE.md §6)', () => {
+    describe('GET', () => {
+      it('returns all-null defaults for a device with no PosDeviceSettings row', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.findUnique.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'GET', url: '/pos-devices/dev-1/settings' });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().data).toEqual({
+          printer: null, scanner: null, pinPad: null, scale: null, display: null, updatedAt: null,
+        });
+        await app.close();
+      });
+
+      it('returns the stored profile for a configured device', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.findUnique.mockResolvedValue({
+          printer: { type: 'THERMAL', paperWidth: 58 },
+          scanner: null, pinPad: null, scale: null, display: null,
+          updatedAt: new Date('2026-07-18T00:00:00Z'),
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'GET', url: '/pos-devices/dev-1/settings' });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().data.printer).toEqual({ type: 'THERMAL', paperWidth: 58 });
+        await app.close();
+      });
+
+      it('returns 404 for a device belonging to another tenant', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue(null);
+        const app = await buildApp();
+        const response = await app.inject({ method: 'GET', url: '/pos-devices/dev-foreign/settings' });
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.posDeviceSettings.findUnique).not.toHaveBeenCalled();
+        await app.close();
+      });
+    });
+
+    describe('PUT', () => {
+      it('creates a hardware profile for a device with none yet', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.upsert.mockResolvedValue({
+          printer: { type: 'THERMAL', paperWidth: 58 },
+          scanner: null, pinPad: null, scale: null, display: null,
+          updatedAt: new Date('2026-07-18T00:00:00Z'),
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-1/settings',
+          payload: { printer: { type: 'THERMAL', paperWidth: 58 } },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(mocks.prisma.posDeviceSettings.upsert).toHaveBeenCalledWith({
+          where: { deviceId: 'dev-1' },
+          create: {
+            deviceId: 'dev-1',
+            printer: { type: 'THERMAL', paperWidth: 58 },
+            scanner: undefined,
+            pinPad: undefined,
+            scale: undefined,
+            display: undefined,
+          },
+          update: {
+            printer: { type: 'THERMAL', paperWidth: 58 },
+            scanner: undefined,
+            pinPad: undefined,
+            scale: undefined,
+            display: undefined,
+          },
+          select: { printer: true, scanner: true, pinPad: true, scale: true, display: true, updatedAt: true },
+        });
+        await app.close();
+      });
+
+      // §6 — a PUT sending only one section must not touch the others;
+      // omitted keys arrive as `undefined` in the Prisma `update` data,
+      // which Prisma itself treats as "leave this column alone" (not a
+      // literal write of `undefined`) — this test locks in that the
+      // route handler passes the keys through as-is rather than
+      // defaulting them to `null`, which would instead clear them.
+      it('only sends the section present in the request body, leaving the rest untouched', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.upsert.mockResolvedValue({
+          printer: null, scanner: { port: 'COM3', baudRate: 9600 }, pinPad: null, scale: null, display: null,
+          updatedAt: new Date(),
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-1/settings',
+          payload: { scanner: { port: 'COM3', baudRate: 9600 } },
+        });
+
+        const call = mocks.prisma.posDeviceSettings.upsert.mock.calls[0][0];
+        expect(call.update.scanner).toEqual({ port: 'COM3', baudRate: 9600 });
+        expect(call.update.printer).toBeUndefined();
+        expect(call.update.pinPad).toBeUndefined();
+        await app.close();
+      });
+
+      it('clears a section when explicitly sent as null', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.upsert.mockResolvedValue({
+          printer: null, scanner: null, pinPad: null, scale: null, display: null, updatedAt: new Date(),
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-1/settings',
+          payload: { printer: null },
+        });
+
+        const call = mocks.prisma.posDeviceSettings.upsert.mock.calls[0][0];
+        expect(call.update.printer).toBeNull();
+        await app.close();
+      });
+
+      it('returns 404 for a device belonging to another tenant', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue(null);
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-foreign/settings',
+          payload: { printer: { type: 'THERMAL' } },
+        });
+        expect(response.statusCode).toBe(404);
+        expect(mocks.prisma.posDeviceSettings.upsert).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('returns 400 for an invalid body', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-1/settings',
+          payload: { printer: 'not-an-object' },
+        });
+        expect(response.statusCode).toBe(400);
+        expect(mocks.prisma.posDeviceSettings.upsert).not.toHaveBeenCalled();
+        await app.close();
+      });
     });
   });
 });

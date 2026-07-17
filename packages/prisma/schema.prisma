@@ -1383,6 +1383,7 @@ model PosDevice {
 
   activations DeviceActivation[]
   syncCursor  SyncCursor?
+  deviceSettings PosDeviceSettings?
   saleEvents  SaleEvent[]
   stockEvents StockEvent[]
   fiscalEvents FiscalEvent[]
@@ -2072,6 +2073,48 @@ model SyncCursor {
   updatedAt          DateTime  @updatedAt
 
   @@map("sync_cursors")
+}
+
+// docs/POS_SETTINGS_ARCHITECTURE.md §6/§9 steps 5-6 — Layer 3 of the
+// three-layer settings split: device-scoped hardware profiles (printer/
+// scanner/pin-pad/scale/customer display), broken out of
+// PosSettings.payload.printerProfile (store-scoped, no device
+// association — §7's per-key migration table flags this as an
+// unresolved ambiguity for multi-device stores, not solved here). One
+// row per device, same 1:1 shape as SyncCursor above (`deviceId String
+// @unique` + `device PosDevice @relation(...)`), not a new relational
+// pattern.
+model PosDeviceSettings {
+  id       String    @id @default(cuid())
+  deviceId String    @unique
+  device   PosDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  // { type, host, port, charset, paperWidth } — same shape
+  // PosSettings.payload.printerProfile already has (§6), moving house
+  // to a device-scoped home, not changing shape.
+  printer Json?
+  // { port, baudRate, protocol } — no existing shape to inherit; shape
+  // settles with real usage, same treatment PosSettings.payload's own
+  // unconstrained keys already get (docs/POS_SYNC_API.md §10).
+  scanner Json?
+  // { protocol, port, baudRate, timeout } — protocol e.g. NEXGO/PAX/
+  // INGENICO, same vocabulary as PaymentTerminal's CARD_PINPAD config
+  // (docs/POS_SETTINGS_ARCHITECTURE.md §3.2), but this is the physical
+  // pinpad's serial connection, not the payment-provider config —
+  // deliberately two separate models, same "provider config vs. device
+  // wiring" split §1 already draws between PaymentTerminal and this one.
+  pinPad Json?
+  // { port, baudRate, protocol, barcodePrefix } — barcodePrefix is a
+  // per-device override of the store-wide weight-barcode convention
+  // question docs/PRODUCT_TYPES.md §5/§9 already left open (superseded
+  // there by ProductType.barcodePrefixes, never implemented as its own
+  // key) — this field exists for whichever of those two homes ends up
+  // being real; not wired to anything reading it yet.
+  scale Json?
+  // { type, port, lines } — customer-facing pole display.
+  display Json?
+  updatedAt DateTime @updatedAt
+
+  @@map("pos_device_settings")
 }
 
 // Independent from StockMovement (Sellgram Commerce's own stock audit log,

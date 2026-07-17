@@ -1139,7 +1139,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     // versioned blocks. Fetched in parallel: PosSettings (tenant-scoped,
     // may not exist yet), the global PlatformPolicyVersion counter, and
     // enabled PlatformPolicy rows (also global, never tenant-scoped).
-    const [stored, platformPolicyVersion, platformPolicies, operators, storeTerminals, deviceTerminals] = await Promise.all([
+    const [stored, platformPolicyVersion, platformPolicies, operators, storeTerminals, deviceTerminals, deviceSettings] = await Promise.all([
       prisma.posSettings.findUnique({
         where: { storeId: device.storeId },
         select: {
@@ -1184,6 +1184,12 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       prisma.paymentTerminal.findMany({
         where: { deviceId: device.id, enabled: true },
         select: { type: true, config: true, deviceId: true },
+      }),
+      // docs/POS_SETTINGS_ARCHITECTURE.md §6 — this device's own
+      // hardware profile, if configured.
+      prisma.posDeviceSettings.findUnique({
+        where: { deviceId: device.id },
+        select: { printer: true, scanner: true, pinPad: true, scale: true, display: true },
       }),
     ]);
 
@@ -1242,6 +1248,22 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       };
     }
     (settings as Record<string, unknown>).paymentProviders = paymentProviders;
+
+    // docs/POS_SETTINGS_ARCHITECTURE.md §6/§9 step 5 — settles that
+    // document's open placement question: hardware lives nested inside
+    // `settings`, a sibling of paymentProviders/storeTimezone/etc., not
+    // a top-level sibling of `settings` itself. `null` per-field (not
+    // an absent key, not an empty object) for a device with no
+    // PosDeviceSettings row at all or no value set for that one field —
+    // same "absent means unconfigured" convention as every other
+    // optional field in this response.
+    (settings as Record<string, unknown>).hardware = {
+      printer: deviceSettings?.printer ?? null,
+      scanner: deviceSettings?.scanner ?? null,
+      pinPad: deviceSettings?.pinPad ?? null,
+      scale: deviceSettings?.scale ?? null,
+      display: deviceSettings?.display ?? null,
+    };
 
     // §7 — the wire Rule shape flattens `extra` onto the rule object
     // itself rather than nesting it; `source` is always server-assigned
