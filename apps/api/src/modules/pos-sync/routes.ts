@@ -5,7 +5,7 @@ import prisma from '../../lib/prisma.js';
 import { getLicenseStatus } from '../../lib/billing.js';
 import { generateLoyaltyCardNumber } from '../../lib/loyalty-card.js';
 import { DEFAULT_TIERS, computeTier } from '../loyalty/routes.js';
-import { fetchProductTypesById, deriveProductTypeFields } from './product-type-rules.js';
+import { fetchProductTypesById, mapProductForCatalog, CATALOG_PRODUCT_SELECT } from './product-type-rules.js';
 import { resolveDevice } from './device-auth.js';
 import { sendAck, sendError, sendSuccess } from './envelope.js';
 // docs/POS_SETTINGS_ARCHITECTURE.md §5 — PaymentTerminal.config secret
@@ -107,6 +107,17 @@ const productSearchQuerySchema = z.object({
   q: z.string().min(2),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
+
+const catalogChangesQuerySchema = z.object({
+  since: z.coerce.number().int().min(0),
+});
+
+// docs/POS_SYNC_API.md §26 — a `since` snapshot older than this forces a
+// full resync rather than a delta, matching cleanupSoftDeletedProducts'
+// physical-delete horizon (apps/api/src/jobs/cleanup-soft-deleted-products.ts)
+// so a delta computed against a since-snapshot never risks missing a
+// deletion whose tombstone row has already been purged.
+const CATALOG_DELTA_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // docs/CUSTOMER_LOYALTY.md §5 — both optional at the schema level; the
 // "at least one of the two" requirement is enforced in the handler
@@ -977,9 +988,11 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       );
     }
 
-    // sinceVersion is accepted but has no effect in v1 — delta sync is out
-    // of scope (§9: `full` is always true), so the latest full snapshot is
-    // always returned.
+    // sinceVersion is accepted but has no effect here — this endpoint
+    // always returns the latest full snapshot (§9: `full` is always
+    // true). A device that already has an older version should prefer
+    // GET /pos/v1/catalog/changes (§26) and only fall back here when
+    // that endpoint reports requiresFullSync.
     const snapshot = await prisma.catalogSnapshot.findFirst({
       where: { tenantId: device.tenantId, storeId: device.storeId },
       orderBy: { version: 'desc' },
@@ -1018,6 +1031,72 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     );
   });
 
+  // docs/POS_SYNC_API.md §26 — incremental catalog sync. A device that
+  // already has version `since` asks what changed since then instead of
+  // re-downloading the whole catalog via GET /pos/v1/catalog/snapshot.
+  // requiresFullSync tells the till to fall back to that endpoint when
+  // the delta can't be computed (unknown or stale `since`).
+  fastify.get('/pos/v1/catalog/changes', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
+    const device = await resolveAuthenticatedDevice(request, reply);
+    if (!device) return;
+
+    const query = catalogChangesQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'since query parameter is required', request, {
+        issues: query.error.issues,
+      });
+    }
+    const { since } = query.data;
+
+    const sinceSnapshot = await prisma.catalogSnapshot.findFirst({
+      where: { tenantId: device.tenantId, storeId: device.storeId, version: since },
+      select: { version: true, createdAt: true },
+    });
+    if (!sinceSnapshot) {
+      return sendSuccess(reply, 200, { requiresFullSync: true, reason: 'version_not_found' }, request);
+    }
+    if (sinceSnapshot.createdAt < new Date(Date.now() - CATALOG_DELTA_MAX_AGE_MS)) {
+      return sendSuccess(reply, 200, { requiresFullSync: true, reason: 'version_too_old' }, request);
+    }
+
+    const current = await prisma.catalogSnapshot.findFirst({
+      where: { tenantId: device.tenantId, storeId: device.storeId },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+    // sinceSnapshot was just found by exact version lookup above, so a
+    // current snapshot necessarily exists (at least that one) — this is
+    // reachable in practice, not just a type-narrowing formality.
+    const toVersion = current!.version;
+
+    if (since === toVersion) {
+      return sendSuccess(reply, 200, { fromVersion: since, toVersion, requiresFullSync: false, items: [] }, request);
+    }
+
+    const [changedProducts, deletedProducts] = await Promise.all([
+      prisma.product.findMany({
+        where: { tenantId: device.tenantId, deletedAt: null, updatedAt: { gt: sinceSnapshot.createdAt } },
+        select: CATALOG_PRODUCT_SELECT,
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.product.findMany({
+        where: { tenantId: device.tenantId, deletedAt: { gt: sinceSnapshot.createdAt } },
+        select: { id: true },
+      }),
+    ]);
+
+    const typesById = await fetchProductTypesById();
+    const items: Record<string, unknown>[] = changedProducts.map((product) => {
+      const action = product.createdAt > sinceSnapshot.createdAt ? 'created' : 'updated';
+      return { action, ...mapProductForCatalog(product, typesById) };
+    });
+    for (const product of deletedProducts) {
+      items.push({ action: 'deleted', id: product.id });
+    }
+
+    return sendSuccess(reply, 200, { fromVersion: since, toVersion, requiresFullSync: false, items }, request);
+  });
+
   // On-demand product search for the till — a cashier typing a partial
   // name/SKU/ИКПУ code or scanning a barcode the local catalog snapshot
   // doesn't resolve. Same device auth as every other /pos/v1/* route;
@@ -1042,6 +1121,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       where: {
         tenantId: device.tenantId,
         isActive: true,
+        deletedAt: null,
         OR: [
           { name: { contains: q, mode: 'insensitive' } },
           { sku: { contains: q, mode: 'insensitive' } },
@@ -1053,48 +1133,11 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       },
       take: limit,
       orderBy: { name: 'asc' },
-      // Field-for-field identical to admin-routes.ts's CatalogSnapshot
-      // product select — see that handler's comments for why each field
-      // is here (VAT/marking, weighted-goods, barcodes/variants).
-      select: {
-        id: true,
-        name: true,
-        sku: true,
-        price: true,
-        currency: true,
-        stockQty: true,
-        categoryId: true,
-        vatRate: true,
-        vatExempt: true,
-        markType: true,
-        isMarked: true,
-        mxikCode: true,
-        packageCode: true,
-        unit: true,
-        isByWeight: true,
-        isWeightedPiece: true,
-        pluCode: true,
-        pricePerKg: true,
-        updatedAt: true,
-        barcodes: {
-          select: { id: true, barcode: true, type: true, isDefault: true, unitQty: true, variantId: true },
-        },
-        variants: {
-          where: { isActive: true },
-          select: { id: true, name: true, sku: true, price: true, stockQty: true },
-        },
-        productTypeId: true,
-        productType: {
-          select: { code: true, rules: true, weightMode: true, barcodePrefixes: true, parentTypeId: true },
-        },
-      },
+      select: CATALOG_PRODUCT_SELECT,
     });
 
     const typesById = await fetchProductTypesById();
-    const results = products.map(({ productType, ...product }) => ({
-      ...product,
-      ...deriveProductTypeFields(product, productType, typesById),
-    }));
+    const results = products.map((product) => mapProductForCatalog(product, typesById));
 
     // Same "unconfigured store" convention as GET /pos/v1/settings (§6)
     // — no snapshot yet is 0, not an error; the search results

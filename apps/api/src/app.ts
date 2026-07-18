@@ -443,6 +443,15 @@ async function main() {
     fastify.log.error(`POS device offline monitor failed to start: ${err.message}`);
   }
 
+  // Soft-deleted product cleanup (once a day) — docs/POS_SYNC_API.md §26
+  try {
+    const { startSoftDeleteCleanupJob } = await import('./jobs/cleanup-soft-deleted-products.js');
+    startSoftDeleteCleanupJob();
+    fastify.log.info('Soft-deleted product cleanup job started');
+  } catch (err: any) {
+    fastify.log.error(`Soft-deleted product cleanup job failed to start: ${err.message}`);
+  }
+
   // Nightly subscription reminders
   setInterval(async () => {
     try {

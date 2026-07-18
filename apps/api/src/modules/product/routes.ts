@@ -96,7 +96,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     const { page, pageSize, search, categoryId, active } = query;
     const skip = (page - 1) * pageSize;
 
-    const where: any = { tenantId: request.tenantId! };
+    const where: any = { tenantId: request.tenantId!, deletedAt: null };
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -133,7 +133,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
   fastify.get('/products/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     const product = await prisma.product.findFirst({
-      where: { id, tenantId: request.tenantId! },
+      where: { id, tenantId: request.tenantId!, deletedAt: null },
       include: {
         category: true,
         images: { orderBy: { sortOrder: 'asc' } },
@@ -274,8 +274,8 @@ export default async function productRoutes(fastify: FastifyInstance) {
   fastify.delete('/products/:id', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await prisma.product.updateMany({
-      where: { id, tenantId: request.tenantId! },
-      data: { isActive: false },
+      where: { id, tenantId: request.tenantId!, deletedAt: null },
+      data: { isActive: false, deletedAt: new Date() },
     });
     if (result.count === 0) return reply.status(404).send({ success: false, error: 'Product not found' });
     return { success: true, message: 'Product deactivated' };
@@ -292,7 +292,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
 
   fastify.post('/products/:id/variants', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId! }, select: { id: true } });
+    const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId!, deletedAt: null }, select: { id: true } });
     if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
 
     let body: z.infer<typeof variantBodySchema>;
@@ -359,7 +359,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
 
   fastify.get('/products/:id/barcodes', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId! }, select: { id: true } });
+    const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId!, deletedAt: null }, select: { id: true } });
     if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
 
     const barcodes = await prisma.productBarcode.findMany({
@@ -378,7 +378,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     }
     const { barcode, type, isDefault, unitQty, variantId } = parsed.data;
 
-    const product = await prisma.product.findFirst({ where: { id, tenantId }, select: { id: true } });
+    const product = await prisma.product.findFirst({ where: { id, tenantId, deletedAt: null }, select: { id: true } });
     if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
 
     if (variantId) {
@@ -432,7 +432,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     const { id, barcodeId } = request.params as { id: string; barcodeId: string };
     const tenantId = request.tenantId!;
 
-    const product = await prisma.product.findFirst({ where: { id, tenantId }, select: { id: true } });
+    const product = await prisma.product.findFirst({ where: { id, tenantId, deletedAt: null }, select: { id: true } });
     if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
 
     // Tenant isolation via productId (already tenant-checked above) +
@@ -496,7 +496,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
       qtyAfter = mode === 'delta' ? Math.max(0, qtyBefore + qty) : qty;
       await prisma.productVariant.update({ where: { id: variantId }, data: { stockQty: qtyAfter } });
     } else {
-      const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId! } });
+      const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId!, deletedAt: null } });
       if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
       qtyBefore = product.stockQty;
       qtyAfter = mode === 'delta' ? Math.max(0, qtyBefore + qty) : qty;
@@ -525,7 +525,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
 
     const product = await prisma.product.findFirst({
-      where: { id, tenantId: request.tenantId! },
+      where: { id, tenantId: request.tenantId!, deletedAt: null },
     });
     if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
 

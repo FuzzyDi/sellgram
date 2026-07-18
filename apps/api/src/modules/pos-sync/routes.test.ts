@@ -682,6 +682,150 @@ describe('pos-sync.routes', () => {
     });
   });
 
+  describe('GET /api/pos/v1/catalog/changes (docs/POS_SYNC_API.md §26)', () => {
+    beforeEach(() => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.productType.findMany.mockResolvedValue([]);
+    });
+
+    it('returns 400 VALIDATION_ERROR when since is missing', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/changes',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+      await app.close();
+    });
+
+    it('returns 401 for an invalid device key', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/changes?since=1',
+        headers: { authorization: 'Bearer bad', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+
+    it('reports requiresFullSync: version_not_found when no snapshot exists at `since`', async () => {
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/changes?since=99',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({ requiresFullSync: true, reason: 'version_not_found' });
+      expect(mocks.prisma.product.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('reports requiresFullSync: version_too_old when the since snapshot is past the 30-day window', async () => {
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({
+        version: 2,
+        createdAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+      });
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/changes?since=2',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({ requiresFullSync: true, reason: 'version_too_old' });
+      expect(mocks.prisma.product.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns an empty delta when since already equals the current version', async () => {
+      mocks.prisma.catalogSnapshot.findFirst.mockImplementation((args: any) =>
+        Promise.resolve(
+          args.where.version !== undefined
+            ? { version: 5, createdAt: new Date() }
+            : { version: 5 }
+        )
+      );
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/changes?since=5',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({ fromVersion: 5, toVersion: 5, requiresFullSync: false, items: [] });
+      expect(mocks.prisma.product.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('computes created/updated/deleted items against the since snapshot', async () => {
+      const sinceCreatedAt = new Date('2026-07-01T00:00:00Z');
+      mocks.prisma.catalogSnapshot.findFirst.mockImplementation((args: any) =>
+        Promise.resolve(
+          args.where.version !== undefined ? { version: 4, createdAt: sinceCreatedAt } : { version: 7 }
+        )
+      );
+
+      const basePayload = {
+        name: 'Widget', sku: 'W1', price: 10000, currency: 'UZS', stockQty: 5, categoryId: null,
+        vatRate: null, vatExempt: false, markType: null, isMarked: false, mxikCode: null, packageCode: null,
+        unit: null, isByWeight: false, isWeightedPiece: false, pluCode: null, pricePerKg: null,
+        barcodes: [], variants: [], productTypeId: null, productType: null,
+      };
+      const createdProduct = {
+        id: 'p-created', ...basePayload, name: 'New Widget',
+        createdAt: new Date('2026-07-05T00:00:00Z'), updatedAt: new Date('2026-07-05T00:00:00Z'),
+      };
+      const updatedProduct = {
+        id: 'p-updated', ...basePayload, name: 'Old Widget',
+        createdAt: new Date('2026-06-01T00:00:00Z'), updatedAt: new Date('2026-07-10T00:00:00Z'),
+      };
+
+      mocks.prisma.product.findMany.mockImplementation((args: any) => {
+        if (args.where.updatedAt) return Promise.resolve([createdProduct, updatedProduct]);
+        if (args.where.deletedAt) return Promise.resolve([{ id: 'p-deleted' }]);
+        return Promise.resolve([]);
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/changes?since=4',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.fromVersion).toBe(4);
+      expect(body.data.toVersion).toBe(7);
+      expect(body.data.requiresFullSync).toBe(false);
+      expect(body.data.items).toHaveLength(3);
+      expect(body.data.items).toContainEqual(expect.objectContaining({ action: 'created', id: 'p-created', name: 'New Widget' }));
+      expect(body.data.items).toContainEqual(expect.objectContaining({ action: 'updated', id: 'p-updated', name: 'Old Widget' }));
+      expect(body.data.items).toContainEqual({ action: 'deleted', id: 'p-deleted' });
+
+      // Both queries scoped to the tenant, excluding soft-deleted rows for created/updated.
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId: 't-1', deletedAt: null, updatedAt: { gt: sinceCreatedAt } },
+        })
+      );
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId: 't-1', deletedAt: { gt: sinceCreatedAt } },
+        })
+      );
+      await app.close();
+    });
+  });
+
   describe('GET /api/pos/v1/products/search', () => {
     beforeEach(() => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
@@ -755,6 +899,7 @@ describe('pos-sync.routes', () => {
           where: {
             tenantId: 't-1',
             isActive: true,
+            deletedAt: null,
             OR: [
               { name: { contains: 'cola', mode: 'insensitive' } },
               { sku: { contains: 'cola', mode: 'insensitive' } },

@@ -166,14 +166,27 @@ describe('product.routes', () => {
       await app.close();
     });
 
-    it('soft-deletes product (sets isActive=false)', async () => {
+    it('soft-deletes product (sets isActive=false and deletedAt)', async () => {
       mocks.prisma.product.updateMany.mockResolvedValue({ count: 1 });
       const app = await buildApp();
       const response = await app.inject({ method: 'DELETE', url: '/products/p-1' });
       expect(response.statusCode).toBe(200);
       expect(mocks.prisma.product.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { isActive: false } })
+        expect.objectContaining({
+          where: { id: 'p-1', tenantId: 'tenant-1', deletedAt: null },
+          data: { isActive: false, deletedAt: expect.any(Date) },
+        })
       );
+      await app.close();
+    });
+
+    it('returns 404 when product is already soft-deleted', async () => {
+      // deletedAt: null in the where clause means an already-deleted
+      // product matches zero rows, same as a nonexistent id.
+      mocks.prisma.product.updateMany.mockResolvedValue({ count: 0 });
+      const app = await buildApp();
+      const response = await app.inject({ method: 'DELETE', url: '/products/p-1' });
+      expect(response.statusCode).toBe(404);
       await app.close();
     });
   });
@@ -255,6 +268,38 @@ describe('product.routes', () => {
       });
       expect(response.statusCode).toBe(400);
       expect(mocks.prisma.product.updateMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  // ─── GET /products (soft-delete exclusion) ─────────────────────────────────
+
+  describe('GET /products', () => {
+    it('excludes soft-deleted products from the list query', async () => {
+      mocks.prisma.product.findMany.mockResolvedValue([]);
+      mocks.prisma.product.count.mockResolvedValue(0);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/products' });
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1', deletedAt: null }) })
+      );
+      expect(mocks.prisma.product.count).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ deletedAt: null }) })
+      );
+      await app.close();
+    });
+  });
+
+  describe('GET /products/:id', () => {
+    it('returns 404 for a soft-deleted product (deletedAt filter, not just id/tenantId)', async () => {
+      mocks.prisma.product.findFirst.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/products/p-1' });
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.product.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'p-1', tenantId: 'tenant-1', deletedAt: null } })
+      );
       await app.close();
     });
   });

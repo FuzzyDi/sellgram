@@ -357,6 +357,13 @@ model Product {
   lowStockAlert Int       @default(5)
   isActive      Boolean   @default(true)
   sortOrder     Int       @default(0)
+  // Soft-delete tombstone (docs/POS_SYNC_API.md §26 catalog delta sync).
+  // null = active product. Non-null = soft-deleted; the row is kept so a
+  // till that hasn't synced past this point can still be told "deleted"
+  // instead of just silently disappearing from a delta. Distinct from
+  // isActive, which is a merchant-facing visibility toggle, not a
+  // deletion marker.
+  deletedAt     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

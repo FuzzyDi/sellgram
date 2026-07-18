@@ -171,6 +171,11 @@ describe('pos-sync.admin-routes', () => {
           }),
         })
       );
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-1', isActive: true, deletedAt: null }),
+        })
+      );
       await app.close();
     });
 

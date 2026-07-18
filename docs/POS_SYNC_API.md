@@ -1218,7 +1218,7 @@ work outside this document's scope (there is none left inside it).
 | `POST /activate` response | `accessToken` + `refreshToken`, `catalogVersion`, `settingsVersion` | **Closed** — both tokens minted (hash-only, same pattern as before), `catalogVersion`/`settingsVersion` returned | No gap in shape. `refreshToken` is stored but unconsumed — still no `token/refresh` endpoint in code or in this contract, so `accessToken` remains long-lived in practice (§4). `settingsVersion` is a stable placeholder (`1`) pending `PosSettings` existing. |
 | `POST /heartbeat` request | Rich payload: `shiftState`, `unsyncedEvents`, `fiscal{}`, `printer{}`, `network{}` | **Closed** — full payload validated; mismatched `deviceId` rejected as `VALIDATION_ERROR`; degraded `fiscal`/`printer` status logged | No gap in validation. Payload fields (`shiftState`, `unsyncedEvents`, etc.) are validated and log-inspected but not persisted — no admin fleet-monitoring endpoint reads them yet, so there's nowhere to store them usefully. |
 | `POST /heartbeat` response | `licenseStatus`, `catalogVersion`, `settingsVersion`, `hasCommands` | **Closed** — `licenseStatus` derived via `getLicenseStatus()` (`apps/api/src/lib/billing.ts`) from `Tenant.planExpiresAt`/`Tenant.blockedAt`; `catalogVersion` from the latest snapshot; `settingsVersion` from the real `PosSettings.version` (was a stale note here — corrected, see the `GET /settings` row below, which already had this right); `hasCommands`/`pendingCommandsCount` from a real `CloudCommand.count()` for this device (§15), no longer the hardcoded `false` placeholder | No gap in shape. `BLOCKED` only ever comes from explicit system-admin block/unblock — no automatic non-payment path sets it beyond what `EXPIRED` already covers. |
-| `GET /catalog/snapshot` request | `storeId`, `sinceVersion` query params | **Closed** — `storeId` required and must match the device's own store (else `VALIDATION_ERROR`); `sinceVersion` accepted but inert | No gap. `sinceVersion` being inert matches this contract's own v1 stance (`full` is always `true`, delta sync out of scope). |
+| `GET /catalog/snapshot` request | `storeId`, `sinceVersion` query params | **Closed** — `storeId` required and must match the device's own store (else `VALIDATION_ERROR`); `sinceVersion` accepted but inert on this endpoint | No gap. `sinceVersion` stays inert here by design — delta sync is no longer out of scope, but lives on its own endpoint, `GET /catalog/changes` (§26), rather than changing this endpoint's `full: true` response. |
 | `GET /catalog/snapshot` response | Top-level `categories`/`products`/`barcodes`/`uzProfiles`, `checksum`, `full` | **Closed** — contract shape served; snapshot builder now stores categories alongside products; legacy `{ products }`-only snapshots served with empty arrays for the missing keys | No gap in shape. `barcodes`/`uzProfiles` are always `[]` pending the `Barcode`/`ProductUzProfile` models (§12). `checksum` is opaque in v1 (§9). |
 | `GET /settings` response | Versioned, structured (`taxProfile`, `paymentMethods`, `receiptTemplate`, `printerProfile`, `fiscalProfile`, `offlineLimits`, `roundingRules`, `featureFlags`) | **Closed** — backed by the new `PosSettings` model (store-scoped, `version` + `payload Json`), written via `PUT /store-admin/pos-devices/settings`; unconfigured stores get empty eight-key defaults at version 1 | No gap in shape. Nested shapes are whatever the admin stored — unconstrained by design pending a fiscal partner (§10). The old `currency`/`timezone` placeholder response is gone (not part of the contract body). `settingsVersion` in `/activate` and `/heartbeat` now reports the real `PosSettings.version`. |
 | Sale events | Full event-type vocabulary, idempotent ingestion, `StockLedgerEntry` derivation | **Closed** — `SaleEvent` model (append-only, unique `idempotencyKey` + payload hash), full §5 semantics (identical replay → stored result; different payload → 409), `SALE_COMPLETED` derives `StockLedgerEntry` rows, per-item warnings per §11/§18 | No gap in ingestion. Stock *reconciliation* strategy vs Sellgram Commerce's `StockMovement` is now resolved — see §11 (shared warehouse, synchronous atomic `stockQty` update, negative never clamped). Refund/cancel stock effects intentionally unspecified — only `SALE_COMPLETED` derives stock. |
@@ -1788,3 +1788,133 @@ event model in this document.
   "requestId": "string"
 }
 ```
+
+## 26. Catalog Delta Sync
+
+An incremental alternative to `GET /pos/v1/catalog/snapshot` (§9). A
+device that already applied catalog version `since` asks what changed
+since then instead of re-downloading the full catalog (categories,
+every product, every barcode) on each sync cycle.
+
+```
+GET /api/pos/v1/catalog/changes?since=<catalogVersion>
+```
+
+Same device auth as every other `/pos/v1/*` route (§4). `since` is a
+required integer query parameter — the `CatalogSnapshot.version` the
+device last fully applied (its own `lastCatalogVersion`, or the
+`version` from a prior `catalog/changes` response's `toVersion`).
+
+### 26.1 `requiresFullSync`
+
+The server can only compute a delta against a `CatalogSnapshot` row it
+still has on file for `since`. Two cases fall back to a full resync
+instead:
+
+- **`version_not_found`** — no `CatalogSnapshot` exists at `version:
+  since` for this device's store (an unknown version, a version from a
+  different store, or a store that has never had a snapshot built at
+  all). The device should call `GET /pos/v1/catalog/snapshot` instead.
+- **`version_too_old`** — a snapshot at `since` exists, but its
+  `createdAt` is older than the 30-day retention window
+  (`CATALOG_DELTA_MAX_AGE_MS`, `apps/api/src/modules/pos-sync/routes.ts`).
+  This window is deliberately the same 30 days
+  `cleanupSoftDeletedProducts` (§26.3) waits before physically deleting
+  a soft-deleted product's tombstone row — a delta computed against a
+  `since` older than that could miss a deletion whose row no longer
+  exists to report.
+
+In both cases the response is:
+
+```json
+{ "requiresFullSync": true, "reason": "version_not_found" }
+```
+
+(`reason` is `"version_not_found"` or `"version_too_old"`.) There is no
+`items` array in this shape — the device gets nothing to apply and must
+fall back to §9.
+
+### 26.2 Delta response
+
+When `since` resolves to a snapshot within the retention window:
+
+```json
+{
+  "fromVersion": 4,
+  "toVersion": 7,
+  "requiresFullSync": false,
+  "items": [
+    { "action": "created", "id": "...", "name": "...", "...": "same shape as §9's products[] items" },
+    { "action": "updated", "id": "...", "name": "...", "...": "same shape as §9's products[] items" },
+    { "action": "deleted", "id": "..." }
+  ]
+}
+```
+
+If `since` already equals the store's current (latest) version, the
+response is the same shape with an empty `items: []` — a legitimate
+"nothing changed" answer, not `requiresFullSync`.
+
+**`action` determination** (evaluated per product against the `since`
+snapshot's `createdAt`):
+
+- `product.deletedAt` is set and newer than the `since` snapshot's
+  `createdAt` → `"deleted"`. The item carries only `{ "action":
+  "deleted", "id": "..." }` — a till doesn't need the full payload for a
+  row it's about to remove locally.
+- Otherwise, if `product.createdAt` is newer than the `since` snapshot's
+  `createdAt` → `"created"`.
+- Otherwise (the product already existed at `since` and
+  `product.updatedAt` is newer than the `since` snapshot's `createdAt`)
+  → `"updated"`.
+
+**`created`/`updated` items are field-for-field identical to a
+`products[]` entry in a full snapshot** — both are built from the same
+`CATALOG_PRODUCT_SELECT` select and `mapProductForCatalog` mapping
+(`apps/api/src/modules/pos-sync/product-type-rules.ts`), also shared
+with `GET /pos/v1/products/search` (§9's neighbor endpoint). A till can
+apply a delta item with the exact same rendering/upsert code path it
+already uses for a snapshot row, without a shape check first.
+
+### 26.3 Soft delete semantics
+
+`DELETE /products/:id` never hard-deletes a `Product` row. It sets
+`isActive: false` (unchanged, pre-existing behavior) and now also
+`deletedAt: <now>` (`packages/prisma/schema.prisma`, additive nullable
+column — `null` means active). The row stays in place so a delta
+computed against an older `since` can still report it as `"deleted"` to
+a till that hasn't caught up yet; deleting it outright the moment a
+merchant removes a product would make that impossible.
+
+Every catalog-facing product query (`GET /products`, `GET /products/:id`,
+the `CatalogSnapshot` builder, `GET /pos/v1/products/search`, and this
+endpoint's `created`/`updated` query) filters `deletedAt: null` — a
+soft-deleted product is invisible everywhere a till or the admin catalog
+UI would otherwise see it, even though the row still physically exists.
+
+A daily job, `cleanupSoftDeletedProducts`
+(`apps/api/src/jobs/cleanup-soft-deleted-products.ts`, wired into
+`app.ts` alongside the other background jobs), physically deletes
+`Product` rows whose `deletedAt` is older than the same 30-day window
+`version_too_old` (§26.1) uses. It deletes row-by-row rather than as a
+single batch: a product that was ever sold or purchased has an
+`OrderItem`/`PurchaseOrderItem` row referencing it with no cascade
+(Postgres `RESTRICT`), so that product's tombstone is permanently
+un-deletable and is simply left in place (soft-deleted, excluded from
+every query above) rather than blocking cleanup of every other eligible
+row in the same run.
+
+### 26.4 Till behavior (expected)
+
+1. Track the last catalog version actually applied locally (from a
+   prior full snapshot's `version` or a delta's `toVersion`).
+2. On each sync cycle, call `GET /pos/v1/catalog/changes?since=<lastApplied>`.
+3. If `requiresFullSync: true`, call `GET /pos/v1/catalog/snapshot`
+   instead and replace the local catalog wholesale, exactly as before
+   this endpoint existed.
+4. Otherwise, apply each `items[]` entry in order: upsert `created`/
+   `updated` rows, remove `deleted` rows by `id`, then record
+   `toVersion` as the new last-applied version.
+5. If `items` is empty (`fromVersion === toVersion`), there is nothing
+   to apply — still record `toVersion` as last-applied so the next
+   cycle's `since` stays current.
