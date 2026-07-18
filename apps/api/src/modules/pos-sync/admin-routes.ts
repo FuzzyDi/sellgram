@@ -5,7 +5,7 @@ import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 import { encrypt, decrypt } from '../../lib/encrypt.js';
-import { fetchProductTypesById, deriveProductTypeFields } from './product-type-rules.js';
+import { fetchProductTypesById, mapProductForCatalog, CATALOG_PRODUCT_SELECT } from './product-type-rules.js';
 
 const ACTIVATION_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 const ACTIVATION_CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
@@ -633,59 +633,8 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
 
       const products = await prisma.product.findMany({
-        where: { tenantId, isActive: true },
-        select: {
-          id: true,
-          name: true,
-          sku: true,
-          price: true,
-          currency: true,
-          stockQty: true,
-          categoryId: true,
-          // Per-item VAT/marking (docs/POS_SYNC_API.md §10/§12; schema
-          // comment on Product) — a till needs these at sale time to (a)
-          // apply the right VAT rate, falling back to
-          // settings.taxProfile.vatRate when vatRate is null, and (b)
-          // know whether to prompt for a marking code (isMarked=true)
-          // and which classification it is (markType).
-          vatRate: true,
-          vatExempt: true,
-          markType: true,
-          isMarked: true,
-          mxikCode: true,
-          packageCode: true,
-          // Unit of measure + weighted-goods sale (docs/POS_SYNC_API.md
-          // §10's weightBarcode key; schema comment on Product) — a till
-          // uses unit for display, isByWeight/isWeightedPiece to decide
-          // whether to prompt for a weight/qty, pluCode to resolve a
-          // scanned weight barcode back to this Product, and
-          // pricePerKg ?? price to compute the line total.
-          unit: true,
-          isByWeight: true,
-          isWeightedPiece: true,
-          pluCode: true,
-          pricePerKg: true,
-          // packages/prisma/schema.prisma ProductBarcode — a till scans
-          // any of these to resolve back to this Product, and uses
-          // unitQty to decrement stock by the right multiple for a
-          // case/block barcode (not necessarily 1).
-          barcodes: {
-            select: { id: true, barcode: true, type: true, isDefault: true, unitQty: true, variantId: true },
-          },
-          variants: {
-            where: { isActive: true },
-            select: { id: true, name: true, sku: true, price: true, stockQty: true },
-          },
-          // docs/PRODUCT_TYPES.md §6 — productTypeId is the FK read
-          // directly off Product (used to walk the parent chain via
-          // typesById below); the nested productType select covers the
-          // fields read straight from the assigned type without needing
-          // the chain (code/weightMode/barcodePrefixes).
-          productTypeId: true,
-          productType: {
-            select: { code: true, rules: true, weightMode: true, barcodePrefixes: true, parentTypeId: true },
-          },
-        },
+        where: { tenantId, isActive: true, deletedAt: null },
+        select: CATALOG_PRODUCT_SELECT,
         orderBy: { createdAt: 'asc' },
       });
 
@@ -696,13 +645,10 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       });
 
       // docs/PRODUCT_TYPES.md §4/§6 — shared with routes.ts's
-      // product-search endpoint (product-type-rules.ts), not a local
-      // copy anymore.
+      // product-search and catalog/changes endpoints (product-type-rules.ts),
+      // not a local copy anymore.
       const typesById = await fetchProductTypesById();
-      const productsForSnapshot = products.map(({ productType, ...product }) => ({
-        ...product,
-        ...deriveProductTypeFields(product, productType, typesById),
-      }));
+      const productsForSnapshot = products.map((product) => mapProductForCatalog(product, typesById));
 
       const last = await prisma.catalogSnapshot.findFirst({
         where: { tenantId, storeId: store.id },

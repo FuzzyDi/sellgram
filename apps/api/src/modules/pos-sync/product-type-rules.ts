@@ -56,6 +56,46 @@ export function mergeProductTypeRules(
   return Array.from(merged.values());
 }
 
+// docs/POS_SYNC_API.md §9/§26 — the Prisma select for a catalog item,
+// shared by admin-routes.ts's CatalogSnapshot builder and routes.ts's
+// GET /pos/v1/catalog/changes delta endpoint. A delta's "updated"/
+// "created" items must be field-for-field identical to what a full
+// snapshot would have sent for that product, so both call sites read
+// this one select rather than keeping their own copies in sync by hand.
+export const CATALOG_PRODUCT_SELECT = {
+  id: true,
+  name: true,
+  sku: true,
+  price: true,
+  currency: true,
+  stockQty: true,
+  categoryId: true,
+  vatRate: true,
+  vatExempt: true,
+  markType: true,
+  isMarked: true,
+  mxikCode: true,
+  packageCode: true,
+  unit: true,
+  isByWeight: true,
+  isWeightedPiece: true,
+  pluCode: true,
+  pricePerKg: true,
+  barcodes: {
+    select: { id: true, barcode: true, type: true, isDefault: true, unitQty: true, variantId: true },
+  },
+  variants: {
+    where: { isActive: true },
+    select: { id: true, name: true, sku: true, price: true, stockQty: true },
+  },
+  productTypeId: true,
+  productType: {
+    select: { code: true, rules: true, weightMode: true, barcodePrefixes: true, parentTypeId: true },
+  },
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 export type ProductTypeSummary = { code: string; weightMode: string; barcodePrefixes: string[] } | null | undefined;
 
 // Bundles the same four-field derivation admin-routes.ts's
@@ -80,4 +120,18 @@ export function deriveProductTypeFields(
     weightMode: productType?.weightMode ?? (product.isWeightedPiece ? 'PIECE_WEIGHT' : product.isByWeight ? 'WEIGHT' : 'PIECE'),
     barcodePrefixes: productType?.barcodePrefixes ?? [],
   };
+}
+
+// Combines CATALOG_PRODUCT_SELECT's raw shape (productType still
+// nested, productTypeId still present) with deriveProductTypeFields into
+// the flat catalog-item shape docs/POS_SYNC_API.md §9 documents —
+// admin-routes.ts's snapshot builder and routes.ts's delta endpoint both
+// call this on each row instead of repeating the same
+// destructure-and-spread inline.
+export function mapProductForCatalog<
+  T extends { productTypeId: string | null; isByWeight: boolean; isWeightedPiece: boolean; productType: ProductTypeSummary }
+>(product: T, typesById: Map<string, ProductTypeForRules>): Omit<T, 'productType'> & ReturnType<typeof deriveProductTypeFields> {
+  const { productType, ...rest } = product;
+  return { ...rest, ...deriveProductTypeFields(product, productType, typesById) } as Omit<T, 'productType'> &
+    ReturnType<typeof deriveProductTypeFields>;
 }
