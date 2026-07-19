@@ -45,12 +45,17 @@ const mocks = vi.hoisted(() => ({
   // on encryptSecrets' output need a deterministic stand-in.
   encrypt: vi.fn((value: string) => `encrypted(${value})`),
   decrypt: vi.fn((value: string) => `decrypted(${value})`),
+  // docs/POS_SYNC_API.md §10 — invalidatePosSettingsCache's only actual
+  // redis call is del(); get/setex aren't used from this file but are
+  // stubbed for shape-completeness with routes.test.ts's redis mock.
+  redis: { get: vi.fn().mockResolvedValue(null), setex: vi.fn().mockResolvedValue('OK'), del: vi.fn().mockResolvedValue(1) },
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../plugins/plan-guard.js', () => ({ planGuard: mocks.planGuard }));
 vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
 vi.mock('../../lib/encrypt.js', () => ({ encrypt: mocks.encrypt, decrypt: mocks.decrypt }));
+vi.mock('../../lib/redis.js', () => ({ default: () => mocks.redis }));
 
 // A value shaped like apps/api/src/lib/encrypt.ts's real output
 // (iv:encrypted:tag, iv/tag each 32 hex chars) so encryptSecrets'
@@ -297,6 +302,30 @@ describe('pos-sync.admin-routes', () => {
       await app.close();
     });
 
+    it('invalidates the settings cache for every device at the store', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.posSettings.upsert.mockResolvedValue({ storeId: 'store-1', version: 2, updatedAt: new Date() });
+      // Also read by fanOutCommandToActiveDevices (REFRESH_SETTINGS,
+      // filtered further to status: 'ACTIVE' in its own where clause) —
+      // the mock doesn't discriminate on where, so the same device list
+      // stands in for both calls.
+      mocks.prisma.posDevice.findMany.mockResolvedValue([{ id: 'dev-1' }, { id: 'dev-2' }]);
+
+      const app = await buildApp();
+      await app.inject({
+        method: 'PUT',
+        url: '/pos-devices/settings',
+        payload: { storeId: 'store-1', settings: validSettings },
+      });
+
+      expect(mocks.prisma.posDevice.findMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', storeId: 'store-1' },
+        select: { id: true },
+      });
+      expect(mocks.redis.del).toHaveBeenCalledWith('pos:settings:dev-1', 'pos:settings:dev-2');
+      await app.close();
+    });
+
     it('returns 400 when a settings key is missing', async () => {
       const { featureFlags: _omit, ...incomplete } = validSettings;
 
@@ -530,6 +559,26 @@ describe('pos-sync.admin-routes', () => {
             create: expect.objectContaining({ tenantId: 'tenant-1', storeId: 'store-1' }),
           })
         );
+        await app.close();
+      });
+
+      it('invalidates the settings cache for every device in the tenant, not just the operator\'s store', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.posOperator.create.mockResolvedValue({ id: 'op-1' });
+        mocks.prisma.posDevice.findMany.mockResolvedValue([{ id: 'dev-1' }, { id: 'dev-2' }, { id: 'dev-3' }]);
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/pos-operators',
+          payload: { storeId: 'store-1', name: 'Alice', role: 'CASHIER', permissions: ['void_sale'] },
+        });
+
+        expect(mocks.prisma.posDevice.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1' },
+          select: { id: true },
+        });
+        expect(mocks.redis.del).toHaveBeenCalledWith('pos:settings:dev-1', 'pos:settings:dev-2', 'pos:settings:dev-3');
         await app.close();
       });
 
@@ -1202,6 +1251,28 @@ describe('pos-sync.admin-routes', () => {
         await app.close();
       });
 
+      it('invalidates the settings cache for every device at the terminal\'s store', async () => {
+        mocks.prisma.paymentTerminal.create.mockResolvedValue({
+          id: 'pt-1', storeId: 'store-1', deviceId: null, type: 'CASH', name: 'Наличные',
+          enabled: true, sortOrder: 0, config: {},
+        });
+        mocks.prisma.posDevice.findMany.mockResolvedValue([{ id: 'dev-1' }]);
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/payment-terminals',
+          payload: { storeId: 'store-1', type: 'CASH', name: 'Наличные' },
+        });
+
+        expect(mocks.prisma.posDevice.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', storeId: 'store-1' },
+          select: { id: true },
+        });
+        expect(mocks.redis.del).toHaveBeenCalledWith('pos:settings:dev-1');
+        await app.close();
+      });
+
       it('encrypts secret-shaped config keys before create', async () => {
         mocks.prisma.paymentTerminal.create.mockResolvedValue({
           id: 'pt-3', storeId: 'store-1', deviceId: null, type: 'QR_UZQR', name: 'UzQR',
@@ -1544,6 +1615,28 @@ describe('pos-sync.admin-routes', () => {
           },
           select: { printer: true, scanner: true, pinPad: true, scale: true, display: true, updatedAt: true },
         });
+        await app.close();
+      });
+
+      it('invalidates only this device\'s settings cache entry', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+        mocks.prisma.posDeviceSettings.upsert.mockResolvedValue({
+          printer: { type: 'THERMAL', paperWidth: 58 },
+          scanner: null, pinPad: null, scale: null, display: null,
+          updatedAt: new Date(),
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'PUT',
+          url: '/pos-devices/dev-1/settings',
+          payload: { printer: { type: 'THERMAL', paperWidth: 58 } },
+        });
+
+        expect(mocks.redis.del).toHaveBeenCalledWith('pos:settings:dev-1');
+        // Device-scoped, not tenant/store-wide — no posDevice.findMany
+        // lookup needed, the deviceId is already known from the route.
+        expect(mocks.prisma.posDevice.findMany).not.toHaveBeenCalled();
         await app.close();
       });
 

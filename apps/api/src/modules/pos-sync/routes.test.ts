@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
     deviceActivation: { findUnique: vi.fn(), update: vi.fn() },
     posDevice: { update: vi.fn().mockResolvedValue({}), findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
     syncCursor: { upsert: vi.fn().mockResolvedValue({}) },
-    catalogSnapshot: { findFirst: vi.fn().mockResolvedValue(null) },
+    catalogSnapshot: { findFirst: vi.fn().mockResolvedValue(null), findUniqueOrThrow: vi.fn() },
     posSettings: { findUnique: vi.fn().mockResolvedValue(null) },
     platformPolicy: { findMany: vi.fn().mockResolvedValue([]) },
     platformPolicyVersion: { findFirst: vi.fn().mockResolvedValue({ version: 1 }) },
@@ -56,10 +56,15 @@ const mocks = vi.hoisted(() => ({
   // encrypt/decrypt; mocked here for the same determinism reasons as
   // admin-routes.test.ts.
   decrypt: vi.fn((value: string) => `decrypted(${value})`),
+  // §10/§26 — cache miss by default (get resolves null) so every
+  // existing test exercises the real DB path unless a test explicitly
+  // sets up a cache hit.
+  redis: { get: vi.fn().mockResolvedValue(null), setex: vi.fn().mockResolvedValue('OK'), del: vi.fn().mockResolvedValue(1) },
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../lib/encrypt.js', () => ({ encrypt: vi.fn((v: string) => v), decrypt: mocks.decrypt }));
+vi.mock('../../lib/redis.js', () => ({ default: () => mocks.redis }));
 
 import posSyncRoutes from './routes.js';
 
@@ -558,15 +563,14 @@ describe('pos-sync.routes', () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
-      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({
-        version: 3,
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ id: 'snap-3', version: 3 });
+      mocks.prisma.catalogSnapshot.findUniqueOrThrow.mockResolvedValue({
         payload: {
           categories: [{ id: 'c-1', name: 'Drinks' }],
           products: [{ id: 'p-1', name: 'Cola' }],
           barcodes: [],
           uzProfiles: [],
         },
-        createdAt: new Date(),
       });
 
       const app = await buildApp();
@@ -594,8 +598,9 @@ describe('pos-sync.routes', () => {
       mocks.prisma.posDevice.findUnique.mockResolvedValue({
         id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
       });
-      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({
-        version: 1, payload: { products: [{ id: 'p-1' }] }, createdAt: new Date(),
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ id: 'snap-1', version: 1 });
+      mocks.prisma.catalogSnapshot.findUniqueOrThrow.mockResolvedValue({
+        payload: { products: [{ id: 'p-1' }] },
       });
 
       const app = await buildApp();
@@ -611,6 +616,76 @@ describe('pos-sync.routes', () => {
       expect(body.data.categories).toEqual([]);
       expect(body.data.barcodes).toEqual([]);
       expect(body.data.uzProfiles).toEqual([]);
+      await app.close();
+    });
+
+    it('caches the payload under pos:catalog:{storeId}:{version} on a cache miss', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ id: 'snap-3', version: 3 });
+      mocks.prisma.catalogSnapshot.findUniqueOrThrow.mockResolvedValue({
+        payload: { categories: [], products: [{ id: 'p-1' }], barcodes: [], uzProfiles: [] },
+      });
+
+      const app = await buildApp();
+      await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(mocks.redis.get).toHaveBeenCalledWith('pos:catalog:s-1:3');
+      expect(mocks.redis.setex).toHaveBeenCalledWith(
+        'pos:catalog:s-1:3',
+        3600,
+        JSON.stringify({ categories: [], products: [{ id: 'p-1' }], barcodes: [], uzProfiles: [] })
+      );
+      await app.close();
+    });
+
+    it('serves the cached payload and skips the payload DB fetch on a cache hit', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ id: 'snap-3', version: 3 });
+      mocks.redis.get.mockResolvedValueOnce(
+        JSON.stringify({ categories: [], products: [{ id: 'cached' }], barcodes: [], uzProfiles: [] })
+      );
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.products).toEqual([{ id: 'cached' }]);
+      expect(mocks.prisma.catalogSnapshot.findUniqueOrThrow).not.toHaveBeenCalled();
+      expect(mocks.redis.setex).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('falls back to the DB when the cache read fails, without erroring the request', async () => {
+      mocks.prisma.posDevice.findUnique.mockResolvedValue({
+        id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+      });
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue({ id: 'snap-3', version: 3 });
+      mocks.prisma.catalogSnapshot.findUniqueOrThrow.mockResolvedValue({
+        payload: { categories: [], products: [{ id: 'p-1' }], barcodes: [], uzProfiles: [] },
+      });
+      mocks.redis.get.mockRejectedValueOnce(new Error('redis down'));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pos/v1/catalog/snapshot?storeId=s-1',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.products).toEqual([{ id: 'p-1' }]);
       await app.close();
     });
 
@@ -1315,6 +1390,85 @@ describe('pos-sync.routes', () => {
       // false and both fields null, not omitted.
       expect(op2).toMatchObject({ pinRequired: false, pinHashSha256: null, pinSalt: null });
       await app.close();
+    });
+
+    describe('settings cache (docs/POS_SYNC_API.md §10, pos:settings:{deviceId})', () => {
+      it('serves the cached response and skips every DB query on a cache hit', async () => {
+        mocks.prisma.posDevice.findUnique.mockResolvedValue({
+          id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+        });
+        mocks.redis.get.mockResolvedValueOnce(JSON.stringify({ settingsVersion: 9, cached: true }));
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().data).toEqual({ settingsVersion: 9, cached: true });
+        expect(mocks.redis.get).toHaveBeenCalledWith('pos:settings:dev-1');
+        expect(mocks.prisma.posSettings.findUnique).not.toHaveBeenCalled();
+        expect(mocks.redis.setex).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('caches the built response under pos:settings:{deviceId} with a 60s TTL on a cache miss', async () => {
+        mocks.prisma.posDevice.findUnique.mockResolvedValue({
+          id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(mocks.redis.setex).toHaveBeenCalledWith(
+          'pos:settings:dev-1',
+          60,
+          JSON.stringify(response.json().data)
+        );
+        await app.close();
+      });
+
+      it('falls back to the DB and still responds 200 when the cache read fails', async () => {
+        mocks.prisma.posDevice.findUnique.mockResolvedValue({
+          id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+        });
+        mocks.redis.get.mockRejectedValueOnce(new Error('redis down'));
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(mocks.prisma.posSettings.findUnique).toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('still responds 200 when the cache write fails', async () => {
+        mocks.prisma.posDevice.findUnique.mockResolvedValue({
+          id: 'dev-1', tenantId: 't-1', storeId: 's-1', status: 'ACTIVE', deviceCode: 'code-1',
+        });
+        mocks.redis.setex.mockRejectedValueOnce(new Error('redis down'));
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/pos/v1/settings',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        await app.close();
+      });
     });
 
     // docs/POS_SETTINGS_ARCHITECTURE.md §4 — server-side store/device

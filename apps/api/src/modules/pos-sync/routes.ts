@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, randomBytes } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+import getRedis from '../../lib/redis.js';
 import { getLicenseStatus } from '../../lib/billing.js';
 import { generateLoyaltyCardNumber } from '../../lib/loyalty-card.js';
 import { DEFAULT_TIERS, computeTier } from '../loyalty/routes.js';
@@ -118,6 +119,27 @@ const catalogChangesQuerySchema = z.object({
 // so a delta computed against a since-snapshot never risks missing a
 // deletion whose tombstone row has already been purged.
 const CATALOG_DELTA_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+// docs/POS_SYNC_API.md §10 — GET /pos/v1/settings response cache, keyed
+// per device (not per store) since the response is already resolved to
+// this specific device's paymentProviders/deviceSettings layers, not a
+// store-wide document. 60s, not longer: settings change rarely, but a
+// device polling right after an admin save should see it fresh within
+// one TTL window even if admin-routes.ts's invalidation (below) somehow
+// missed a case. Same pos-sync/admin-routes.ts also deletes this key —
+// keep the prefix identical in both files if it ever changes.
+const POS_SETTINGS_CACHE_PREFIX = 'pos:settings:';
+const POS_SETTINGS_CACHE_TTL = 60;
+
+// §9/§26 — a CatalogSnapshot's payload is immutable once created (a new
+// admin snapshot always gets a new version, never rewrites an old one),
+// so unlike the settings cache above this has no invalidation path to
+// worry about: the same (storeId, version) key can be cached
+// indefinitely. 1h TTL anyway rather than no expiry — bounds memory for
+// versions nobody's actively syncing against without needing any
+// eviction logic of its own.
+const POS_CATALOG_SNAPSHOT_CACHE_PREFIX = 'pos:catalog:';
+const POS_CATALOG_SNAPSHOT_CACHE_TTL = 3600;
 
 // docs/CUSTOMER_LOYALTY.md §5 — both optional at the schema level; the
 // "at least one of the two" requirement is enforced in the handler
@@ -993,36 +1015,68 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     // true). A device that already has an older version should prefer
     // GET /pos/v1/catalog/changes (§26) and only fall back here when
     // that endpoint reports requiresFullSync.
-    const snapshot = await prisma.catalogSnapshot.findFirst({
+    //
+    // Which version is "latest" can still only be answered by the DB (no
+    // way to know it from Redis alone), so this lookup always runs — but
+    // it's select-limited to just the version, not the (potentially
+    // large) payload column, which is only fetched below on a cache
+    // miss.
+    const latest = await prisma.catalogSnapshot.findFirst({
       where: { tenantId: device.tenantId, storeId: device.storeId },
       orderBy: { version: 'desc' },
+      select: { id: true, version: true },
     });
-    if (!snapshot) {
+    if (!latest) {
       return sendError(reply, 404, 'NO_SNAPSHOT_AVAILABLE', 'No catalog snapshot available yet', request);
     }
 
     await prisma.syncCursor.upsert({
       where: { deviceId: device.id },
-      create: { deviceId: device.id, lastCatalogVersion: snapshot.version, lastSyncAt: new Date() },
-      update: { lastCatalogVersion: snapshot.version, lastSyncAt: new Date() },
+      create: { deviceId: device.id, lastCatalogVersion: latest.version, lastSyncAt: new Date() },
+      update: { lastCatalogVersion: latest.version, lastSyncAt: new Date() },
     });
 
-    // Legacy snapshots (built before categories were added to the payload)
-    // stored only { products } — serve missing arrays as empty rather than
-    // failing or forcing a rebuild.
-    const payload = (snapshot.payload ?? {}) as Record<string, unknown[]>;
-    const body = {
-      categories: payload.categories ?? [],
-      products: payload.products ?? [],
-      barcodes: payload.barcodes ?? [],
-      uzProfiles: payload.uzProfiles ?? [],
-    };
+    // §26/this section's comment above the cache constants — a
+    // (storeId, version) snapshot payload never changes once created, so
+    // a cache hit here needs no freshness check at all, unlike the
+    // settings cache above.
+    const snapshotCacheKey = `${POS_CATALOG_SNAPSHOT_CACHE_PREFIX}${device.storeId}:${latest.version}`;
+    let body: { categories: unknown[]; products: unknown[]; barcodes: unknown[]; uzProfiles: unknown[] } | null = null;
+    try {
+      const cached = await getRedis().get(snapshotCacheKey);
+      if (cached) body = JSON.parse(cached);
+    } catch (err) {
+      request.log.warn({ err, storeId: device.storeId, version: latest.version }, 'pos-sync: catalog snapshot cache read failed, falling back to DB');
+    }
+
+    if (!body) {
+      const snapshot = await prisma.catalogSnapshot.findUniqueOrThrow({
+        where: { id: latest.id },
+        select: { payload: true },
+      });
+      // Legacy snapshots (built before categories were added to the
+      // payload) stored only { products } — serve missing arrays as
+      // empty rather than failing or forcing a rebuild.
+      const payload = (snapshot.payload ?? {}) as Record<string, unknown[]>;
+      body = {
+        categories: payload.categories ?? [],
+        products: payload.products ?? [],
+        barcodes: payload.barcodes ?? [],
+        uzProfiles: payload.uzProfiles ?? [],
+      };
+
+      try {
+        await getRedis().setex(snapshotCacheKey, POS_CATALOG_SNAPSHOT_CACHE_TTL, JSON.stringify(body));
+      } catch (err) {
+        request.log.warn({ err, storeId: device.storeId, version: latest.version }, 'pos-sync: catalog snapshot cache write failed');
+      }
+    }
 
     return sendSuccess(
       reply,
       200,
       {
-        version: snapshot.version,
+        version: latest.version,
         checksum: checksumOf(body),
         full: true,
         ...body,
@@ -1184,6 +1238,16 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
   fastify.get('/pos/v1/settings', { config: { rateLimit: POS_DEFAULT_RATE_LIMIT } }, async (request, reply) => {
     const device = await resolveAuthenticatedDevice(request, reply);
     if (!device) return;
+
+    const settingsCacheKey = `${POS_SETTINGS_CACHE_PREFIX}${device.id}`;
+    try {
+      const cached = await getRedis().get(settingsCacheKey);
+      if (cached) {
+        return sendSuccess(reply, 200, JSON.parse(cached), request);
+      }
+    } catch (err) {
+      request.log.warn({ err, deviceId: device.id }, 'pos-sync: settings cache read failed, falling back to DB');
+    }
 
     // docs/POS_POLICY_ENGINE.md §6 — this replaces the old single
     // { version, checksum, settings } shape with three independently
@@ -1409,33 +1473,36 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         }
       : null;
 
-    return sendSuccess(
-      reply,
-      200,
-      {
-        settingsVersion: stored?.version ?? 1,
-        // §5 — a computed sum of two independently monotonic counters,
-        // not a stored column; the till only needs to know *something*
-        // in `policies` changed, not which side.
-        policiesVersion: (platformPolicyVersion?.version ?? 1) + (stored?.policiesVersion ?? 1),
-        printTemplatesVersion: stored?.printTemplatesVersion ?? 1,
-        staffVersion: stored?.staffVersion ?? 1,
-        // §6/§10 — PosDeviceSettings has no independent counter column
-        // (schema comment on the Promise.all entry above); the row's
-        // own updatedAt, truncated to whole seconds, stands in for one.
-        // 0 (not 1, unlike every real-counter *Version field above) for
-        // a device with no PosDeviceSettings row at all — 0 can never
-        // collide with a real Unix-seconds timestamp, so it
-        // unambiguously means "nothing configured yet" rather than
-        // "configured once, a long time ago."
-        deviceSettingsVersion: deviceSettings?.updatedAt ? Math.floor(deviceSettings.updatedAt.getTime() / 1000) : 0,
-        settings,
-        policies: { rules: [...platformRules, ...tenantRules] },
-        printTemplates,
-        staff,
-      },
-      request
-    );
+    const responseData = {
+      settingsVersion: stored?.version ?? 1,
+      // §5 — a computed sum of two independently monotonic counters,
+      // not a stored column; the till only needs to know *something*
+      // in `policies` changed, not which side.
+      policiesVersion: (platformPolicyVersion?.version ?? 1) + (stored?.policiesVersion ?? 1),
+      printTemplatesVersion: stored?.printTemplatesVersion ?? 1,
+      staffVersion: stored?.staffVersion ?? 1,
+      // §6/§10 — PosDeviceSettings has no independent counter column
+      // (schema comment on the Promise.all entry above); the row's
+      // own updatedAt, truncated to whole seconds, stands in for one.
+      // 0 (not 1, unlike every real-counter *Version field above) for
+      // a device with no PosDeviceSettings row at all — 0 can never
+      // collide with a real Unix-seconds timestamp, so it
+      // unambiguously means "nothing configured yet" rather than
+      // "configured once, a long time ago."
+      deviceSettingsVersion: deviceSettings?.updatedAt ? Math.floor(deviceSettings.updatedAt.getTime() / 1000) : 0,
+      settings,
+      policies: { rules: [...platformRules, ...tenantRules] },
+      printTemplates,
+      staff,
+    };
+
+    try {
+      await getRedis().setex(settingsCacheKey, POS_SETTINGS_CACHE_TTL, JSON.stringify(responseData));
+    } catch (err) {
+      request.log.warn({ err, deviceId: device.id }, 'pos-sync: settings cache write failed');
+    }
+
+    return sendSuccess(reply, 200, responseData, request);
   });
 
   // docs/CUSTOMER_LOYALTY.md §5/§13 step 2 — cashier scans a card/QR or

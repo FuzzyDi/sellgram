@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { randomInt, randomBytes, createHash } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
+import getRedis from '../../lib/redis.js';
 import { planGuard } from '../../plugins/plan-guard.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 import { encrypt, decrypt } from '../../lib/encrypt.js';
@@ -9,6 +10,48 @@ import { fetchProductTypesById, mapProductForCatalog, CATALOG_PRODUCT_SELECT } f
 
 const ACTIVATION_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 const ACTIVATION_CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+// docs/POS_SYNC_API.md §10 — must match pos-sync/routes.ts's
+// POS_SETTINGS_CACHE_PREFIX exactly; that file's GET /pos/v1/settings
+// writes under this prefix, this file deletes under it on every write
+// that changes what that response contains.
+const POS_SETTINGS_CACHE_PREFIX = 'pos:settings:';
+
+// Deletes the cached GET /pos/v1/settings response for each given
+// device. Called after any write that changes store settings, staff
+// roster, payment terminals, or a device's own hardware profile — see
+// each call site's comment for why that particular set of devices.
+// Redis failure is non-fatal (apps/api/src/lib/plan-config.ts's
+// established pattern): a stale cache entry expires on its own via the
+// 60s TTL, so a failed invalidation here degrades to "up to 60s stale,"
+// never to wrong-forever.
+async function invalidatePosSettingsCache(deviceIds: string[]): Promise<void> {
+  if (deviceIds.length === 0) return;
+  try {
+    await getRedis().del(...deviceIds.map((id) => `${POS_SETTINGS_CACHE_PREFIX}${id}`));
+  } catch (err) {
+    console.error('[pos-sync] settings cache invalidation failed:', err);
+  }
+}
+
+// Payment terminals and store-wide settings are scoped to one store —
+// every device at that store (regardless of ACTIVE/INACTIVE status,
+// unlike the REFRESH_* CloudCommand fan-out) has a stale cache entry.
+async function invalidatePosSettingsCacheForStore(tenantId: string, storeId: string): Promise<void> {
+  const devices = await prisma.posDevice.findMany({ where: { tenantId, storeId }, select: { id: true } });
+  await invalidatePosSettingsCache(devices.map((d) => d.id));
+}
+
+// Staff (PosOperator) is not store-exclusive the way payment terminals
+// are in practice — an operator's storeId can change, and the roster a
+// device sees in GET /pos/v1/settings' `staff` block is scoped to the
+// device's own store today but could plausibly widen. Invalidating
+// every device in the tenant, not just the affected store, is the
+// conservative choice the task spec calls for here.
+async function invalidatePosSettingsCacheForTenant(tenantId: string): Promise<void> {
+  const devices = await prisma.posDevice.findMany({ where: { tenantId }, select: { id: true } });
+  await invalidatePosSettingsCache(devices.map((d) => d.id));
+}
 
 function generateActivationCode(): string {
   let code = '';
@@ -747,6 +790,8 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       // REFRESH_CATALOG fan-out above, for settings.
       await fanOutCommandToActiveDevices(tenantId, store.id, 'REFRESH_SETTINGS', { settingsVersion: settings.version });
 
+      await invalidatePosSettingsCacheForStore(tenantId, store.id);
+
       return reply.status(200).send({ success: true, data: settings });
     }
   );
@@ -817,6 +862,9 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         update: fields,
         select: { printer: true, scanner: true, pinPad: true, scale: true, display: true, updatedAt: true },
       });
+
+      // §6/§10 — only this device's own deviceSettings block changed.
+      await invalidatePosSettingsCache([device.id]);
 
       return reply.status(200).send({ success: true, data: settings });
     }
@@ -1255,6 +1303,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         select: OPERATOR_SAFE_SELECT,
       });
       await bumpStaffVersion(tenantId, store.id);
+      await invalidatePosSettingsCacheForTenant(tenantId);
 
       return reply.status(201).send({ success: true, data: operator });
     }
@@ -1315,6 +1364,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         select: OPERATOR_SAFE_SELECT,
       });
       await bumpStaffVersion(tenantId, existing.storeId);
+      await invalidatePosSettingsCacheForTenant(tenantId);
 
       return reply.status(200).send({ success: true, data: operator });
     }
@@ -1341,6 +1391,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         select: OPERATOR_SAFE_SELECT,
       });
       await bumpStaffVersion(tenantId, existing.storeId);
+      await invalidatePosSettingsCacheForTenant(tenantId);
 
       return reply.status(200).send({ success: true, data: operator });
     }
@@ -1358,6 +1409,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
 
       await prisma.posOperator.delete({ where: { id: existing.id } });
       await bumpStaffVersion(tenantId, existing.storeId);
+      await invalidatePosSettingsCacheForTenant(tenantId);
 
       return reply.status(200).send({ success: true, data: { id: existing.id } });
     }
@@ -1428,6 +1480,10 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         },
       });
 
+      // §4 — a new terminal changes settings.paymentProviders for every
+      // device at this store, store-level or device-level override alike.
+      await invalidatePosSettingsCacheForStore(tenantId, store.id);
+
       return reply.status(201).send({ success: true, data: maskTerminal(terminal) });
     }
   );
@@ -1495,6 +1551,8 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         data,
       });
 
+      await invalidatePosSettingsCacheForStore(tenantId, existing.storeId);
+
       return reply.status(200).send({ success: true, data: maskTerminal(terminal) });
     }
   );
@@ -1506,10 +1564,11 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const tenantId = request.tenantId!;
       const { id } = request.params as { id: string };
 
-      const existing = await prisma.paymentTerminal.findFirst({ where: { id, tenantId }, select: { id: true } });
+      const existing = await prisma.paymentTerminal.findFirst({ where: { id, tenantId }, select: { id: true, storeId: true } });
       if (!existing) return reply.status(404).send({ success: false, error: 'Payment terminal not found' });
 
       await prisma.paymentTerminal.delete({ where: { id: existing.id } });
+      await invalidatePosSettingsCacheForStore(tenantId, existing.storeId);
 
       return reply.status(200).send({ success: true, data: { id: existing.id } });
     }
