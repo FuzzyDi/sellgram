@@ -384,6 +384,12 @@ model Product {
   @@index([tenantId])
   @@index([tenantId, categoryId])
   @@index([tenantId, isActive])
+  // docs/POS_SYNC_API.md §26 — GET /products, snapshot builder, and
+  // product-search all filter deletedAt: null on top of tenantId.
+  @@index([tenantId, deletedAt])
+  // §26 delta sync's created/updated query: WHERE tenantId = ? AND
+  // updatedAt > sinceSnapshot.createdAt.
+  @@index([tenantId, updatedAt])
   @@map("products")
 }
 
@@ -1641,6 +1647,10 @@ model FiscalEvent {
   @@index([deviceId, shiftNumber])
   @@index([customerId])
   @@index([operatorId])
+  // Analytics/admin date-range queries (docs/POS_SYNC_API.md §12) filter
+  // by tenantId and order/range on createdAt (Cloud's own receipt time,
+  // not the till-reported createdAtMs).
+  @@index([tenantId, createdAt])
   @@map("fiscal_events")
 }
 
@@ -1771,6 +1781,9 @@ model PosPaymentEvent {
   @@index([tenantId, aggregateId])
   @@index([providerInvoiceId])
   @@index([providerPaymentId])
+  // Admin GET /pos-payment-events (docs/POS_SYNC_API.md §25) filters by
+  // tenantId and orders/ranges on createdAt.
+  @@index([tenantId, createdAt])
   @@map("pos_payment_events")
 }
 
