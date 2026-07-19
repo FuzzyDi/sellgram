@@ -1044,7 +1044,12 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     let body: { categories: unknown[]; products: unknown[]; barcodes: unknown[]; uzProfiles: unknown[] } | null = null;
     try {
       const cached = await getRedis().get(snapshotCacheKey);
-      if (cached) body = JSON.parse(cached);
+      if (cached) {
+        body = JSON.parse(cached);
+        request.log.debug({ storeId: device.storeId, version: latest.version }, 'pos-sync: catalog snapshot cache hit');
+      } else {
+        request.log.debug({ storeId: device.storeId, version: latest.version }, 'pos-sync: catalog snapshot cache miss');
+      }
     } catch (err) {
       request.log.warn({ err, storeId: device.storeId, version: latest.version }, 'pos-sync: catalog snapshot cache read failed, falling back to DB');
     }
@@ -1067,6 +1072,10 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
 
       try {
         await getRedis().setex(snapshotCacheKey, POS_CATALOG_SNAPSHOT_CACHE_TTL, JSON.stringify(body));
+        request.log.debug(
+          { storeId: device.storeId, version: latest.version, ttl: POS_CATALOG_SNAPSHOT_CACHE_TTL },
+          'pos-sync: catalog snapshot cache written'
+        );
       } catch (err) {
         request.log.warn({ err, storeId: device.storeId, version: latest.version }, 'pos-sync: catalog snapshot cache write failed');
       }
@@ -1243,8 +1252,10 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     try {
       const cached = await getRedis().get(settingsCacheKey);
       if (cached) {
+        request.log.debug({ deviceId: device.id }, 'pos-sync: settings cache hit');
         return sendSuccess(reply, 200, JSON.parse(cached), request);
       }
+      request.log.debug({ deviceId: device.id }, 'pos-sync: settings cache miss');
     } catch (err) {
       request.log.warn({ err, deviceId: device.id }, 'pos-sync: settings cache read failed, falling back to DB');
     }
@@ -1498,6 +1509,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
 
     try {
       await getRedis().setex(settingsCacheKey, POS_SETTINGS_CACHE_TTL, JSON.stringify(responseData));
+      request.log.debug({ deviceId: device.id, ttl: POS_SETTINGS_CACHE_TTL }, 'pos-sync: settings cache written');
     } catch (err) {
       request.log.warn({ err, deviceId: device.id }, 'pos-sync: settings cache write failed');
     }
