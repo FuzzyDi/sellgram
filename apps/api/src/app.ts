@@ -452,6 +452,15 @@ async function main() {
     fastify.log.error(`Soft-deleted product cleanup job failed to start: ${err.message}`);
   }
 
+  // Old catalog snapshot cleanup (once a day) — docs/POS_SYNC_API.md §26
+  try {
+    const { startCatalogSnapshotCleanupJob } = await import('./jobs/cleanup-old-catalog-snapshots.js');
+    startCatalogSnapshotCleanupJob();
+    fastify.log.info('Old catalog snapshot cleanup job started');
+  } catch (err: any) {
+    fastify.log.error(`Old catalog snapshot cleanup job failed to start: ${err.message}`);
+  }
+
   // Nightly subscription reminders
   setInterval(async () => {
     try {
