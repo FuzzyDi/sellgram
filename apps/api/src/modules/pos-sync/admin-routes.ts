@@ -392,6 +392,88 @@ async function bumpStaffVersion(tenantId: string, storeId: string) {
 // `createMany`'s own `skipDuplicates` express this — that flag only
 // skips rows violating a real unique constraint, which doesn't exist
 // here — so the exclusion is a plain pre-query instead.
+// Shared by POST /pos-devices/catalog-snapshot below and
+// triggerCatalogRefresh — the product/category query, product-type
+// derivation, and payload shape docs/POS_SYNC_API.md §9 documents were
+// duplicated between the two before this extraction. Tenant-scoped only
+// (no storeId): Product has no storeId column at all (schema.prisma) —
+// a tenant's catalog is one shared list across every one of its stores,
+// only the CatalogSnapshot row (and its version counter) is per-store.
+async function buildCatalogPayload(tenantId: string) {
+  const products = await prisma.product.findMany({
+    where: { tenantId, isActive: true, deletedAt: null },
+    select: CATALOG_PRODUCT_SELECT,
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const categories = await prisma.category.findMany({
+    where: { tenantId, isActive: true },
+    select: { id: true, name: true, slug: true, sortOrder: true, parentId: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  // docs/PRODUCT_TYPES.md §4/§6 — shared with routes.ts's
+  // product-search and catalog/changes endpoints (product-type-rules.ts).
+  const typesById = await fetchProductTypesById();
+  const productsForSnapshot = products.map((product) => mapProductForCatalog(product, typesById));
+
+  // barcodes/uzProfiles have no backing model yet (Barcode/
+  // ProductUzProfile, docs/SBGCLOUD_ARCHITECTURE.md §12) — stored empty
+  // so the payload shape matches docs/POS_SYNC_API.md §9.
+  return { categories, products: productsForSnapshot, barcodes: [] as unknown[], uzProfiles: [] as unknown[] };
+}
+
+// docs/SBGCLOUD_ARCHITECTURE.md §13 — automatic catalog refresh on any
+// tenant-panel product change (product/routes.ts's create/update/soft-
+// delete/bulk handlers), so admins no longer have to remember to press
+// "build snapshot" by hand after editing the catalog. Builds one new
+// CatalogSnapshot per active store (storeId narrows to just one; omitted
+// or null means every active store of the tenant) and nudges each
+// store's active devices via the same REFRESH_CATALOG fan-out the manual
+// endpoint below uses.
+//
+// Deliberately swallows its own errors: this runs as a side effect of a
+// product write, not the write itself — a snapshot/fan-out failure here
+// must never turn a successful product create/update/delete into a
+// failed HTTP response. A store's devices simply keep serving the
+// previous snapshot version until the next successful refresh (manual
+// or automatic).
+export async function triggerCatalogRefresh(tenantId: string, storeId?: string | null): Promise<void> {
+  try {
+    const stores = await prisma.store.findMany({
+      where: { tenantId, isActive: true, ...(storeId ? { id: storeId } : {}) },
+      select: { id: true },
+    });
+    if (stores.length === 0) return;
+
+    const payload = await buildCatalogPayload(tenantId);
+
+    for (const store of stores) {
+      try {
+        const last = await prisma.catalogSnapshot.findFirst({
+          where: { tenantId, storeId: store.id },
+          orderBy: { version: 'desc' },
+          select: { version: true },
+        });
+        const version = (last?.version ?? 0) + 1;
+
+        const snapshot = await prisma.catalogSnapshot.create({
+          data: { tenantId, storeId: store.id, version, payload: payload as any },
+          select: { version: true },
+        });
+
+        await fanOutCommandToActiveDevices(tenantId, store.id, 'REFRESH_CATALOG', { catalogVersion: snapshot.version });
+      } catch (err) {
+        // One store's failure must not stop the rest of the tenant's
+        // stores from getting their refresh.
+        console.error(`[pos-sync] triggerCatalogRefresh failed for store ${store.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('[pos-sync] triggerCatalogRefresh failed:', err);
+  }
+}
+
 async function fanOutCommandToActiveDevices(
   tenantId: string,
   storeId: string,
@@ -659,9 +741,13 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // Manually build and store a catalog snapshot for a store's devices to pull.
-  // Not triggered automatically on product/category changes — see
-  // docs/SBGCLOUD_ARCHITECTURE.md §13 (future sprint work).
+  // Manually build and store a catalog snapshot for a store's devices to
+  // pull. Also triggered automatically on product create/update/soft-
+  // delete/bulk changes (product/routes.ts, via triggerCatalogRefresh
+  // above) — this endpoint remains for an on-demand rebuild (e.g. after
+  // a category-only edit, which triggerCatalogRefresh's call sites don't
+  // cover) and stays the reference implementation triggerCatalogRefresh
+  // was factored out of.
   fastify.post(
     '/pos-devices/catalog-snapshot',
     { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
@@ -675,23 +761,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const store = await prisma.store.findFirst({ where: { id: body.data.storeId, tenantId }, select: { id: true } });
       if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
 
-      const products = await prisma.product.findMany({
-        where: { tenantId, isActive: true, deletedAt: null },
-        select: CATALOG_PRODUCT_SELECT,
-        orderBy: { createdAt: 'asc' },
-      });
-
-      const categories = await prisma.category.findMany({
-        where: { tenantId, isActive: true },
-        select: { id: true, name: true, slug: true, sortOrder: true, parentId: true },
-        orderBy: { sortOrder: 'asc' },
-      });
-
-      // docs/PRODUCT_TYPES.md §4/§6 — shared with routes.ts's
-      // product-search and catalog/changes endpoints (product-type-rules.ts),
-      // not a local copy anymore.
-      const typesById = await fetchProductTypesById();
-      const productsForSnapshot = products.map((product) => mapProductForCatalog(product, typesById));
+      const payload = await buildCatalogPayload(tenantId);
 
       const last = await prisma.catalogSnapshot.findFirst({
         where: { tenantId, storeId: store.id },
@@ -701,15 +771,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const version = (last?.version ?? 0) + 1;
 
       const snapshot = await prisma.catalogSnapshot.create({
-        data: {
-          tenantId,
-          storeId: store.id,
-          version,
-          // barcodes/uzProfiles have no backing model yet (Barcode/
-          // ProductUzProfile, docs/SBGCLOUD_ARCHITECTURE.md §12) — stored
-          // empty so the payload shape matches docs/POS_SYNC_API.md §9.
-          payload: { categories, products: productsForSnapshot, barcodes: [], uzProfiles: [] } as any,
-        },
+        data: { tenantId, storeId: store.id, version, payload: payload as any },
         select: { id: true, version: true, createdAt: true },
       });
 

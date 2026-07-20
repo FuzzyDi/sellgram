@@ -4,6 +4,7 @@ import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 import { uploadFile, ensureBucket, resolveBucketAndObjectPath, buildProductImageObjectPath } from '../../lib/s3.js';
+import { triggerCatalogRefresh } from '../pos-sync/admin-routes.js';
 import crypto from 'node:crypto';
 
 const listProductsQuerySchema = z.object({
@@ -203,6 +204,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
         },
         include: { variants: true, images: true },
       });
+      await triggerCatalogRefresh(request.tenantId!);
       return { success: true, data: product };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
@@ -227,6 +229,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
       where: { id: { in: body.ids }, tenantId: request.tenantId! },
       data: { isActive },
     });
+    await triggerCatalogRefresh(request.tenantId!);
     return { success: true, updated: result.count };
   });
 
@@ -264,6 +267,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
         data: { ...body, ...typeSyncFields } as any,
       });
       if (product.count === 0) return reply.status(404).send({ success: false, error: 'Product not found' });
+      await triggerCatalogRefresh(request.tenantId!);
       return { success: true, message: 'Product updated' };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
@@ -278,6 +282,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
       data: { isActive: false, deletedAt: new Date() },
     });
     if (result.count === 0) return reply.status(404).send({ success: false, error: 'Product not found' });
+    await triggerCatalogRefresh(request.tenantId!);
     return { success: true, message: 'Product deactivated' };
   });
 

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   prisma: {
-    store: { findFirst: vi.fn() },
+    store: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     posDevice: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     deviceActivation: { create: vi.fn() },
     product: { findMany: vi.fn().mockResolvedValue([]) },
@@ -64,7 +64,7 @@ vi.mock('../../lib/redis.js', () => ({ default: () => mocks.redis }));
 // (real) encryption, as opposed to legacy/never-encrypted plaintext.
 const FAKE_CIPHERTEXT = `${'a'.repeat(32)}:deadbeef:${'b'.repeat(32)}`;
 
-import posDeviceAdminRoutes from './admin-routes.js';
+import posDeviceAdminRoutes, { triggerCatalogRefresh } from './admin-routes.js';
 
 async function buildApp() {
   const app = Fastify();
@@ -262,6 +262,73 @@ describe('pos-sync.admin-routes', () => {
       expect(response.statusCode).toBe(201);
       expect(mocks.prisma.cloudCommand.createMany).not.toHaveBeenCalled();
       await app.close();
+    });
+  });
+
+  // docs/SBGCLOUD_ARCHITECTURE.md §13 — called directly (not via HTTP)
+  // by product/routes.ts after create/update/bulk/soft-delete.
+  describe('triggerCatalogRefresh', () => {
+    it('does nothing when the tenant has no active stores', async () => {
+      mocks.prisma.store.findMany.mockResolvedValueOnce([]);
+      await triggerCatalogRefresh('tenant-1');
+      expect(mocks.prisma.catalogSnapshot.create).not.toHaveBeenCalled();
+    });
+
+    it('builds one new snapshot per active store and fans out REFRESH_CATALOG to each', async () => {
+      mocks.prisma.store.findMany.mockResolvedValueOnce([{ id: 'store-1' }, { id: 'store-2' }]);
+      mocks.prisma.product.findMany.mockResolvedValueOnce([
+        { id: 'p-1', name: 'Widget', sku: 'W1', price: 10000, currency: 'UZS', stockQty: 5, categoryId: null, variants: [] },
+      ]);
+      mocks.prisma.catalogSnapshot.findFirst
+        .mockResolvedValueOnce({ version: 2 }) // store-1
+        .mockResolvedValueOnce(null); // store-2
+      mocks.prisma.catalogSnapshot.create
+        .mockResolvedValueOnce({ version: 3 })
+        .mockResolvedValueOnce({ version: 1 });
+      mocks.prisma.posDevice.findMany.mockResolvedValue([{ id: 'dev-1' }]);
+
+      await triggerCatalogRefresh('tenant-1');
+
+      expect(mocks.prisma.catalogSnapshot.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ storeId: 'store-1', version: 3 }) })
+      );
+      expect(mocks.prisma.catalogSnapshot.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ storeId: 'store-2', version: 1 }) })
+      );
+      // Product/category/productType queried once, not once per store —
+      // the catalog itself is tenant-wide, not per-store.
+      expect(mocks.prisma.product.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('narrows to a single store when storeId is given', async () => {
+      mocks.prisma.store.findMany.mockResolvedValueOnce([{ id: 'store-1' }]);
+      mocks.prisma.catalogSnapshot.create.mockResolvedValueOnce({ version: 1 });
+
+      await triggerCatalogRefresh('tenant-1', 'store-1');
+
+      expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', isActive: true, id: 'store-1' },
+        select: { id: true },
+      });
+    });
+
+    it("one store's failure does not stop the others from getting a fresh snapshot", async () => {
+      mocks.prisma.store.findMany.mockResolvedValueOnce([{ id: 'store-1' }, { id: 'store-2' }]);
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValue(null);
+      mocks.prisma.catalogSnapshot.create
+        .mockRejectedValueOnce(new Error('db down for store-1'))
+        .mockResolvedValueOnce({ version: 1 });
+
+      await expect(triggerCatalogRefresh('tenant-1')).resolves.toBeUndefined();
+
+      expect(mocks.prisma.catalogSnapshot.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ storeId: 'store-2' }) })
+      );
+    });
+
+    it('never throws — a total failure (e.g. the product query itself) is swallowed', async () => {
+      mocks.prisma.store.findMany.mockRejectedValueOnce(new Error('db unreachable'));
+      await expect(triggerCatalogRefresh('tenant-1')).resolves.toBeUndefined();
     });
   });
 

@@ -4,10 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     product: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-    category: { findFirst: vi.fn() },
+    category: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     productVariant: { findFirst: vi.fn(), update: vi.fn() },
     productImage: { count: vi.fn(), create: vi.fn(), findFirst: vi.fn(), delete: vi.fn() },
     stockMovement: { create: vi.fn().mockResolvedValue({}) },
+    // pos-sync/admin-routes.js's triggerCatalogRefresh (imported by
+    // routes.ts, called after every product create/update/bulk/delete)
+    // shares this same mocked prisma client. No active stores by
+    // default — triggerCatalogRefresh's own early return then means
+    // productType/catalogSnapshot/cloudCommand/posDevice never need
+    // mocking here at all.
+    store: { findMany: vi.fn().mockResolvedValue([]) },
+    productType: { findMany: vi.fn().mockResolvedValue([]) },
+    catalogSnapshot: { findFirst: vi.fn(), create: vi.fn() },
+    cloudCommand: { findMany: vi.fn().mockResolvedValue([]), createMany: vi.fn() },
+    posDevice: { findMany: vi.fn().mockResolvedValue([]) },
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
@@ -84,6 +95,37 @@ describe('product.routes', () => {
           data: expect.objectContaining({ tenantId: 'tenant-1', categoryId: 'cat-1' }),
         })
       );
+      // triggerCatalogRefresh (pos-sync/admin-routes.js) — tenant-wide
+      // (storeId omitted), fires after the product write succeeds.
+      expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', isActive: true },
+        select: { id: true },
+      });
+      await app.close();
+    });
+
+    it('builds a new CatalogSnapshot and fans out REFRESH_CATALOG when the tenant has an active store', async () => {
+      mocks.prisma.category.findFirst.mockResolvedValue({ id: 'cat-1' });
+      mocks.prisma.product.create.mockResolvedValue({ id: 'p-1', name: 'Widget', variants: [], images: [] });
+      mocks.prisma.product.findMany.mockResolvedValueOnce([]);
+      mocks.prisma.store.findMany.mockResolvedValueOnce([{ id: 'store-1' }]);
+      mocks.prisma.catalogSnapshot.findFirst.mockResolvedValueOnce({ version: 4 });
+      mocks.prisma.catalogSnapshot.create.mockResolvedValueOnce({ version: 5 });
+      mocks.prisma.posDevice.findMany.mockResolvedValueOnce([{ id: 'dev-1' }]);
+
+      const app = await buildApp();
+      await app.inject({
+        method: 'POST',
+        url: '/products',
+        payload: { name: 'Widget', price: 5000, categoryId: 'cat-1' },
+      });
+
+      expect(mocks.prisma.catalogSnapshot.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ tenantId: 'tenant-1', storeId: 'store-1', version: 5 }) })
+      );
+      expect(mocks.prisma.cloudCommand.createMany).toHaveBeenCalledWith({
+        data: [{ tenantId: 'tenant-1', deviceId: 'dev-1', type: 'REFRESH_CATALOG', payload: { catalogVersion: 5 }, status: 'PENDING' }],
+      });
       await app.close();
     });
 
@@ -97,6 +139,26 @@ describe('product.routes', () => {
       });
       expect(response.statusCode).toBe(200);
       expect(mocks.prisma.category.findFirst).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  // ─── PATCH /products/bulk ──────────────────────────────────────────────────
+
+  describe('PATCH /products/bulk', () => {
+    it('triggers a tenant-wide catalog refresh after a bulk activate/deactivate', async () => {
+      mocks.prisma.product.updateMany.mockResolvedValue({ count: 3 });
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/products/bulk',
+        payload: { ids: ['ckxxxxxxxxxxxxxxxxxxxxxx1', 'ckxxxxxxxxxxxxxxxxxxxxxx2'], action: 'deactivate' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', isActive: true },
+        select: { id: true },
+      });
       await app.close();
     });
   });
@@ -124,6 +186,7 @@ describe('product.routes', () => {
         payload: { name: 'New name' },
       });
       expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.store.findMany).not.toHaveBeenCalled();
       await app.close();
     });
 
@@ -139,6 +202,10 @@ describe('product.routes', () => {
       expect(mocks.prisma.product.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1' }) })
       );
+      expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', isActive: true },
+        select: { id: true },
+      });
       await app.close();
     });
 
@@ -177,6 +244,10 @@ describe('product.routes', () => {
           data: { isActive: false, deletedAt: expect.any(Date) },
         })
       );
+      expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', isActive: true },
+        select: { id: true },
+      });
       await app.close();
     });
 
@@ -187,6 +258,7 @@ describe('product.routes', () => {
       const app = await buildApp();
       const response = await app.inject({ method: 'DELETE', url: '/products/p-1' });
       expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.store.findMany).not.toHaveBeenCalled();
       await app.close();
     });
   });
