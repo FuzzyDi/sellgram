@@ -64,7 +64,7 @@ vi.mock('../../lib/redis.js', () => ({ default: () => mocks.redis }));
 // (real) encryption, as opposed to legacy/never-encrypted plaintext.
 const FAKE_CIPHERTEXT = `${'a'.repeat(32)}:deadbeef:${'b'.repeat(32)}`;
 
-import posDeviceAdminRoutes, { triggerCatalogRefresh } from './admin-routes.js';
+import posDeviceAdminRoutes, { triggerCatalogRefresh, triggerSettingsRefresh } from './admin-routes.js';
 
 async function buildApp() {
   const app = Fastify();
@@ -329,6 +329,62 @@ describe('pos-sync.admin-routes', () => {
     it('never throws — a total failure (e.g. the product query itself) is swallowed', async () => {
       mocks.prisma.store.findMany.mockRejectedValueOnce(new Error('db unreachable'));
       await expect(triggerCatalogRefresh('tenant-1')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('triggerSettingsRefresh', () => {
+    it('sends a REFRESH_SETTINGS command to every active device at every active store when storeId is omitted', async () => {
+      mocks.prisma.store.findMany.mockResolvedValueOnce([{ id: 'store-1' }, { id: 'store-2' }]);
+      mocks.prisma.posDevice.findMany.mockResolvedValue([{ id: 'dev-1' }]);
+
+      await triggerSettingsRefresh('tenant-1');
+
+      expect(mocks.prisma.cloudCommand.createMany).toHaveBeenCalledWith({
+        data: [{ tenantId: 'tenant-1', deviceId: 'dev-1', type: 'REFRESH_SETTINGS', payload: {}, status: 'PENDING' }],
+      });
+      expect(mocks.prisma.cloudCommand.createMany).toHaveBeenCalledTimes(2);
+    });
+
+    it('narrows to a single store when storeId is given', async () => {
+      mocks.prisma.store.findMany.mockResolvedValueOnce([{ id: 'store-1' }]);
+
+      await triggerSettingsRefresh('tenant-1', 'store-1');
+
+      expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', isActive: true, id: 'store-1' },
+        select: { id: true },
+      });
+    });
+
+    it('does nothing when the tenant has no active stores', async () => {
+      mocks.prisma.store.findMany.mockResolvedValueOnce([]);
+      await triggerSettingsRefresh('tenant-1');
+      expect(mocks.prisma.cloudCommand.createMany).not.toHaveBeenCalled();
+    });
+
+    it("one store's failure does not stop the fan-out to the others", async () => {
+      mocks.prisma.store.findMany.mockResolvedValueOnce([{ id: 'store-1' }, { id: 'store-2' }]);
+      // .mockResolvedValue([{ deviceId: 'dev-2' }]) (not ...Once) set by
+      // an earlier POST /pos-devices/catalog-snapshot test persists past
+      // clearAllMocks() (that only clears call history, not
+      // implementations) — reset explicitly rather than inherit it.
+      mocks.prisma.cloudCommand.findMany.mockResolvedValue([]);
+      // .mockImplementationOnce (not a persistent .mockImplementation)
+      // so this only affects the next two calls, not every later test.
+      mocks.prisma.posDevice.findMany
+        .mockImplementationOnce(() => Promise.reject(new Error('db down for store-1')))
+        .mockImplementationOnce(() => Promise.resolve([{ id: 'dev-2' }]));
+
+      await expect(triggerSettingsRefresh('tenant-1')).resolves.toBeUndefined();
+
+      expect(mocks.prisma.cloudCommand.createMany).toHaveBeenCalledWith({
+        data: [{ tenantId: 'tenant-1', deviceId: 'dev-2', type: 'REFRESH_SETTINGS', payload: {}, status: 'PENDING' }],
+      });
+    });
+
+    it('never throws — a total failure (e.g. the store query itself) is swallowed', async () => {
+      mocks.prisma.store.findMany.mockRejectedValueOnce(new Error('db unreachable'));
+      await expect(triggerSettingsRefresh('tenant-1')).resolves.toBeUndefined();
     });
   });
 
@@ -646,6 +702,10 @@ describe('pos-sync.admin-routes', () => {
           select: { id: true },
         });
         expect(mocks.redis.del).toHaveBeenCalledWith('pos:settings:dev-1', 'pos:settings:dev-2', 'pos:settings:dev-3');
+        expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', isActive: true },
+          select: { id: true },
+        });
         await app.close();
       });
 
@@ -823,6 +883,12 @@ describe('pos-sync.admin-routes', () => {
         expect(mocks.prisma.posSettings.upsert).toHaveBeenCalledWith(
           expect.objectContaining({ where: { storeId: 'store-1' }, update: { staffVersion: { increment: 1 } } })
         );
+        // triggerSettingsRefresh — tenant-wide (null), same reasoning as
+        // invalidatePosSettingsCacheForTenant above it.
+        expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', isActive: true },
+          select: { id: true },
+        });
         await app.close();
       });
 
@@ -966,6 +1032,10 @@ describe('pos-sync.admin-routes', () => {
         expect(mocks.prisma.posSettings.upsert).toHaveBeenCalledWith(
           expect.objectContaining({ where: { storeId: 'store-1' }, update: { staffVersion: { increment: 1 } } })
         );
+        expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', isActive: true },
+          select: { id: true },
+        });
         await app.close();
       });
 
@@ -996,6 +1066,10 @@ describe('pos-sync.admin-routes', () => {
         expect(mocks.prisma.posSettings.upsert).toHaveBeenCalledWith(
           expect.objectContaining({ where: { storeId: 'store-1' }, update: { staffVersion: { increment: 1 } } })
         );
+        expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', isActive: true },
+          select: { id: true },
+        });
         await app.close();
       });
 
@@ -1337,6 +1411,10 @@ describe('pos-sync.admin-routes', () => {
           select: { id: true },
         });
         expect(mocks.redis.del).toHaveBeenCalledWith('pos:settings:dev-1');
+        expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', isActive: true, id: 'store-1' },
+          select: { id: true },
+        });
         await app.close();
       });
 
@@ -1419,6 +1497,10 @@ describe('pos-sync.admin-routes', () => {
 
         expect(response.statusCode).toBe(200);
         expect(response.json().data.config).toEqual({ apiKey: '••••••' });
+        expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', isActive: true, id: 'store-1' },
+          select: { id: true },
+        });
         await app.close();
       });
 
@@ -1522,11 +1604,15 @@ describe('pos-sync.admin-routes', () => {
 
     describe('DELETE /payment-terminals/:id', () => {
       it('deletes a terminal', async () => {
-        mocks.prisma.paymentTerminal.findFirst.mockResolvedValue({ id: 'pt-1' });
+        mocks.prisma.paymentTerminal.findFirst.mockResolvedValue({ id: 'pt-1', storeId: 'store-1' });
         const app = await buildApp();
         const response = await app.inject({ method: 'DELETE', url: '/payment-terminals/pt-1' });
         expect(response.statusCode).toBe(200);
         expect(mocks.prisma.paymentTerminal.delete).toHaveBeenCalledWith({ where: { id: 'pt-1' } });
+        expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', isActive: true, id: 'store-1' },
+          select: { id: true },
+        });
         await app.close();
       });
 
@@ -1685,8 +1771,8 @@ describe('pos-sync.admin-routes', () => {
         await app.close();
       });
 
-      it('invalidates only this device\'s settings cache entry', async () => {
-        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1' });
+      it('invalidates only this device\'s settings cache entry and refreshes only its own store', async () => {
+        mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1', storeId: 'store-1' });
         mocks.prisma.posDeviceSettings.upsert.mockResolvedValue({
           printer: { type: 'THERMAL', paperWidth: 58 },
           scanner: null, pinPad: null, scale: null, display: null,
@@ -1704,6 +1790,10 @@ describe('pos-sync.admin-routes', () => {
         // Device-scoped, not tenant/store-wide — no posDevice.findMany
         // lookup needed, the deviceId is already known from the route.
         expect(mocks.prisma.posDevice.findMany).not.toHaveBeenCalled();
+        expect(mocks.prisma.store.findMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', isActive: true, id: 'store-1' },
+          select: { id: true },
+        });
         await app.close();
       });
 

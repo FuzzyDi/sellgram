@@ -474,6 +474,36 @@ export async function triggerCatalogRefresh(tenantId: string, storeId?: string |
   }
 }
 
+// Same shape as triggerCatalogRefresh above, but there is no PosSettings
+// row to build or version to bump here — a device's GET /pos/v1/settings
+// response is assembled fresh from several independent sources (staff
+// roster, payment terminals, device hardware profile, the PosSettings
+// document itself), and this trigger covers writes to the sources that
+// don't already do their own REFRESH_SETTINGS fan-out (PUT
+// /pos-devices/settings already does, directly, with a real
+// settingsVersion payload — this is for everything else). `{}` payload:
+// unlike catalogVersion above, there's no single version number that
+// covers "an operator changed" or "a payment terminal changed," so the
+// command carries no payload at all — it's purely a "go re-pull" nudge.
+export async function triggerSettingsRefresh(tenantId: string, storeId?: string | null): Promise<void> {
+  try {
+    const stores = await prisma.store.findMany({
+      where: { tenantId, isActive: true, ...(storeId ? { id: storeId } : {}) },
+      select: { id: true },
+    });
+
+    for (const store of stores) {
+      try {
+        await fanOutCommandToActiveDevices(tenantId, store.id, 'REFRESH_SETTINGS', {});
+      } catch (err) {
+        console.error(`[pos-sync] triggerSettingsRefresh failed for store ${store.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('[pos-sync] triggerSettingsRefresh failed:', err);
+  }
+}
+
 async function fanOutCommandToActiveDevices(
   tenantId: string,
   storeId: string,
@@ -900,7 +930,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ success: false, error: body.error.errors[0]?.message ?? 'Invalid input' });
       }
 
-      const device = await prisma.posDevice.findFirst({ where: { id: deviceId, tenantId }, select: { id: true } });
+      const device = await prisma.posDevice.findFirst({ where: { id: deviceId, tenantId }, select: { id: true, storeId: true } });
       if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
 
       // §10 — `pinpad` (canonical) wins if the caller sent it at all
@@ -927,6 +957,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
 
       // §6/§10 — only this device's own deviceSettings block changed.
       await invalidatePosSettingsCache([device.id]);
+      await triggerSettingsRefresh(tenantId, device.storeId);
 
       return reply.status(200).send({ success: true, data: settings });
     }
@@ -1366,6 +1397,10 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       });
       await bumpStaffVersion(tenantId, store.id);
       await invalidatePosSettingsCacheForTenant(tenantId);
+      // Staff is tenant-scoped in practice, not just per operator's own
+      // store (invalidatePosSettingsCacheForTenant's comment above) —
+      // same reasoning applies to nudging devices to re-pull.
+      await triggerSettingsRefresh(tenantId, null);
 
       return reply.status(201).send({ success: true, data: operator });
     }
@@ -1427,6 +1462,10 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       });
       await bumpStaffVersion(tenantId, existing.storeId);
       await invalidatePosSettingsCacheForTenant(tenantId);
+      // Staff is tenant-scoped in practice, not just per operator's own
+      // store (invalidatePosSettingsCacheForTenant's comment above) —
+      // same reasoning applies to nudging devices to re-pull.
+      await triggerSettingsRefresh(tenantId, null);
 
       return reply.status(200).send({ success: true, data: operator });
     }
@@ -1454,6 +1493,10 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       });
       await bumpStaffVersion(tenantId, existing.storeId);
       await invalidatePosSettingsCacheForTenant(tenantId);
+      // Staff is tenant-scoped in practice, not just per operator's own
+      // store (invalidatePosSettingsCacheForTenant's comment above) —
+      // same reasoning applies to nudging devices to re-pull.
+      await triggerSettingsRefresh(tenantId, null);
 
       return reply.status(200).send({ success: true, data: operator });
     }
@@ -1472,6 +1515,10 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       await prisma.posOperator.delete({ where: { id: existing.id } });
       await bumpStaffVersion(tenantId, existing.storeId);
       await invalidatePosSettingsCacheForTenant(tenantId);
+      // Staff is tenant-scoped in practice, not just per operator's own
+      // store (invalidatePosSettingsCacheForTenant's comment above) —
+      // same reasoning applies to nudging devices to re-pull.
+      await triggerSettingsRefresh(tenantId, null);
 
       return reply.status(200).send({ success: true, data: { id: existing.id } });
     }
@@ -1545,6 +1592,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       // §4 — a new terminal changes settings.paymentProviders for every
       // device at this store, store-level or device-level override alike.
       await invalidatePosSettingsCacheForStore(tenantId, store.id);
+      await triggerSettingsRefresh(tenantId, store.id);
 
       return reply.status(201).send({ success: true, data: maskTerminal(terminal) });
     }
@@ -1614,6 +1662,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       });
 
       await invalidatePosSettingsCacheForStore(tenantId, existing.storeId);
+      await triggerSettingsRefresh(tenantId, existing.storeId);
 
       return reply.status(200).send({ success: true, data: maskTerminal(terminal) });
     }
@@ -1631,6 +1680,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
 
       await prisma.paymentTerminal.delete({ where: { id: existing.id } });
       await invalidatePosSettingsCacheForStore(tenantId, existing.storeId);
+      await triggerSettingsRefresh(tenantId, existing.storeId);
 
       return reply.status(200).send({ success: true, data: { id: existing.id } });
     }
