@@ -39,6 +39,7 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
   const [activity, setActivity] = useState<any[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
   const [bots, setBots] = useState<any[]>([]);
+  const [stalledOnboarding, setStalledOnboarding] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
       systemApi.activity('limit=10').then((d) => setActivity(d?.items || d || [])),
       systemApi.pendingInvoices().then(setPendingInvoices),
       systemApi.bots().then(setBots),
+      systemApi.stalledOnboarding().then(setStalledOnboarding),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -57,6 +59,9 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
   if (pendingInvoices.length > 0) alerts.push({ text: `${pendingInvoices.length} инвойс(ов) ожидают подтверждения`, severity: 'warn', page: 'invoices' });
   if (dash?.expiringPlans > 0) {
     alerts.push({ text: `${dash.expiringPlans} план(ов) истекает в течение 7 дней`, severity: 'warn', page: 'tenants' });
+  }
+  if (stalledOnboarding.length > 0) {
+    alerts.push({ text: `${stalledOnboarding.length} регистраци(й) зависли без подключённого бота`, severity: 'warn', page: 'tenants' });
   }
   const failedBots = bots.filter((b) => !b.isActive);
   if (failedBots.length > 0) alerts.push({ text: `${failedBots.length} бот(ов) неактивны`, severity: 'error', page: 'monitoring' });

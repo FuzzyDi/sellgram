@@ -52,6 +52,7 @@ import {
   updateSystemSoftMode,
   extendTenantPlan,
   getExpiringTenants,
+  getStalledOnboarding,
   sendReminderToTenant,
   getMonitorSettings,
   updateMonitorSettings,
@@ -361,6 +362,12 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
   fastify.get('/tenants/expiring', { preHandler: [authenticateSystem] }, async (request) => {
     const days = Math.min(Number((request.query as any).days) || 7, 30);
     const data = await getExpiringTenants(days);
+    return { success: true, data };
+  });
+
+  fastify.get('/tenants/stalled-onboarding', { preHandler: [authenticateSystem] }, async (request) => {
+    const hours = Math.min(Number((request.query as any).hours) || 24, 24 * 90);
+    const data = await getStalledOnboarding(hours);
     return { success: true, data };
   });
 

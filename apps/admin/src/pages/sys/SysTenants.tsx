@@ -331,6 +331,43 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
   );
 }
 
+function StalledOnboardingPanel({ onSelect }: { onSelect: (t: any) => void }) {
+  const [items, setItems] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    systemApi.stalledOnboarding().then(setItems).catch(() => setItems([]));
+  }, []);
+
+  if (!items || items.length === 0) return null;
+
+  return (
+    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
+      <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e', marginBottom: 10 }}>
+        ⚠️ Зависшие регистрации ({items.length}) — магазин создан, бот так и не подключён (или магазина ещё нет)
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {items.map((t) => (
+          <div key={t.id} onClick={() => onSelect(t)}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', fontSize: 13 }}>
+            <span style={{ fontWeight: 700 }}>{t.name}</span>
+            <span style={{ color: '#94a3b8', fontSize: 11 }}>{t.slug}</span>
+            <span style={{ background: t.stage === 'NO_STORE' ? '#fee2e2' : '#fef3c7', color: t.stage === 'NO_STORE' ? '#991b1b' : '#92400e', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+              {t.stage === 'NO_STORE' ? 'магазин не создан' : 'бот не подключён'}
+            </span>
+            <span style={{ color: '#64748b' }}>{t.daysSinceRegistration} дн. с регистрации</span>
+            {t.ownerEmail && (
+              <a href={`mailto:${t.ownerEmail}`} onClick={(e) => e.stopPropagation()} style={{ marginLeft: 'auto', color: '#3b82f6', fontSize: 12 }}>
+                ✉ {t.ownerEmail}
+              </a>
+            )}
+            {t.ownerHasTelegram && <span style={{ fontSize: 12, color: '#0ea5e9' }}>📱 TG</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SysTenants() {
   const [data, setData] = useState<any>(null);
   const [search, setSearch] = useState('');
@@ -363,6 +400,8 @@ export default function SysTenants() {
   return (
     <div style={{ padding: 28 }}>
       <h1 style={{ margin: '0 0 20px', fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Тенанты</h1>
+
+      <StalledOnboardingPanel onSelect={setSelected} />
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <input value={search} onChange={(e) => handleSearch(e.target.value)} placeholder="Поиск по имени / slug..."

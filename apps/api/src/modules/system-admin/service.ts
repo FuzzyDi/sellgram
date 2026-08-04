@@ -1060,6 +1060,56 @@ export async function getExpiringTenants(days = 7) {
   }));
 }
 
+// ─── Stalled Onboarding ─────────────────────────────────────────────────────
+
+// Tenants that registered but never got a bot connected — no store at all,
+// or a store row that exists but its bot check/activate never succeeded
+// (botUsername stays null). Mirrors the check the admin frontend itself
+// uses to decide whether to reopen the onboarding wizard (App.tsx).
+export async function getStalledOnboarding(hours = 24) {
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+  const tenants = await prisma.tenant.findMany({
+    where: {
+      deletedAt: null,
+      createdAt: { lte: cutoff },
+      stores: { none: { botUsername: { not: null } } },
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      plan: true,
+      createdAt: true,
+      stores: { select: { id: true, name: true, createdAt: true } },
+      users: {
+        where: { role: 'OWNER' },
+        select: { email: true, name: true, adminTelegramId: true },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const now = Date.now();
+  return tenants.map((t) => {
+    const owner = t.users[0];
+    return {
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      plan: t.plan,
+      createdAt: t.createdAt,
+      daysSinceRegistration: Math.floor((now - t.createdAt.getTime()) / (24 * 60 * 60 * 1000)),
+      stage: t.stores.length === 0 ? 'NO_STORE' : 'STORE_NOT_CONNECTED',
+      storeName: t.stores[0]?.name ?? null,
+      ownerName: owner?.name ?? null,
+      ownerEmail: owner?.email ?? null,
+      ownerHasTelegram: Boolean(owner?.adminTelegramId),
+    };
+  });
+}
+
 export async function sendReminderToTenant(tenantId: string): Promise<{ sent: boolean; reason?: string }> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
