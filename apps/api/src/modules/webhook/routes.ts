@@ -1,23 +1,33 @@
 import type { FastifyInstance } from 'fastify';
 import { randomBytes } from 'crypto';
+import { isIP } from 'net';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
+import { isUnsafeResolvedAddress } from '../../lib/ssrf-guard.js';
 
 const ALLOWED_EVENTS = ['order.created', 'order.status_changed', 'order.paid', 'customer.created', '*'] as const;
 
 // Block SSRF: reject URLs that resolve to private/internal network addresses.
-// Covers localhost, loopback, RFC-1918 ranges, Docker service names, and cloud metadata IPs.
-const BLOCKED_HOSTNAMES = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|::1|redis|postgres|minio|api|admin|miniapp|nginx)$/i;
-const PRIVATE_IP = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/;
+// Covers localhost, Docker service names, and — via isUnsafeResolvedAddress —
+// any literal IPv4/IPv6 private, loopback, link-local or metadata address.
+// This only catches a hostname that's already a literal IP; a symbolic
+// hostname passes here even if it currently resolves to a private address,
+// because DNS can change after this check runs — the real enforcement for
+// that (re-resolve immediately before each delivery attempt) lives in
+// lib/webhook-dispatcher.ts, not here.
+const BLOCKED_HOSTNAMES = /^(localhost|redis|postgres|minio|api|admin|miniapp|nginx)$/i;
 
 function isSafeWebhookUrl(raw: string): boolean {
   try {
     const u = new URL(raw);
     if (u.protocol !== 'https:') return false;
-    const host = u.hostname.toLowerCase();
+    // URL.hostname keeps the brackets for an IPv6 literal ("[::1]") —
+    // net.isIP doesn't parse those, so a bracketed literal silently passed
+    // as "not an IP" and skipped the range check entirely until this strip.
+    const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
     if (BLOCKED_HOSTNAMES.test(host)) return false;
-    if (PRIVATE_IP.test(host)) return false;
+    if (isIP(host) && isUnsafeResolvedAddress(host)) return false;
     return true;
   } catch {
     return false;

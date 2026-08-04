@@ -1,5 +1,31 @@
 import { createHmac, randomBytes } from 'crypto';
+import { lookup } from 'dns/promises';
 import prisma from './prisma.js';
+import { isUnsafeResolvedAddress } from './ssrf-guard.js';
+
+// A webhook URL's hostname passes SSRF validation once, at create/update
+// time (webhook/routes.ts's isSafeWebhookUrl) — but a tenant fully controls
+// their own DNS, so a hostname that was public then can be repointed at an
+// internal address (169.254.169.254, a container's own IP, …) at any point
+// after that, before the next delivery actually fires. Re-resolving and
+// re-checking here, right before each attempt, is what actually closes
+// that window rather than just checking once and trusting the stored URL
+// forever.
+async function assertPublicHost(rawHostname: string): Promise<void> {
+  // URL.hostname keeps brackets around an IPv6 literal ("[::1]"); dns.lookup
+  // doesn't accept that form (it treats it as an unresolvable name), so
+  // strip them before resolving — otherwise a stored IPv6-literal webhook
+  // URL fails as a generic network error instead of being classified (and
+  // logged) as the SSRF block it actually is.
+  const hostname = rawHostname.replace(/^\[|\]$/g, '');
+  const records = await lookup(hostname, { all: true });
+  if (records.length === 0) throw new Error('DNS resolution returned no addresses');
+  for (const { address } of records) {
+    if (isUnsafeResolvedAddress(address)) {
+      throw new Error(`refusing to deliver: ${hostname} resolves to a private/internal address (${address})`);
+    }
+  }
+}
 
 export type WebhookEventType =
   | 'order.created'
@@ -27,9 +53,11 @@ export async function dispatchWebhook(tenantId: string, event: WebhookEventType,
     // Fire-and-forget with one retry after 3 s
     void (async () => {
       let delivered = false;
+      let blocked = false;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
+          await assertPublicHost(new URL(hook.url).hostname);
           const res = await fetch(hook.url, {
             method: 'POST',
             headers: {
@@ -42,11 +70,19 @@ export async function dispatchWebhook(tenantId: string, event: WebhookEventType,
             signal: AbortSignal.timeout(10_000),
           });
           if (res.ok) { delivered = true; break; }
-        } catch {
+        } catch (err) {
+          // A DNS-resolution block is deterministic within this delivery
+          // window — retrying after 3s won't change what the hostname
+          // resolves to, so stop instead of burning the retry on it.
+          if (err instanceof Error && err.message.startsWith('refusing to deliver')) {
+            blocked = true;
+            console.warn('[webhook] delivery blocked — target resolves to a private address', { hookId: hook.id, event, eventId, reason: err.message });
+            break;
+          }
           // network/timeout error — will retry once
         }
       }
-      if (!delivered) {
+      if (!delivered && !blocked) {
         console.warn('[webhook] delivery failed after retries', { hookId: hook.id, event, eventId });
       }
     })();

@@ -396,7 +396,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.patch('/reviews/:id/hide', async (request, reply) => {
+  fastify.patch('/reviews/:id/hide', { preHandler: [permissionGuard('manageOrders')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const review = await prisma.orderReview.findFirst({ where: { id, tenantId: request.tenantId! } });
     if (!review) return reply.status(404).send({ success: false, error: 'Review not found' });
@@ -404,7 +404,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     return { success: true };
   });
 
-  fastify.patch('/reviews/:id/show', async (request, reply) => {
+  fastify.patch('/reviews/:id/show', { preHandler: [permissionGuard('manageOrders')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const review = await prisma.orderReview.findFirst({ where: { id, tenantId: request.tenantId! } });
     if (!review) return reply.status(404).send({ success: false, error: 'Review not found' });
