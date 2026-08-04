@@ -22,6 +22,11 @@ type ReportLimits = {
   maxExportsPerMonth: number;
 };
 
+// Short — dashboard KPIs don't need second-level freshness, but a
+// merchant refreshing/re-opening the page repeatedly shouldn't re-run
+// ~39 queries every time within this window.
+const ANALYTICS_DASHBOARD_CACHE_TTL = 60;
+
 function hasReportsLevel(current: ReportsLevel, required: ReportsLevel) {
   return REPORTS_LEVEL_WEIGHT[current] >= REPORTS_LEVEL_WEIGHT[required];
 }
@@ -378,6 +383,28 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       return reply.status(402).send({ success: false, error: 'Reports are not available on your current plan. Please upgrade.' });
     }
 
+    // ~39 queries below, unbatched, on every single load of the most
+    // heavily-hit admin page — every other big POS read path in this
+    // codebase already has a short Redis cache in front of it; this one
+    // never did. No invalidation hooks (unlike POS settings/catalog):
+    // dashboard KPIs don't need second-level freshness, and this view
+    // touches orders/products/customers/POS/B2B/fiscal writes across
+    // enough modules that wiring explicit invalidation everywhere would
+    // cost far more than a short TTL is worth. Same non-fatal-on-Redis-
+    // failure posture as pos-sync's caches: a miss just falls through to
+    // the real queries below.
+    const dashboardCacheKey = `analytics:dashboard:${tenantId}`;
+    try {
+      const cached = await getRedis().get(dashboardCacheKey);
+      if (cached) {
+        request.log.debug({ tenantId }, 'analytics: dashboard cache hit');
+        return JSON.parse(cached);
+      }
+      request.log.debug({ tenantId }, 'analytics: dashboard cache miss');
+    } catch (err) {
+      request.log.warn({ err, tenantId }, 'analytics: dashboard cache read failed, falling back to DB');
+    }
+
     const now = new Date();
     const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -614,7 +641,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     const b2bRevenueToday = Number(b2bRevenueTodayAgg._sum.delta) || 0;
     const b2bRevenueMonth = Number(b2bRevenueMonthAgg._sum.delta) || 0;
 
-    return {
+    const result = {
       success: true,
       data: {
         // ── back-compat — unchanged shape, unchanged queries above ──
@@ -670,6 +697,14 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       reportLimits,
       reportAccess: getReportAccess(reportLimits),
     };
+
+    try {
+      await getRedis().setex(dashboardCacheKey, ANALYTICS_DASHBOARD_CACHE_TTL, JSON.stringify(result));
+    } catch (err) {
+      request.log.warn({ err, tenantId }, 'analytics: dashboard cache write failed');
+    }
+
+    return result;
   });
 
   // Summary KPIs for selected period (BASIC+)

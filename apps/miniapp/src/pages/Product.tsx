@@ -58,12 +58,13 @@ export default function Product({ id }: { id: string }) {
     setQty(1);
     Promise.all([
       api.getProduct(id),
-      api.getWishlist().catch(() => ({ items: [] })),
+      // O(1) — was api.getWishlist(), fetching every wishlisted product
+      // just to derive this one boolean (audit finding).
+      api.checkWishlisted(id).catch(() => ({ wishlisted: false })),
       api.getProductReviews(id).catch(() => null),
     ]).then(([p, wl, rv]) => {
       setProduct(p);
-      const list: any[] = Array.isArray(wl) ? wl : (wl?.items ?? []);
-      setWishlisted(list.some((w: any) => w.productId === id || w.product?.id === id));
+      setWishlisted(!!wl?.wishlisted);
       setReviews(rv);
       const storeName = getStoreName();
       const title = storeName ? `${p.name} — ${storeName}` : p.name;

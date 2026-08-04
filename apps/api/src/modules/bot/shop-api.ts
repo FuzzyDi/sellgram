@@ -365,6 +365,18 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
     return { success: true, data: items.filter((i) => i.product.isActive) };
   });
 
+  // O(1) existence check for a single product — Product.tsx used to fetch
+  // the whole wishlist on every product page view just to derive this one
+  // boolean (audit finding: O(wishlist size) paid per view instead of O(1)).
+  fastify.get('/shop/wishlist/:productId', async (request) => {
+    const { productId } = (request.params as any);
+    const item = await prisma.wishlistItem.findUnique({
+      where: { customerId_productId: { customerId: request.customer!.id, productId } },
+      select: { productId: true },
+    });
+    return { success: true, data: { wishlisted: !!item } };
+  });
+
   fastify.post('/shop/wishlist/:productId', {
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
   }, async (request, reply) => {

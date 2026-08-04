@@ -795,6 +795,11 @@ model OrderItem {
 
   @@index([orderId])
   @@index([variantId])
+  // analytics/routes.ts's "top products" query and jobs/scheduled-reports.ts
+  // both run orderItem.findMany({ where: { productId: { in: [...] } } })
+  // on every dashboard load / scheduled report send — unindexed on a
+  // growing order_items table.
+  @@index([productId])
   @@map("order_items")
 }
 

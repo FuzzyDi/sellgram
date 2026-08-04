@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   },
   redis: {
     get: vi.fn(),
+    setex: vi.fn(),
     incr: vi.fn(),
     decr: vi.fn(),
     ttl: vi.fn(),
@@ -192,6 +193,54 @@ describe('analytics.routes', () => {
       expect(data.b2b.counterpartiesActive).toBe(0);
       expect(data.topProducts).toEqual([]);
       expect(data.posStatus).toEqual([]);
+      await app.close();
+    });
+
+    // Audit finding: ~39 unbatched queries with zero caching on the
+    // hottest admin page. Same non-fatal-on-Redis-failure posture as
+    // pos-sync's caches — a real DB compute always still runs and is
+    // cached for next time, not required for this request to succeed.
+    it('caches the computed response under a tenant-scoped key with a 60s TTL', async () => {
+      mocks.prisma.tenant.findUnique.mockResolvedValue(FREE_TENANT);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/analytics/dashboard' });
+
+      expect(response.statusCode).toBe(200);
+      expect(mocks.redis.setex).toHaveBeenCalledWith(
+        'analytics:dashboard:tenant-1',
+        60,
+        expect.any(String)
+      );
+      const cachedPayload = JSON.parse(mocks.redis.setex.mock.calls[0][2]);
+      expect(cachedPayload).toEqual(response.json());
+      await app.close();
+    });
+
+    it('serves a cache hit without touching prisma at all', async () => {
+      mocks.prisma.tenant.findUnique.mockResolvedValue(FREE_TENANT);
+      const cachedBody = { success: true, data: { cached: true } };
+      mocks.redis.get.mockResolvedValueOnce(JSON.stringify(cachedBody));
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/analytics/dashboard' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual(cachedBody);
+      expect(mocks.prisma.order.count).not.toHaveBeenCalled();
+      expect(mocks.redis.setex).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('falls through to the real query path when the cache read itself errors', async () => {
+      mocks.prisma.tenant.findUnique.mockResolvedValue(FREE_TENANT);
+      mocks.redis.get.mockRejectedValueOnce(new Error('redis down'));
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/analytics/dashboard' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.summary).toBeDefined();
       await app.close();
     });
 

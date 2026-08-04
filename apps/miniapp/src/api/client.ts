@@ -139,6 +139,7 @@ export const api = {
   updateProfile: (data: { phone?: string }) =>
     request<any>('/shop/profile', { method: 'PATCH', body: JSON.stringify(data) }),
   getWishlist: () => request<any>('/shop/wishlist'),
+  checkWishlisted: (productId: string) => request<any>(`/shop/wishlist/${productId}`),
   addToWishlist: (productId: string) => request<any>(`/shop/wishlist/${productId}`, { method: 'POST' }),
   removeFromWishlist: (productId: string) => request<any>(`/shop/wishlist/${productId}`, { method: 'DELETE' }),
   validatePromo: (code: string, orderTotal: number) =>
