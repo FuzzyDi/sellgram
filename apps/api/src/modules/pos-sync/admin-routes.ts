@@ -53,6 +53,18 @@ async function invalidatePosSettingsCacheForTenant(tenantId: string): Promise<vo
   await invalidatePosSettingsCache(devices.map((d) => d.id));
 }
 
+// PlatformPolicy (system-admin/policy-routes.ts) is not tenant-scoped —
+// its rules and PlatformPolicyVersion are embedded in every device's
+// GET /pos/v1/settings response across every tenant, so a policy edit
+// needs every device's cache entry gone, not just one tenant's. Exported
+// for policy-routes.ts to call; every other invalidation path above stays
+// tenant/store-scoped because everything else it invalidates for actually
+// is tenant/store-scoped.
+export async function invalidatePosSettingsCacheGlobally(): Promise<void> {
+  const devices = await prisma.posDevice.findMany({ select: { id: true } });
+  await invalidatePosSettingsCache(devices.map((d) => d.id));
+}
+
 function generateActivationCode(): string {
   let code = '';
   for (let i = 0; i < 8; i++) {

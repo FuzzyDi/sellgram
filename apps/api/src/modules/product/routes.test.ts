@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     catalogSnapshot: { findFirst: vi.fn(), create: vi.fn() },
     cloudCommand: { findMany: vi.fn().mockResolvedValue([]), createMany: vi.fn() },
     posDevice: { findMany: vi.fn().mockResolvedValue([]) },
+    $queryRaw: vi.fn(),
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
@@ -316,6 +317,57 @@ describe('product.routes', () => {
           }),
         })
       );
+      await app.close();
+    });
+
+    // docs audit finding: delta mode used to read stockQty, compute in JS,
+    // then write — two concurrent deltas could lose one under a race. Now
+    // a single atomic UPDATE ... RETURNING does the read+add+clamp in the
+    // database, so the JS layer never independently recomputes stockQty.
+    it('applies a positive delta via a single atomic UPDATE, not a read-then-write', async () => {
+      mocks.prisma.product.findFirst.mockResolvedValue({ id: 'p-1', stockQty: 5 });
+      mocks.prisma.$queryRaw.mockResolvedValue([{ stockQty: 8 }]);
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/products/p-1/stock',
+        payload: { qty: 3, mode: 'delta' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({ qtyBefore: 5, qtyAfter: 8, delta: 3 });
+      expect(mocks.prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(mocks.prisma.product.update).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('floors a negative delta at zero atomically in the database, not in JS', async () => {
+      mocks.prisma.product.findFirst.mockResolvedValue({ id: 'p-1', stockQty: 2 });
+      // The DB's GREATEST(0, ...) is what actually floors this — the mock
+      // just stands in for what that atomic statement would return.
+      mocks.prisma.$queryRaw.mockResolvedValue([{ stockQty: 0 }]);
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/products/p-1/stock',
+        payload: { qty: -10, mode: 'delta' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.qtyAfter).toBe(0);
+      await app.close();
+    });
+
+    it('applies a delta to a variant via the same atomic path', async () => {
+      mocks.prisma.productVariant.findFirst.mockResolvedValue({ id: 'var-1', stockQty: 5 });
+      mocks.prisma.$queryRaw.mockResolvedValue([{ stockQty: 9 }]);
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/products/p-1/stock',
+        payload: { qty: 4, variantId: 'var-1', mode: 'delta' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({ qtyBefore: 5, qtyAfter: 9, delta: 4 });
+      expect(mocks.prisma.productVariant.update).not.toHaveBeenCalled();
       await app.close();
     });
 

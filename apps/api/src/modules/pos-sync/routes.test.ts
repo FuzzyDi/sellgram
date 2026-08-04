@@ -2033,6 +2033,28 @@ describe('pos-sync.routes', () => {
       await app.close();
     });
 
+    // Regression for the audit finding: idempotencyKey used to be a bare
+    // global @unique, so a key collision between two different tenants'
+    // devices could reject one tenant's legitimate sale. The lookup must
+    // be scoped to (deviceId, idempotencyKey), not idempotencyKey alone.
+    it('scopes the duplicate lookup to this device, not idempotencyKey alone', async () => {
+      mocks.prisma.saleEvent.findUnique.mockResolvedValue(null);
+      const app = await buildApp();
+      await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/sale-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validSaleEvent,
+      });
+
+      expect(mocks.prisma.saleEvent.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { deviceId_idempotencyKey: { deviceId: 'dev-1', idempotencyKey: validSaleEvent.idempotencyKey } },
+        })
+      );
+      await app.close();
+    });
+
     it('rejects a reused idempotencyKey with a different payload as 409', async () => {
       mocks.prisma.saleEvent.findUnique.mockResolvedValue({
         id: 'evt-1', payloadHash: 'a-different-hash', warnings: [],
@@ -2314,6 +2336,26 @@ describe('pos-sync.routes', () => {
       expect(mocks.prisma.stockMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ productId: 'p-1', delta: 10, qtyBefore: 10, qtyAfter: 20 }),
       });
+      await app.close();
+    });
+
+    // Regression for the audit finding: idempotencyKey used to be a bare
+    // global @unique — same fix and same reasoning as the sale-events test
+    // above, mirrored here for stock-events.
+    it('scopes the duplicate lookup to this device, not idempotencyKey alone', async () => {
+      const app = await buildApp();
+      await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/stock-events',
+        headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+        payload: validStockEvent,
+      });
+
+      expect(mocks.prisma.stockEvent.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { deviceId_idempotencyKey: { deviceId: 'dev-1', idempotencyKey: validStockEvent.idempotencyKey } },
+        })
+      );
       await app.close();
     });
 

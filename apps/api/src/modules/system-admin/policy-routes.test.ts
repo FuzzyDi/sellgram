@@ -16,8 +16,13 @@ const mocks = vi.hoisted(() => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    // Read by invalidatePosSettingsCacheGlobally (pos-sync/admin-routes.js)
+    // — every mutating policy route calls it after its transaction, since
+    // PlatformPolicy is global, not tenant-scoped.
+    posDevice: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: vi.fn(),
   },
+  redis: { del: vi.fn().mockResolvedValue(1) },
 }));
 
 vi.mock('../../lib/system-jwt.js', () => ({
@@ -25,6 +30,7 @@ vi.mock('../../lib/system-jwt.js', () => ({
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
+vi.mock('../../lib/redis.js', () => ({ default: () => mocks.redis }));
 
 import policyRoutes from './policy-routes.js';
 
@@ -130,6 +136,30 @@ describe('policy.routes', () => {
     await app.close();
   });
 
+  // Regression for the audit finding: this was the one PlatformPolicy
+  // mutation path that never invalidated the POS settings cache — every
+  // device's cached response embeds the policy set/version, so every
+  // device (tenant-agnostic, unlike the tenant/store-scoped invalidations
+  // elsewhere) needs its cache entry gone after an edit.
+  it('invalidates every device\'s POS settings cache after creating a policy', async () => {
+    mockTransaction();
+    mocks.prisma.platformPolicy.create.mockResolvedValue({ id: 'p-2' });
+    mocks.prisma.platformPolicyVersion.findFirst.mockResolvedValue({ id: 'v-1', version: 1 });
+    mocks.prisma.posDevice.findMany.mockResolvedValue([{ id: 'dev-1' }, { id: 'dev-2' }]);
+
+    const app = await buildApp();
+    await app.inject({
+      method: 'POST',
+      url: '/platform-policies',
+      headers: AUTH,
+      payload: { scope: 'PAYMENT', severity: 'BLOCK', match: {}, message: { ru: 'x', uz: 'x' } },
+    });
+
+    expect(mocks.prisma.posDevice.findMany).toHaveBeenCalledWith({ select: { id: true } });
+    expect(mocks.redis.del).toHaveBeenCalledWith('pos:settings:dev-1', 'pos:settings:dev-2');
+    await app.close();
+  });
+
   it('returns 400 for an invalid scope', async () => {
     const app = await buildApp();
     const response = await app.inject({
@@ -170,6 +200,7 @@ describe('policy.routes', () => {
       data: { enabled: false },
     });
     expect(mocks.prisma.platformPolicyVersion.create).toHaveBeenCalledWith({ data: { version: 1 } });
+    expect(mocks.redis.del).toHaveBeenCalled();
     await app.close();
   });
 
@@ -206,6 +237,7 @@ describe('policy.routes', () => {
       where: { id: 'v-1' },
       data: { version: { increment: 1 } },
     });
+    expect(mocks.prisma.posDevice.findMany).toHaveBeenCalledWith({ select: { id: true } });
     await app.close();
   });
 

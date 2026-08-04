@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { verifySystemToken } from '../../lib/system-jwt.js';
 import prisma from '../../lib/prisma.js';
+import { invalidatePosSettingsCacheGlobally } from '../pos-sync/admin-routes.js';
 
 // Same protection as every other route in ./routes.ts (verifySystemToken +
 // Bearer header) — duplicated here rather than imported to avoid a
@@ -90,6 +91,10 @@ export default async function policyRoutes(fastify: FastifyInstance) {
         await bumpPlatformPolicyVersion(tx);
         return created;
       });
+      // Global, not tenant-scoped (see invalidatePosSettingsCacheGlobally's
+      // own comment) — every device's cached GET /pos/v1/settings response
+      // embeds the platform policy set, regardless of tenant.
+      await invalidatePosSettingsCacheGlobally();
       return { success: true, data };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
@@ -119,6 +124,7 @@ export default async function policyRoutes(fastify: FastifyInstance) {
         await bumpPlatformPolicyVersion(tx);
         return updated;
       });
+      await invalidatePosSettingsCacheGlobally();
       return { success: true, data };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });
@@ -134,6 +140,7 @@ export default async function policyRoutes(fastify: FastifyInstance) {
         await tx.platformPolicy.delete({ where: { id } });
         await bumpPlatformPolicyVersion(tx);
       });
+      await invalidatePosSettingsCacheGlobally();
       return { success: true, data: { ok: true } };
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.message });

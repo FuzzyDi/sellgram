@@ -1476,7 +1476,13 @@ model SaleEvent {
   eventType      SaleEventType
   status         SaleEventStatus
   receiptNumber  Int
-  idempotencyKey String          @unique
+  // Scoped to the device that generated it, matching FiscalEvent/ShiftEvent
+  // (@@unique([deviceId, eventId])) and PosOperatorEvent/PosPaymentEvent
+  // (@@unique([deviceId, idempotencyKey])) — this key is client-generated,
+  // so a bare global @unique meant a weak-UUID-source bug on one tenant's
+  // till could collide with another tenant's device and silently reject
+  // that tenant's legitimate sale.
+  idempotencyKey String
   payloadHash    String
   occurredAt     DateTime
   payload        Json
@@ -1508,6 +1514,7 @@ model SaleEvent {
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
+  @@unique([deviceId, idempotencyKey])
   @@index([tenantId, storeId, localSaleId])
   @@index([tenantId, occurredAt])
   @@index([customerId])
@@ -1535,13 +1542,15 @@ model StockEvent {
   // accepts POS_ADJUSTMENT/RESTOCK/OTHER — POS_SALE rows are exclusively
   // derived from sale events (§14).
   reason         StockLedgerReason
-  idempotencyKey String            @unique
+  // Scoped to the device, same reasoning as SaleEvent.idempotencyKey above.
+  idempotencyKey String
   payloadHash    String
   occurredAt     DateTime
   note           String?
   warnings       Json
   createdAt      DateTime          @default(now())
 
+  @@unique([deviceId, idempotencyKey])
   @@index([tenantId, storeId, productId])
   @@map("stock_events")
 }

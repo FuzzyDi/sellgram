@@ -1651,7 +1651,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
 
     const findExisting = () =>
       prisma.saleEvent.findUnique({
-        where: { idempotencyKey: body.data.idempotencyKey },
+        where: { deviceId_idempotencyKey: { deviceId: device.id, idempotencyKey: body.data.idempotencyKey } },
         select: { id: true, payloadHash: true, warnings: true },
       });
 
@@ -1832,7 +1832,7 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
 
     const findExisting = () =>
       prisma.stockEvent.findUnique({
-        where: { idempotencyKey: body.data.idempotencyKey },
+        where: { deviceId_idempotencyKey: { deviceId: device.id, idempotencyKey: body.data.idempotencyKey } },
         select: { id: true, payloadHash: true, warnings: true },
       });
 

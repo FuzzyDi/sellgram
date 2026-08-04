@@ -498,14 +498,37 @@ export default async function productRoutes(fastify: FastifyInstance) {
       });
       if (!variant) return reply.status(404).send({ success: false, error: 'Variant not found' });
       qtyBefore = variant.stockQty;
-      qtyAfter = mode === 'delta' ? Math.max(0, qtyBefore + qty) : qty;
-      await prisma.productVariant.update({ where: { id: variantId }, data: { stockQty: qtyAfter } });
+      if (mode === 'delta') {
+        // Plain read-compute-write here raced: two concurrent deltas (e.g. a
+        // POS sale and a manual admin correction) both read the same
+        // qtyBefore and the second update() silently discarded the first's
+        // change. A single atomic UPDATE — the DB does the read, add, and
+        // floor-at-zero in one statement — closes that window entirely.
+        const [updated] = await prisma.$queryRaw<{ stockQty: number }[]>`
+          UPDATE product_variants SET "stockQty" = GREATEST(0, "stockQty" + ${qty})
+          WHERE id = ${variantId}
+          RETURNING "stockQty"
+        `;
+        qtyAfter = updated.stockQty;
+      } else {
+        qtyAfter = qty;
+        await prisma.productVariant.update({ where: { id: variantId }, data: { stockQty: qtyAfter } });
+      }
     } else {
       const product = await prisma.product.findFirst({ where: { id, tenantId: request.tenantId!, deletedAt: null } });
       if (!product) return reply.status(404).send({ success: false, error: 'Product not found' });
       qtyBefore = product.stockQty;
-      qtyAfter = mode === 'delta' ? Math.max(0, qtyBefore + qty) : qty;
-      await prisma.product.update({ where: { id }, data: { stockQty: qtyAfter } });
+      if (mode === 'delta') {
+        const [updated] = await prisma.$queryRaw<{ stockQty: number }[]>`
+          UPDATE products SET "stockQty" = GREATEST(0, "stockQty" + ${qty})
+          WHERE id = ${id}
+          RETURNING "stockQty"
+        `;
+        qtyAfter = updated.stockQty;
+      } else {
+        qtyAfter = qty;
+        await prisma.product.update({ where: { id }, data: { stockQty: qtyAfter } });
+      }
     }
 
     const delta = mode === 'delta' ? qty : qtyAfter - qtyBefore;
