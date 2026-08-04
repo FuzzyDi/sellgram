@@ -91,7 +91,12 @@ function TenantApp() {
         if (!isOnboardingDone() && ['OWNER'].includes(user.role)) {
           adminApi.getStores().then((stores: any) => {
             const list = Array.isArray(stores) ? stores : stores?.items || [];
-            if (list.length === 0) setShowOnboarding(true);
+            // A store row can exist with its bot never activated (invalid
+            // token, abandoned mid-wizard) — only botUsername being set
+            // means the bot actually connected, so re-check that instead
+            // of just "does a store row exist".
+            const hasConnectedBot = list.some((s: any) => s.botUsername);
+            if (!hasConnectedBot) setShowOnboarding(true);
           }).catch(() => {});
         }
       })

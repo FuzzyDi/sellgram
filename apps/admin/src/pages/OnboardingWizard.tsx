@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
@@ -107,6 +107,21 @@ export default function OnboardingWizard({ onFinish }: Props) {
   const [deliveryType, setDeliveryType] = useState<'zone' | 'pickup'>('zone');
   const [zoneName, setZoneName] = useState('');
   const [zonePrice, setZonePrice] = useState('0');
+
+  // The wizard can reopen on a later login for a tenant that already has a
+  // store row but never got its bot connected (App.tsx re-triggers it in
+  // that case now). Reuse that store instead of blindly creating another
+  // one every time the user retries from a fresh page load.
+  useEffect(() => {
+    adminApi.getStores().then((stores: any) => {
+      const list = Array.isArray(stores) ? stores : stores?.items || [];
+      const unconnected = list.find((s: any) => !s.botUsername);
+      if (unconnected) {
+        setCreatedStoreId(unconnected.id);
+        setStoreName(unconnected.name || '');
+      }
+    }).catch(() => {});
+  }, []);
 
   const stepIndex = STEPS.indexOf(step);
   const totalSteps = STEPS.length - 1; // exclude 'done'
