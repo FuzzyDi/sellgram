@@ -2,16 +2,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { systemApi } from '../../api/system-admin-client';
 import { setTokens } from '../../api/store-admin-client';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
+import Select from '../../components/Select';
+import Badge, { BadgeVariant } from '../../components/Badge';
+import Table, { TableColumn } from '../../components/Table';
 
-const PLAN_COLORS: Record<string, { bg: string; color: string }> = {
-  FREE:     { bg: '#f1f5f9', color: '#475569' },
-  PRO:      { bg: '#ede9fe', color: '#5b21b6' },
-  BUSINESS: { bg: '#fef3c7', color: '#92400e' },
+const PLAN_VARIANT: Record<string, BadgeVariant> = {
+  FREE: 'neutral',
+  PRO: 'info',
+  BUSINESS: 'warning',
 };
 
 function PlanBadge({ plan }: { plan: string }) {
-  const c = PLAN_COLORS[plan] || PLAN_COLORS.FREE;
-  return <span style={{ ...c, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{plan}</span>;
+  return <Badge variant={PLAN_VARIANT[plan] || 'neutral'}>{plan}</Badge>;
 }
 
 function ReminderButton({ tenantId }: { tenantId: string }) {
@@ -28,11 +33,10 @@ function ReminderButton({ tenantId }: { tenantId: string }) {
     }
   }
   const label = state === 'loading' ? '...' : state === 'sent' ? '✓ Отправлено' : state === 'error' ? '✗ Ошибка' : 'Напомнить';
-  const bg = state === 'sent' ? '#dcfce7' : state === 'error' ? '#fee2e2' : '#fef3c7';
-  const color = state === 'sent' ? '#166534' : state === 'error' ? '#991b1b' : '#92400e';
+  const cls = state === 'sent' ? 'bg-success/15 text-success' : state === 'error' ? 'bg-danger/15 text-danger' : 'bg-warning/15 text-warning';
   return (
     <button disabled={state === 'loading' || state === 'sent'} onClick={send}
-      style={{ border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: state === 'loading' || state === 'sent' ? 'default' : 'pointer', background: bg, color, transition: 'all 0.2s' }}>
+      className={`border-none rounded-token-sm px-2.5 py-1 text-token-xs font-bold transition-colors ${state === 'loading' || state === 'sent' ? 'cursor-default' : 'cursor-pointer'} ${cls}`}>
       {label}
     </button>
   );
@@ -141,29 +145,32 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
   const isBlocked = detail?.stores?.every((s: any) => !s.isActive) ?? false;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', justifyContent: 'flex-end' }}>
-      <div onClick={onClose} style={{ flex: 1, background: 'rgba(0,0,0,0.35)', cursor: 'pointer' }} />
-      <aside style={{ width: 520, maxWidth: '95vw', background: '#fff', height: '100vh', overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 18, boxShadow: '-4px 0 32px rgba(0,0,0,0.15)' }}>
-        {notice && <div style={{ position: 'sticky', top: 0, background: notice.startsWith('✅') ? '#d1fae5' : '#fee2e2', border: '1px solid', borderColor: notice.startsWith('✅') ? '#6ee7b7' : '#fca5a5', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontWeight: 700, zIndex: 10, color: notice.startsWith('✅') ? '#065f46' : '#991b1b' }}>{notice}</div>}
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{tenant.name}</h2>
-            <p style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: 13 }}>{tenant.slug} · ID: {tenant.id.slice(0, 12)}</p>
+    <div className="fixed inset-0 z-[500] flex justify-end">
+      <div onClick={onClose} className="flex-1 bg-black/35 cursor-pointer" />
+      <aside className="w-[520px] max-w-[95vw] bg-white h-screen overflow-y-auto flex flex-col gap-4 shadow-2xl" style={{ padding: 24 }}>
+        {notice && (
+          <div className={`sticky top-0 border rounded-token-md px-3 py-2 text-token-sm font-bold z-10 ${notice.startsWith('✅') ? 'bg-success/10 border-success/40 text-success' : 'bg-danger/10 border-danger/40 text-danger'}`}>
+            {notice}
           </div>
-          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>✕</button>
+        )}
+
+        <div className="flex justify-between items-start">
+          <div>
+            <h2 className="m-0 text-token-xl font-extrabold">{tenant.name}</h2>
+            <p className="mt-1 mb-0 text-neutral-400 text-token-sm">{tenant.slug} · ID: {tenant.id.slice(0, 12)}</p>
+          </div>
+          <button onClick={onClose} className="border-none bg-transparent cursor-pointer text-token-xl text-neutral-400">✕</button>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="flex gap-2">
           <PlanBadge plan={tenant.plan} />
-          {tenant.planExpiresAt && <span style={{ background: '#f1f5f9', color: '#475569', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>до {new Date(tenant.planExpiresAt).toLocaleDateString('ru')}</span>}
-          {isBlocked && <span style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>ЗАБЛОКИРОВАН</span>}
+          {tenant.planExpiresAt && <Badge variant="neutral">до {new Date(tenant.planExpiresAt).toLocaleDateString('ru')}</Badge>}
+          {isBlocked && <Badge variant="danger">ЗАБЛОКИРОВАН</Badge>}
         </div>
 
-        {/* Stats */}
-        {loading && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>{[1,2,3,4,5,6].map(i => <div key={i} className="animate-pulse bg-neutral-200 rounded" style={{ height: 56, borderRadius: 8 }} />)}</div>}
+        {loading && <div className="grid grid-cols-3 gap-2">{[1,2,3,4,5,6].map(i => <div key={i} className="animate-pulse bg-neutral-200 rounded-token-md" style={{ height: 56 }} />)}</div>}
         {detail && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <div className="grid grid-cols-3 gap-2">
             {[
               { label: 'Заказов всего', value: detail.stats.ordersTotal },
               { label: 'Заказов /мес', value: detail.stats.ordersMonth },
@@ -172,154 +179,124 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
               { label: 'Выручка всего', value: `${(detail.stats.revenueTotal / 1e6).toFixed(1)}M` },
               { label: 'Выручка /мес', value: `${(detail.stats.revenueMonth / 1e6).toFixed(1)}M` },
             ].map(({ label, value }) => (
-              <div key={label} style={{ background: '#f8fafc', borderRadius: 8, padding: '10px 12px' }}>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{label}</div>
-                <div style={{ fontWeight: 800, fontSize: 16 }}>{value}</div>
+              <div key={label} className="bg-neutral-50 rounded-token-md px-3 py-2.5">
+                <div className="text-token-xs text-neutral-500 mb-1">{label}</div>
+                <div className="font-extrabold text-token-base">{value}</div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Plan change */}
-        <div style={{ background: '#f8fafc', borderRadius: 10, padding: '14px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Изменить план</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <select value={plan} onChange={(e) => setPlan(e.target.value)}
-              style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13, background: '#fff' }}>
+        <div className="bg-neutral-50 rounded-token-lg px-4 py-3.5">
+          <div className="text-token-xs font-bold text-neutral-700 uppercase tracking-wide mb-2.5">Изменить план</div>
+          <div className="flex gap-2 items-end flex-wrap">
+            <Select value={plan} onChange={(e) => setPlan(e.target.value)} className="w-auto">
               {['FREE', 'PRO', 'BUSINESS'].map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
+            </Select>
             <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)}
-              style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13, background: '#fff' }} />
-            <button onClick={savePlan} disabled={saving} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-              {saving ? '...' : 'Сохранить'}
-            </button>
+              className="border border-neutral-300 rounded-token-md px-2.5 py-2 text-token-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500" />
+            <Button variant="primary" onClick={savePlan} disabled={saving}>{saving ? '...' : 'Сохранить'}</Button>
           </div>
         </div>
 
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={() => setShowExtend(true)} style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setShowExtend(true)} className="bg-violet-600 text-white border-none rounded-token-md px-3.5 py-2 font-bold text-token-sm cursor-pointer">
             ➕ Продлить
           </button>
-          <button onClick={impersonate} disabled={impersonating} style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+          <button onClick={impersonate} disabled={impersonating} className="bg-warning text-white border-none rounded-token-md px-3.5 py-2 font-bold text-token-sm cursor-pointer disabled:opacity-70">
             {impersonating ? '...' : '🎭 Impersonate'}
           </button>
-          <button onClick={() => setCreateInvoice(true)} style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-            💳 Инвойс
-          </button>
-          <button onClick={toggleBlock} disabled={blocking} style={{ background: isBlocked ? '#22c55e' : '#ef4444', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+          <Button variant="primary" onClick={() => setCreateInvoice(true)} className="!bg-success">💳 Инвойс</Button>
+          <button onClick={toggleBlock} disabled={blocking} className={`text-white border-none rounded-token-md px-3.5 py-2 font-bold text-token-sm cursor-pointer disabled:opacity-70 ${isBlocked ? 'bg-success' : 'bg-danger'}`}>
             {blocking ? '...' : isBlocked ? '🔓 Разблок' : '🚫 Блок'}
           </button>
         </div>
 
-        {/* Extend plan form */}
         {showExtend && (
-          <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#5b21b6' }}>Продлить подписку</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Тариф</label>
-                <select value={extendForm.plan} onChange={(e) => setExtendForm((f) => ({ ...f, plan: e.target.value }))}
-                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }}>
-                  {['FREE', 'PRO', 'BUSINESS'].map((p) => <option key={p}>{p}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Месяцев</label>
-                <select value={extendForm.months} onChange={(e) => setExtendForm((f) => ({ ...f, months: e.target.value }))}
-                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }}>
-                  {[1,2,3,6,12].map((m) => <option key={m} value={m}>{m} мес.</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Сумма (UZS)</label>
-                <input placeholder="500000" value={extendForm.amount} onChange={(e) => setExtendForm((f) => ({ ...f, amount: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Примечание</label>
-                <input placeholder="Необязательно" value={extendForm.note} onChange={(e) => setExtendForm((f) => ({ ...f, note: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }} />
-              </div>
+          <Card className="flex flex-col gap-2.5" style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', padding: '14px 16px' }}>
+            <div className="font-bold text-token-sm text-violet-800">Продлить подписку</div>
+            <div className="grid grid-cols-2 gap-2">
+              <Select label="Тариф" value={extendForm.plan} onChange={(e) => setExtendForm((f) => ({ ...f, plan: e.target.value }))}>
+                {['FREE', 'PRO', 'BUSINESS'].map((p) => <option key={p}>{p}</option>)}
+              </Select>
+              <Select label="Месяцев" value={extendForm.months} onChange={(e) => setExtendForm((f) => ({ ...f, months: e.target.value }))}>
+                {[1,2,3,6,12].map((m) => <option key={m} value={m}>{m} мес.</option>)}
+              </Select>
+              <Input label="Сумма (UZS)" placeholder="500000" value={extendForm.amount} onChange={(e) => setExtendForm((f) => ({ ...f, amount: e.target.value }))} />
+              <Input label="Примечание" placeholder="Необязательно" value={extendForm.note} onChange={(e) => setExtendForm((f) => ({ ...f, note: e.target.value }))} />
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={submitExtend} disabled={extending || !extendForm.amount} style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: !extendForm.amount ? 0.5 : 1 }}>
+            <div className="flex gap-2">
+              <Button variant="primary" onClick={submitExtend} disabled={extending || !extendForm.amount} className="!bg-violet-600">
                 {extending ? '...' : 'Продлить'}
-              </button>
-              <button onClick={() => setShowExtend(false)} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}>Отмена</button>
+              </Button>
+              <Button variant="ghost" onClick={() => setShowExtend(false)}>Отмена</Button>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* Create invoice modal */}
         {createInvoice && (
-          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>Создать инвойс</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <select value={invoiceForm.plan} onChange={(e) => setInvoiceForm((f) => ({ ...f, plan: e.target.value }))}
-                style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }}>
+          <Card className="flex flex-col gap-2.5" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '14px 16px' }}>
+            <div className="font-bold text-token-sm">Создать инвойс</div>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={invoiceForm.plan} onChange={(e) => setInvoiceForm((f) => ({ ...f, plan: e.target.value }))}>
                 {['PRO', 'BUSINESS'].map((p) => <option key={p}>{p}</option>)}
-              </select>
-              <input placeholder="Сумма (UZS)" value={invoiceForm.amount} onChange={(e) => setInvoiceForm((f) => ({ ...f, amount: e.target.value }))}
-                style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }} />
-              <input placeholder="Ref платежа (необяз.)" value={invoiceForm.paymentRef} onChange={(e) => setInvoiceForm((f) => ({ ...f, paymentRef: e.target.value }))}
-                style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13, gridColumn: '1 / -1' }} />
+              </Select>
+              <Input placeholder="Сумма (UZS)" value={invoiceForm.amount} onChange={(e) => setInvoiceForm((f) => ({ ...f, amount: e.target.value }))} />
+              <div className="col-span-2">
+                <Input placeholder="Ref платежа (необяз.)" value={invoiceForm.paymentRef} onChange={(e) => setInvoiceForm((f) => ({ ...f, paymentRef: e.target.value }))} />
+              </div>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            <label className="flex items-center gap-2 text-token-sm">
               <input type="checkbox" checked={invoiceForm.autoConfirm} onChange={(e) => setInvoiceForm((f) => ({ ...f, autoConfirm: e.target.checked })) } />
               Сразу активировать план
             </label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={submitInvoice} disabled={submittingInvoice} style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            <div className="flex gap-2">
+              <Button variant="primary" onClick={submitInvoice} disabled={submittingInvoice} className="!bg-success">
                 {submittingInvoice ? '...' : 'Создать'}
-              </button>
-              <button onClick={() => setCreateInvoice(false)} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Отмена</button>
+              </Button>
+              <Button variant="ghost" onClick={() => setCreateInvoice(false)}>Отмена</Button>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* Reset password modal */}
         {resetPwd && (
-          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>Сброс пароля: {resetPwd.name}</div>
-            <input placeholder="Новый пароль (мин. 6 симв.)" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} type="password"
-              style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 9px', fontSize: 13 }} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={submitResetPwd} disabled={newPwd.length < 6} style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Сохранить</button>
-              <button onClick={() => { setResetPwd(null); setNewPwd(''); }} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>Отмена</button>
+          <Card className="flex flex-col gap-2.5" style={{ background: '#fff7ed', border: '1px solid #fed7aa', padding: '14px 16px' }}>
+            <div className="font-bold text-token-sm">Сброс пароля: {resetPwd.name}</div>
+            <Input placeholder="Новый пароль (мин. 6 симв.)" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} type="password" />
+            <div className="flex gap-2">
+              <Button variant="primary" onClick={submitResetPwd} disabled={newPwd.length < 6} className="!bg-warning">Сохранить</Button>
+              <Button variant="ghost" onClick={() => { setResetPwd(null); setNewPwd(''); }}>Отмена</Button>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* Stores */}
         {detail && (
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Магазины ({detail.stores?.length || 0})</div>
+            <div className="text-token-xs font-bold text-neutral-700 uppercase tracking-wide mb-2">Магазины ({detail.stores?.length || 0})</div>
             {(detail.stores || []).map((s: any) => (
-              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: '#f9fafb', marginBottom: 4 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.isActive ? '#22c55e' : '#ef4444', display: 'inline-block' }} />
-                <span style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</span>
-                {s.botUsername && <span style={{ fontSize: 11, color: '#94a3b8' }}>@{s.botUsername}</span>}
-                <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{s.isActive ? 'Активен' : 'Откл.'}</span>
+              <div key={s.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-token-md bg-neutral-50 mb-1">
+                <span className={`w-2 h-2 rounded-full inline-block ${s.isActive ? 'bg-success' : 'bg-danger'}`} />
+                <span className="font-semibold text-token-sm">{s.name}</span>
+                {s.botUsername && <span className="text-token-xs text-neutral-400">@{s.botUsername}</span>}
+                <span className="text-token-xs text-neutral-400 ml-auto">{s.isActive ? 'Активен' : 'Откл.'}</span>
               </div>
             ))}
           </div>
         )}
 
-        {/* Users */}
         {detail && (
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Пользователи ({detail.users?.length || 0})</div>
+            <div className="text-token-xs font-bold text-neutral-700 uppercase tracking-wide mb-2">Пользователи ({detail.users?.length || 0})</div>
             {(detail.users || []).map((u: any) => (
-              <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: '#f9fafb', marginBottom: 4 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: u.isActive ? '#22c55e' : '#9ca3af', display: 'inline-block' }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</div>
-                  <div style={{ fontSize: 11, color: '#9ca3af' }}>{u.email}</div>
+              <div key={u.id} className="flex items-center gap-2 px-2.5 py-2 rounded-token-md bg-neutral-50 mb-1">
+                <span className={`w-2 h-2 rounded-full inline-block ${u.isActive ? 'bg-success' : 'bg-neutral-400'}`} />
+                <div className="flex-1">
+                  <div className="font-semibold text-token-sm">{u.name}</div>
+                  <div className="text-token-xs text-neutral-400">{u.email}</div>
                 </div>
-                <span style={{ background: '#f1f5f9', color: '#374151', borderRadius: 4, padding: '2px 6px', fontSize: 11, fontWeight: 600 }}>{u.role}</span>
+                <Badge variant="neutral">{u.role}</Badge>
                 <button onClick={() => { setResetPwd({ userId: u.id, name: u.name }); setNewPwd(''); }}
-                  style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', color: '#475569' }}>
+                  className="bg-transparent border border-neutral-200 rounded-token-sm px-2 py-0.5 text-token-xs cursor-pointer text-neutral-600">
                   🔑
                 </button>
               </div>
@@ -341,30 +318,30 @@ function StalledOnboardingPanel({ onSelect }: { onSelect: (t: any) => void }) {
   if (!items || items.length === 0) return null;
 
   return (
-    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
-      <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e', marginBottom: 10 }}>
+    <Card className="mb-4" style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: '14px 16px' }}>
+      <div className="font-bold text-token-sm text-warning mb-2.5">
         ⚠️ Зависшие регистрации ({items.length}) — магазин создан, бот так и не подключён (или магазина ещё нет)
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div className="flex flex-col gap-1.5">
         {items.map((t) => (
           <div key={t.id} onClick={() => onSelect(t)}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', fontSize: 13 }}>
-            <span style={{ fontWeight: 700 }}>{t.name}</span>
-            <span style={{ color: '#94a3b8', fontSize: 11 }}>{t.slug}</span>
-            <span style={{ background: t.stage === 'NO_STORE' ? '#fee2e2' : '#fef3c7', color: t.stage === 'NO_STORE' ? '#991b1b' : '#92400e', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+            className="flex items-center gap-2.5 bg-white rounded-token-md px-2.5 py-2 cursor-pointer text-token-sm">
+            <span className="font-bold">{t.name}</span>
+            <span className="text-neutral-400 text-token-xs">{t.slug}</span>
+            <Badge variant={t.stage === 'NO_STORE' ? 'danger' : 'warning'}>
               {t.stage === 'NO_STORE' ? 'магазин не создан' : 'бот не подключён'}
-            </span>
-            <span style={{ color: '#64748b' }}>{t.daysSinceRegistration} дн. с регистрации</span>
+            </Badge>
+            <span className="text-neutral-500">{t.daysSinceRegistration} дн. с регистрации</span>
             {t.ownerEmail && (
-              <a href={`mailto:${t.ownerEmail}`} onClick={(e) => e.stopPropagation()} style={{ marginLeft: 'auto', color: '#3b82f6', fontSize: 12 }}>
+              <a href={`mailto:${t.ownerEmail}`} onClick={(e) => e.stopPropagation()} className="ml-auto text-accent-600 text-token-xs">
                 ✉ {t.ownerEmail}
               </a>
             )}
-            {t.ownerHasTelegram && <span style={{ fontSize: 12, color: '#0ea5e9' }}>📱 TG</span>}
+            {t.ownerHasTelegram && <span className="text-token-xs text-sky-500">📱 TG</span>}
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -397,76 +374,72 @@ export default function SysTenants() {
   const items: any[] = data?.items || data || [];
   const totalPages = data?.totalPages || 1;
 
+  const columns: TableColumn<any>[] = [
+    {
+      key: 'tenant',
+      header: 'Тенант',
+      render: (t) => (
+        <div>
+          <div className="font-bold">{t.name}</div>
+          <div className="font-normal text-token-xs text-neutral-400">{t.slug}</div>
+        </div>
+      ),
+    },
+    { key: 'plan', header: 'План', render: (t) => <PlanBadge plan={t.plan} /> },
+    {
+      key: 'expires',
+      header: 'Истекает',
+      render: (t) => {
+        const expiresAt = t.planExpiresAt ? new Date(t.planExpiresAt) : null;
+        const expiringSoon = expiresAt && (expiresAt.getTime() - Date.now()) / 86400000 < 7;
+        return (
+          <span className={expiringSoon ? 'text-warning font-bold' : 'text-neutral-500'}>
+            {expiresAt ? expiresAt.toLocaleDateString('ru') : '—'}
+            {expiringSoon && <span className="text-[10px] ml-1">⚠️</span>}
+          </span>
+        );
+      },
+    },
+    { key: 'stores', header: 'Магазины', render: (t) => t.storesCount ?? t._count?.stores ?? '—' },
+    { key: 'orders', header: 'Заказов/мес', render: (t) => t.ordersMonth ?? '—' },
+    { key: 'created', header: 'Создан', render: (t) => <span className="text-token-xs text-neutral-400">{new Date(t.createdAt).toLocaleDateString('ru')}</span> },
+    {
+      key: 'actions',
+      header: '',
+      render: (t) => {
+        const expiresAt = t.planExpiresAt ? new Date(t.planExpiresAt) : null;
+        const expiringSoon = expiresAt && (expiresAt.getTime() - Date.now()) / 86400000 < 7;
+        return expiringSoon ? <ReminderButton tenantId={t.id} /> : null;
+      },
+    },
+  ];
+
   return (
-    <div style={{ padding: 28 }}>
-      <h1 style={{ margin: '0 0 20px', fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Тенанты</h1>
+    <div className="p-7">
+      <h1 className="mb-5 text-token-2xl font-extrabold text-neutral-900">Тенанты</h1>
 
       <StalledOnboardingPanel onSelect={setSelected} />
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <input value={search} onChange={(e) => handleSearch(e.target.value)} placeholder="Поиск по имени / slug..."
-          style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 12px', fontSize: 13, minWidth: 260, flex: 1, background: '#fff' }} />
-        <select value={planFilter} onChange={(e) => { setPlanFilter(e.target.value); setPage(1); }}
-          style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13, background: '#fff' }}>
+      <div className="flex gap-2.5 mb-4 flex-wrap">
+        <div className="flex-1 min-w-[260px]">
+          <Input value={search} onChange={(e) => handleSearch(e.target.value)} placeholder="Поиск по имени / slug..." />
+        </div>
+        <Select value={planFilter} onChange={(e) => { setPlanFilter(e.target.value); setPage(1); }} className="w-auto">
           <option value="">Все планы</option>
           <option value="FREE">FREE</option>
           <option value="PRO">PRO</option>
           <option value="BUSINESS">BUSINESS</option>
-        </select>
+        </Select>
       </div>
 
-      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-              {['Тенант', 'План', 'Истекает', 'Магазины', 'Заказов/мес', 'Создан', ''].map((h) => (
-                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, fontSize: 12, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && [1,2,3,4,5].map((i) => (
-              <tr key={i}><td colSpan={7} style={{ padding: '10px 14px' }}><div className="animate-pulse bg-neutral-200 rounded" style={{ height: 14, width: '60%' }} /></td></tr>
-            ))}
-            {!loading && items.map((t: any) => {
-              const expiresAt = t.planExpiresAt ? new Date(t.planExpiresAt) : null;
-              const expiringSoon = expiresAt && (expiresAt.getTime() - Date.now()) / 86400000 < 7;
-              return (
-                <tr key={t.id} onClick={() => setSelected(t)} style={{ cursor: 'pointer', borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = '')}>
-                  <td style={{ padding: '10px 14px', fontWeight: 700 }}>
-                    <div>{t.name}</div>
-                    <div style={{ fontWeight: 400, fontSize: 11, color: '#9ca3af' }}>{t.slug}</div>
-                  </td>
-                  <td style={{ padding: '10px 14px' }}><PlanBadge plan={t.plan} /></td>
-                  <td style={{ padding: '10px 14px', color: expiringSoon ? '#f59e0b' : '#64748b', fontWeight: expiringSoon ? 700 : 400 }}>
-                    {expiresAt ? expiresAt.toLocaleDateString('ru') : '—'}
-                    {expiringSoon && <span style={{ fontSize: 10, marginLeft: 4 }}>⚠️</span>}
-                  </td>
-                  <td style={{ padding: '10px 14px' }}>{t.storesCount ?? t._count?.stores ?? '—'}</td>
-                  <td style={{ padding: '10px 14px' }}>{t.ordersMonth ?? '—'}</td>
-                  <td style={{ padding: '10px 14px', color: '#94a3b8', fontSize: 12 }}>{new Date(t.createdAt).toLocaleDateString('ru')}</td>
-                  <td style={{ padding: '10px 14px' }} onClick={(e) => e.stopPropagation()}>
-                    {expiringSoon && (
-                      <ReminderButton tenantId={t.id} />
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {!loading && items.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>Ничего не найдено</td></tr>
-            )}
-          </tbody>
-        </table>
-        <div style={{ padding: '10px 14px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#64748b' }}>
-          <span>Всего: {data?.total || items.length}</span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>← Назад</button>
-            <span style={{ padding: '4px 8px' }}>{page} / {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>Далее →</button>
-          </div>
+      <Table columns={columns} data={items} rowKey={(t) => t.id} onRowClick={setSelected} loading={loading} emptyMessage="Ничего не найдено" />
+
+      <div className="flex justify-between items-center text-token-sm text-neutral-500 mt-3">
+        <span>Всего: {data?.total || items.length}</span>
+        <div className="flex gap-2 items-center">
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>← Назад</Button>
+          <span className="px-2">{page} / {totalPages}</span>
+          <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Далее →</Button>
         </div>
       </div>
 

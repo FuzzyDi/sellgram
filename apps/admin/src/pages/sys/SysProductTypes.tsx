@@ -1,27 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { systemApi } from '../../api/system-admin-client';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
+import Select from '../../components/Select';
+import Badge from '../../components/Badge';
+import Table, { TableColumn } from '../../components/Table';
 
 const WEIGHT_MODES = ['PIECE', 'WEIGHT', 'PIECE_WEIGHT'] as const;
-
-const WEIGHT_MODE_BADGE = { bg: '#eef2ff', color: '#4338ca' };
-
-const SYSTEM_BADGE = {
-  on: { bg: '#fef3c7', color: '#92400e' },
-  off: { bg: '#f1f5f9', color: '#475569' },
-};
-
-const ENABLED_BADGE = {
-  on: { bg: '#d1fae5', color: '#065f46' },
-  off: { bg: '#f1f5f9', color: '#475569' },
-};
-
-function Badge({ label, style }: { label: string; style: { bg: string; color: string } }) {
-  return (
-    <span style={{ background: style.bg, color: style.color, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-      {label}
-    </span>
-  );
-}
 
 interface CreateForm {
   code: string;
@@ -200,229 +186,151 @@ export default function SysProductTypes() {
 
   const codeById = new Map(types.map((t) => [t.id, t.code]));
 
+  const columns: TableColumn<any>[] = [
+    { key: 'code', header: 'Код', render: (t) => <span className="font-mono font-bold">{t.code}</span> },
+    { key: 'name', header: 'Название', render: (t) => t.name },
+    { key: 'parent', header: 'Родитель', render: (t) => <span className="text-neutral-400">{t.parentTypeId ? (codeById.get(t.parentTypeId) || '—') : '—'}</span> },
+    { key: 'weightMode', header: 'Weight mode', render: (t) => <Badge variant="info">{t.weightMode}</Badge> },
+    { key: 'isSystem', header: 'Тип', render: (t) => <Badge variant={t.isSystem ? 'warning' : 'neutral'}>{t.isSystem ? 'Системный' : 'Кастомный'}</Badge> },
+    { key: 'enabled', header: 'Статус', render: (t) => <Badge variant={t.enabled ? 'success' : 'neutral'}>{t.enabled ? 'Включён' : 'Выключен'}</Badge> },
+    { key: 'rules', header: 'Правил', render: (t) => <span className="text-neutral-500">{Array.isArray(t.rules) ? t.rules.length : 0}</span> },
+    {
+      key: 'actions',
+      header: '',
+      render: (t) => (
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm" onClick={() => openEdit(t)}>Редактировать</Button>
+          {!t.isSystem && (
+            <Button variant="danger" size="sm" onClick={() => remove(t)} disabled={deletingId === t.id}>
+              {deletingId === t.id ? '...' : 'Удалить'}
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div style={{ padding: 28 }}>
+    <div className="p-7">
       {notice && (
-        <div style={{ position: 'fixed', top: 20, right: 20, background: notice.startsWith('✅') ? '#d1fae5' : '#fee2e2', borderRadius: 8, padding: '10px 16px', fontWeight: 700, fontSize: 13, color: notice.startsWith('✅') ? '#065f46' : '#991b1b', zIndex: 999, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>
+        <div className={`fixed top-5 right-5 rounded-token-md px-4 py-2.5 font-bold text-token-sm z-[999] shadow-lg ${notice.startsWith('✅') ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
           {notice}
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Типы товаров</h1>
-          <p style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: 13 }}>Глобальный справочник (docs/PRODUCT_TYPES.md §11)</p>
+          <h1 className="m-0 text-token-2xl font-extrabold text-neutral-900">Типы товаров</h1>
+          <p className="mt-1 mb-0 text-neutral-400 text-token-sm">Глобальный справочник (docs/PRODUCT_TYPES.md §11)</p>
         </div>
-        <button onClick={openCreate} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-          + Новый тип
-        </button>
+        <Button variant="primary" onClick={openCreate}>+ Новый тип</Button>
       </div>
 
       {/* Create modal — only reachable for non-system types (isSystem is server-forced false) */}
       {showCreate && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.45)' }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 520, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 800 }}>Новый тип товара</h3>
+        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-slate-900/45">
+          <Card className="w-[520px] max-w-[95vw] max-h-[90vh] overflow-y-auto shadow-2xl" style={{ padding: 24 }}>
+            <h3 className="mb-4 text-token-lg font-extrabold">Новый тип товара</h3>
 
             {createError && (
-              <div style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+              <div className="bg-danger/10 text-danger rounded-token-md px-3 py-2 text-token-sm font-semibold mb-3.5">
                 {createError}
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Код</label>
-                <input value={createForm.code} onChange={(e) => setCreateForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-                  placeholder="CUSTOM_TYPE"
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Название</label>
-                <input value={createForm.name} onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
-              </div>
+            <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+              <Input label="Код" value={createForm.code} onChange={(e) => setCreateForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="CUSTOM_TYPE" />
+              <Input label="Название" value={createForm.name} onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))} />
             </div>
 
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Описание</label>
-              <input value={createForm.description} onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))}
-                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
+            <div className="mb-2.5">
+              <Input label="Описание" value={createForm.description} onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Родительский тип</label>
-                <select value={createForm.parentTypeId} onChange={(e) => setCreateForm((f) => ({ ...f, parentTypeId: e.target.value }))}
-                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13, background: '#fff' }}>
-                  <option value="">— нет —</option>
-                  {types.map((t) => <option key={t.id} value={t.id}>{t.code} — {t.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Weight mode</label>
-                <select value={createForm.weightMode} onChange={(e) => setCreateForm((f) => ({ ...f, weightMode: e.target.value }))}
-                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13, background: '#fff' }}>
-                  {WEIGHT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
+            <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+              <Select label="Родительский тип" value={createForm.parentTypeId} onChange={(e) => setCreateForm((f) => ({ ...f, parentTypeId: e.target.value }))}>
+                <option value="">— нет —</option>
+                {types.map((t) => <option key={t.id} value={t.id}>{t.code} — {t.name}</option>)}
+              </Select>
+              <Select label="Weight mode" value={createForm.weightMode} onChange={(e) => setCreateForm((f) => ({ ...f, weightMode: e.target.value }))}>
+                {WEIGHT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+              </Select>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Barcode-префиксы (через запятую)</label>
-                <input value={createForm.barcodePrefixesText} onChange={(e) => setCreateForm((f) => ({ ...f, barcodePrefixesText: e.target.value }))}
-                  placeholder="22, 23"
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Mark type</label>
-                <input value={createForm.markType} onChange={(e) => setCreateForm((f) => ({ ...f, markType: e.target.value }))}
-                  placeholder="ALCOHOL"
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
-              </div>
+            <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+              <Input label="Barcode-префиксы (через запятую)" value={createForm.barcodePrefixesText} onChange={(e) => setCreateForm((f) => ({ ...f, barcodePrefixesText: e.target.value }))} placeholder="22, 23" />
+              <Input label="Mark type" value={createForm.markType} onChange={(e) => setCreateForm((f) => ({ ...f, markType: e.target.value }))} placeholder="ALCOHOL" />
             </div>
 
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>rules (JSON-массив)</label>
+            <div className="mb-2.5">
+              <label className="block text-token-xs font-bold text-neutral-700 mb-1">rules (JSON-массив)</label>
               <textarea value={createForm.rulesText} onChange={(e) => setCreateForm((f) => ({ ...f, rulesText: e.target.value }))}
                 rows={5} spellCheck={false}
-                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontFamily: 'monospace', resize: 'vertical' }} />
+                className="w-full box-border border border-neutral-300 rounded-token-md px-3 py-2 text-token-xs font-mono resize-y focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500" />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14, alignItems: 'end' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>sortOrder</label>
-                <input value={createForm.sortOrder} onChange={(e) => setCreateForm((f) => ({ ...f, sortOrder: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, paddingBottom: 8 }}>
+            <div className="grid grid-cols-2 gap-2.5 mb-3.5 items-end">
+              <Input label="sortOrder" value={createForm.sortOrder} onChange={(e) => setCreateForm((f) => ({ ...f, sortOrder: e.target.value }))} />
+              <label className="flex items-center gap-2 text-token-sm font-semibold pb-2">
                 <input type="checkbox" checked={createForm.enabled} onChange={(e) => setCreateForm((f) => ({ ...f, enabled: e.target.checked }))} />
                 Активен
               </label>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button onClick={submitCreate} disabled={saving}
-                style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                {saving ? '...' : 'Создать'}
-              </button>
-              <button onClick={() => setShowCreate(false)} disabled={saving}
-                style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>
-                Отмена
-              </button>
+            <div className="flex gap-2 mt-4">
+              <Button variant="primary" onClick={submitCreate} disabled={saving}>{saving ? '...' : 'Создать'}</Button>
+              <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={saving}>Отмена</Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Edit modal — for both system and non-system types, but only name/description/enabled/rules/sortOrder are editable */}
       {editing && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.45)' }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 520, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
-            <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800 }}>Редактировать: {editing.code}</h3>
-            <p style={{ margin: '0 0 16px', fontSize: 12, color: '#94a3b8' }}>
+        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-slate-900/45">
+          <Card className="w-[520px] max-w-[95vw] max-h-[90vh] overflow-y-auto shadow-2xl" style={{ padding: 24 }}>
+            <h3 className="mb-1 text-token-lg font-extrabold">Редактировать: {editing.code}</h3>
+            <p className="mb-4 text-token-xs text-neutral-400">
               Код, родитель, weightMode, barcode-префиксы и markType фиксированы после создания.
             </p>
 
             {editError && (
-              <div style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+              <div className="bg-danger/10 text-danger rounded-token-md px-3 py-2 text-token-sm font-semibold mb-3.5">
                 {editError}
               </div>
             )}
 
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Название</label>
-              <input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
+            <div className="mb-2.5">
+              <Input label="Название" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
             </div>
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Описание</label>
-              <input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
-                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
+            <div className="mb-2.5">
+              <Input label="Описание" value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
 
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>rules (JSON-массив)</label>
+            <div className="mb-2.5">
+              <label className="block text-token-xs font-bold text-neutral-700 mb-1">rules (JSON-массив)</label>
               <textarea value={editForm.rulesText} onChange={(e) => setEditForm((f) => ({ ...f, rulesText: e.target.value }))}
                 rows={6} spellCheck={false}
-                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontFamily: 'monospace', resize: 'vertical' }} />
+                className="w-full box-border border border-neutral-300 rounded-token-md px-3 py-2 text-token-xs font-mono resize-y focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500" />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14, alignItems: 'end' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>sortOrder</label>
-                <input value={editForm.sortOrder} onChange={(e) => setEditForm((f) => ({ ...f, sortOrder: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, paddingBottom: 8 }}>
+            <div className="grid grid-cols-2 gap-2.5 mb-3.5 items-end">
+              <Input label="sortOrder" value={editForm.sortOrder} onChange={(e) => setEditForm((f) => ({ ...f, sortOrder: e.target.value }))} />
+              <label className="flex items-center gap-2 text-token-sm font-semibold pb-2">
                 <input type="checkbox" checked={editForm.enabled} onChange={(e) => setEditForm((f) => ({ ...f, enabled: e.target.checked }))} />
                 Активен
               </label>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button onClick={submitEdit} disabled={saving}
-                style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                {saving ? '...' : 'Сохранить'}
-              </button>
-              <button onClick={() => setEditing(null)} disabled={saving}
-                style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: '9px 14px', cursor: 'pointer', fontSize: 13 }}>
-                Отмена
-              </button>
+            <div className="flex gap-2 mt-4">
+              <Button variant="primary" onClick={submitEdit} disabled={saving}>{saving ? '...' : 'Сохранить'}</Button>
+              <Button variant="ghost" onClick={() => setEditing(null)} disabled={saving}>Отмена</Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
-      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-              {['Код', 'Название', 'Родитель', 'Weight mode', 'Тип', 'Статус', 'Правил', ''].map((h) => (
-                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, fontSize: 12, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && [1, 2, 3].map((i) => (
-              <tr key={i}><td colSpan={8} style={{ padding: 14 }}><div className="animate-pulse bg-neutral-200 rounded" style={{ height: 14, width: '60%' }} /></td></tr>
-            ))}
-            {!loading && types.map((t: any) => (
-              <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700 }}>{t.code}</td>
-                <td style={{ padding: '10px 14px' }}>{t.name}</td>
-                <td style={{ padding: '10px 14px', color: '#94a3b8' }}>{t.parentTypeId ? (codeById.get(t.parentTypeId) || '—') : '—'}</td>
-                <td style={{ padding: '10px 14px' }}><Badge label={t.weightMode} style={WEIGHT_MODE_BADGE} /></td>
-                <td style={{ padding: '10px 14px' }}>
-                  <Badge label={t.isSystem ? 'Системный' : 'Кастомный'} style={t.isSystem ? SYSTEM_BADGE.on : SYSTEM_BADGE.off} />
-                </td>
-                <td style={{ padding: '10px 14px' }}>
-                  <Badge label={t.enabled ? 'Включён' : 'Выключен'} style={t.enabled ? ENABLED_BADGE.on : ENABLED_BADGE.off} />
-                </td>
-                <td style={{ padding: '10px 14px', color: '#64748b' }}>{Array.isArray(t.rules) ? t.rules.length : 0}</td>
-                <td style={{ padding: '10px 14px' }}>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => openEdit(t)}
-                      style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: '#475569' }}>
-                      Редактировать
-                    </button>
-                    {!t.isSystem && (
-                      <button onClick={() => remove(t)} disabled={deletingId === t.id}
-                        style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: '#dc2626' }}>
-                        {deletingId === t.id ? '...' : 'Удалить'}
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!loading && types.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>Типов пока нет</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table columns={columns} data={types} rowKey={(t) => t.id} loading={loading} emptyMessage="Типов пока нет" />
     </div>
   );
 }

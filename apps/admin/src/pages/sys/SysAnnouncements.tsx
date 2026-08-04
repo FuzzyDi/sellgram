@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { systemApi } from '../../api/system-admin-client';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Select from '../../components/Select';
+import Badge from '../../components/Badge';
 
 const FILTER_LABELS: Record<string, string> = {
   all:      'Все владельцы',
@@ -45,100 +49,97 @@ export default function SysAnnouncements() {
   }
 
   return (
-    <div style={{ padding: 28 }}>
-      {notice && <div style={{ position: 'fixed', top: 20, right: 20, background: notice.startsWith('✅') ? '#d1fae5' : '#fee2e2', borderRadius: 8, padding: '10px 16px', fontWeight: 700, fontSize: 13, color: notice.startsWith('✅') ? '#065f46' : '#991b1b', zIndex: 999, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>{notice}</div>}
+    <div className="p-7">
+      {notice && (
+        <div className={`fixed top-5 right-5 rounded-token-md px-4 py-2.5 font-bold text-token-sm z-[999] shadow-lg ${notice.startsWith('✅') ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
+          {notice}
+        </div>
+      )}
 
-      <h1 style={{ margin: '0 0 20px', fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Объявления</h1>
+      <h1 className="mb-5 text-token-2xl font-extrabold text-neutral-900">Объявления</h1>
 
-      {/* Compose */}
-      <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 24 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#0f172a' }}>📣 Отправить сообщение владельцам</div>
-        <p style={{ margin: '0 0 14px', fontSize: 13, color: '#64748b' }}>
+      <Card className="mb-6" style={{ padding: '20px 24px' }}>
+        <div className="font-bold text-token-lg mb-4 text-neutral-900">📣 Отправить сообщение владельцам</div>
+        <p className="mb-3.5 text-token-sm text-neutral-500">
           Сообщение будет отправлено через Telegram-бот каждого магазина владельцу, у которого привязан adminTelegramId.
         </p>
 
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Аудитория</label>
-          <select value={filter} onChange={(e) => { setFilter(e.target.value); setConfirmed(false); }}
-            style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 12px', fontSize: 13, background: '#f8fafc', width: '100%', maxWidth: 320 }}>
+        <div className="mb-3 max-w-xs">
+          <Select
+            label="Аудитория"
+            value={filter}
+            onChange={(e) => { setFilter(e.target.value); setConfirmed(false); }}
+          >
             {Object.entries(FILTER_LABELS).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
-          </select>
+          </Select>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+        <div className="mb-4">
+          <label className="block text-token-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wide">
             Текст сообщения (поддерживается HTML)
           </label>
           <textarea
             value={message}
             onChange={(e) => { setMessage(e.target.value); setConfirmed(false); }}
             rows={5}
-            placeholder="Например: <b>🚀 Обновление SellGram!</b>&#10;&#10;Мы добавили новые функции..."
-            style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', fontSize: 13, resize: 'vertical', fontFamily: 'monospace', background: '#f8fafc' }}
+            placeholder={'Например: <b>🚀 Обновление SellGram!</b>\n\nМы добавили новые функции...'}
+            className="w-full box-border border border-neutral-300 rounded-token-md px-3 py-2.5 text-token-sm resize-y font-mono bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500"
           />
         </div>
 
         {confirmed && (
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '12px 16px', marginBottom: 12, fontSize: 13, color: '#92400e' }}>
+          <div className="bg-warning/10 border border-warning/30 rounded-token-md px-4 py-3 mb-3 text-token-sm text-warning">
             ⚠️ Подтвердите отправку: сообщение будет разослано <strong>{FILTER_LABELS[filter]}</strong>. Нажмите кнопку ещё раз для подтверждения.
           </div>
         )}
 
-        <button
+        <Button
+          variant={confirmed ? 'danger' : 'primary'}
           onClick={send}
           disabled={sending || !message.trim()}
-          style={{
-            background: confirmed ? '#ef4444' : '#3b82f6',
-            color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px',
-            fontWeight: 700, fontSize: 14, cursor: (sending || !message.trim()) ? 'not-allowed' : 'pointer',
-            opacity: (sending || !message.trim()) ? 0.6 : 1,
-          }}
         >
           {sending ? '⏳ Отправка...' : confirmed ? '⚠️ Подтвердить отправку' : '📤 Отправить'}
-        </button>
+        </Button>
 
         {result && (
-          <div style={{ marginTop: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 16px', fontSize: 13 }}>
-            <strong style={{ color: '#065f46' }}>Результат:</strong>
-            <span style={{ marginLeft: 12, color: '#374151' }}>✅ Доставлено: {result.sentCount}</span>
-            <span style={{ marginLeft: 12, color: '#ef4444' }}>❌ Ошибок: {result.failedCount}</span>
-            <span style={{ marginLeft: 12, color: '#94a3b8' }}>⏭️ Пропущено: {result.skipped}</span>
+          <div className="mt-3.5 bg-success/10 border border-success/30 rounded-token-md px-4 py-3 text-token-sm">
+            <strong className="text-success">Результат:</strong>
+            <span className="ml-3 text-neutral-700">✅ Доставлено: {result.sentCount}</span>
+            <span className="ml-3 text-danger">❌ Ошибок: {result.failedCount}</span>
+            <span className="ml-3 text-neutral-400">⏭️ Пропущено: {result.skipped}</span>
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* History */}
-      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 700, fontSize: 15 }}>
+      <Card className="overflow-hidden" style={{ padding: 0 }}>
+        <div className="px-4 py-3.5 border-b border-neutral-100 font-bold text-token-lg">
           История объявлений ({history.length})
         </div>
         {history.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>Объявлений ещё не было</div>
+          <div className="p-6 text-center text-neutral-400">Объявлений ещё не было</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="flex flex-col">
             {history.map((item: any) => (
-              <div key={item.id} style={{ padding: '14px 18px', borderBottom: '1px solid #f8fafc' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ background: '#eff6ff', color: '#1e40af', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
-                      {FILTER_LABELS[item.filter] || item.filter}
-                    </span>
-                    <span style={{ fontSize: 12, color: '#94a3b8' }}>от {item.sentBy}</span>
+              <div key={item.id} className="px-4 py-3.5 border-b border-neutral-50 last:border-0">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex gap-2 items-center">
+                    <Badge variant="info">{FILTER_LABELS[item.filter] || item.filter}</Badge>
+                    <span className="text-token-xs text-neutral-400">от {item.sentBy}</span>
                   </div>
-                  <span style={{ fontSize: 12, color: '#94a3b8' }}>{new Date(item.sentAt).toLocaleString('ru')}</span>
+                  <span className="text-token-xs text-neutral-400">{new Date(item.sentAt).toLocaleString('ru')}</span>
                 </div>
-                <div style={{ background: '#f8fafc', borderRadius: 8, padding: '10px 12px', fontFamily: 'monospace', fontSize: 12, color: '#374151', whiteSpace: 'pre-wrap', marginBottom: 8 }}>
+                <div className="bg-neutral-50 rounded-token-md px-3 py-2.5 font-mono text-token-xs text-neutral-700 whitespace-pre-wrap mb-2">
                   {item.message}
                 </div>
-                <div style={{ display: 'flex', gap: 14, fontSize: 12 }}>
-                  <span style={{ color: '#059669' }}>✅ {item.sentCount} доставлено</span>
-                  {item.failedCount > 0 && <span style={{ color: '#dc2626' }}>❌ {item.failedCount} ошибок</span>}
+                <div className="flex gap-3.5 text-token-xs">
+                  <span className="text-success">✅ {item.sentCount} доставлено</span>
+                  {item.failedCount > 0 && <span className="text-danger">❌ {item.failedCount} ошибок</span>}
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

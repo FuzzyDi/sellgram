@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { systemApi } from '../../api/system-admin-client';
+import Card from '../../components/Card';
+import Input from '../../components/Input';
 
 const PLAN_CODES = ['FREE', 'PRO', 'BUSINESS'];
 
@@ -84,23 +86,29 @@ export default function SysPlans() {
     }
   }
 
+  // Per-plan brand colors, not a status/semantic variant — Button's fixed
+  // 4-variant palette and Badge don't have a slot for "this specific
+  // plan's identity color", so these stay inline (the borderTop accent
+  // and the save button both need a color no shared component expresses).
   const planColors: Record<string, string> = { FREE: '#64748b', PRO: '#7c3aed', BUSINESS: '#d97706' };
 
   return (
-    <div style={{ padding: 28, maxWidth: 1000 }}>
+    <div className="p-7 max-w-[1000px]">
       {notice && (
-        <div style={{ position: 'fixed', top: 20, right: 20, background: notice.startsWith('✅') ? '#d1fae5' : '#fee2e2', borderRadius: 8, padding: '10px 16px', fontWeight: 700, fontSize: 13, color: notice.startsWith('✅') ? '#065f46' : '#991b1b', zIndex: 999, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>{notice}</div>
+        <div className={`fixed top-5 right-5 rounded-token-md px-4 py-2.5 font-bold text-token-sm z-[999] shadow-lg ${notice.startsWith('✅') ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
+          {notice}
+        </div>
       )}
 
-      <h1 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Управление тарифами</h1>
-      <p style={{ margin: '0 0 24px', fontSize: 13, color: '#64748b' }}>
+      <h1 className="mb-2 text-token-2xl font-extrabold text-neutral-900">Управление тарифами</h1>
+      <p className="mb-6 text-token-sm text-neutral-500">
         Изменения применяются сразу и кешируются на 5 мин. Новые тенанты получат обновлённые лимиты немедленно.
       </p>
 
-      {loading && <div style={{ color: '#94a3b8', fontSize: 14 }}>Загрузка...</div>}
+      {loading && <div className="text-neutral-400 text-token-base">Загрузка...</div>}
 
       {!loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+        <div className="grid grid-cols-3 gap-5">
           {PLAN_CODES.map((code) => {
             const cfg = configs[code] || {};
             const edit = edits[code] || {};
@@ -108,39 +116,34 @@ export default function SysPlans() {
             const color = planColors[code] || '#64748b';
 
             return (
-              <div key={code} style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: `4px solid ${color}` }}>
-                <div style={{ fontWeight: 800, fontSize: 18, color, marginBottom: 16 }}>{code}</div>
+              <Card key={code} style={{ padding: '20px 24px', borderTop: `4px solid ${color}` }}>
+                <div className="font-extrabold text-token-xl mb-4" style={{ color }}>{code}</div>
 
-                {/* Price */}
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>
-                    Цена (UZS/мес)
-                  </label>
-                  <input
+                <div className="mb-4">
+                  <Input
+                    label="Цена (UZS/мес)"
                     type="number"
                     value={edit.price ?? cfg.price ?? 0}
                     onChange={e => setEditField(code, 'price', e.target.value)}
-                    style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 14, fontWeight: 700 }}
                   />
                 </div>
 
-                {/* Limits */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 10 }}>Лимиты</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="mb-4">
+                  <div className="text-token-xs font-bold text-neutral-700 uppercase tracking-wide mb-2.5">Лимиты</div>
+                  <div className="flex flex-col gap-2">
                     {Object.keys(LIMIT_LABELS).map((key) => {
                       const val = limits[key];
                       const isBoolean = typeof val === 'boolean' || val === 'true' || val === 'false';
                       const label = LIMIT_LABELS[key];
 
                       return (
-                        <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                          <label style={{ fontSize: 12, color: '#374151', flex: 1 }}>{label}</label>
+                        <div key={key} className="flex items-center justify-between gap-2">
+                          <label className="text-token-xs text-neutral-700 flex-1">{label}</label>
                           {isBoolean ? (
                             <select
                               value={String(val)}
                               onChange={e => setLimitField(code, key, e.target.value)}
-                              style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 6px', fontSize: 12, width: 70 }}
+                              className="border border-neutral-300 rounded-token-sm px-1.5 py-1 text-token-xs w-[70px] bg-white focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500"
                             >
                               <option value="true">Да</option>
                               <option value="false">Нет</option>
@@ -151,7 +154,7 @@ export default function SysPlans() {
                               value={val === -1 ? '∞' : String(val ?? '')}
                               onChange={e => setLimitField(code, key, e.target.value)}
                               placeholder="∞ или число"
-                              style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 8px', fontSize: 12, width: 70, textAlign: 'right' }}
+                              className="border border-neutral-300 rounded-token-sm px-2 py-1 text-token-xs w-[70px] text-right focus:outline-none focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500"
                             />
                           )}
                         </div>
@@ -163,11 +166,12 @@ export default function SysPlans() {
                 <button
                   onClick={() => void savePlan(code)}
                   disabled={saving === code}
-                  style={{ width: '100%', background: color, color: '#fff', border: 'none', borderRadius: 8, padding: '9px', fontWeight: 700, fontSize: 13, cursor: saving === code ? 'not-allowed' : 'pointer', opacity: saving === code ? 0.7 : 1 }}
+                  className={`w-full text-white border-none rounded-token-md py-2.5 font-bold text-token-sm ${saving === code ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                  style={{ background: color }}
                 >
                   {saving === code ? 'Сохранение...' : 'Сохранить'}
                 </button>
-              </div>
+              </Card>
             );
           })}
         </div>

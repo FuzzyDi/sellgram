@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { systemApi } from '../../api/system-admin-client';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
 
 type MethodType = 'bank' | 'card' | 'payme' | 'click' | 'stars';
 
@@ -121,87 +124,89 @@ export default function SysPayment() {
   const enabledCount = METHODS.filter(m => isEnabled(m.type)).length;
 
   return (
-    <div style={{ padding: 28, maxWidth: 860 }}>
+    <div className="p-7 max-w-[860px]">
       {notice && (
-        <div style={{ position: 'fixed', top: 20, right: 20, background: notice.startsWith('✅') ? '#d1fae5' : notice.startsWith('⚠') ? '#fef3c7' : '#fee2e2', borderRadius: 8, padding: '10px 16px', fontWeight: 700, fontSize: 13, color: notice.startsWith('✅') ? '#065f46' : notice.startsWith('⚠') ? '#92400e' : '#991b1b', zIndex: 999, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>{notice}</div>
+        <div className={`fixed top-5 right-5 rounded-token-md px-4 py-2.5 font-bold text-token-sm z-[999] shadow-lg ${notice.startsWith('✅') ? 'bg-success/10 text-success' : notice.startsWith('⚠') ? 'bg-warning/10 text-warning' : 'bg-danger/10 text-danger'}`}>
+          {notice}
+        </div>
       )}
 
-      <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Настройки оплаты</h1>
-      <p style={{ margin: '0 0 24px', fontSize: 13, color: '#64748b' }}>
+      <h1 className="mb-1.5 text-token-2xl font-extrabold text-neutral-900">Настройки оплаты</h1>
+      <p className="mb-6 text-token-sm text-neutral-500">
         Тенантам показываются только включённые способы. Активно: {enabledCount} из {METHODS.length}.
       </p>
 
-      {loading && <div style={{ color: '#94a3b8', fontSize: 14 }}>Загрузка...</div>}
+      {loading && <div className="text-neutral-400 text-token-base">Загрузка...</div>}
 
       {!loading && (
         <>
-          {/* Soft mode */}
-          <div style={{ background: softMode ? '#fffbeb' : '#fff', border: softMode ? '2px solid #f59e0b' : '1px solid #e5e7eb', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <Card
+            className="mb-5 flex items-center justify-between gap-4"
+            style={{ padding: '16px 20px', background: softMode ? '#fffbeb' : '#fff', border: softMode ? '2px solid #f59e0b' : '1px solid #e5e7eb' }}
+          >
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>⚠ Мягкий режим биллинга</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Если включён — истёкшие подписки не даунгрейдятся автоматически</div>
+              <div className="font-bold text-token-base text-neutral-900">⚠ Мягкий режим биллинга</div>
+              <div className="text-token-xs text-neutral-500 mt-0.5">Если включён — истёкшие подписки не даунгрейдятся автоматически</div>
             </div>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+            <label className="inline-flex items-center gap-2 cursor-pointer font-bold text-token-sm flex-shrink-0">
               <input type="checkbox" checked={softMode} onChange={e => void toggleSoftMode(e.target.checked)} disabled={softSaving}
-                style={{ width: 18, height: 18, accentColor: '#f59e0b' }} />
-              <span style={{ color: softMode ? '#d97706' : '#374151' }}>{softMode ? 'ВКЛЮЧЁН' : 'Выкл'}</span>
-              {softSaving && <span style={{ fontSize: 12, color: '#94a3b8' }}>...</span>}
+                className="w-[18px] h-[18px]" style={{ accentColor: '#f59e0b' }} />
+              <span className={softMode ? 'text-warning' : 'text-neutral-700'}>{softMode ? 'ВКЛЮЧЁН' : 'Выкл'}</span>
+              {softSaving && <span className="text-token-xs text-neutral-400">...</span>}
             </label>
-          </div>
+          </Card>
 
-          {/* Email */}
-          <div style={{ background: '#fff', borderRadius: 12, padding: '16px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Email для подтверждений</label>
-            <input value={settings['email'] ?? ''} onChange={e => setField('email', e.target.value)}
+          <Card className="mb-4" style={{ padding: '16px 20px' }}>
+            <Input
+              label="Email для подтверждений"
+              value={settings['email'] ?? ''}
+              onChange={e => setField('email', e.target.value)}
               placeholder="billing@example.com"
-              style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
-          </div>
+            />
+          </Card>
 
-          {/* Payment methods */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+          <div className="flex flex-col gap-3 mb-5">
             {METHODS.map(({ type, label, icon, fields }) => {
               const enabled = isEnabled(type);
               return (
-                <div key={type} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: enabled ? '2px solid #3b82f6' : '1px solid #e5e7eb', overflow: 'hidden' }}>
-                  {/* Header */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', background: enabled ? '#eff6ff' : '#f8fafc', cursor: 'pointer' }}
-                    onClick={() => toggleMethod(type, !enabled)}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 20 }}>{icon}</span>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{label}</span>
+                <Card key={type} className="overflow-hidden" style={{ padding: 0, border: enabled ? '2px solid #3b82f6' : '1px solid #e5e7eb' }}>
+                  <div
+                    className={`flex items-center justify-between px-5 py-3.5 cursor-pointer ${enabled ? 'bg-accent-600/5' : 'bg-neutral-50'}`}
+                    onClick={() => toggleMethod(type, !enabled)}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-token-xl">{icon}</span>
+                      <span className="font-bold text-token-base text-neutral-900">{label}</span>
                     </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={e => e.stopPropagation()}>
+                    <label className="flex items-center gap-1.5 cursor-pointer" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={enabled} onChange={e => toggleMethod(type, e.target.checked)}
-                        style={{ width: 16, height: 16, accentColor: '#3b82f6' }} />
-                      <span style={{ fontSize: 12, fontWeight: 600, color: enabled ? '#2563eb' : '#9ca3af' }}>{enabled ? 'Включён' : 'Выкл'}</span>
+                        className="w-4 h-4" style={{ accentColor: '#3b82f6' }} />
+                      <span className={`text-token-xs font-semibold ${enabled ? 'text-accent-600' : 'text-neutral-400'}`}>{enabled ? 'Включён' : 'Выкл'}</span>
                     </label>
                   </div>
 
-                  {/* Fields */}
                   {enabled && (
-                    <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="px-5 py-4 grid grid-cols-2 gap-3">
                       {fields.map(({ key, label: flabel, placeholder }) => (
-                        <div key={key} style={{ gridColumn: key === 'note' || key === 'merchantId' ? '1 / -1' : undefined }}>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>{flabel}</label>
-                          <input
+                        <div key={key} className={key === 'note' || key === 'merchantId' ? 'col-span-2' : undefined}>
+                          <Input
+                            label={flabel}
                             value={settings[methodKey(type, key)] ?? ''}
                             onChange={e => setField(methodKey(type, key), e.target.value)}
                             placeholder={placeholder}
-                            style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 13 }}
                           />
                         </div>
                       ))}
                     </div>
                   )}
-                </div>
+                </Card>
               );
             })}
           </div>
 
-          <button onClick={saveSettings} disabled={saving}
-            style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 28px', fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+          <Button variant="primary" size="lg" onClick={saveSettings} disabled={saving}>
             {saving ? 'Сохранение...' : 'Сохранить'}
-          </button>
+          </Button>
         </>
       )}
     </div>

@@ -1,5 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { systemApi } from '../../api/system-admin-client';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
+import Badge from '../../components/Badge';
+import Table, { TableColumn } from '../../components/Table';
 
 function MonitorSettings() {
   const [settings, setSettings] = useState<any>(null);
@@ -44,84 +49,78 @@ function MonitorSettings() {
     } finally { setTesting(false); }
   }
 
-  if (!settings) return <div style={{ color: '#94a3b8', fontSize: 13 }}>Загрузка настроек...</div>;
+  if (!settings) return <div className="text-neutral-400 text-token-sm">Загрузка настроек...</div>;
 
   return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: '20px 22px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginTop: 24 }}>
-      <h2 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: '#0f172a' }}>⚙️ Настройки уведомлений</h2>
-      <p style={{ margin: '0 0 18px', fontSize: 12, color: '#64748b' }}>Telegram-бот для healthcheck и disk-alert. Скрипт читает из API при каждом запуске.</p>
+    <Card className="mt-6" style={{ padding: '20px 22px' }}>
+      <h2 className="mb-1 text-token-lg font-extrabold text-neutral-900">⚙️ Настройки уведомлений</h2>
+      <p className="mb-4 text-token-xs text-neutral-500">Telegram-бот для healthcheck и disk-alert. Скрипт читает из API при каждом запуске.</p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 480 }}>
-        <div>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>Токен бота</label>
-          <input
-            value={draft.botToken}
-            onChange={e => setDraft(p => ({ ...p, botToken: e.target.value }))}
-            style={{ width: '100%', boxSizing: 'border-box', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontFamily: 'monospace', color: '#0f172a' }}
-            placeholder="123456:ABC-DEF..."
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat ID</label>
-          <input
-            value={draft.chatId}
-            onChange={e => setDraft(p => ({ ...p, chatId: e.target.value }))}
-            style={{ width: '100%', boxSizing: 'border-box', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontFamily: 'monospace', color: '#0f172a' }}
-            placeholder="-1001234567890"
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>Порог диска (%)</label>
-          <input
+      <div className="flex flex-col gap-3 max-w-[480px]">
+        <Input
+          label="Токен бота"
+          value={draft.botToken}
+          onChange={e => setDraft(p => ({ ...p, botToken: e.target.value }))}
+          placeholder="123456:ABC-DEF..."
+          className="font-mono bg-neutral-50"
+        />
+        <Input
+          label="Chat ID"
+          value={draft.chatId}
+          onChange={e => setDraft(p => ({ ...p, chatId: e.target.value }))}
+          placeholder="-1001234567890"
+          className="font-mono bg-neutral-50"
+        />
+        <div className="w-[100px]">
+          <Input
+            label="Порог диска (%)"
             type="number" min={50} max={99}
             value={draft.diskThreshold}
             onChange={e => setDraft(p => ({ ...p, diskThreshold: Number(e.target.value) }))}
-            style={{ width: 100, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0f172a' }}
+            className="bg-neutral-50"
           />
         </div>
       </div>
 
-      {saveErr && <p style={{ margin: '10px 0 0', color: '#dc2626', fontSize: 12 }}>{saveErr}</p>}
-      {saved && <p style={{ margin: '10px 0 0', color: '#059669', fontSize: 12, fontWeight: 700 }}>✓ Сохранено</p>}
+      {saveErr && <p className="mt-2.5 text-danger text-token-xs">{saveErr}</p>}
+      {saved && <p className="mt-2.5 text-success text-token-xs font-bold">✓ Сохранено</p>}
 
-      <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button onClick={() => void save()} disabled={saving}
-          style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+      <div className="flex gap-2.5 mt-4 flex-wrap items-center">
+        <Button variant="primary" onClick={() => void save()} disabled={saving}>
           {saving ? 'Сохранение...' : 'Сохранить'}
-        </button>
-        <button onClick={() => void sendTest()} disabled={testing || !draft.botToken || !draft.chatId}
-          style={{ background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: (testing || !draft.botToken || !draft.chatId) ? 'not-allowed' : 'pointer', opacity: (testing || !draft.botToken || !draft.chatId) ? 0.5 : 1 }}>
+        </Button>
+        <Button variant="secondary" onClick={() => void sendTest()} disabled={testing || !draft.botToken || !draft.chatId}>
           {testing ? 'Отправка...' : '📨 Тест уведомления'}
-        </button>
-        {testResult && <span style={{ fontSize: 12, color: testResult.startsWith('✅') ? '#059669' : '#dc2626' }}>{testResult}</span>}
+        </Button>
+        {testResult && <span className={`text-token-xs ${testResult.startsWith('✅') ? 'text-success' : 'text-danger'}`}>{testResult}</span>}
       </div>
-    </div>
+    </Card>
   );
 }
 
 function ServiceCard({ name, ok, metrics }: { name: string; ok: boolean; metrics: { label: string; value: string | number }[] }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: `4px solid ${ok ? '#22c55e' : '#ef4444'}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ width: 12, height: 12, borderRadius: '50%', background: ok ? '#22c55e' : '#ef4444', display: 'inline-block', boxShadow: `0 0 0 3px ${ok ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }} />
-        <span style={{ fontWeight: 800, fontSize: 16, color: '#0f172a' }}>{name}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: ok ? '#059669' : '#dc2626' }}>{ok ? 'OK' : 'ERR'}</span>
+    <Card style={{ padding: '16px 18px', borderLeft: `4px solid ${ok ? '#22c55e' : '#ef4444'}` }}>
+      <div className="flex items-center gap-2.5 mb-3">
+        <span className={`w-3 h-3 rounded-full inline-block ${ok ? 'bg-success shadow-[0_0_0_3px_rgba(34,197,94,0.2)]' : 'bg-danger shadow-[0_0_0_3px_rgba(239,68,68,0.2)]'}`} />
+        <span className="font-extrabold text-token-lg text-neutral-900">{name}</span>
+        <span className={`ml-auto text-token-xs font-bold ${ok ? 'text-success' : 'text-danger'}`}>{ok ? 'OK' : 'ERR'}</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="flex flex-col gap-1">
         {metrics.map(({ label, value }) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-            <span style={{ color: '#64748b' }}>{label}</span>
-            <span style={{ fontWeight: 700, color: '#374151' }}>{value}</span>
+          <div key={label} className="flex justify-between text-token-xs">
+            <span className="text-neutral-500">{label}</span>
+            <span className="font-bold text-neutral-700">{value}</span>
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
 function StatusDot({ code }: { code: number }) {
-  const color = code < 400 ? '#22c55e' : code < 500 ? '#f59e0b' : '#ef4444';
-  return <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />;
+  const cls = code < 400 ? 'bg-success' : code < 500 ? 'bg-warning' : 'bg-danger';
+  return <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${cls}`} />;
 }
 
 export default function SysMonitoring() {
@@ -162,28 +161,33 @@ export default function SysMonitoring() {
   const error4xx = errors.filter((e) => e.statusCode >= 400 && e.statusCode < 500).length;
   const error5xx = errors.filter((e) => e.statusCode >= 500).length;
 
+  const botColumns: TableColumn<any>[] = [
+    { key: 'status', header: '', width: 20, render: (b) => <span className={`w-2.5 h-2.5 rounded-full inline-block ${b.isActive ? 'bg-success' : 'bg-danger'}`} /> },
+    { key: 'storeName', header: 'Магазин', render: (b) => <span className="font-semibold">{b.storeName}</span> },
+    { key: 'username', header: 'Username', render: (b) => <span className="text-accent-600">{b.username ? `@${b.username}` : '—'}</span> },
+    { key: 'tenantId', header: 'Tenant ID', render: (b) => <span className="font-mono text-[11px] text-neutral-400">{b.tenantId.slice(0, 16)}…</span> },
+    { key: 'storeId', header: 'Store ID', render: (b) => <span className="font-mono text-[11px] text-neutral-400">{b.storeId.slice(0, 16)}…</span> },
+  ];
+
   return (
-    <div style={{ padding: 28 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Мониторинг</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>Обновлено: {lastRefresh.toLocaleTimeString('ru')}</span>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+    <div className="p-7">
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="m-0 text-token-2xl font-extrabold text-neutral-900">Мониторинг</h1>
+        <div className="flex items-center gap-3">
+          <span className="text-token-xs text-neutral-400">Обновлено: {lastRefresh.toLocaleTimeString('ru')}</span>
+          <label className="flex items-center gap-1.5 text-token-sm cursor-pointer">
             <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
             Авто-обновление (15с)
           </label>
-          <button onClick={loadAll} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-            🔄 Обновить
-          </button>
+          <Button variant="primary" size="sm" onClick={loadAll}>🔄 Обновить</Button>
         </div>
       </div>
 
-      {loading && <div style={{ color: '#94a3b8', fontSize: 14 }}>Загрузка...</div>}
+      {loading && <div className="text-neutral-400 text-token-base">Загрузка...</div>}
 
       {!loading && (
         <>
-          {/* Services */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14, marginBottom: 24 }}>
+          <div className="grid gap-3.5 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
             <ServiceCard name="API" ok={true} metrics={[
               { label: 'Uptime', value: uptime },
               { label: 'Память', value: memMb ? `${memMb} MB` : '—' },
@@ -206,84 +210,54 @@ export default function SysMonitoring() {
             ]} />
           </div>
 
-          {/* Bots */}
-          <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden', marginBottom: 24 }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 700, fontSize: 15, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Card className="mb-6 overflow-hidden" style={{ padding: 0 }}>
+            <div className="px-4 py-3.5 border-b border-neutral-100 font-bold text-token-lg flex justify-between items-center">
               <span>🤖 Зарегистрированные боты ({bots.length})</span>
               {bots.filter((b) => !b.isActive).length > 0 && (
-                <span style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 6, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>
-                  {bots.filter((b) => !b.isActive).length} неактивных
-                </span>
+                <Badge variant="danger">{bots.filter((b) => !b.isActive).length} неактивных</Badge>
               )}
             </div>
-            {bots.length === 0 ? (
-              <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>Нет активных ботов</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc' }}>
-                    {['', 'Магазин', 'Username', 'Tenant ID', 'Store ID'].map((h) => (
-                      <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {bots.map((b: any) => (
-                    <tr key={b.storeId} style={{ borderTop: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '8px 14px', width: 20 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: b.isActive ? '#22c55e' : '#ef4444', display: 'inline-block' }} />
-                      </td>
-                      <td style={{ padding: '8px 14px', fontWeight: 600 }}>{b.storeName}</td>
-                      <td style={{ padding: '8px 14px', color: '#3b82f6' }}>{b.username ? `@${b.username}` : '—'}</td>
-                      <td style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>{b.tenantId.slice(0, 16)}…</td>
-                      <td style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>{b.storeId.slice(0, 16)}…</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+            <Table columns={botColumns} data={bots} rowKey={(b) => b.storeId} emptyMessage="Нет активных ботов" />
+          </Card>
 
-          {/* Monitor settings */}
           <MonitorSettings />
 
-          {/* Error log */}
-          <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden', marginTop: 24 }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 700, fontSize: 15, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Card className="overflow-hidden mt-6" style={{ padding: 0 }}>
+            <div className="px-4 py-3.5 border-b border-neutral-100 font-bold text-token-lg flex justify-between items-center">
               <span>🔴 Лог ошибок (последние {errors.length})</span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 6, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>{error4xx} · 4xx</span>
-                <span style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 6, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>{error5xx} · 5xx</span>
+              <div className="flex gap-2">
+                <Badge variant="warning">{error4xx} · 4xx</Badge>
+                <Badge variant="danger">{error5xx} · 5xx</Badge>
               </div>
             </div>
             {errors.length === 0 ? (
-              <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>Ошибок нет 🎉</div>
+              <div className="p-6 text-center text-neutral-400">Ошибок нет 🎉</div>
             ) : (
-              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
+              <div className="max-h-[400px] overflow-y-auto">
+                <table className="w-full border-collapse text-token-xs">
+                  <thead className="sticky top-0 bg-neutral-50 z-[1]">
                     <tr>
                       {['', 'Время', 'Код', 'Метод', 'URL', 'Tenant'].map((h) => (
-                        <th key={h} style={{ padding: '7px 12px', textAlign: 'left', fontWeight: 700, fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
+                        <th key={h} className="px-3 py-1.5 text-left font-bold text-[11px] text-neutral-500 uppercase tracking-wide">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {errors.map((e: any, i: number) => (
-                      <tr key={i} style={{ borderTop: '1px solid #f8fafc' }}>
-                        <td style={{ padding: '6px 12px' }}><StatusDot code={e.statusCode} /></td>
-                        <td style={{ padding: '6px 12px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{new Date(e.time).toLocaleTimeString('ru')}</td>
-                        <td style={{ padding: '6px 12px', fontWeight: 700, color: e.statusCode >= 500 ? '#dc2626' : '#d97706' }}>{e.statusCode}</td>
-                        <td style={{ padding: '6px 12px', color: '#374151' }}>{e.method}</td>
-                        <td style={{ padding: '6px 12px', fontFamily: 'monospace', color: '#475569', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.url}>{e.url}</td>
-                        <td style={{ padding: '6px 12px', color: '#94a3b8', fontFamily: 'monospace', fontSize: 11 }}>{e.tenantId ? e.tenantId.slice(0, 12) + '…' : '—'}</td>
+                      <tr key={i} className="border-t border-neutral-50">
+                        <td className="px-3 py-1.5"><StatusDot code={e.statusCode} /></td>
+                        <td className="px-3 py-1.5 text-neutral-400 whitespace-nowrap">{new Date(e.time).toLocaleTimeString('ru')}</td>
+                        <td className={`px-3 py-1.5 font-bold ${e.statusCode >= 500 ? 'text-danger' : 'text-warning'}`}>{e.statusCode}</td>
+                        <td className="px-3 py-1.5 text-neutral-700">{e.method}</td>
+                        <td className="px-3 py-1.5 font-mono text-neutral-600 max-w-[320px] overflow-hidden text-ellipsis whitespace-nowrap" title={e.url}>{e.url}</td>
+                        <td className="px-3 py-1.5 text-neutral-400 font-mono text-[11px]">{e.tenantId ? e.tenantId.slice(0, 12) + '…' : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
-          </div>
+          </Card>
         </>
       )}
     </div>

@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { systemApi } from '../../api/system-admin-client';
+import Card from '../../components/Card';
+import Button from '../../components/Button';
+import Input from '../../components/Input';
+import Table, { TableColumn } from '../../components/Table';
+
+const SECTION_PADDING = { padding: '20px 24px' };
 
 export default function SysSettings() {
   const [health, setHealth] = useState<any>(null);
@@ -41,22 +47,36 @@ export default function SysSettings() {
   const uptimeStr = uptimeSec > 0 ? `${Math.floor(uptimeSec / 3600)}ч ${Math.floor((uptimeSec % 3600) / 60)}м` : '—';
   const queues = health?.queues || {};
 
+  const queueColumns: TableColumn<[string, any]>[] = [
+    { key: 'name', header: 'Очередь', render: ([name]) => <span className="font-semibold">{name}</span> },
+    { key: 'waiting', header: 'Ожидают', render: ([, q]) => q.waiting ?? '—' },
+    { key: 'active', header: 'Активные', render: ([, q]) => q.active ?? '—' },
+    {
+      key: 'failed',
+      header: 'Ошибки',
+      render: ([, q]) => (
+        <span className={q.failed > 0 ? 'text-danger font-bold' : 'text-neutral-400'}>{q.failed ?? '—'}</span>
+      ),
+    },
+  ];
+
   return (
-    <div style={{ padding: 28, maxWidth: 900 }}>
+    <div className="p-7 max-w-[900px]">
       {notice && (
-        <div style={{ position: 'fixed', top: 20, right: 20, background: notice.startsWith('✅') ? '#d1fae5' : '#fee2e2', borderRadius: 8, padding: '10px 16px', fontWeight: 700, fontSize: 13, color: notice.startsWith('✅') ? '#065f46' : '#991b1b', zIndex: 999, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>{notice}</div>
+        <div className={`fixed top-5 right-5 rounded-token-md px-4 py-2.5 font-bold text-token-sm z-[999] shadow-lg ${notice.startsWith('✅') ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
+          {notice}
+        </div>
       )}
 
-      <h1 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Настройки системы</h1>
+      <h1 className="mb-6 text-token-2xl font-extrabold text-neutral-900">Настройки системы</h1>
 
-      {loading && <div style={{ color: '#94a3b8', fontSize: 14 }}>Загрузка...</div>}
+      {loading && <div className="text-neutral-400 text-token-base">Загрузка...</div>}
 
       {!loading && (
         <>
-          {/* Runtime info */}
-          <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#0f172a' }}>🖥️ Runtime</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+          <Card className="mb-5" style={SECTION_PADDING}>
+            <div className="font-bold text-token-lg mb-4 text-neutral-900">🖥️ Runtime</div>
+            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
               {[
                 { label: 'Node.js', value: runtime.node || '—' },
                 { label: 'Uptime', value: uptimeStr },
@@ -65,106 +85,78 @@ export default function SysSettings() {
                 { label: 'Redis', value: health?.redis?.ok !== false ? 'OK' : 'ERROR' },
                 { label: 'Статус', value: health?.status || '—' },
               ].map(({ label, value }) => (
-                <div key={label} style={{ background: '#f8fafc', borderRadius: 8, padding: '12px 14px' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{value}</div>
+                <div key={label} className="bg-neutral-50 rounded-token-md px-3.5 py-3">
+                  <div className="text-token-xs text-neutral-500 font-semibold uppercase tracking-wide mb-1">{label}</div>
+                  <div className="text-token-base font-bold text-neutral-900">{value}</div>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
-          {/* Queue status */}
           {Object.keys(queues).length > 0 && (
-            <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#0f172a' }}>📋 Очереди BullMQ</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc' }}>
-                    {['Очередь', 'Ожидают', 'Активные', 'Ошибки'].map((h) => (
-                      <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(queues).map(([name, q]: [string, any]) => (
-                    <tr key={name} style={{ borderTop: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '8px 14px', fontWeight: 600 }}>{name}</td>
-                      <td style={{ padding: '8px 14px' }}>{q.waiting ?? '—'}</td>
-                      <td style={{ padding: '8px 14px' }}>{q.active ?? '—'}</td>
-                      <td style={{ padding: '8px 14px', color: q.failed > 0 ? '#dc2626' : '#94a3b8', fontWeight: q.failed > 0 ? 700 : 400 }}>{q.failed ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Card className="mb-5" style={SECTION_PADDING}>
+              <div className="font-bold text-token-lg mb-4 text-neutral-900">📋 Очереди BullMQ</div>
+              <Table columns={queueColumns} data={Object.entries(queues)} rowKey={([name]) => name} />
+            </Card>
           )}
 
-          {/* Subscription reminder settings */}
-          <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, color: '#0f172a' }}>🔔 Напоминания об истечении подписки</div>
-            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>
+          <Card className="mb-5" style={SECTION_PADDING}>
+            <div className="font-bold text-token-lg mb-1 text-neutral-900">🔔 Напоминания об истечении подписки</div>
+            <p className="mb-4 text-token-sm text-neutral-500">
               Автоматические уведомления владельцам магазинов о скором истечении плана.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, cursor: 'pointer' }}>
+            <div className="flex flex-col gap-3.5">
+              <label className="flex items-center gap-2.5 text-token-base cursor-pointer">
                 <input
                   type="checkbox"
                   checked={reminderEnabled}
                   onChange={(e) => setReminderEnabled(e.target.checked)}
-                  style={{ width: 16, height: 16 }}
+                  className="w-4 h-4"
                 />
-                <span style={{ fontWeight: 600 }}>Включить напоминания</span>
+                <span className="font-semibold">Включить напоминания</span>
               </label>
 
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                  За сколько дней уведомлять (через запятую)
-                </label>
-                <input
+              <div className="max-w-[220px]">
+                <Input
+                  label="За сколько дней уведомлять (через запятую)"
                   value={reminderDays}
                   onChange={(e) => setReminderDays(e.target.value)}
                   disabled={!reminderEnabled}
                   placeholder="7, 3, 1"
-                  style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 12px', fontSize: 13, width: 220, background: reminderEnabled ? '#fff' : '#f8fafc', color: reminderEnabled ? '#0f172a' : '#94a3b8' }}
+                  helpText="Например: 7, 3, 1 — уведомление за 7, 3 и 1 день до истечения"
                 />
-                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Например: 7, 3, 1 — уведомление за 7, 3 и 1 день до истечения</div>
               </div>
 
               <div>
-                <button
-                  onClick={saveReminders}
-                  disabled={saving}
-                  style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontWeight: 700, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
-                >
+                <Button variant="primary" onClick={saveReminders} disabled={saving}>
                   {saving ? 'Сохранение...' : 'Сохранить'}
-                </button>
+                </Button>
               </div>
             </div>
 
             {reminders && (
-              <div style={{ marginTop: 14, fontSize: 12, color: '#94a3b8' }}>
+              <div className="mt-3.5 text-token-xs text-neutral-400">
                 Текущие значения: {reminders.enabled ? `✅ включено, дни: ${(reminders.days || []).join(', ')}` : '❌ отключено'}
               </div>
             )}
-          </div>
+          </Card>
 
-          {/* Counters */}
-          <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#0f172a' }}>📊 Счётчики системы</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+          <Card style={SECTION_PADDING}>
+            <div className="font-bold text-token-lg mb-4 text-neutral-900">📊 Счётчики системы</div>
+            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
               {[
                 { label: 'Тенантов', value: health?.counters?.tenants ?? '—' },
                 { label: 'Активных магазинов', value: health?.counters?.activeStores ?? '—' },
                 { label: 'Инвойсов PENDING', value: health?.counters?.pendingInvoices ?? '—' },
               ].map(({ label, value }) => (
-                <div key={label} style={{ background: '#f8fafc', borderRadius: 8, padding: '12px 14px' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{value}</div>
+                <div key={label} className="bg-neutral-50 rounded-token-md px-3.5 py-3">
+                  <div className="text-token-xs text-neutral-500 font-semibold uppercase tracking-wide mb-1">{label}</div>
+                  <div className="text-token-2xl font-extrabold text-neutral-900">{value}</div>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         </>
       )}
     </div>

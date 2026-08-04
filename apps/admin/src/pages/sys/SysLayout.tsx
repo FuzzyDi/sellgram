@@ -30,6 +30,13 @@ const NAV: { id: SysPage; label: string; icon: string }[] = [
   { id: 'settings',      label: 'Настройки',        icon: '⚙️' },
 ];
 
+// Deliberately not routed through Card/Button/Input — those default to a
+// light background/border palette (docs/ADMIN_REDESIGN.md §2's tenant
+// admin look), while the system-admin shell is a distinct dark "internal
+// tool" identity that predates and isn't meant to match it. Adopts the
+// same token-* font/radius scale and Tailwind's own slate/blue/red
+// palette (exact matches for the hex values this file used before) for
+// consistency, without forcing light-theme components onto a dark UI.
 function SysLogin({ onLogin }: { onLogin: (token: string) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -51,30 +58,30 @@ function SysLogin({ onLogin }: { onLogin: (token: string) => void }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a' }}>
-      <form onSubmit={handleLogin} style={{ background: '#1e293b', borderRadius: 16, padding: '40px 36px', width: 360, boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>🛡️</div>
-          <h1 style={{ margin: 0, color: '#f8fafc', fontSize: 22, fontWeight: 800 }}>SellGram System</h1>
-          <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: 13 }}>Системная панель администратора</p>
+    <div className="min-h-screen flex items-center justify-center bg-slate-900">
+      <form onSubmit={handleLogin} className="bg-slate-800 rounded-token-lg w-[360px] shadow-2xl" style={{ padding: '40px 36px' }}>
+        <div className="text-center mb-8">
+          <div className="text-4xl mb-2">🛡️</div>
+          <h1 className="m-0 text-slate-50 text-token-2xl font-extrabold">SellGram System</h1>
+          <p className="mt-1.5 mb-0 text-slate-500 text-token-sm">Системная панель администратора</p>
         </div>
         {error && (
-          <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 12px', marginBottom: 16, color: '#fca5a5', fontSize: 13 }}>
+          <div className="bg-red-950 border border-red-900 rounded-token-md px-3 py-2.5 mb-4 text-red-300 text-token-sm">
             {error}
           </div>
         )}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', color: '#94a3b8', fontSize: 12, fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Email</label>
+        <div className="mb-3.5">
+          <label className="block text-slate-400 text-token-xs font-semibold mb-1.5 uppercase tracking-wide">Email</label>
           <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoFocus required
-            style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px', color: '#f8fafc', fontSize: 14, outline: 'none' }} />
+            className="w-full box-border bg-slate-900 border border-slate-700 rounded-token-md px-3 py-2.5 text-slate-50 text-token-base outline-none focus:border-blue-500" />
         </div>
-        <div style={{ marginBottom: 24 }}>
-          <label style={{ display: 'block', color: '#94a3b8', fontSize: 12, fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Пароль</label>
+        <div className="mb-6">
+          <label className="block text-slate-400 text-token-xs font-semibold mb-1.5 uppercase tracking-wide">Пароль</label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required
-            style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px', color: '#f8fafc', fontSize: 14, outline: 'none' }} />
+            className="w-full box-border bg-slate-900 border border-slate-700 rounded-token-md px-3 py-2.5 text-slate-50 text-token-base outline-none focus:border-blue-500" />
         </div>
         <button type="submit" disabled={loading}
-          style={{ width: '100%', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '12px', fontWeight: 700, fontSize: 15, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+          className={`w-full bg-blue-500 text-white border-none rounded-token-md p-3 font-bold text-token-lg ${loading ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
           {loading ? 'Вход...' : 'Войти'}
         </button>
       </form>
@@ -95,25 +102,28 @@ export default function SysLayout() {
   const sideW = collapsed ? 56 : 220;
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#0f172a', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="flex bg-slate-900" style={{ height: '100vh', fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Sidebar */}
-      <aside style={{
-        width: sideW, minWidth: sideW, background: '#0f172a', display: 'flex', flexDirection: 'column',
-        borderRight: '1px solid #1e293b', transition: 'width 0.2s ease', overflow: 'hidden',
-      }}>
+      <aside
+        className="bg-slate-900 flex flex-col border-r border-slate-800 overflow-hidden"
+        style={{ width: sideW, minWidth: sideW, transition: 'width 0.2s ease' }}
+      >
         {/* Header */}
-        <div style={{ padding: collapsed ? '16px 0' : '16px 16px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #1e293b', justifyContent: collapsed ? 'center' : 'space-between' }}>
+        <div
+          className={`flex items-center gap-2.5 border-b border-slate-800 ${collapsed ? 'justify-center' : 'justify-between'}`}
+          style={{ padding: collapsed ? '16px 0' : '16px 16px' }}
+        >
           {!collapsed && <div>
-            <div style={{ color: '#f8fafc', fontWeight: 800, fontSize: 15, lineHeight: 1.2 }}>SellGram</div>
-            <div style={{ color: '#64748b', fontSize: 11 }}>System Admin</div>
+            <div className="text-slate-50 font-extrabold text-token-lg leading-tight">SellGram</div>
+            <div className="text-slate-500 text-[11px]">System Admin</div>
           </div>}
-          <button onClick={() => setCollapsed(!collapsed)} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 16, padding: 4, borderRadius: 6, flexShrink: 0 }}>
+          <button onClick={() => setCollapsed(!collapsed)} className="bg-transparent border-none text-slate-600 cursor-pointer text-token-lg p-1 rounded-token-sm flex-shrink-0">
             {collapsed ? '▶' : '◀'}
           </button>
         </div>
 
         {/* Nav */}
-        <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
+        <nav className="flex-1 overflow-y-auto py-2">
           {NAV.map((item) => {
             const active = page === item.id;
             return (
@@ -121,18 +131,14 @@ export default function SysLayout() {
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 title={collapsed ? item.label : undefined}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: collapsed ? '10px 0' : '10px 16px',
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                  background: active ? 'rgba(59,130,246,0.15)' : 'none',
-                  border: 'none', borderLeft: active ? '3px solid #3b82f6' : '3px solid transparent',
-                  color: active ? '#60a5fa' : '#64748b',
-                  cursor: 'pointer', fontSize: 13, fontWeight: active ? 700 : 400,
-                  transition: 'all 0.15s',
-                }}
+                className={[
+                  'w-full flex items-center gap-2.5 border-none cursor-pointer text-token-sm transition-colors',
+                  collapsed ? 'justify-center' : 'justify-start',
+                  active ? 'bg-blue-500/15 border-l-[3px] border-l-blue-500 text-blue-400 font-bold' : 'border-l-[3px] border-l-transparent text-slate-500 font-normal',
+                ].join(' ')}
+                style={{ padding: collapsed ? '10px 0' : '10px 16px' }}
               >
-                <span style={{ fontSize: 17, flexShrink: 0 }}>{item.icon}</span>
+                <span className="text-token-lg flex-shrink-0">{item.icon}</span>
                 {!collapsed && <span>{item.label}</span>}
               </button>
             );
@@ -140,17 +146,17 @@ export default function SysLayout() {
         </nav>
 
         {/* Logout */}
-        <div style={{ padding: collapsed ? '12px 0' : '12px 16px', borderTop: '1px solid #1e293b', display: 'flex', justifyContent: collapsed ? 'center' : 'flex-start' }}>
+        <div className={`border-t border-slate-800 flex ${collapsed ? 'justify-center' : 'justify-start'}`} style={{ padding: collapsed ? '12px 0' : '12px 16px' }}>
           <button onClick={handleLogout} title={collapsed ? 'Выйти' : undefined}
-            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6 }}>
-            <span style={{ fontSize: 16 }}>🚪</span>
+            className="bg-transparent border-none text-slate-500 cursor-pointer text-token-sm flex items-center gap-2 px-2 py-1.5 rounded-token-sm">
+            <span className="text-token-base">🚪</span>
             {!collapsed && <span>Выйти</span>}
           </button>
         </div>
       </aside>
 
       {/* Content */}
-      <main style={{ flex: 1, overflow: 'auto', background: '#f1f5f9' }}>
+      <main className="flex-1 overflow-auto bg-slate-100">
         {page === 'overview'      && <SysOverview onNavigate={setPage} />}
         {page === 'tenants'       && <SysTenants />}
         {page === 'invoices'      && <SysInvoices />}
