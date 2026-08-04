@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { setAuthData } from './api/client';
+import { api, setAuthData } from './api/client';
+import { cartStore } from './stores/cartStore';
 import Catalog from './pages/Catalog';
 import Product from './pages/Product';
 import Cart from './pages/Cart';
@@ -89,6 +90,12 @@ function AppShell() {
   const { initData, webApp } = useTelegram();
   const route = useRoute();
   const [ready, setReady] = useState(false);
+  // If window.Telegram.WebApp never shows up (opened outside Telegram, the
+  // WebApp script blocked/slow to load) or the URL is missing storeId/
+  // initData, `ready` stays false forever with nothing on screen but a
+  // spinner — no error, no way out. This flips to true a few seconds in so
+  // that case gets an explanation instead of an infinite "Загрузка...".
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -106,6 +113,44 @@ function AppShell() {
     setAuthData(effectiveInitData, storeId);
     setReady(true);
   }, [initData, webApp]);
+
+  useEffect(() => {
+    if (ready) return;
+    const timer = setTimeout(() => setTimedOut(true), 5000);
+    return () => clearTimeout(timer);
+  }, [ready]);
+
+  // cartStore starts at 0 and was previously only ever set() by Cart.tsx's
+  // own load — a returning customer with items already in their cart saw
+  // badge "0" everywhere until they happened to open the Cart tab once.
+  // Hydrate it from the server as soon as auth is ready, on every boot.
+  useEffect(() => {
+    if (!ready) return;
+    api.getCart()
+      .then((c: any) => cartStore.set(c?.items?.length ?? 0))
+      .catch(() => {});
+  }, [ready]);
+
+  if (!ready && timedOut) {
+    return (
+      <div className="flex items-center justify-center h-screen" style={{ padding: 24, textAlign: 'center' }}>
+        <div>
+          <p style={{ margin: '0 0 12px', color: '#6b7280' }}>
+            {tr(
+              'Не удалось открыть магазин. Откройте эту страницу через кнопку в Telegram-боте.',
+              "Do'konni ochib bo'lmadi. Bu sahifani Telegram-bot tugmasi orqali oching."
+            )}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ border: '1px solid #00875a', color: '#00875a', background: 'none', borderRadius: 10, padding: '8px 16px', fontWeight: 700, cursor: 'pointer' }}
+          >
+            {tr('Попробовать снова', 'Qayta urinish')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!ready) {
     return (

@@ -55,6 +55,7 @@ export default function Product({ id }: { id: string }) {
     setLoading(true);
     setFetchError(false);
     setSelectedVariantId(null);
+    setQty(1);
     Promise.all([
       api.getProduct(id),
       api.getWishlist().catch(() => ({ items: [] })),
@@ -219,7 +220,14 @@ export default function Product({ id }: { id: string }) {
                 return (
                   <button
                     key={v.id}
-                    onClick={() => setSelectedVariantId(selected ? null : v.id)}
+                    onClick={() => {
+                      // A qty bumped up against one variant's stock (e.g. 15
+                      // on a stockQty:20 variant) previously carried over
+                      // untouched to a lower-stock variant — nothing
+                      // reclamped it before addToCart submitted it.
+                      setSelectedVariantId(selected ? null : v.id);
+                      setQty(1);
+                    }}
                     disabled={outOfStock}
                     style={{
                       padding: '8px 16px',

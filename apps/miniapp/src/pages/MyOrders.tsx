@@ -48,12 +48,29 @@ export default function MyOrders() {
     e.stopPropagation();
     const items: any[] = order.items ?? [];
     if (!items.length) return;
-    try {
-      await Promise.all(items.map((it: any) => api.addToCart(it.productId, it.variantId ?? undefined, it.qty)));
-      for (let i = 0; i < items.length; i++) cartStore.inc();
+    // Promise.all rejected the whole batch on the first failure (e.g. one
+    // line now out of stock) while earlier items had already been added
+    // server-side — the user was told "nothing was added" when some items
+    // actually were. allSettled adds what it can and reports accurately.
+    const results = await Promise.allSettled(
+      items.map((it: any) => api.addToCart(it.productId, it.variantId ?? undefined, it.qty))
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    for (let i = 0; i < succeeded; i++) cartStore.inc();
+
+    if (succeeded === items.length) {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       navigate('/cart');
-    } catch {
+    } else if (succeeded > 0) {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
+      window.Telegram?.WebApp?.showAlert?.(
+        tr(
+          `Добавлено ${succeeded} из ${items.length} товаров — остальные недоступны`,
+          `${items.length} tadan ${succeeded} tasi qo'shildi — qolganlari mavjud emas`
+        )
+      );
+      navigate('/cart');
+    } else {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
       window.Telegram?.WebApp?.showAlert?.(tr('Не удалось добавить товары в корзину', "Mahsulotlarni savatga qo'shib bo'lmadi"));
     }
