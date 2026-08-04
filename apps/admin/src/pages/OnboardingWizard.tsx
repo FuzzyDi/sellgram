@@ -134,17 +134,32 @@ export default function OnboardingWizard({ onFinish }: Props) {
     }
   }
 
+  function friendlyBotError(raw?: string) {
+    if (raw && raw.includes('401')) {
+      return tr(
+        'Неверный токен бота. Скопируйте токен заново из @BotFather и вставьте ниже.',
+        'Bot tokeni noto\'g\'ri. @BotFather dan tokenni qayta nusxalab, pastga joylashtiring.'
+      );
+    }
+    return raw || tr('Бот недоступен. Проверьте токен.', 'Bot mavjud emas. Tokenni tekshiring.');
+  }
+
   async function checkBot() {
     if (!createdStoreId) return;
     setBotStatus('checking');
     setError('');
     try {
       const data = await adminApi.checkStoreBot(createdStoreId);
-      setBotInfo(data);
-      setBotStatus('ok');
+      if (data?.ok) {
+        setBotInfo(data);
+        setBotStatus('ok');
+      } else {
+        setBotStatus('error');
+        setError(friendlyBotError(data?.error));
+      }
     } catch (e: any) {
       setBotStatus('error');
-      setError(e.message || tr('Бот недоступен. Проверьте токен.', 'Bot mavjud emas. Tokenni tekshiring.'));
+      setError(friendlyBotError(e.message));
     }
   }
 
@@ -156,9 +171,30 @@ export default function OnboardingWizard({ onFinish }: Props) {
       await adminApi.activateStore(createdStoreId);
       setStep('delivery');
     } catch (e: any) {
-      setError(e.message);
+      if (e.message === 'Invalid bot token') {
+        setBotStatus('error');
+        setBotInfo(null);
+        setStep('bot');
+        setError(friendlyBotError('401'));
+      } else {
+        setError(e.message);
+      }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function fixTokenAndRetry() {
+    if (!createdStoreId || !botToken.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      await adminApi.updateStore(createdStoreId, { botToken: botToken.trim() });
+      setSaving(false);
+      await checkBot();
+    } catch (e: any) {
+      setSaving(false);
+      setError(e.message);
     }
   }
 
@@ -454,9 +490,32 @@ export default function OnboardingWizard({ onFinish }: Props) {
             )}
 
             {botStatus === 'error' && (
-              <Button variant="ghost" size="md" style={{ width: '100%', padding: '12px 0' }} onClick={checkBot}>
-                {tr('Попробовать снова', 'Qayta urinish')}
-              </Button>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                    Bot Token
+                  </label>
+                  <input
+                    value={botToken}
+                    onChange={(e) => setBotToken(e.target.value)}
+                    placeholder="123456789:AAF..."
+                    style={{ width: '100%', border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', boxSizing: 'border-box' }}
+                  />
+                  <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280' }}>
+                    {tr('Возьмите актуальный токен у ', 'Joriy tokenni oling: ')}
+                    <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" style={{ color: '#00875a' }}>@BotFather</a>
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="md"
+                  style={{ width: '100%', padding: '12px 0' }}
+                  disabled={saving || !botToken.trim()}
+                  onClick={fixTokenAndRetry}
+                >
+                  {saving ? tr('Проверка...', 'Tekshirilmoqda...') : tr('Сохранить токен и проверить снова', 'Tokenni saqlash va qayta tekshirish')}
+                </Button>
+              </div>
             )}
           </>
         )}

@@ -11,7 +11,8 @@ export class StoreServiceError extends Error {
     | 'STORE_INACTIVE'
     | 'WEBHOOK_BASE_URL_NOT_CONFIGURED'
     | 'STORE_HAS_ORDERS'
-    | 'LAST_STORE_CANNOT_BE_DELETED';
+    | 'LAST_STORE_CANNOT_BE_DELETED'
+    | 'INVALID_BOT_TOKEN';
 
   constructor(code: StoreServiceError['code']) {
     super(code);
@@ -117,7 +118,11 @@ export async function activateTenantStoreBot(tenantId: string, id: string) {
 
   const token = decrypt(store.botToken);
   const bot = new Bot(token);
-  await bot.init();
+  try {
+    await bot.init();
+  } catch {
+    throw new StoreServiceError('INVALID_BOT_TOKEN');
+  }
 
   // Persist bot username so miniapp can share product deep links
   const botUsername = bot.botInfo.username;

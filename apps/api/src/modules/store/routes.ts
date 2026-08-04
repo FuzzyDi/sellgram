@@ -23,6 +23,7 @@ function mapStoreError(err: unknown) {
     if (err.code === 'WEBHOOK_BASE_URL_NOT_CONFIGURED') return { status: 400, error: 'Webhook base URL is not configured' };
     if (err.code === 'STORE_HAS_ORDERS') return { status: 409, error: 'Store has orders and cannot be deleted' };
     if (err.code === 'LAST_STORE_CANNOT_BE_DELETED') return { status: 409, error: 'At least one store must remain' };
+    if (err.code === 'INVALID_BOT_TOKEN') return { status: 400, error: 'Invalid bot token' };
   }
 
   if (err instanceof Error) return { status: 400, error: err.message };
