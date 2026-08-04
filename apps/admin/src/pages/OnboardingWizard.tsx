@@ -8,9 +8,13 @@ const STORAGE_KEY = 'sg_onboarding_done';
 export function markOnboardingDone() { localStorage.setItem(STORAGE_KEY, '1'); }
 export function isOnboardingDone() { return !!localStorage.getItem(STORAGE_KEY); }
 
-type Step = 'welcome' | 'template' | 'store' | 'bot' | 'delivery' | 'done';
+type Step = 'welcome' | 'template' | 'store' | 'delivery' | 'done';
 
-const STEPS: Step[] = ['welcome', 'template', 'store', 'bot', 'delivery', 'done'];
+const STEPS: Step[] = ['welcome', 'template', 'store', 'delivery', 'done'];
+
+// Telegram bot tokens look like "123456789:AAF...35 more chars...". Catches
+// truncated copy-pastes and stray whitespace before we ever hit the network.
+const BOT_TOKEN_RE = /^\d{6,}:[A-Za-z0-9_-]{30,45}$/;
 
 interface IndustryTemplate {
   id: string;
@@ -94,14 +98,10 @@ export default function OnboardingWizard({ onFinish }: Props) {
   // Step: template
   const [selectedTemplate, setSelectedTemplate] = useState<string>('blank');
 
-  // Step: store
+  // Step: store (create + connect bot in one action)
   const [storeName, setStoreName] = useState('');
   const [botToken, setBotToken] = useState('');
   const [createdStoreId, setCreatedStoreId] = useState<string | null>(null);
-
-  // Step: bot check
-  const [botStatus, setBotStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
-  const [botInfo, setBotInfo] = useState<any>(null);
 
   // Step: delivery
   const [deliveryType, setDeliveryType] = useState<'zone' | 'pickup'>('zone');
@@ -116,24 +116,6 @@ export default function OnboardingWizard({ onFinish }: Props) {
     onFinish();
   }
 
-  async function createStore() {
-    if (!storeName.trim() || !botToken.trim()) {
-      setError(tr('Заполните название и Bot Token', 'Nomi va Bot Token kiriting'));
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      const store = await adminApi.createStore({ name: storeName.trim(), botToken: botToken.trim() });
-      setCreatedStoreId(store.id || store.data?.id);
-      setStep('bot');
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function friendlyBotError(raw?: string) {
     if (raw && raw.includes('401')) {
       return tr(
@@ -144,57 +126,49 @@ export default function OnboardingWizard({ onFinish }: Props) {
     return raw || tr('Бот недоступен. Проверьте токен.', 'Bot mavjud emas. Tokenni tekshiring.');
   }
 
-  async function checkBot() {
-    if (!createdStoreId) return;
-    setBotStatus('checking');
-    setError('');
-    try {
-      const data = await adminApi.checkStoreBot(createdStoreId);
-      if (data?.ok) {
-        setBotInfo(data);
-        setBotStatus('ok');
-      } else {
-        setBotStatus('error');
-        setError(friendlyBotError(data?.error));
-      }
-    } catch (e: any) {
-      setBotStatus('error');
-      setError(friendlyBotError(e.message));
+  // Single action: create the store (or, on retry, save the corrected token
+  // to the store already created), verify the bot, and activate it — one
+  // round trip from the user's point of view instead of three separate steps.
+  async function connectBot() {
+    const name = storeName.trim();
+    const token = botToken.trim();
+    if (!name || !token) {
+      setError(tr('Заполните название и Bot Token', 'Nomi va Bot Token kiriting'));
+      return;
     }
-  }
+    if (!BOT_TOKEN_RE.test(token)) {
+      setError(tr(
+        'Токен выглядит неполным или содержит опечатку. Формат: 123456789:AAF... (35+ символов после двоеточия).',
+        'Token to\'liq emasga yoki xato kiritilganga o\'xshaydi. Format: 123456789:AAF... (ikki nuqtadan keyin 35+ belgi).'
+      ));
+      return;
+    }
 
-  async function activateBot() {
-    if (!createdStoreId) return;
     setSaving(true);
     setError('');
     try {
-      await adminApi.activateStore(createdStoreId);
+      let storeId: string | undefined = createdStoreId ?? undefined;
+      if (!storeId) {
+        const store = await adminApi.createStore({ name, botToken: token });
+        storeId = store.id || store.data?.id;
+        setCreatedStoreId(storeId ?? null);
+      } else {
+        await adminApi.updateStore(storeId, { botToken: token });
+      }
+      if (!storeId) throw new Error(tr('Не удалось создать магазин', 'Do\'kon yaratilmadi'));
+
+      const check = await adminApi.checkStoreBot(storeId);
+      if (!check?.ok) {
+        setError(friendlyBotError(check?.error));
+        return;
+      }
+
+      await adminApi.activateStore(storeId);
       setStep('delivery');
     } catch (e: any) {
-      if (e.message === 'Invalid bot token') {
-        setBotStatus('error');
-        setBotInfo(null);
-        setStep('bot');
-        setError(friendlyBotError('401'));
-      } else {
-        setError(e.message);
-      }
+      setError(e.message === 'Invalid bot token' ? friendlyBotError('401') : e.message);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function fixTokenAndRetry() {
-    if (!createdStoreId || !botToken.trim()) return;
-    setSaving(true);
-    setError('');
-    try {
-      await adminApi.updateStore(createdStoreId, { botToken: botToken.trim() });
-      setSaving(false);
-      await checkBot();
-    } catch (e: any) {
-      setSaving(false);
-      setError(e.message);
     }
   }
 
@@ -440,83 +414,15 @@ export default function OnboardingWizard({ onFinish }: Props) {
               size="md"
               style={{ width: '100%', padding: '12px 0', fontSize: 15 }}
               disabled={saving}
-              onClick={createStore}
+              onClick={connectBot}
             >
-              {saving ? tr('Создание...', 'Yaratilmoqda...') : tr('Создать магазин', 'Do\'kon yaratish')}
+              {saving
+                ? tr('Подключение...', 'Ulanmoqda...')
+                : error
+                  ? tr('Исправить и подключить снова', 'Tuzatish va qayta ulash')
+                  : tr('Создать магазин и подключить бота', 'Do\'kon yaratish va botni ulash')
+              }
             </Button>
-          </>
-        )}
-
-        {/* ── STEP: BOT CHECK ── */}
-        {step === 'bot' && (
-          <>
-            <div>
-              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{tr('Проверка бота', 'Botni tekshirish')}</h2>
-              <p style={{ margin: '6px 0 0', color: '#6b7280', fontSize: 14 }}>
-                {tr('Убедимся, что бот доступен и настроим Web App.', 'Botni tekshirib, Web App-ni sozlaymiz.')}
-              </p>
-            </div>
-
-            {botStatus === 'idle' && (
-              <Button variant="primary" size="md" style={{ width: '100%', padding: '12px 0' }} onClick={checkBot}>
-                {tr('Проверить бота', 'Botni tekshirish')}
-              </Button>
-            )}
-
-            {botStatus === 'checking' && (
-              <div style={{ textAlign: 'center', padding: '16px 0', color: '#6b7280' }}>
-                <div className="animate-pulse bg-neutral-200 rounded" style={{ height: 14, width: '60%', margin: '0 auto' }} />
-              </div>
-            )}
-
-            {botStatus === 'ok' && botInfo && (
-              <>
-                <div style={{ background: '#f0faf4', borderRadius: 12, padding: '14px 16px', border: '1px solid #bbf0d8' }}>
-                  <div style={{ fontWeight: 700, color: '#065f46', marginBottom: 4 }}>✓ {tr('Бот найден', 'Bot topildi')}</div>
-                  <div style={{ fontSize: 13, color: '#3d6b52' }}>
-                    @{botInfo.username || botInfo.botUsername || '—'}
-                  </div>
-                </div>
-                <Button
-                  variant="primary"
-                  size="md"
-                  style={{ width: '100%', padding: '12px 0' }}
-                  disabled={saving}
-                  onClick={activateBot}
-                >
-                  {saving ? tr('Активация...', 'Faollashtirish...') : tr('Активировать и продолжить', 'Faollashtirish va davom etish')}
-                </Button>
-              </>
-            )}
-
-            {botStatus === 'error' && (
-              <div style={{ display: 'grid', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                    Bot Token
-                  </label>
-                  <input
-                    value={botToken}
-                    onChange={(e) => setBotToken(e.target.value)}
-                    placeholder="123456789:AAF..."
-                    style={{ width: '100%', border: '1px solid #d6e0da', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', boxSizing: 'border-box' }}
-                  />
-                  <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280' }}>
-                    {tr('Возьмите актуальный токен у ', 'Joriy tokenni oling: ')}
-                    <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" style={{ color: '#00875a' }}>@BotFather</a>
-                  </p>
-                </div>
-                <Button
-                  variant="primary"
-                  size="md"
-                  style={{ width: '100%', padding: '12px 0' }}
-                  disabled={saving || !botToken.trim()}
-                  onClick={fixTokenAndRetry}
-                >
-                  {saving ? tr('Проверка...', 'Tekshirilmoqda...') : tr('Сохранить токен и проверить снова', 'Tokenni saqlash va qayta tekshirish')}
-                </Button>
-              </div>
-            )}
           </>
         )}
 
