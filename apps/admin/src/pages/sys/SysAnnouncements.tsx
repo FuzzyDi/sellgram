@@ -24,7 +24,7 @@ export default function SysAnnouncements() {
   function showNotice(msg: string) { setNotice(msg); setTimeout(() => setNotice(''), 4000); }
 
   useEffect(() => {
-    systemApi.announcements().then(setHistory).catch(() => {});
+    systemApi.announcements().then(setHistory).catch(() => showNotice('❌ Не удалось загрузить историю объявлений'));
   }, []);
 
   async function send() {
@@ -38,7 +38,11 @@ export default function SysAnnouncements() {
       showNotice(`✅ Отправлено: ${data.sentCount}, не доставлено: ${data.failedCount}`);
       setMessage('');
       setConfirmed(false);
-      // refresh history
+      // Best-effort refresh right after a successful send — left silent on
+      // failure deliberately, unlike the mount-time load above: surfacing
+      // an error here would immediately overwrite the "✅ Отправлено"
+      // notice just shown two lines up with a confusing one about the
+      // history list specifically, right after a send that actually worked.
       systemApi.announcements().then(setHistory).catch(() => {});
     } catch (e: any) {
       showNotice('❌ ' + e.message);

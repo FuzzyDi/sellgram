@@ -205,13 +205,15 @@ export default function OnboardingWizard({ onFinish }: Props) {
           storeId: createdStoreId || undefined,
         });
       }
-      // Apply industry template — create categories
+      // Apply industry template — create categories. Independent creates
+      // (each just needs its own name + explicit sortOrder, no server-side
+      // ordering dependency between them) — parallelizing directly cuts
+      // the latency of this step instead of paying for up to 4 round trips
+      // back to back.
       const tpl = TEMPLATES.find((t) => t.id === selectedTemplate);
       if (tpl && tpl.categoriesRu.length > 0) {
         const names = lang === 'uz' ? tpl.categoriesUz : tpl.categoriesRu;
-        for (let i = 0; i < names.length; i++) {
-          await adminApi.createCategory({ name: names[i], sortOrder: i });
-        }
+        await Promise.all(names.map((name, i) => adminApi.createCategory({ name, sortOrder: i })));
       }
       adminApi.completeOnboarding().catch(() => {/* non-fatal */});
       setStep('done');

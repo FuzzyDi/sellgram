@@ -14,12 +14,16 @@ export default function Wishlist() {
   const [loadError, setLoadError] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadError(false);
     api.getWishlist()
       .then((data) => setItems(Array.isArray(data) ? data : []))
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const removeFromWishlist = async (productId: string) => {
     try {
@@ -54,7 +58,7 @@ export default function Wishlist() {
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
         <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить избранное', "Sevimlilarni yuklab bo'lmadi")}</p>
-        <button className="btn secondary sm pill" onClick={() => window.location.reload()}>{tr('Повторить', 'Qayta urinish')}</button>
+        <button className="btn secondary sm pill" onClick={load}>{tr('Повторить', 'Qayta urinish')}</button>
       </div>
     );
   }

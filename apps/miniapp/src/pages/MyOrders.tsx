@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { BottomNav } from './Catalog';
 import { useMiniI18n } from '../i18n';
 import { cartStore } from '../stores/cartStore';
+import { useOrderStatusConfig } from '../hooks/useOrderStatusConfig';
 
 export default function MyOrders() {
   const { tr, locale } = useMiniI18n();
@@ -12,17 +13,7 @@ export default function MyOrders() {
   const [error, setError] = useState(false);
   const [storeFilter, setStoreFilter] = useState<string | null>(null);
 
-  const SC = useMemo(() => ({
-    NEW:       { emoji: '🆕', label: tr('Новый', 'Yangi'),               color: 'var(--status-new)' },
-    CONFIRMED: { emoji: '✅', label: tr('Подтвержден', 'Tasdiqlandi'),    color: 'var(--status-confirmed)' },
-    PREPARING: { emoji: '👨‍🍳', label: tr('Готовится', 'Tayyorlanmoqda'), color: 'var(--status-preparing)' },
-    READY:     { emoji: '📦', label: tr('Готов', 'Tayyor'),               color: 'var(--status-ready)' },
-    SHIPPED:   { emoji: '🚚', label: tr('В пути', "Yo'lda"),              color: 'var(--status-shipped)' },
-    DELIVERED: { emoji: '📬', label: tr('Доставлен', 'Yetkazildi'),       color: 'var(--status-delivered)' },
-    COMPLETED: { emoji: '🎉', label: tr('Завершен', 'Yakunlandi'),        color: 'var(--status-completed)' },
-    CANCELLED: { emoji: '❌', label: tr('Отменен', 'Bekor qilindi'),      color: 'var(--status-cancelled)' },
-    REFUNDED:  { emoji: '↩️', label: tr('Возврат', 'Qaytarildi'),         color: 'var(--status-refunded)' },
-  }) as const, [tr]);
+  const SC = useOrderStatusConfig();
 
   const stores = useMemo(() => {
     const seen = new Map<string, string>();

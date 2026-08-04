@@ -65,12 +65,12 @@ export default function SysPolicies() {
   function showNotice(msg: string) { setNotice(msg); setTimeout(() => setNotice(''), 3000); }
 
   function loadVersion() {
-    systemApi.platformPolicyVersion().then((d) => setVersion(d.version)).catch(() => {});
+    systemApi.platformPolicyVersion().then((d) => setVersion(d.version)).catch(() => showNotice('❌ Не удалось загрузить версию политик'));
   }
 
   function load() {
     setLoading(true);
-    systemApi.platformPolicies().then(setPolicies).catch(() => {}).finally(() => setLoading(false));
+    systemApi.platformPolicies().then(setPolicies).catch(() => showNotice('❌ Не удалось загрузить правила')).finally(() => setLoading(false));
     loadVersion();
   }
 

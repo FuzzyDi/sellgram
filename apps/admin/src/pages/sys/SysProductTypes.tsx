@@ -73,7 +73,7 @@ export default function SysProductTypes() {
 
   function load() {
     setLoading(true);
-    systemApi.productTypes().then(setTypes).catch(() => {}).finally(() => setLoading(false));
+    systemApi.productTypes().then(setTypes).catch(() => showNotice('❌ Не удалось загрузить типы товаров')).finally(() => setLoading(false));
   }
 
   useEffect(() => { load(); }, []);

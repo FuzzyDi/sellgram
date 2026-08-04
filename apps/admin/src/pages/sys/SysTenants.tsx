@@ -62,7 +62,7 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
   const [extending, setExtending] = useState(false);
 
   useEffect(() => {
-    systemApi.tenantDetail(tenant.id).then(setDetail).catch(() => {}).finally(() => setLoading(false));
+    systemApi.tenantDetail(tenant.id).then(setDetail).catch(() => showNotice('❌ Не удалось загрузить детали тенанта')).finally(() => setLoading(false));
   }, [tenant.id]);
 
   function showNotice(msg: string) { setNotice(msg); setTimeout(() => setNotice(''), 3000); }
@@ -353,14 +353,17 @@ export default function SysTenants() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any>(null);
+  const [notice, setNotice] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showNotice(msg: string) { setNotice(msg); setTimeout(() => setNotice(''), 3000); }
 
   function load(p = page, s = debouncedSearch, plan = planFilter) {
     setLoading(true);
     const params = new URLSearchParams({ page: String(p), pageSize: '25' });
     if (s) params.set('search', s);
     if (plan) params.set('plan', plan);
-    systemApi.tenants(params.toString()).then(setData).catch(() => {}).finally(() => setLoading(false));
+    systemApi.tenants(params.toString()).then(setData).catch(() => showNotice('❌ Не удалось загрузить список тенантов')).finally(() => setLoading(false));
   }
 
   useEffect(() => { load(page, debouncedSearch, planFilter); }, [page, debouncedSearch, planFilter]);
@@ -416,6 +419,12 @@ export default function SysTenants() {
 
   return (
     <div className="p-7">
+      {notice && (
+        <div className="fixed top-5 right-5 rounded-token-md px-4 py-2.5 font-bold text-token-sm z-[999] shadow-lg bg-danger/10 text-danger">
+          {notice}
+        </div>
+      )}
+
       <h1 className="mb-5 text-token-2xl font-extrabold text-neutral-900">Тенанты</h1>
 
       <StalledOnboardingPanel onSelect={setSelected} />

@@ -47,7 +47,7 @@ export default function SysInvoices() {
   useEffect(() => { setLoading(true); loadAll(); }, [page, statusFilter, search]);
 
   useEffect(() => {
-    systemApi.tenants('pageSize=200').then((d) => setTenants(d?.items || d || [])).catch(() => {});
+    systemApi.tenants('pageSize=200').then((d) => setTenants(d?.items || d || [])).catch(() => showNotice('❌ Не удалось загрузить список тенантов'));
   }, []);
 
   async function moderate(id: string, action: 'confirm' | 'reject') {

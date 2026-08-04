@@ -40,7 +40,7 @@ export default function SysUsers() {
     const params = new URLSearchParams({ page: String(p), pageSize: '30' });
     if (s) params.set('search', s);
     if (role) params.set('role', role);
-    systemApi.users(params.toString()).then(setData).catch(() => {}).finally(() => setLoading(false));
+    systemApi.users(params.toString()).then(setData).catch(() => showNotice('❌ Не удалось загрузить пользователей')).finally(() => setLoading(false));
   }
 
   useEffect(() => { load(page, debouncedSearch, roleFilter); }, [page, debouncedSearch, roleFilter]);
