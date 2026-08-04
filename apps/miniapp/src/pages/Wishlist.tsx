@@ -48,7 +48,7 @@ export default function Wishlist() {
 
   if (loading) {
     return (
-      <div style={{ padding: 16 }}>
+      <div style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16, paddingBottom: 24 }}>
         {[1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 72, borderRadius: 12, marginBottom: 10 }} />)}
       </div>
     );

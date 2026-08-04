@@ -88,7 +88,7 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div style={{ padding: 16, paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
+      <div style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16, paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
         <div className="skeleton" style={{ height: 80, width: 80, borderRadius: '50%', margin: '32px auto 16px' }} />
         <div className="skeleton" style={{ height: 20, width: 160, margin: '0 auto 8px' }} />
         <div className="skeleton" style={{ height: 14, width: 120, margin: '0 auto 24px' }} />
@@ -100,7 +100,7 @@ export default function Profile() {
 
   if (error) {
     return (
-      <div style={{ padding: 32, textAlign: 'center', paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
+      <div style={{ paddingTop: 32, paddingLeft: 32, paddingRight: 32, textAlign: 'center', paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
         <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить профиль', "Profilni yuklab bo'lmadi")}</p>
         <button className="btn secondary sm pill" onClick={load}>{tr('Повторить', 'Qayta urinish')}</button>
         <BottomNav active="profile" />
