@@ -131,6 +131,51 @@ describe('order.routes', () => {
       await app.close();
     });
 
+    it('returns 400 for invalid salesChannel enum', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/orders?salesChannel=RETAIL' });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    // docs/B2B_COUNTERPARTIES.md §13 step 4 — B2bOrders.tsx filters the
+    // shared /orders list down to B2B-channel orders this way.
+    it('filters by salesChannel when provided', async () => {
+      mocks.prisma.order.findMany.mockResolvedValue([]);
+      mocks.prisma.order.count.mockResolvedValue(0);
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/orders?salesChannel=B2B' });
+      expect(mocks.prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ salesChannel: 'B2B' }) })
+      );
+      await app.close();
+    });
+
+    it('omits the salesChannel filter (both channels) when not provided', async () => {
+      mocks.prisma.order.findMany.mockResolvedValue([]);
+      mocks.prisma.order.count.mockResolvedValue(0);
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/orders' });
+      const where = mocks.prisma.order.findMany.mock.calls[0][0].where;
+      expect(where).not.toHaveProperty('salesChannel');
+      await app.close();
+    });
+
+    it("includes each order's counterparty (id/name/type) so B2B orders can show who they're for", async () => {
+      mocks.prisma.order.findMany.mockResolvedValue([]);
+      mocks.prisma.order.count.mockResolvedValue(0);
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/orders' });
+      expect(mocks.prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            counterparty: { select: { id: true, name: true, type: true } },
+          }),
+        })
+      );
+      await app.close();
+    });
+
     it('returns paginated orders for valid query', async () => {
       mocks.prisma.order.findMany.mockResolvedValue([{ id: 'o-1' }]);
       mocks.prisma.order.count.mockResolvedValue(1);

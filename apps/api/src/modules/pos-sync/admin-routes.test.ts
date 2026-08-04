@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
     category: { findMany: vi.fn().mockResolvedValue([]) },
     productType: { findMany: vi.fn().mockResolvedValue([]) },
     catalogSnapshot: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
-    posSettings: { upsert: vi.fn() },
+    posSettings: { upsert: vi.fn(), findUnique: vi.fn() },
     posOperator: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -496,6 +496,79 @@ describe('pos-sync.admin-routes', () => {
       expect(mocks.prisma.cloudCommand.createMany).toHaveBeenCalledWith({
         data: [{ tenantId: 'tenant-1', deviceId: 'dev-1', type: 'REFRESH_SETTINGS', payload: { settingsVersion: 4 }, status: 'PENDING' }],
       });
+      await app.close();
+    });
+  });
+
+  describe('GET /pos-devices/settings', () => {
+    const storedSettings = {
+      taxProfile: { vat: 12 },
+      paymentMethods: [{ code: 'cash' }],
+      receiptTemplate: {},
+      printerProfile: {},
+      fiscalProfile: {},
+      offlineLimits: { maxOfflineHours: 24 },
+      roundingRules: {},
+      featureFlags: {},
+    };
+
+    it('returns the stored settings document when one exists', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.posSettings.findUnique.mockResolvedValue({
+        storeId: 'store-1', version: 3, payload: storedSettings, updatedAt: new Date(),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-devices/settings?storeId=store-1' });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json().data;
+      expect(data.version).toBe(3);
+      expect(data.payload).toEqual(storedSettings);
+      expect(mocks.prisma.posSettings.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { storeId: 'store-1' } })
+      );
+      await app.close();
+    });
+
+    // docs/POS_SYNC_API.md §10 — a store that hasn't been configured yet
+    // gets the eight-key defaults at version 0, not a 404. No PosSettings
+    // row is created just to serve this read.
+    it('returns the eight-key defaults at version 0 for a store with no PosSettings row yet', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.posSettings.findUnique.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-devices/settings?storeId=store-1' });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json().data;
+      expect(data.storeId).toBe('store-1');
+      expect(data.version).toBe(0);
+      expect(data.updatedAt).toBeNull();
+      expect(data.payload).toEqual({
+        taxProfile: {}, paymentMethods: [], receiptTemplate: {}, printerProfile: {},
+        fiscalProfile: {}, offlineLimits: {}, roundingRules: {}, featureFlags: {},
+      });
+      await app.close();
+    });
+
+    it('returns 404 when the store does not belong to the tenant', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-devices/settings?storeId=store-foreign' });
+
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.posSettings.findUnique).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 when storeId is missing', async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: 'GET', url: '/pos-devices/settings' });
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.posSettings.findUnique).not.toHaveBeenCalled();
       await app.close();
     });
   });

@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
       update: vi.fn(),
     },
     $transaction: vi.fn(),
+    tenant: { update: vi.fn() },
   },
   permissionGuard: vi.fn((_key: string) => async (_req: any, _reply: any) => {}),
   createB2BOrder: vi.fn(),
@@ -97,6 +98,59 @@ describe('counterparty.routes', () => {
       const keys = mocks.permissionGuard.mock.calls.map(([key]) => key);
       expect(keys.filter((key) => key === 'manageB2B')).toHaveLength(12);
       expect(keys.filter((key) => key === 'manageSettings')).toHaveLength(1);
+    });
+  });
+
+  // docs/B2B_COUNTERPARTIES.md §13 step 4 — the module toggle the doc
+  // prescribed but that was never actually built until this endpoint
+  // was added; b2bEnabled is a plain per-tenant boolean, not plan-gated.
+  describe('PATCH /b2b-settings', () => {
+    it('enables B2B for the tenant', async () => {
+      mocks.prisma.tenant.update.mockResolvedValue({ b2bEnabled: true });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/b2b-settings',
+        payload: { enabled: true },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({ b2bEnabled: true });
+      expect(mocks.prisma.tenant.update).toHaveBeenCalledWith({
+        where: { id: 'tenant-1' },
+        data: { b2bEnabled: true },
+        select: { b2bEnabled: true },
+      });
+      await app.close();
+    });
+
+    it('disables B2B for the tenant', async () => {
+      mocks.prisma.tenant.update.mockResolvedValue({ b2bEnabled: false });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/b2b-settings',
+        payload: { enabled: false },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toEqual({ b2bEnabled: false });
+      await app.close();
+    });
+
+    it('returns 400 when enabled is missing or not a boolean', async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/b2b-settings',
+        payload: { enabled: 'yes' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.tenant.update).not.toHaveBeenCalled();
+      await app.close();
     });
   });
 
