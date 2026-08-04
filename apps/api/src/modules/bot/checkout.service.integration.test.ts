@@ -25,7 +25,7 @@ describe('checkout.service integration', () => {
     const store = await createTestStore(tenant.id);
     const product = await createTestProduct(tenant.id, { stockQty: 10, price: 5000 });
     const customer = await createTestCustomer(tenant.id);
-    await createTestCartItem(customer.id, store.id, product.id, 3);
+    await createTestCartItem(tenant.id, customer.id, store.id, product.id, 3);
     await createTestPaymentMethod(tenant.id, store.id);
 
     const order = await createShopCheckoutOrder({
@@ -52,8 +52,8 @@ describe('checkout.service integration', () => {
       createTestCustomer(tenant.id, BigInt(1002)),
     ]);
     await Promise.all([
-      createTestCartItem(cust1.id, store.id, product.id, 1),
-      createTestCartItem(cust2.id, store.id, product.id, 1),
+      createTestCartItem(tenant.id, cust1.id, store.id, product.id, 1),
+      createTestCartItem(tenant.id, cust2.id, store.id, product.id, 1),
     ]);
     await createTestPaymentMethod(tenant.id, store.id);
 
@@ -81,7 +81,7 @@ describe('checkout.service integration', () => {
     const store = await createTestStore(tenant.id);
     const product = await createTestProduct(tenant.id, { stockQty: 2 });
     const customer = await createTestCustomer(tenant.id);
-    await createTestCartItem(customer.id, store.id, product.id, 5);
+    await createTestCartItem(tenant.id, customer.id, store.id, product.id, 5);
     await createTestPaymentMethod(tenant.id, store.id);
 
     await expect(
@@ -103,7 +103,7 @@ describe('checkout.service integration', () => {
       where: { id: customer.id },
       data: { loyaltyPoints: 50 },
     });
-    await createTestCartItem(customer.id, store.id, product.id, 1);
+    await createTestCartItem(tenant.id, customer.id, store.id, product.id, 1);
     await createTestPaymentMethod(tenant.id, store.id);
     // loyaltyConfig: 1 pt = 100 UZS, maxDiscount 30%
     await testPrisma.loyaltyConfig.create({

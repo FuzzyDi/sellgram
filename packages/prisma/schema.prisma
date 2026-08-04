@@ -157,6 +157,7 @@ model Tenant {
   markingCodes       ProductMarkingCode[]
   barcodes           ProductBarcode[]
   paymentTerminals   PaymentTerminal[]
+  cartItems          CartItem[]
 
   @@map("tenants")
 }
@@ -239,6 +240,7 @@ model Store {
   broadcasts       BroadcastCampaign[]
   posDevices       PosDevice[]
   catalogSnapshots CatalogSnapshot[]
+  cartItems        CartItem[]
   posSettings      PosSettings?
   saleEvents       SaleEvent[]
   stockEvents      StockEvent[]
@@ -377,6 +379,7 @@ model Product {
   counterpartyPrices CounterpartyPrice[]
   markingCodes       ProductMarkingCode[]
   barcodes           ProductBarcode[]
+  cartItems          CartItem[]
 
   productTypeId String?
   productType   ProductType? @relation(fields: [productTypeId], references: [id], onDelete: SetNull)
@@ -471,6 +474,7 @@ model ProductVariant {
   orderItems OrderItem[]
   counterpartyPrices CounterpartyPrice[]
   barcodes           ProductBarcode[]
+  cartItems          CartItem[]
 
   @@map("product_variants")
 }
@@ -673,18 +677,32 @@ model CustomerAddress {
 // ============================================================
 
 model CartItem {
-  id         String   @id @default(cuid())
+  id       String @id @default(cuid())
+  // Every other tenant-owned model carries tenantId directly even when
+  // derivable through a parent (defense-in-depth — see e.g.
+  // OrderReview.tenantId alongside orderId). CartItem was the one
+  // exception, with no tenantId and no FK relations for storeId/
+  // productId/variantId at all — not exploitable today since cart.
+  // service.ts/checkout.service.ts always scope by customerId (which
+  // transitively carries tenant), but nothing at the schema level
+  // enforced that.
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   storeId    String
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   variantId  String?
+  variant    ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   qty        Int      @default(1)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@unique([customerId, storeId, productId, variantId])
   @@index([customerId, storeId])
+  @@index([tenantId])
   @@map("cart_items")
 }
 

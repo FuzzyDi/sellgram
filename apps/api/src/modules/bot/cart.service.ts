@@ -62,6 +62,7 @@ export async function addCartItem(input: {
   } else {
     await prisma.cartItem.create({
       data: {
+        tenantId,
         customerId,
         storeId,
         productId,

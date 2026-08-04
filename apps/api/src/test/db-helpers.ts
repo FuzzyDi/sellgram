@@ -63,13 +63,14 @@ export async function createTestCustomer(tenantId: string, telegramId?: bigint) 
 }
 
 export async function createTestCartItem(
+  tenantId: string,
   customerId: string,
   storeId: string,
   productId: string,
   qty = 1
 ) {
   return testPrisma.cartItem.create({
-    data: { customerId, storeId, productId, qty },
+    data: { tenantId, customerId, storeId, productId, qty },
   });
 }
 
