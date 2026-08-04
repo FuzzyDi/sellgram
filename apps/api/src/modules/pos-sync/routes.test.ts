@@ -841,7 +841,13 @@ describe('pos-sync.routes', () => {
     });
 
     it('computes created/updated/deleted items against the since snapshot', async () => {
-      const sinceCreatedAt = new Date('2026-07-01T00:00:00Z');
+      // Relative to Date.now(), not a fixed calendar date — a hardcoded
+      // absolute date here previously drifted past CATALOG_DELTA_MAX_AGE_MS
+      // (30 days) as real time moved on, silently flipping this test onto
+      // the version_too_old branch instead of the delta-computation path
+      // it's meant to cover.
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const sinceCreatedAt = new Date(Date.now() - 5 * DAY_MS);
       mocks.prisma.catalogSnapshot.findFirst.mockImplementation((args: any) =>
         Promise.resolve(
           args.where.version !== undefined ? { version: 4, createdAt: sinceCreatedAt } : { version: 7 }
@@ -856,11 +862,11 @@ describe('pos-sync.routes', () => {
       };
       const createdProduct = {
         id: 'p-created', ...basePayload, name: 'New Widget',
-        createdAt: new Date('2026-07-05T00:00:00Z'), updatedAt: new Date('2026-07-05T00:00:00Z'),
+        createdAt: new Date(sinceCreatedAt.getTime() + 2 * DAY_MS), updatedAt: new Date(sinceCreatedAt.getTime() + 2 * DAY_MS),
       };
       const updatedProduct = {
         id: 'p-updated', ...basePayload, name: 'Old Widget',
-        createdAt: new Date('2026-06-01T00:00:00Z'), updatedAt: new Date('2026-07-10T00:00:00Z'),
+        createdAt: new Date(sinceCreatedAt.getTime() - 30 * DAY_MS), updatedAt: new Date(sinceCreatedAt.getTime() + 3 * DAY_MS),
       };
 
       mocks.prisma.product.findMany.mockImplementation((args: any) => {
