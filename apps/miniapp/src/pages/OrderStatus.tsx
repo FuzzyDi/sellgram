@@ -84,7 +84,7 @@ export default function OrderStatus({ id }: { id: string }) {
 
   if (loading) {
     return (
-      <div style={{ padding: 16 }}>
+      <div className="page-pad-sm">
         <div className="skeleton" style={{ height: 200, borderRadius: 20, marginBottom: 16 }} />
         <div className="skeleton" style={{ height: 120, borderRadius: 'var(--radius)' }} />
       </div>
@@ -93,7 +93,7 @@ export default function OrderStatus({ id }: { id: string }) {
 
   if (error) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 12, padding: 24 }}>
+      <div className="full-state">
         <span style={{ fontSize: 48 }}>⚠️</span>
         <p className="error-banner">{tr('Не удалось загрузить заказ', "Buyurtmani yuklab bo'lmadi")}</p>
         <button className="btn secondary pill" onClick={() => navigate('/orders')}>{tr('К заказам', 'Buyurtmalarga')}</button>
@@ -103,7 +103,7 @@ export default function OrderStatus({ id }: { id: string }) {
 
   if (!order) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--hint)' }}>
+      <div className="full-state muted">
         <span style={{ fontSize: 48 }}>😕</span>
         <p style={{ fontWeight: 600, marginTop: 8 }}>{tr('Заказ не найден', 'Buyurtma topilmadi')}</p>
       </div>
@@ -125,7 +125,7 @@ export default function OrderStatus({ id }: { id: string }) {
         <div style={{ fontSize: 52, marginBottom: 4 }}>{s.emoji}</div>
         <h2 style={{ fontSize: 22, fontWeight: 800 }}>{tr('Заказ', 'Buyurtma')} #{order.orderNumber}</h2>
         <p style={{ color: s.color, fontWeight: 700, fontSize: 15, marginTop: 4 }}>{s.label}</p>
-        <p style={{ color: 'var(--hint)', fontSize: 13, marginTop: 6 }}>
+        <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
           {new Date(order.createdAt).toLocaleString(locale, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>
@@ -147,18 +147,18 @@ export default function OrderStatus({ id }: { id: string }) {
       <div style={{ padding: '0 12px' }}>
         <div className="card" style={{ marginBottom: 12 }}>
           {order.items?.map((item: any, i: number) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < order.items.length - 1 ? '1px solid var(--divider)' : 'none' }}>
+            <div key={i} className="row-between" style={{ padding: '8px 0', borderBottom: i < order.items.length - 1 ? '1px solid var(--divider)' : 'none' }}>
               <div>
                 <p style={{ fontWeight: 500, fontSize: 14 }}>{item.name}</p>
-                <p style={{ color: 'var(--hint)', fontSize: 12, marginTop: 1 }}>{item.qty} x {Number(item.price).toLocaleString()}</p>
+                <p className="muted" style={{ fontSize: 12, marginTop: 1 }}>{item.qty} x {Number(item.price).toLocaleString()}</p>
               </div>
               <span style={{ fontWeight: 700, fontSize: 14 }}>{Number(item.total).toLocaleString()}</span>
             </div>
           ))}
           <div style={{ borderTop: '1px solid var(--divider)', marginTop: 4, paddingTop: 10 }}>
-            {Number(order.deliveryPrice) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--hint)', marginBottom: 4 }}><span>{tr('Доставка', 'Yetkazish')}</span><span>{Number(order.deliveryPrice).toLocaleString()} {tr('сум', "so'm")}</span></div>}
-            {Number(order.loyaltyDiscount) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--success)', marginBottom: 4 }}><span>{tr('Скидка баллами', 'Ballar chegirmasi')}</span><span>−{Number(order.loyaltyDiscount).toLocaleString()} {tr('сум', "so'm")}</span></div>}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 18 }}><span>{tr('Итого', 'Jami')}</span><span>{Number(order.total).toLocaleString()} {tr('сум', "so'm")}</span></div>
+            {Number(order.deliveryPrice) > 0 && <div className="row-between" style={{ fontSize: 13, color: 'var(--hint)', marginBottom: 4 }}><span>{tr('Доставка', 'Yetkazish')}</span><span>{Number(order.deliveryPrice).toLocaleString()} {tr('сум', "so'm")}</span></div>}
+            {Number(order.loyaltyDiscount) > 0 && <div className="row-between" style={{ fontSize: 13, color: 'var(--success)', marginBottom: 4 }}><span>{tr('Скидка баллами', 'Ballar chegirmasi')}</span><span>−{Number(order.loyaltyDiscount).toLocaleString()} {tr('сум', "so'm")}</span></div>}
+            <div className="row-between" style={{ fontWeight: 800, fontSize: 18 }}><span>{tr('Итого', 'Jami')}</span><span>{Number(order.total).toLocaleString()} {tr('сум', "so'm")}</span></div>
           </div>
         </div>
 
@@ -168,7 +168,7 @@ export default function OrderStatus({ id }: { id: string }) {
             {order.deliveryAddress && <p style={{ fontSize: 14, marginBottom: order.trackingNumber ? 6 : 0 }}>📍 {order.deliveryAddress}</p>}
             {order.trackingNumber && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                <span style={{ fontSize: 13, color: 'var(--hint)' }}>🔍 {tr('Трек-номер', 'Kuzatuv raqami')}:</span>
+                <span className="muted" style={{ fontSize: 13 }}>🔍 {tr('Трек-номер', 'Kuzatuv raqami')}:</span>
                 <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14, flex: 1 }}>{order.trackingNumber}</span>
                 <button
                   onClick={() => { navigator.clipboard?.writeText(order.trackingNumber).catch(() => {}); window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success'); }}
@@ -185,7 +185,8 @@ export default function OrderStatus({ id }: { id: string }) {
           <div style={{ marginBottom: 12 }}>
             <button
               onClick={() => setShowHistory((v) => !v)}
-              style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', color: 'var(--hint)', fontSize: 13, fontWeight: 600 }}
+              className="row-between muted"
+              style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '10px 0', fontSize: 13, fontWeight: 600 }}
             >
               <span>{tr('История статусов', 'Holat tarixi')}</span>
               <span style={{ transition: 'transform 0.2s', display: 'inline-block', transform: showHistory ? 'rotate(180deg)' : 'none' }}>▾</span>
@@ -200,8 +201,8 @@ export default function OrderStatus({ id }: { id: string }) {
                       <div style={{ marginTop: 4, flexShrink: 0, width: 8, height: 8, borderRadius: '50%', background: idx === 0 ? hS.color : 'var(--divider)' }} />
                       <div style={{ flex: 1 }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: hS.color }}>{hS.emoji} {hS.label}</span>
-                        {h.note && <p style={{ fontSize: 12, color: 'var(--hint)', marginTop: 2 }}>{h.note}</p>}
-                        <p style={{ fontSize: 11, color: 'var(--hint)', marginTop: 2 }}>
+                        {h.note && <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>{h.note}</p>}
+                        <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>
                           {new Date(h.createdAt).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
@@ -286,7 +287,7 @@ export default function OrderStatus({ id }: { id: string }) {
         {(order.status === 'DELIVERED' || order.status === 'COMPLETED') && (order.review || reviewDone) && (
           <div style={{ marginTop: 12, background: 'var(--sec)', borderRadius: 'var(--radius)', padding: '14px', textAlign: 'center' }}>
             <p style={{ fontSize: 20, marginBottom: 4 }}>{'★'.repeat(order.review?.rating ?? reviewRating)}</p>
-            <p style={{ fontSize: 13, color: 'var(--hint)' }}>{tr('Спасибо за отзыв!', 'Fikringiz uchun rahmat!')}</p>
+            <p className="muted" style={{ fontSize: 13 }}>{tr('Спасибо за отзыв!', 'Fikringiz uchun rahmat!')}</p>
           </div>
         )}
 

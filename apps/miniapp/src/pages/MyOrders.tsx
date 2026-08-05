@@ -71,7 +71,7 @@ export default function MyOrders() {
 
   if (loading) {
     return (
-      <div style={{ padding: 16 }}>
+      <div className="page-pad-sm">
         <div className="skeleton" style={{ height: 28, width: 140, marginBottom: 16 }} />
         {[1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 80, marginBottom: 8, borderRadius: 'var(--radius)' }} />)}
       </div>
@@ -80,7 +80,7 @@ export default function MyOrders() {
 
   if (error) {
     return (
-      <div style={{ padding: 32, textAlign: 'center' }}>
+      <div className="page-error">
         <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить заказы', "Buyurtmalarni yuklab bo'lmadi")}</p>
         <button className="btn secondary sm pill" onClick={load}>{tr('Повторить', 'Qayta urinish')}</button>
         <BottomNav active="orders" />
@@ -89,10 +89,10 @@ export default function MyOrders() {
   }
 
   return (
-    <div className="anim-fade" style={{ paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
-      <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, padding: '12px 16px', borderBottom: '0.5px solid var(--divider)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Заказы', 'Buyurtmalar')}</h1>
+    <div className="anim-fade pb-nav">
+      <div className="glass sticky-header" style={{ padding: '12px 16px' }}>
+        <div className="row-between">
+          <h1 className="page-title">{tr('Заказы', 'Buyurtmalar')}</h1>
           <button onClick={() => navigate('/profile')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }} aria-label={tr('Профиль', 'Profil')}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--hint)' }}>
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -123,32 +123,32 @@ export default function MyOrders() {
         )}
       </div>
       {orders.length === 0 ? (
-        <div className="anim-scale" style={{ textAlign: 'center', padding: '72px 16px' }}>
-          <div style={{ fontSize: 56, marginBottom: 12 }}>📦</div>
+        <div className="anim-scale empty-state">
+          <div className="empty-icon">📦</div>
           <p style={{ fontSize: 18, fontWeight: 600 }}>{tr('Заказов пока нет', "Hozircha buyurtmalar yo'q")}</p>
-          <p style={{ fontSize: 14, color: 'var(--hint)', marginTop: 4 }}>{tr('Самое время сделать первый!', 'Birinchi buyurtma qilish vaqti keldi!')}</p>
+          <p className="muted" style={{ fontSize: 14, marginTop: 4 }}>{tr('Самое время сделать первый!', 'Birinchi buyurtma qilish vaqti keldi!')}</p>
         </div>
       ) : (
-        <div style={{ padding: '8px 12px' }}>
+        <div className="list-pad">
           {visibleOrders.map((o: any, i: number) => {
             const statusKey = String(o.status) as keyof typeof SC;
             const s = SC[statusKey] || SC.NEW;
             return (
               <div key={o.id} onClick={() => navigate(`/order/${o.id}`)} className={`pressable anim-fade anim-d${Math.min(i, 5)}`} style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 8, cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="row-between">
                   <span style={{ fontWeight: 700 }}>#{o.orderNumber}</span>
                   <span className="badge" style={{ color: s.color, background: `color-mix(in srgb, ${s.color} 12%, transparent)` }}>{s.emoji} {s.label}</span>
                 </div>
                 {o.store?.name && stores.length > 1 && (
-                  <div style={{ fontSize: 11, color: 'var(--hint)', marginTop: 4 }}>🏪 {o.store.name}</div>
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>🏪 {o.store.name}</div>
                 )}
-                <p style={{ color: 'var(--hint)', fontSize: 13, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <p className="muted" style={{ fontSize: 13, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {o.items?.map((it: any) => `${it.name} x${it.qty}`).join(', ')}
                 </p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                <div className="row-between" style={{ marginTop: 8 }}>
                   <span style={{ fontWeight: 700 }}>{Number(o.total).toLocaleString()} {tr('сум', "so'm")}</span>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ color: 'var(--hint)', fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString(locale)}</span>
+                    <span className="muted" style={{ fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString(locale)}</span>
                     {(o.status === 'COMPLETED' || o.status === 'DELIVERED') && (
                       <button
                         onClick={(e) => repeatOrder(e, o)}

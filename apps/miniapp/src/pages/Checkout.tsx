@@ -144,7 +144,7 @@ export default function Checkout() {
 
   if (loadingData) {
     return (
-      <div style={{ padding: 16 }}>
+      <div className="page-pad-sm">
         <div className="skeleton" style={{ height: 28, width: 140, marginBottom: 16 }} />
         {[1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 56, marginBottom: 10, borderRadius: 'var(--radius-sm)' }} />)}
       </div>
@@ -153,7 +153,7 @@ export default function Checkout() {
 
   if (loadError) {
     return (
-      <div style={{ padding: 32, textAlign: 'center' }}>
+      <div className="page-error">
         <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить данные', "Ma'lumotlarni yuklab bo'lmadi")}</p>
         <button className="btn secondary sm pill" onClick={loadData}>{tr('Повторить', 'Qayta urinish')}</button>
       </div>
@@ -162,9 +162,9 @@ export default function Checkout() {
 
   return (
     <div className="anim-fade" style={{ paddingBottom: 96 }}>
-      <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, padding: 16, borderBottom: '0.5px solid var(--divider)' }}>
+      <div className="glass sticky-header">
         <button onClick={() => navigate('/cart')} className="btn ghost xs" style={{ marginBottom: 4 }}>← {tr('Корзина', 'Savat')}</button>
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Оформление', 'Rasmiylashtirish')}</h1>
+        <h1 className="page-title">{tr('Оформление', 'Rasmiylashtirish')}</h1>
       </div>
 
       <div style={{ padding: '12px 16px' }}>
@@ -232,7 +232,7 @@ export default function Checkout() {
 
         <Section title={tr('Способ оплаты', "To'lov usuli")}>
           {paymentMethods.length === 0 ? (
-            <div className="card" style={{ color: 'var(--hint)', fontSize: 14 }}>
+            <div className="card muted" style={{ fontSize: 14 }}>
               {tr('Способы оплаты не настроены', "To'lov usullari sozlanmagan")}
             </div>
           ) : (
@@ -272,10 +272,10 @@ export default function Checkout() {
 
         {loyalty?.config?.isEnabled && loyalty.balance > 0 && (
           <div className="card" style={{ background: 'linear-gradient(135deg, rgba(0,135,90,0.08), rgba(0,185,107,0.06))', marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="row-between">
               <div>
                 <p style={{ fontWeight: 600, fontSize: 14 }}>⭐ {tr('Списать баллы', 'Ballarni ishlatish')}</p>
-                <p style={{ fontSize: 12, color: 'var(--hint)', marginTop: 2 }}>{loyalty.balance} {tr('баллов', 'ball')} = {(loyalty.balance * loyalty.config.pointValue).toLocaleString()} {tr('сум', "so'm")}</p>
+                <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>{loyalty.balance} {tr('баллов', 'ball')} = {(loyalty.balance * loyalty.config.pointValue).toLocaleString()} {tr('сум', "so'm")}</p>
               </div>
               <Toggle checked={usePoints} onChange={(v) => {
                 setUsePoints(v);
@@ -288,10 +288,10 @@ export default function Checkout() {
         <div className="card" style={{ marginBottom: 20 }}>
           <p className="section-title" style={{ marginTop: 0 }}>{tr('Промокод', 'Promokod')}</p>
           {promoApplied ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'rgba(0,135,90,0.1)', borderRadius: 'var(--radius-sm)' }}>
+            <div className="row-between" style={{ padding: '10px 12px', background: 'rgba(0,135,90,0.1)', borderRadius: 'var(--radius-sm)' }}>
               <div>
                 <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--success)' }}>✓ {promoCode.toUpperCase()}</span>
-                <span style={{ fontSize: 13, color: 'var(--hint)', marginLeft: 8 }}>−{promoApplied.discount.toLocaleString()} {tr('сум', "so'm")}</span>
+                <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>−{promoApplied.discount.toLocaleString()} {tr('сум', "so'm")}</span>
               </div>
               <button onClick={() => { setPromoApplied(null); setPromoCode(''); }} style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer', fontSize: 18 }}>×</button>
             </div>
@@ -319,7 +319,7 @@ export default function Checkout() {
 
           {/* Referral code */}
           <div style={{ marginTop: 10, borderTop: '0.5px solid var(--divider)', paddingTop: 10 }}>
-            <p style={{ fontSize: 12, color: 'var(--hint)', marginBottom: 6 }}>{tr('Код друга (реферальный)', 'Do\'st kodi (referal)')}</p>
+            <p className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{tr('Код друга (реферальный)', 'Do\'st kodi (referal)')}</p>
             <input
               className="field"
               value={referralCode}
@@ -335,11 +335,11 @@ export default function Checkout() {
           {form.deliveryType === 'LOCAL' && <Row label={tr('Доставка', 'Yetkazish')} value={deliveryFee ? `${deliveryFee.toLocaleString()} ${tr('сум', "so'm")}` : tr('Бесплатно', 'Bepul')} />}
           {loyaltyDiscount > 0 && <Row label={tr('Скидка баллами', 'Ballar chegirmasi')} value={`−${loyaltyDiscount.toLocaleString()} ${tr('сум', "so'm")}`} color="var(--success)" />}
           {promoDiscount > 0 && <Row label={tr('Промокод', 'Promokod')} value={`−${promoDiscount.toLocaleString()} ${tr('сум', "so'm")}`} color="var(--success)" />}
-          <div style={{ borderTop: '1px solid var(--divider)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 18 }}>
+          <div className="row-between" style={{ borderTop: '1px solid var(--divider)', marginTop: 8, paddingTop: 8, fontWeight: 800, fontSize: 18 }}>
             <span>{tr('Итого', 'Jami')}</span><span>{total.toLocaleString()} {tr('сум', "so'm")}</span>
           </div>
           {loyalty?.config?.isEnabled && loyalty.config.pointsPerUnit && loyalty.config.unitAmount && (
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--divider)', fontSize: 12, color: 'var(--hint)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div className="muted" style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--divider)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
               <span>⭐</span>
               <span>
                 {tr('Начислим', 'Hisoblaymiz')}{' '}
@@ -374,8 +374,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Row({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 14 }}>
-      <span style={{ color: 'var(--hint)' }}>{label}</span>
+    <div className="row-between" style={{ padding: '3px 0', fontSize: 14 }}>
+      <span className="muted">{label}</span>
       <span style={{ fontWeight: 600, color }}>{value}</span>
     </div>
   );

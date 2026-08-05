@@ -48,7 +48,7 @@ export default function Wishlist() {
 
   if (loading) {
     return (
-      <div style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16, paddingBottom: 24 }}>
+      <div className="page-pad-sm">
         {[1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 72, borderRadius: 12, marginBottom: 10 }} />)}
       </div>
     );
@@ -56,7 +56,7 @@ export default function Wishlist() {
 
   if (loadError) {
     return (
-      <div style={{ padding: 32, textAlign: 'center' }}>
+      <div className="page-error">
         <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить избранное', "Sevimlilarni yuklab bo'lmadi")}</p>
         <button className="btn secondary sm pill" onClick={load}>{tr('Повторить', 'Qayta urinish')}</button>
       </div>
@@ -64,13 +64,13 @@ export default function Wishlist() {
   }
 
   return (
-    <div className="anim-fade" style={{ padding: 16, paddingBottom: 24 }}>
+    <div className="anim-fade page-pad-sm">
       <h2 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 16px' }}>
         {tr('Избранное', 'Sevimlilар')}
       </h2>
 
       {items.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--hint)' }}>
+        <div className="muted" style={{ textAlign: 'center', padding: '48px 16px' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>♡</div>
           <p style={{ fontWeight: 600, margin: '0 0 16px' }}>{tr('Избранное пусто', 'Sevimlilар bo\'sh')}</p>
           <button className="btn primary pill" onClick={() => navigate('/')}>
@@ -84,13 +84,13 @@ export default function Wishlist() {
           const product = item.product ?? {};
           const image = product.images?.[0]?.url;
           return (
-            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--sec)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
-              <div onClick={() => navigate(`/product/${product.id}`)} style={{ width: 56, height: 56, borderRadius: 10, background: 'var(--divider)', overflow: 'hidden', flexShrink: 0 }}>
-                {image && <img src={image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+            <div key={item.id} className="row-card" style={{ marginBottom: 0, cursor: 'pointer' }}>
+              <div onClick={() => navigate(`/product/${product.id}`)} className="thumb">
+                {image && <img src={image} alt="" />}
               </div>
-              <div onClick={() => navigate(`/product/${product.id}`)} style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name}</p>
-                <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--hint)' }}>{Number(product.price).toLocaleString()} {tr('сум', "so'm")}</p>
+              <div onClick={() => navigate(`/product/${product.id}`)} className="flex-fill">
+                <p className="row-title" style={{ margin: 0 }}>{product.name}</p>
+                <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>{Number(product.price).toLocaleString()} {tr('сум', "so'm")}</p>
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                 <button

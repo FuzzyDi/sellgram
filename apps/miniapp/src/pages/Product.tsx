@@ -115,7 +115,7 @@ export default function Product({ id }: { id: string }) {
     return (
       <div>
         <div className="skeleton" style={{ width: '100%', aspectRatio: '1' }} />
-        <div style={{ padding: 16 }}>
+        <div className="page-pad-sm">
           <div className="skeleton" style={{ height: 24, width: '70%', marginBottom: 12 }} />
           <div className="skeleton" style={{ height: 32, width: '40%' }} />
         </div>
@@ -125,9 +125,9 @@ export default function Product({ id }: { id: string }) {
 
   if (fetchError) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 12, padding: 24 }}>
+      <div className="full-state">
         <span style={{ fontSize: 40 }}>⚠️</span>
-        <p style={{ fontWeight: 600, color: 'var(--hint)', textAlign: 'center' }}>{tr('Не удалось загрузить товар', 'Mahsulotni yuklab bo\'lmadi')}</p>
+        <p className="muted" style={{ fontWeight: 600 }}>{tr('Не удалось загрузить товар', 'Mahsulotni yuklab bo\'lmadi')}</p>
         <button className="btn primary pill" onClick={loadProduct}>
           {tr('Повторить', 'Qayta urinish')}
         </button>
@@ -137,7 +137,7 @@ export default function Product({ id }: { id: string }) {
 
   if (!product) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 12, color: 'var(--hint)' }}>
+      <div className="full-state muted">
         <span style={{ fontSize: 48 }}>😕</span>
         <p style={{ fontWeight: 600 }}>{tr('Товар не найден', 'Mahsulot topilmadi')}</p>
         <button onClick={() => navigate('/')} style={{ color: 'var(--accent)', background: 'none', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
@@ -202,9 +202,9 @@ export default function Product({ id }: { id: string }) {
         {product.category && <span className="anim-fade anim-d1" style={{ display: 'inline-block', fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-light)', padding: '3px 10px', borderRadius: 8 }}>{product.category.name}</span>}
         <h1 className="anim-fade anim-d2" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2, marginTop: 10 }}>{product.name}</h1>
         <p className="anim-fade anim-d3" style={{ fontSize: 28, fontWeight: 800, marginTop: 12, letterSpacing: -0.5 }}>
-          {displayPrice.toLocaleString()} <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--hint)' }}>{tr('сум', "so'm")}</span>
+          {displayPrice.toLocaleString()} <span className="muted" style={{ fontSize: 16, fontWeight: 500 }}>{tr('сум', "so'm")}</span>
         </p>
-        {product.description && <p className="anim-fade anim-d4" style={{ color: 'var(--hint)', marginTop: 16, lineHeight: 1.55, fontSize: 15 }}>{product.description}</p>}
+        {product.description && <p className="anim-fade anim-d4 muted" style={{ marginTop: 16, lineHeight: 1.55, fontSize: 15 }}>{product.description}</p>}
 
         {/* Variant selector */}
         {hasVariants && (
@@ -268,7 +268,7 @@ export default function Product({ id }: { id: string }) {
         {(!hasVariants || selectedVariant) && (
           <div className="anim-fade anim-d5" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 14, padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--sec)' }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: inStock ? (stockQty > 5 ? 'var(--success)' : 'var(--warning)') : 'var(--danger)' }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--hint)' }}>
+            <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>
               {!inStock ? tr('Нет в наличии', 'Mavjud emas') : stockQty > 5 ? tr('В наличии', 'Mavjud') : tr(`Осталось ${stockQty} шт`, `${stockQty} ta qoldi`)}
             </span>
           </div>
@@ -279,7 +279,7 @@ export default function Product({ id }: { id: string }) {
       {reviews && reviews.total === 0 && (
         <div style={{ padding: '4px 16px 16px' }}>
           <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{tr('Отзывы', 'Sharhlar')}</p>
-          <p style={{ fontSize: 13, color: 'var(--hint)' }}>{tr('Отзывов пока нет', 'Hali sharhlar yo\'q')}</p>
+          <p className="muted" style={{ fontSize: 13 }}>{tr('Отзывов пока нет', 'Hali sharhlar yo\'q')}</p>
         </div>
       )}
       {reviews && reviews.total > 0 && (
@@ -292,7 +292,7 @@ export default function Product({ id }: { id: string }) {
               ))}
             </span>
             <span style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b' }}>{reviews.avg}</span>
-            <span style={{ fontSize: 12, color: 'var(--hint)' }}>({reviews.total})</span>
+            <span className="muted" style={{ fontSize: 12 }}>({reviews.total})</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {reviews.reviews.slice(0, 5).map((r: any) => {
@@ -309,7 +309,7 @@ export default function Product({ id }: { id: string }) {
                       ))}
                     </span>
                   </div>
-                  {r.comment && <p style={{ fontSize: 13, color: 'var(--hint)', margin: 0, lineHeight: 1.4 }}>{r.comment}</p>}
+                  {r.comment && <p className="muted" style={{ fontSize: 13, margin: 0, lineHeight: 1.4 }}>{r.comment}</p>}
                 </div>
               );
             })}

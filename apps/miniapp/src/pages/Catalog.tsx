@@ -161,8 +161,8 @@ export default function Catalog() {
 
   return (
     <div style={{ paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
-      <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, padding: '16px 16px 0', borderBottom: '0.5px solid var(--divider)' }}>
-        <h1 className="anim-fade" style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Каталог', 'Katalog')}</h1>
+      <div className="glass sticky-header" style={{ padding: '16px 16px 0' }}>
+        <h1 className="anim-fade page-title">{tr('Каталог', 'Katalog')}</h1>
         <div className="anim-fade anim-d1" style={{ position: 'relative', padding: '10px 0 4px' }}>
           <svg viewBox="0 0 24 24" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, stroke: 'var(--hint)', fill: 'none', strokeWidth: 2, strokeLinecap: 'round', pointerEvents: 'none' }}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -188,9 +188,9 @@ export default function Catalog() {
       </div>
 
       {error && (
-        <div style={{ padding: 32, textAlign: 'center' }}>
+        <div className="page-error">
           <p style={{ fontSize: 40, marginBottom: 12 }}>⚠️</p>
-          <p style={{ fontWeight: 600, color: 'var(--hint)', marginBottom: 20 }}>{tr('Не удалось загрузить каталог', 'Katalogni yuklab bo`lmadi')}</p>
+          <p className="muted" style={{ fontWeight: 600, marginBottom: 20 }}>{tr('Не удалось загрузить каталог', 'Katalogni yuklab bo`lmadi')}</p>
           <button className="btn primary pill" onClick={() => { setPage(1); setRetryKey((k) => k + 1); }}>
             {tr('Повторить', 'Qayta urinish')}
           </button>
@@ -198,12 +198,12 @@ export default function Catalog() {
       )}
 
       {!error && loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '10px 12px' }}>
+        <div className="product-grid">
           {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 220, borderRadius: 'var(--radius)' }} />)}
         </div>
       ) : !error && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '10px 12px' }}>
+          <div className="product-grid">
             {filtered.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
           </div>
 
@@ -289,7 +289,7 @@ function ProductCard({ product: p, index }: { product: Product; index: number })
         <h3 style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.name}</h3>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 6 }}>
           <p style={{ fontWeight: 700, fontSize: 15, color: outOfStock ? 'var(--hint)' : 'var(--text)', margin: 0 }}>
-            {Number(p.price).toLocaleString()} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--hint)' }}>{tr('сум', "so'm")}</span>
+            {Number(p.price).toLocaleString()} <span className="muted-sm">{tr('сум', "so'm")}</span>
           </p>
           {!outOfStock && (
             <button

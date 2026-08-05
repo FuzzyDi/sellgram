@@ -88,7 +88,7 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16, paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
+      <div className="page-pad-sm pb-nav">
         <div className="skeleton" style={{ height: 80, width: 80, borderRadius: '50%', margin: '32px auto 16px' }} />
         <div className="skeleton" style={{ height: 20, width: 160, margin: '0 auto 8px' }} />
         <div className="skeleton" style={{ height: 14, width: 120, margin: '0 auto 24px' }} />
@@ -100,7 +100,7 @@ export default function Profile() {
 
   if (error) {
     return (
-      <div style={{ paddingTop: 32, paddingLeft: 32, paddingRight: 32, textAlign: 'center', paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
+      <div className="page-error pb-nav">
         <p className="error-banner" style={{ marginBottom: 12 }}>{tr('Не удалось загрузить профиль', "Profilni yuklab bo'lmadi")}</p>
         <button className="btn secondary sm pill" onClick={load}>{tr('Повторить', 'Qayta urinish')}</button>
         <BottomNav active="profile" />
@@ -109,10 +109,10 @@ export default function Profile() {
   }
 
   return (
-    <div className="anim-fade" style={{ paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
+    <div className="anim-fade pb-nav">
       {/* Header */}
-      <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, padding: '12px 16px', borderBottom: '0.5px solid var(--divider)' }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{tr('Профиль', 'Profil')}</h1>
+      <div className="glass sticky-header" style={{ padding: '12px 16px' }}>
+        <h1 className="page-title">{tr('Профиль', 'Profil')}</h1>
       </div>
 
       <div style={{ padding: '24px 16px 0' }}>
@@ -153,8 +153,8 @@ export default function Profile() {
         </div>
 
         {/* Phone */}
-        <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 12 }}>
-          <p style={{ fontSize: 12, color: 'var(--hint)', margin: '0 0 4px' }}>{tr('Телефон', 'Telefon')}</p>
+        <div className="panel">
+          <p className="panel-label">{tr('Телефон', 'Telefon')}</p>
           {editPhone ? (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input
@@ -184,7 +184,7 @@ export default function Profile() {
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="row-between">
               <span style={{ fontSize: 15, fontWeight: profile?.phone ? 600 : 400, color: profile?.phone ? 'var(--text)' : 'var(--hint)' }}>
                 {profile?.phone || tr('Не указан', "Ko'rsatilmagan")}
               </span>
@@ -201,8 +201,8 @@ export default function Profile() {
 
         {/* Referral code */}
         {profile?.referralCode && (
-          <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 12 }}>
-            <p style={{ fontSize: 12, color: 'var(--hint)', margin: '0 0 8px' }}>{tr('Ваш реферальный код', 'Sizning referal kodingiz')}</p>
+          <div className="panel">
+            <p className="panel-label" style={{ marginBottom: 8 }}>{tr('Ваш реферальный код', 'Sizning referal kodingiz')}</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontFamily: 'monospace', fontSize: 22, fontWeight: 800, letterSpacing: 3, flex: 1 }}>
                 {profile.referralCode}
@@ -224,9 +224,9 @@ export default function Profile() {
         )}
 
         {/* Saved addresses */}
-        <div style={{ background: 'var(--sec)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <p style={{ fontSize: 12, color: 'var(--hint)', margin: 0 }}>{tr('Адреса доставки', 'Yetkazib berish manzillari')}</p>
+        <div className="panel">
+          <div className="row-between" style={{ marginBottom: 8 }}>
+            <p className="panel-label" style={{ margin: 0 }}>{tr('Адреса доставки', 'Yetkazib berish manzillari')}</p>
             <button
               onClick={() => setShowAddForm((v) => !v)}
               className="btn secondary sm pill"
@@ -245,7 +245,7 @@ export default function Profile() {
               padding: '8px 0', borderBottom: '0.5px solid var(--divider)',
             }}>
               <span style={{ fontSize: 16 }}>{a.label === 'home' ? '🏠' : a.label === 'work' ? '🏢' : '📍'}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="flex-fill">
                 <p style={{ fontSize: 13, fontWeight: 500, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.address}</p>
                 {a.isDefault && <p style={{ fontSize: 11, color: 'var(--success)', margin: 0 }}>{tr('По умолчанию', 'Asosiy')}</p>}
               </div>
@@ -296,16 +296,11 @@ export default function Profile() {
           <button
             key={link.path}
             onClick={() => navigate(link.path)}
-            className="pressable"
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-              background: 'var(--sec)', borderRadius: 'var(--radius)', padding: '14px 16px',
-              marginBottom: 10, border: 'none', cursor: 'pointer', textAlign: 'left',
-            }}
+            className="pressable link-row"
           >
             <span style={{ fontSize: 20 }}>{link.icon}</span>
             <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>{link.label}</span>
-            <span style={{ marginLeft: 'auto', color: 'var(--hint)', fontSize: 18 }}>›</span>
+            <span className="muted" style={{ marginLeft: 'auto', fontSize: 18 }}>›</span>
           </button>
         ))}
       </div>
