@@ -250,6 +250,17 @@ export default async function consignmentSettlementRoutes(fastify: FastifyInstan
 
     try {
       await prisma.$transaction(async (tx: any) => {
+        // Serializes concurrent confirms against the *same PO* — without
+        // this, two DRAFT settlements each reporting qtySold within the
+        // (pre-either-commit) remaining balance could both pass the
+        // OVERSOLD check and jointly charge more than was ever received
+        // (remainingForPoItem only reads confirmed settlements, so two
+        // concurrent transactions under READ COMMITTED can each see the
+        // same pre-charge "remaining"). Scoped to this PO, not the whole
+        // tenant, so unrelated consignment settlements aren't serialized
+        // against each other.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}::text || ':consignment-settlement:' || ${settlement.purchaseOrderId}::text))`;
+
         let totalForeignCost = 0;
         for (const item of settlement.items) {
           if (item.qtySold <= 0) continue;

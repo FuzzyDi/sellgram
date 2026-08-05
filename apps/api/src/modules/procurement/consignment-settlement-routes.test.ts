@@ -232,6 +232,7 @@ describe('consignment-settlement.routes', () => {
 
     function makeConfirmTx() {
       const tx = {
+        $executeRaw: vi.fn().mockResolvedValue(1),
         purchaseOrderItem: mocks.prisma.purchaseOrderItem,
         consignmentSettlementItem: mocks.prisma.consignmentSettlementItem,
         supplier: { update: vi.fn().mockResolvedValue({}) },
@@ -251,6 +252,9 @@ describe('consignment-settlement.routes', () => {
       const response = await app.inject({ method: 'POST', url: '/consignment-settlements/cs-1/confirm' });
 
       expect(response.statusCode).toBe(200);
+      // Advisory lock scoped to this PO — guards against two concurrent
+      // settlements for the same PO both passing the OVERSOLD check.
+      expect(tx.$executeRaw).toHaveBeenCalled();
       expect(tx.supplier.update).toHaveBeenCalledTimes(1);
       expect(tx.supplier.update).toHaveBeenCalledWith({
         where: { id: 'sup-1' }, data: { currentDebt: { increment: 360000 } },
