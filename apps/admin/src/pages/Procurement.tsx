@@ -4,7 +4,8 @@ import { adminApi } from '../api/store-admin-client';
 import { useAdminI18n } from '../i18n';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import type { BadgeVariant } from '../components/Badge';
+import Badge, { type BadgeVariant } from '../components/Badge';
+import Table, { type TableColumn } from '../components/Table';
 import CreatePurchaseOrderForm from './procurement/CreatePurchaseOrderForm';
 import PurchaseOrderCard from './procurement/PurchaseOrderCard';
 import ReceivePurchaseOrderModal from './procurement/ReceivePurchaseOrderModal';
@@ -27,6 +28,12 @@ function statusBadgeVariant(status: POStatus): BadgeVariant {
   if (status === 'IN_TRANSIT') return 'warning';
   return 'neutral';
 }
+
+const PAYMENT_METHOD_BADGE: Record<string, BadgeVariant> = {
+  CASH: 'neutral',
+  NON_CASH: 'neutral',
+  CREDIT: 'warning',
+};
 
 export default function Procurement() {
   const { tr, locale } = useAdminI18n();
@@ -54,6 +61,11 @@ export default function Procurement() {
   // Receive PO modal
   const [receivePo, setReceivePo] = useState<any | null>(null);
   const [receiveItems, setReceiveItems] = useState<Record<string, number>>({});
+
+  // List shows a compact summary row per document; opening one reveals its
+  // items/cost breakdown below instead of every document being expanded
+  // at once.
+  const [selectedPoId, setSelectedPoId] = useState<string | null>(null);
 
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
@@ -91,6 +103,44 @@ export default function Procurement() {
     RECEIVED:   tr('Получен', 'Qabul qilindi'),
     CANCELLED:  tr('Отменён', 'Bekor qilindi'),
   };
+
+  const paymentMethodLabel: Record<string, string> = {
+    CASH: tr('Наличные', 'Naqd'),
+    NON_CASH: tr('Безналичный', 'Naqd emas'),
+    CREDIT: tr('В долг', 'Qarzga'),
+  };
+
+  const selectedPo = pos.find((po: any) => po.id === selectedPoId) ?? null;
+
+  const documentColumns: TableColumn<any>[] = [
+    {
+      key: 'po',
+      header: 'PO#',
+      render: (po) => (
+        <span className="font-semibold text-neutral-800 inline-flex items-center gap-1.5">
+          <span className={`transition-transform ${po.id === selectedPoId ? 'rotate-90' : ''}`} aria-hidden="true">›</span>
+          PO-{po.poNumber}
+        </span>
+      ),
+    },
+    { key: 'supplier', header: tr('Поставщик', 'Yetkazib beruvchi'), render: (po) => po.supplierName },
+    {
+      key: 'paymentMethod',
+      header: tr('Оплата', "To'lov"),
+      render: (po) => <Badge variant={PAYMENT_METHOD_BADGE[po.paymentMethod] || 'neutral'}>{paymentMethodLabel[po.paymentMethod] || po.paymentMethod}</Badge>,
+    },
+    {
+      key: 'status',
+      header: tr('Статус', 'Holat'),
+      render: (po) => <Badge variant={statusBadgeVariant(po.status)}>{statusLabel[po.status as POStatus] || po.status}</Badge>,
+    },
+    {
+      key: 'total',
+      header: tr('Сумма', 'Summa'),
+      render: (po) => <span className="font-semibold text-neutral-800">{Number(po.totalCost).toLocaleString(locale)} {po.currency}</span>,
+    },
+    { key: 'date', header: tr('Дата', 'Sana'), render: (po) => new Date(po.createdAt).toLocaleDateString(locale) },
+  ];
 
   function resetCreateForm() {
     setSupplier(''); setSupplierId(''); setPaymentMethod('CASH'); setCurrency('USD'); setFxRate('');
@@ -291,26 +341,31 @@ export default function Procurement() {
           <p className="m-0 text-token-sm text-neutral-500">{tr('Приходных документов пока нет', "Hali kirim hujjatlari yo'q")}</p>
         </Card>
       ) : (
-        pos.map((po: any) => {
-          const status = po.status as POStatus;
-          const transitions = PO_TRANSITIONS[status] || [];
-          const canReceive = status === 'IN_TRANSIT';
-
-          return (
-            <PurchaseOrderCard
-              key={po.id}
-              po={po}
-              transitions={transitions}
-              canReceive={canReceive}
-              statusLabel={statusLabel}
-              statusBadgeVariant={statusBadgeVariant}
-              saving={saving}
-              onTransition={(poId, next) => void transition(poId, next)}
-              onReceive={openReceive}
-            />
-          );
-        })
+        <Table
+          columns={documentColumns}
+          data={pos}
+          rowKey={(po) => po.id}
+          onRowClick={(po) => setSelectedPoId((prev) => (prev === po.id ? null : po.id))}
+        />
       )}
+
+      {selectedPo && (() => {
+        const status = selectedPo.status as POStatus;
+        const transitions = PO_TRANSITIONS[status] || [];
+        const canReceive = status === 'IN_TRANSIT';
+        return (
+          <PurchaseOrderCard
+            po={selectedPo}
+            transitions={transitions}
+            canReceive={canReceive}
+            statusLabel={statusLabel}
+            statusBadgeVariant={statusBadgeVariant}
+            saving={saving}
+            onTransition={(poId, next) => void transition(poId, next)}
+            onReceive={openReceive}
+          />
+        );
+      })()}
 
       {receivePo && (
         <ReceivePurchaseOrderModal
