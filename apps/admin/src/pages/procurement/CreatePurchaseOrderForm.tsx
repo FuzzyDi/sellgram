@@ -14,12 +14,15 @@ export interface POItemDraft {
 interface CreatePurchaseOrderFormProps {
   suppliers: any[];
   products: any[];
+  existingDocs: any[];
   supplierId: string;
   setSupplierId: (value: string) => void;
   supplier: string;
   setSupplier: (value: string) => void;
   paymentMethod: 'CASH' | 'NON_CASH' | 'CREDIT';
   setPaymentMethod: (value: 'CASH' | 'NON_CASH' | 'CREDIT') => void;
+  relatesToId: string;
+  setRelatesToId: (value: string) => void;
   currency: string;
   setCurrency: (value: string) => void;
   fxRate: string;
@@ -41,8 +44,8 @@ interface CreatePurchaseOrderFormProps {
 }
 
 export default function CreatePurchaseOrderForm({
-  suppliers, products, supplierId, setSupplierId, supplier, setSupplier,
-  paymentMethod, setPaymentMethod,
+  suppliers, products, existingDocs, supplierId, setSupplierId, supplier, setSupplier,
+  paymentMethod, setPaymentMethod, relatesToId, setRelatesToId,
   currency, setCurrency, fxRate, setFxRate, shippingCost, setShippingCost,
   customsCost, setCustomsCost, note, setNote, items, addItem, removeItem, updateItem,
   createTotal, saving, onSubmit, onCancel,
@@ -105,6 +108,15 @@ export default function CreatePurchaseOrderForm({
           <label className="block mb-1 text-token-xs text-neutral-500">{tr('Заметка', 'Izoh')}</label>
           <Input value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
+        {existingDocs.length > 0 && (
+          <div>
+            <label className="block mb-1 text-token-xs text-neutral-500">{tr('Связан с документом', "Hujjat bilan bog'liq")}</label>
+            <Select value={relatesToId} onChange={(e) => setRelatesToId(e.target.value)}>
+              <option value="">{tr('— не связан —', "— bog'lanmagan —")}</option>
+              {existingDocs.map((d: any) => <option key={d.id} value={d.id}>PO-{d.poNumber} · {d.supplierName}</option>)}
+            </Select>
+          </div>
+        )}
       </div>
 
       <div>

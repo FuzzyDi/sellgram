@@ -29,6 +29,11 @@ const updatePOSchema = z.object({
   shippingCost: z.number().min(0).optional(),
   customsCost: z.number().min(0).optional(),
   note: z.string().optional(),
+  // Pure traceability — "this document corrects/supplements PO-X". No
+  // downstream effect, so it's treated the same as note: freely editable
+  // before RECEIVED, editReceivedDocuments-gated after (see schema.prisma
+  // comment on PurchaseOrder.relatesToId).
+  relatesToId: z.string().nullable().optional(),
 });
 
 const createItemSchema = z.object({
@@ -60,6 +65,7 @@ const createPOSchema = z.object({
   shippingCost: z.number().min(0).default(0),
   customsCost: z.number().min(0).default(0),
   note: z.string().optional(),
+  relatesToId: z.string().optional(),
   items: z.array(z.object({
     productId: z.string(),
     qty: z.number().int().positive(),
@@ -87,7 +93,11 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
 
     const pos = await prisma.purchaseOrder.findMany({
       where,
-      include: { items: { include: { product: { select: { id: true, name: true } } } } },
+      include: {
+        items: { include: { product: { select: { id: true, name: true } } } },
+        relatesTo: { select: { id: true, poNumber: true } },
+        relatedBy: { select: { id: true, poNumber: true } },
+      },
       orderBy: { createdAt: 'desc' },
       take: 500,
     });
@@ -99,7 +109,11 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     const po = await prisma.purchaseOrder.findFirst({
       where: { id, tenantId: request.tenantId! },
-      include: { items: { include: { product: { select: { id: true, name: true, sku: true } } } } },
+      include: {
+        items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+        relatesTo: { select: { id: true, poNumber: true } },
+        relatedBy: { select: { id: true, poNumber: true } },
+      },
     });
     if (!po) return reply.status(404).send({ success: false, error: 'PO not found' });
     return { success: true, data: po };
@@ -121,6 +135,10 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
       });
       if (ownedProducts.length !== uniqueProductIds.length) {
         return reply.status(400).send({ success: false, error: 'One or more products are invalid for tenant' });
+      }
+      if (body.relatesToId) {
+        const related = await prisma.purchaseOrder.findFirst({ where: { id: body.relatesToId, tenantId: request.tenantId! }, select: { id: true } });
+        if (!related) return reply.status(400).send({ success: false, error: 'Invalid related document for tenant' });
       }
 
       const totalCost = body.items.reduce((sum: number, item: any) => sum + item.qty * item.unitCost, 0);
@@ -146,6 +164,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
           customsCost: body.customsCost,
           totalCost,
           note: body.note,
+          relatesToId: body.relatesToId ?? null,
           items: {
             create: body.items.map((item: any) => ({
               productId: item.productId,
@@ -175,7 +194,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
 
-    const { status, paymentMethod, fxRate, shippingCost, customsCost, note } = body;
+    const { status, paymentMethod, fxRate, shippingCost, customsCost, note, relatesToId } = body;
 
     if (status === 'RECEIVED') {
       return reply.status(400).send({ success: false, error: 'Use POST /receive to mark PO as received' });
@@ -196,16 +215,19 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
         // StockMovement/SupplierLedger rows already written from the old
         // values (see /receive above), so it would just create a second,
         // silent discrepancy instead of a first, visible one. A genuine
-        // correction goes through the dedicated stock-adjust and
-        // supplier-debt-adjust endpoints instead, both already audited.
-        // note is the one exception — pure annotation, no downstream
-        // effect — and even that needs editReceivedDocuments unless the
-        // actor is OWNER/MANAGER (same bypass permissionGuard itself uses).
+        // correction is a new, separate, fully-audited event instead: a
+        // supplementary document (relatesToId links it back here) for
+        // "we received less than recorded", or a SupplierReturn
+        // (return-routes.ts) for "we're sending goods back" — never an
+        // edit to this row. note/relatesToId are the two exceptions —
+        // pure annotation, no downstream effect — and even those need
+        // editReceivedDocuments unless the actor is OWNER/MANAGER (same
+        // bypass permissionGuard itself uses).
         if (po.status === 'RECEIVED') {
           if (paymentMethod !== undefined || fxRate !== undefined || shippingCost !== undefined || customsCost !== undefined) {
             throw new Error('DOCUMENT_LOCKED');
           }
-          if (note !== undefined && request.user!.role !== 'OWNER' && request.user!.role !== 'MANAGER') {
+          if ((note !== undefined || relatesToId !== undefined) && request.user!.role !== 'OWNER' && request.user!.role !== 'MANAGER') {
             const dbUser = await tx.user.findUnique({ where: { id: request.user!.userId }, select: { role: true, permissions: true } });
             const perms = getEffectivePermissions(dbUser!);
             if (!perms.editReceivedDocuments) throw new Error('FORBIDDEN_NOTE_EDIT');
@@ -216,6 +238,12 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
           throw new Error('CREDIT_REQUIRES_SUPPLIER');
         }
 
+        if (relatesToId) {
+          if (relatesToId === id) throw new Error('CANNOT_RELATE_TO_SELF');
+          const related = await tx.purchaseOrder.findFirst({ where: { id: relatesToId, tenantId: request.tenantId! }, select: { id: true } });
+          if (!related) throw new Error('INVALID_RELATED_DOCUMENT');
+        }
+
         const data: any = {};
         if (status !== undefined) data.status = status;
         if (paymentMethod !== undefined) data.paymentMethod = paymentMethod;
@@ -223,6 +251,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
         if (shippingCost !== undefined) data.shippingCost = shippingCost;
         if (customsCost !== undefined) data.customsCost = customsCost;
         if (note !== undefined) data.note = note;
+        if (relatesToId !== undefined) data.relatesToId = relatesToId;
         if (status === 'ORDERED') data.orderedAt = new Date();
 
         await tx.purchaseOrder.update({ where: { id }, data });
@@ -239,6 +268,12 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
       }
       if (err.message === 'CREDIT_REQUIRES_SUPPLIER') {
         return reply.status(400).send({ success: false, error: 'Credit purchases must be linked to a saved supplier' });
+      }
+      if (err.message === 'CANNOT_RELATE_TO_SELF') {
+        return reply.status(400).send({ success: false, error: 'A document cannot relate to itself' });
+      }
+      if (err.message === 'INVALID_RELATED_DOCUMENT') {
+        return reply.status(400).send({ success: false, error: 'Invalid related document for tenant' });
       }
       if (err.message.startsWith('INVALID_TRANSITION:')) {
         const [, from, to] = err.message.split(':');

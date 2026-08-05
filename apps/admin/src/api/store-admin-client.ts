@@ -337,6 +337,17 @@ export const adminApi = {
     request<any>(`/purchase-orders/${id}/items/${itemId}`, { method: 'DELETE' }),
   receivePurchaseOrder: (id: string, data: any) => request<any>(`/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
 
+  getSupplierReturns: () => request<any>('/supplier-returns'),
+  createSupplierReturn: (data: any) => request<any>('/supplier-returns', { method: 'POST', body: JSON.stringify(data) }),
+  updateSupplierReturn: (id: string, data: any) => request<any>(`/supplier-returns/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  confirmSupplierReturn: (id: string) => request<any>(`/supplier-returns/${id}/confirm`, { method: 'POST' }),
+  addSupplierReturnItem: (id: string, data: { productId: string; qty: number; unitCost: number }) =>
+    request<any>(`/supplier-returns/${id}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  updateSupplierReturnItem: (id: string, itemId: string, data: { qty?: number; unitCost?: number }) =>
+    request<any>(`/supplier-returns/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteSupplierReturnItem: (id: string, itemId: string) =>
+    request<any>(`/supplier-returns/${id}/items/${itemId}`, { method: 'DELETE' }),
+
   getDashboard: () => request<any>('/analytics/dashboard'),
   getAnalyticsSummary: (days?: number) => request<any>(`/analytics/summary?days=${days || 30}`),
   getTopProducts: (period?: number) => request<any>(`/analytics/top-products?period=${period || 30}`),

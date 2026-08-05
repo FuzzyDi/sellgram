@@ -166,6 +166,7 @@ model Tenant {
   counterparties     Counterparty[]
   counterpartyLedger CounterpartyLedger[]
   supplierLedger     SupplierLedger[]
+  supplierReturns    SupplierReturn[]
   posOperators       PosOperator[]
   markingCodes       ProductMarkingCode[]
   barcodes           ProductBarcode[]
@@ -393,6 +394,7 @@ model Product {
   variants           ProductVariant[]
   orderItems         OrderItem[]
   poItems            PurchaseOrderItem[]
+  returnItems        SupplierReturnItem[]
   wishlistItems      WishlistItem[]
   stockMovements     StockMovement[]
   stockLedgerEntries StockLedgerEntry[]
@@ -1019,6 +1021,7 @@ model Supplier {
   purchaseOrders PurchaseOrder[]
   counterparty   Counterparty?
   ledger         SupplierLedger[]
+  returns        SupplierReturn[]
 
   @@index([tenantId])
   @@map("suppliers")
@@ -1051,9 +1054,21 @@ model PurchaseOrder {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  // Pure traceability link — "this document corrects/supplements PO-X"
+  // (docs discussion: a document is permanently frozen once RECEIVED, see
+  // that route's comment, so a shortfall/mistake gets fixed by creating a
+  // new document rather than editing the old one; this is just the paper
+  // trail connecting the two). Self-relation, no cascading behavior of its
+  // own — Prisma requires a named relation once a model relates to itself
+  // twice, so this pairs "relatesTo"/named itself below.
+  relatesToId String?
+  relatesTo   PurchaseOrder?  @relation("PORelatesTo", fields: [relatesToId], references: [id], onDelete: SetNull)
+  relatedBy   PurchaseOrder[] @relation("PORelatesTo")
+
   items        PurchaseOrderItem[]
   markingCodes ProductMarkingCode[]
   ledgerEntries SupplierLedger[]
+  returns      SupplierReturn[]
 
   @@unique([tenantId, poNumber])
   @@index([tenantId])
@@ -1075,10 +1090,70 @@ model PurchaseOrderItem {
   @@map("purchase_order_items")
 }
 
+enum ReturnStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+// Goods physically going back to a supplier — the mirror-image of
+// PurchaseOrder (stock decreases instead of increases, debt decreases
+// instead of increases), kept as its own model rather than a "negative
+// PurchaseOrder": the two have genuinely different lifecycles (no
+// ordered/in-transit stage — a return is created once the goods are
+// already in hand to send back) and mixing signs into one model would
+// mean sign-flipping conditionals through all of receive's cost/stock
+// math. supplierId is required (unlike PurchaseOrder.supplierId) — a
+// return has nothing to write the debt reversal against without one.
+model SupplierReturn {
+  id           String       @id @default(cuid())
+  tenantId     String
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplierId   String
+  supplier     Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  returnNumber Int
+  status       ReturnStatus @default(DRAFT)
+  currency     String       @default("USD")
+  fxRate       Decimal?     @db.Decimal(12, 6)
+  totalCost    Decimal      @default(0) @db.Decimal(12, 2)
+  note         String?
+
+  // Optional link to the purchase this is returning goods from — purely
+  // informational, same spirit as PurchaseOrder.relatesToId.
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items         SupplierReturnItem[]
+  ledgerEntries SupplierLedger[]
+
+  @@unique([tenantId, returnNumber])
+  @@index([tenantId])
+  @@map("supplier_returns")
+}
+
+model SupplierReturnItem {
+  id               String         @id @default(cuid())
+  supplierReturnId String
+  supplierReturn   SupplierReturn @relation(fields: [supplierReturnId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  qty              Int
+  unitCost         Decimal        @db.Decimal(12, 2)
+  totalCost        Decimal        @db.Decimal(12, 2)
+
+  @@index([supplierReturnId])
+  @@map("supplier_return_items")
+}
+
 enum SupplierLedgerType {
   PURCHASE_CHARGE
   PAYMENT_MADE
   ADJUSTMENT
+  RETURN
 }
 
 // Payables ledger — money the tenant owes a Supplier. Deliberately its
@@ -1102,6 +1177,14 @@ model SupplierLedger {
   // Only ever set for PURCHASE_CHARGE — mirrors CounterpartyLedger.orderId.
   purchaseOrderId String?
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  // Only ever set for RETURN — separate field from purchaseOrderId above
+  // rather than overloading it, since a return's own optional link to the
+  // originating purchase (SupplierReturn.purchaseOrderId) is a different
+  // relationship than "this ledger row's negative delta came from a
+  // return doc" and conflating them would make either link ambiguous.
+  supplierReturnId String?
+  supplierReturn    SupplierReturn? @relation(fields: [supplierReturnId], references: [id], onDelete: SetNull)
 
   note      String?
   createdAt DateTime @default(now())
@@ -1438,6 +1521,7 @@ enum StockLedgerReason {
   POS_SALE
   POS_ADJUSTMENT
   RESTOCK
+  SUPPLIER_RETURN
   OTHER
 }
 

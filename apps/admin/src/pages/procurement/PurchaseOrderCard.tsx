@@ -157,6 +157,16 @@ export default function PurchaseOrderCard({
         </div>
       </div>
 
+      {(po.relatesTo || (po.relatedBy && po.relatedBy.length > 0)) && (
+        <p className="mt-1.5 mb-0 text-token-xs text-neutral-500">
+          {po.relatesTo && <span>{tr('Связан с', "Bog'liq")}: PO-{po.relatesTo.poNumber}</span>}
+          {po.relatesTo && po.relatedBy?.length > 0 && ' · '}
+          {po.relatedBy?.length > 0 && (
+            <span>{tr('Связанные документы', "Bog'liq hujjatlar")}: {po.relatedBy.map((d: any) => `PO-${d.poNumber}`).join(', ')}</span>
+          )}
+        </p>
+      )}
+
       <div className="mt-2.5 flex items-center gap-2 flex-wrap">
         <span className="text-token-xs text-neutral-500">{tr('Заметка', 'Eslatma')}:</span>
         {noteEditable ? (

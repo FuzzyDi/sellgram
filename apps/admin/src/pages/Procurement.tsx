@@ -9,7 +9,9 @@ import Table, { type TableColumn } from '../components/Table';
 import CreatePurchaseOrderForm from './procurement/CreatePurchaseOrderForm';
 import PurchaseOrderCard from './procurement/PurchaseOrderCard';
 import ReceivePurchaseOrderModal from './procurement/ReceivePurchaseOrderModal';
-import type { POStatus } from './procurement/types';
+import CreateReturnForm from './procurement/CreateReturnForm';
+import ReturnCard from './procurement/ReturnCard';
+import type { POStatus, ReturnStatus } from './procurement/types';
 
 type NoticeTone = 'success' | 'error';
 
@@ -56,6 +58,7 @@ export default function Procurement() {
   const [shippingCost, setShippingCost] = useState('0');
   const [customsCost, setCustomsCost] = useState('0');
   const [note, setNote] = useState('');
+  const [relatesToId, setRelatesToId] = useState('');
   const [items, setItems] = useState([{ productId: '', qty: 1, unitCost: 0 }]);
 
   // Receive PO modal
@@ -71,6 +74,19 @@ export default function Procurement() {
   // costs stay locked for everyone regardless (see procurement/routes.ts).
   const [canEditReceived, setCanEditReceived] = useState(false);
 
+  const [tab, setTab] = useState<'documents' | 'returns'>('documents');
+
+  // Returns to supplier
+  const [returns, setReturns] = useState<any[]>([]);
+  const [selectedReturnId, setSelectedReturnId] = useState<string | null>(null);
+  const [showCreateReturn, setShowCreateReturn] = useState(false);
+  const [returnSupplierId, setReturnSupplierId] = useState('');
+  const [returnPurchaseOrderId, setReturnPurchaseOrderId] = useState('');
+  const [returnCurrency, setReturnCurrency] = useState('USD');
+  const [returnFxRate, setReturnFxRate] = useState('');
+  const [returnNote, setReturnNote] = useState('');
+  const [returnItems, setReturnItems] = useState([{ productId: '', qty: 1, unitCost: 0 }]);
+
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
     setTimeout(() => setNotice(null), 3200);
@@ -79,14 +95,16 @@ export default function Procurement() {
   async function load() {
     setLoading(true);
     try {
-      const [poList, productList, supplierList] = await Promise.all([
+      const [poList, productList, supplierList, returnList] = await Promise.all([
         adminApi.getPurchaseOrders(),
         adminApi.getProducts('pageSize=500'),
         adminApi.getSuppliers().catch(() => []),
+        adminApi.getSupplierReturns().catch(() => []),
       ]);
       setPos(Array.isArray(poList?.items ?? poList) ? (poList?.items ?? poList) : []);
       setProducts(Array.isArray(productList?.items ?? productList) ? (productList?.items ?? productList) : []);
       setSuppliers(Array.isArray(supplierList) ? supplierList : []);
+      setReturns(Array.isArray(returnList?.items ?? returnList) ? (returnList?.items ?? returnList) : []);
     } catch (err: any) {
       if (err?.message?.includes('402') || err?.message?.toLowerCase().includes('plan')) {
         setPlanBlocked(true);
@@ -154,7 +172,7 @@ export default function Procurement() {
 
   function resetCreateForm() {
     setSupplier(''); setSupplierId(''); setPaymentMethod('CASH'); setCurrency('USD'); setFxRate('');
-    setShippingCost('0'); setCustomsCost('0'); setNote('');
+    setShippingCost('0'); setCustomsCost('0'); setNote(''); setRelatesToId('');
     setItems([{ productId: '', qty: 1, unitCost: 0 }]);
     setShowCreate(false);
   }
@@ -199,6 +217,7 @@ export default function Procurement() {
         shippingCost: Number(shippingCost || 0),
         customsCost: Number(customsCost || 0),
         note: note.trim() || undefined,
+        relatesToId: relatesToId || undefined,
         items: items.map((i) => ({ productId: i.productId, qty: Number(i.qty), unitCost: Number(i.unitCost) })),
       });
       resetCreateForm();
@@ -302,6 +321,156 @@ export default function Procurement() {
     }
   }
 
+  // ─── Returns to supplier ──────────────────────────────────────────────
+
+  const returnStatusLabel: Record<ReturnStatus, string> = {
+    DRAFT: tr('Черновик', 'Qoralama'),
+    CONFIRMED: tr('Подтверждён', 'Tasdiqlangan'),
+    CANCELLED: tr('Отменён', 'Bekor qilindi'),
+  };
+
+  function returnStatusBadgeVariant(status: ReturnStatus): BadgeVariant {
+    if (status === 'CONFIRMED') return 'success';
+    if (status === 'CANCELLED') return 'danger';
+    return 'neutral';
+  }
+
+  const selectedReturn = returns.find((r: any) => r.id === selectedReturnId) ?? null;
+
+  const returnColumns: TableColumn<any>[] = [
+    {
+      key: 'ret',
+      header: 'RET#',
+      render: (r) => (
+        <span className="font-semibold text-neutral-800 inline-flex items-center gap-1.5">
+          <span className={`transition-transform ${r.id === selectedReturnId ? 'rotate-90' : ''}`} aria-hidden="true">›</span>
+          RET-{r.returnNumber}
+        </span>
+      ),
+    },
+    { key: 'supplier', header: tr('Поставщик', 'Yetkazib beruvchi'), render: (r) => r.supplier?.name || r.supplierId },
+    {
+      key: 'status',
+      header: tr('Статус', 'Holat'),
+      render: (r) => <Badge variant={returnStatusBadgeVariant(r.status)}>{returnStatusLabel[r.status as ReturnStatus] || r.status}</Badge>,
+    },
+    {
+      key: 'total',
+      header: tr('Сумма', 'Summa'),
+      render: (r) => <span className="font-semibold text-neutral-800">{Number(r.totalCost).toLocaleString(locale)} {r.currency}</span>,
+    },
+    { key: 'date', header: tr('Дата', 'Sana'), render: (r) => new Date(r.createdAt).toLocaleDateString(locale) },
+  ];
+
+  function resetCreateReturnForm() {
+    setReturnSupplierId(''); setReturnPurchaseOrderId(''); setReturnCurrency('USD'); setReturnFxRate(''); setReturnNote('');
+    setReturnItems([{ productId: '', qty: 1, unitCost: 0 }]);
+    setShowCreateReturn(false);
+  }
+
+  function addReturnItem() {
+    setReturnItems((prev) => [...prev, { productId: '', qty: 1, unitCost: 0 }]);
+  }
+
+  function removeReturnItem(idx: number) {
+    setReturnItems((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateReturnItem(idx: number, field: string, value: string | number) {
+    setReturnItems((prev) => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }
+
+  const returnCreateTotal = useMemo(
+    () => returnItems.reduce((sum, item) => sum + (item.qty || 0) * (item.unitCost || 0), 0),
+    [returnItems]
+  );
+
+  async function submitCreateReturn() {
+    if (!returnSupplierId || returnItems.some((i) => !i.productId || !i.qty || !i.unitCost)) {
+      showNotice('error', tr('Заполните все обязательные поля', "Barcha maydonlarni to'ldiring"));
+      return;
+    }
+    setSaving(true);
+    try {
+      await adminApi.createSupplierReturn({
+        supplierId: returnSupplierId,
+        purchaseOrderId: returnPurchaseOrderId || undefined,
+        currency: returnCurrency,
+        fxRate: returnFxRate ? Number(returnFxRate) : undefined,
+        note: returnNote.trim() || undefined,
+        items: returnItems.map((i) => ({ productId: i.productId, qty: Number(i.qty), unitCost: Number(i.unitCost) })),
+      });
+      resetCreateReturnForm();
+      await load();
+      showNotice('success', tr('Возврат создан', 'Qaytarish yaratildi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка создания', 'Yaratish xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function cancelReturn(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.updateSupplierReturn(id, { status: 'CANCELLED' });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmReturn(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.confirmSupplierReturn(id);
+      await load();
+      showNotice('success', tr('Возврат подтверждён, остатки и долг обновлены', 'Qaytarish tasdiqlandi, qoldiq va qarz yangilandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка подтверждения', 'Tasdiqlash xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addReturnItemToServer(returnId: string, data: { productId: string; qty: number; unitCost: number }) {
+    setSaving(true);
+    try {
+      await adminApi.addSupplierReturnItem(returnId, data);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateReturnItemOnServer(returnId: string, itemId: string, data: { qty?: number; unitCost?: number }) {
+    setSaving(true);
+    try {
+      await adminApi.updateSupplierReturnItem(returnId, itemId, data);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeReturnItemOnServer(returnId: string, itemId: string) {
+    setSaving(true);
+    try {
+      await adminApi.deleteSupplierReturnItem(returnId, itemId);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const noticeNode = notice ? (
     <div
       className={[
@@ -356,83 +525,167 @@ export default function Procurement() {
 
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Приходные документы', 'Kirim hujjatlari')}</h2>
-          <p className="mt-1 text-token-sm text-neutral-500">{tr('Документы от поставщиков: товары, количество, закупочные цены и способ оплаты', "Yetkazib beruvchilardan hujjatlar: mahsulotlar, miqdor, sotib olish narxi va to'lov usuli")}</p>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">
+            {tab === 'documents' ? tr('Приходные документы', 'Kirim hujjatlari') : tr('Возвраты поставщику', "Ta'minotchiga qaytarishlar")}
+          </h2>
+          <p className="mt-1 text-token-sm text-neutral-500">
+            {tab === 'documents'
+              ? tr('Документы от поставщиков: товары, количество, закупочные цены и способ оплаты', "Yetkazib beruvchilardan hujjatlar: mahsulotlar, miqdor, sotib olish narxi va to'lov usuli")
+              : tr('Товары, отправленные обратно поставщику: остатки и долг уменьшаются', "Ta'minotchiga qaytarilgan tovarlar: qoldiq va qarz kamayadi")}
+          </p>
         </div>
-        <Button variant="primary" size="md" type="button" onClick={() => setShowCreate(true)} disabled={showCreate}>
-          + {tr('Новый документ', 'Yangi hujjat')}
-        </Button>
+        {tab === 'documents' ? (
+          <Button variant="primary" size="md" type="button" onClick={() => setShowCreate(true)} disabled={showCreate}>
+            + {tr('Новый документ', 'Yangi hujjat')}
+          </Button>
+        ) : (
+          <Button variant="primary" size="md" type="button" onClick={() => setShowCreateReturn(true)} disabled={showCreateReturn}>
+            + {tr('Новый возврат', 'Yangi qaytarish')}
+          </Button>
+        )}
       </header>
 
-      {showCreate && (
-        <CreatePurchaseOrderForm
-          suppliers={suppliers}
-          products={products}
-          supplierId={supplierId}
-          setSupplierId={setSupplierId}
-          supplier={supplier}
-          setSupplier={setSupplier}
-          paymentMethod={paymentMethod}
-          setPaymentMethod={setPaymentMethod}
-          currency={currency}
-          setCurrency={setCurrency}
-          fxRate={fxRate}
-          setFxRate={setFxRate}
-          shippingCost={shippingCost}
-          setShippingCost={setShippingCost}
-          customsCost={customsCost}
-          setCustomsCost={setCustomsCost}
-          note={note}
-          setNote={setNote}
-          items={items}
-          addItem={addItem}
-          removeItem={removeItem}
-          updateItem={updateItem}
-          createTotal={createTotal}
-          saving={saving}
-          onSubmit={() => void submitCreate()}
-          onCancel={resetCreateForm}
-        />
-      )}
+      <div className="flex gap-1">
+        <Button type="button" variant={tab === 'documents' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('documents')}>
+          {tr('Приходные документы', 'Kirim hujjatlari')}
+        </Button>
+        <Button type="button" variant={tab === 'returns' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('returns')}>
+          {tr('Возвраты поставщику', "Ta'minotchiga qaytarishlar")}
+        </Button>
+      </div>
 
-      {pos.length === 0 && !showCreate ? (
-        <Card className="text-center py-10 px-4">
-          <p className="m-0 text-token-sm text-neutral-500">{tr('Приходных документов пока нет', "Hali kirim hujjatlari yo'q")}</p>
-        </Card>
+      {tab === 'documents' ? (
+        <>
+          {showCreate && (
+            <CreatePurchaseOrderForm
+              suppliers={suppliers}
+              products={products}
+              existingDocs={pos}
+              supplierId={supplierId}
+              setSupplierId={setSupplierId}
+              supplier={supplier}
+              setSupplier={setSupplier}
+              paymentMethod={paymentMethod}
+              setPaymentMethod={setPaymentMethod}
+              relatesToId={relatesToId}
+              setRelatesToId={setRelatesToId}
+              currency={currency}
+              setCurrency={setCurrency}
+              fxRate={fxRate}
+              setFxRate={setFxRate}
+              shippingCost={shippingCost}
+              setShippingCost={setShippingCost}
+              customsCost={customsCost}
+              setCustomsCost={setCustomsCost}
+              note={note}
+              setNote={setNote}
+              items={items}
+              addItem={addItem}
+              removeItem={removeItem}
+              updateItem={updateItem}
+              createTotal={createTotal}
+              saving={saving}
+              onSubmit={() => void submitCreate()}
+              onCancel={resetCreateForm}
+            />
+          )}
+
+          {pos.length === 0 && !showCreate ? (
+            <Card className="text-center py-10 px-4">
+              <p className="m-0 text-token-sm text-neutral-500">{tr('Приходных документов пока нет', "Hali kirim hujjatlari yo'q")}</p>
+            </Card>
+          ) : (
+            <Table
+              columns={documentColumns}
+              data={pos}
+              rowKey={(po) => po.id}
+              onRowClick={(po) => setSelectedPoId((prev) => (prev === po.id ? null : po.id))}
+            />
+          )}
+
+          {selectedPo && (() => {
+            const status = selectedPo.status as POStatus;
+            const transitions = PO_TRANSITIONS[status] || [];
+            const canReceive = status === 'IN_TRANSIT';
+            return (
+              <PurchaseOrderCard
+                key={selectedPo.id}
+                po={selectedPo}
+                transitions={transitions}
+                canReceive={canReceive}
+                statusLabel={statusLabel}
+                statusBadgeVariant={statusBadgeVariant}
+                saving={saving}
+                onTransition={(poId, next) => void transition(poId, next)}
+                onReceive={openReceive}
+                products={products}
+                canEditItems={status === 'DRAFT' || status === 'ORDERED' || status === 'IN_TRANSIT'}
+                onAddItem={(data) => void addPoItem(selectedPo.id, data)}
+                onUpdateItem={(itemId, data) => void updatePoItem(selectedPo.id, itemId, data)}
+                onRemoveItem={(itemId) => void removePoItem(selectedPo.id, itemId)}
+                canEditReceivedNote={canEditReceived}
+                onSaveNote={(noteValue) => void savePoNote(selectedPo.id, noteValue)}
+              />
+            );
+          })()}
+        </>
       ) : (
-        <Table
-          columns={documentColumns}
-          data={pos}
-          rowKey={(po) => po.id}
-          onRowClick={(po) => setSelectedPoId((prev) => (prev === po.id ? null : po.id))}
-        />
-      )}
+        <>
+          {showCreateReturn && (
+            <CreateReturnForm
+              suppliers={suppliers}
+              products={products}
+              purchaseOrders={pos}
+              supplierId={returnSupplierId}
+              setSupplierId={setReturnSupplierId}
+              purchaseOrderId={returnPurchaseOrderId}
+              setPurchaseOrderId={setReturnPurchaseOrderId}
+              currency={returnCurrency}
+              setCurrency={setReturnCurrency}
+              fxRate={returnFxRate}
+              setFxRate={setReturnFxRate}
+              note={returnNote}
+              setNote={setReturnNote}
+              items={returnItems}
+              addItem={addReturnItem}
+              removeItem={removeReturnItem}
+              updateItem={updateReturnItem}
+              createTotal={returnCreateTotal}
+              saving={saving}
+              onSubmit={() => void submitCreateReturn()}
+              onCancel={resetCreateReturnForm}
+            />
+          )}
 
-      {selectedPo && (() => {
-        const status = selectedPo.status as POStatus;
-        const transitions = PO_TRANSITIONS[status] || [];
-        const canReceive = status === 'IN_TRANSIT';
-        return (
-          <PurchaseOrderCard
-            key={selectedPo.id}
-            po={selectedPo}
-            transitions={transitions}
-            canReceive={canReceive}
-            statusLabel={statusLabel}
-            statusBadgeVariant={statusBadgeVariant}
-            saving={saving}
-            onTransition={(poId, next) => void transition(poId, next)}
-            onReceive={openReceive}
-            products={products}
-            canEditItems={status === 'DRAFT' || status === 'ORDERED' || status === 'IN_TRANSIT'}
-            onAddItem={(data) => void addPoItem(selectedPo.id, data)}
-            onUpdateItem={(itemId, data) => void updatePoItem(selectedPo.id, itemId, data)}
-            onRemoveItem={(itemId) => void removePoItem(selectedPo.id, itemId)}
-            canEditReceivedNote={canEditReceived}
-            onSaveNote={(noteValue) => void savePoNote(selectedPo.id, noteValue)}
-          />
-        );
-      })()}
+          {returns.length === 0 && !showCreateReturn ? (
+            <Card className="text-center py-10 px-4">
+              <p className="m-0 text-token-sm text-neutral-500">{tr('Возвратов пока нет', "Hali qaytarishlar yo'q")}</p>
+            </Card>
+          ) : (
+            <Table
+              columns={returnColumns}
+              data={returns}
+              rowKey={(r) => r.id}
+              onRowClick={(r) => setSelectedReturnId((prev) => (prev === r.id ? null : r.id))}
+            />
+          )}
+
+          {selectedReturn && (
+            <ReturnCard
+              key={selectedReturn.id}
+              ret={selectedReturn}
+              saving={saving}
+              onCancel={cancelReturn}
+              onConfirm={confirmReturn}
+              products={products}
+              canEditItems={selectedReturn.status === 'DRAFT'}
+              onAddItem={(data) => void addReturnItemToServer(selectedReturn.id, data)}
+              onUpdateItem={(itemId, data) => void updateReturnItemOnServer(selectedReturn.id, itemId, data)}
+              onRemoveItem={(itemId) => void removeReturnItemOnServer(selectedReturn.id, itemId)}
+            />
+          )}
+        </>
+      )}
 
       {receivePo && (
         <ReceivePurchaseOrderModal

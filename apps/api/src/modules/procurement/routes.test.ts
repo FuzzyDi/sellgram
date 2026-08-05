@@ -342,6 +342,44 @@ describe('procurement.routes', () => {
       await app.close();
     });
 
+    it('links relatesToId to another PO of the same tenant', async () => {
+      const tx = makePatchTx({ id: 'po-1', status: 'DRAFT' });
+      tx.purchaseOrder.findFirst
+        .mockResolvedValueOnce({ id: 'po-1', status: 'DRAFT' }) // the PO being patched
+        .mockResolvedValueOnce({ id: 'po-original' }); // the related-doc lookup
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1',
+        payload: { relatesToId: 'po-original' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(tx.purchaseOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ relatesToId: 'po-original' }) })
+      );
+      await app.close();
+    });
+
+    it('rejects relatesToId pointing at a PO from another tenant', async () => {
+      const tx = makePatchTx({ id: 'po-1', status: 'DRAFT' });
+      tx.purchaseOrder.findFirst
+        .mockResolvedValueOnce({ id: 'po-1', status: 'DRAFT' })
+        .mockResolvedValueOnce(null);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1',
+        payload: { relatesToId: 'po-foreign' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/related document/i);
+      await app.close();
+    });
+
     it.each(['fxRate', 'shippingCost', 'customsCost'])('rejects changing %s once the PO is RECEIVED', async (field) => {
       makePatchTx({ id: 'po-1', status: 'RECEIVED' });
 
