@@ -461,6 +461,24 @@ async function main() {
     fastify.log.error(`Old catalog snapshot cleanup job failed to start: ${err.message}`);
   }
 
+  // Fiscal receipt retention — 1 year (once a day)
+  try {
+    const { startFiscalEventCleanupJob } = await import('./jobs/cleanup-old-fiscal-events.js');
+    startFiscalEventCleanupJob();
+    fastify.log.info('Fiscal event cleanup job started');
+  } catch (err: any) {
+    fastify.log.error(`Fiscal event cleanup job failed to start: ${err.message}`);
+  }
+
+  // Operational log retention — 12 months (once a day)
+  try {
+    const { startEventLogCleanupJob } = await import('./jobs/cleanup-old-event-logs.js');
+    startEventLogCleanupJob();
+    fastify.log.info('Event log cleanup job started');
+  } catch (err: any) {
+    fastify.log.error(`Event log cleanup job failed to start: ${err.message}`);
+  }
+
   // Nightly subscription reminders
   setInterval(async () => {
     try {
