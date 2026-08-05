@@ -169,6 +169,7 @@ model Tenant {
   supplierReturns    SupplierReturn[]
   stockWriteOffs     StockWriteOff[]
   customerReturns    CustomerReturn[]
+  stockCounts        StockCount[]
   posOperators       PosOperator[]
   markingCodes       ProductMarkingCode[]
   barcodes           ProductBarcode[]
@@ -399,6 +400,7 @@ model Product {
   returnItems        SupplierReturnItem[]
   writeOffItems      StockWriteOffItem[]
   customerReturnItems CustomerReturnItem[]
+  stockCountItems    StockCountItem[]
   wishlistItems      WishlistItem[]
   stockMovements     StockMovement[]
   stockLedgerEntries StockLedgerEntry[]
@@ -1272,6 +1274,53 @@ model CustomerReturnItem {
   @@map("customer_return_items")
 }
 
+enum StockCountStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+// A physical stocktake. Created as a full snapshot of every non-deleted
+// product's current stockQty (expectedQty) — the counter then fills in
+// countedQty per row as they go; a row left uncounted (countedQty: null)
+// is treated as matching on confirm, so a partial/spot-check count is a
+// normal use, not an error. Confirm applies (countedQty - expectedQty) as
+// a StockLedgerEntry delta on top of whatever stockQty is *then* (not an
+// absolute overwrite) — this is deliberate: sales/other documents that
+// land during the count keep their own effect, and the count only
+// corrects the discrepancy it actually found.
+model StockCount {
+  id          String           @id @default(cuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  countNumber Int
+  status      StockCountStatus @default(DRAFT)
+  note        String?
+
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items StockCountItem[]
+
+  @@unique([tenantId, countNumber])
+  @@index([tenantId])
+  @@map("stock_counts")
+}
+
+model StockCountItem {
+  id           String     @id @default(cuid())
+  stockCountId String
+  stockCount   StockCount @relation(fields: [stockCountId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id])
+  expectedQty  Int
+  countedQty   Int?
+
+  @@index([stockCountId])
+  @@map("stock_count_items")
+}
+
 enum SupplierLedgerType {
   PURCHASE_CHARGE
   PAYMENT_MADE
@@ -1656,6 +1705,7 @@ enum StockLedgerReason {
   SUPPLIER_RETURN
   WRITE_OFF
   CUSTOMER_RETURN
+  STOCKTAKE
   OTHER
 }
 

@@ -370,6 +370,13 @@ export const adminApi = {
   deleteCustomerReturnItem: (id: string, itemId: string) =>
     request<any>(`/customer-returns/${id}/items/${itemId}`, { method: 'DELETE' }),
 
+  getStockCounts: () => request<any>('/stock-counts'),
+  createStockCount: (data: { note?: string }) => request<any>('/stock-counts', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockCount: (id: string, data: any) => request<any>(`/stock-counts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  confirmStockCount: (id: string) => request<any>(`/stock-counts/${id}/confirm`, { method: 'POST' }),
+  updateStockCountItem: (id: string, itemId: string, data: { countedQty: number | null }) =>
+    request<any>(`/stock-counts/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
   getDashboard: () => request<any>('/analytics/dashboard'),
   getAnalyticsSummary: (days?: number) => request<any>(`/analytics/summary?days=${days || 30}`),
   getTopProducts: (period?: number) => request<any>(`/analytics/top-products?period=${period || 30}`),

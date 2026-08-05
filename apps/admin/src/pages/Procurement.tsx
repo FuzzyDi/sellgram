@@ -15,10 +15,12 @@ import CreateWriteOffForm from './procurement/CreateWriteOffForm';
 import WriteOffCard from './procurement/WriteOffCard';
 import CreateCustomerReturnForm from './procurement/CreateCustomerReturnForm';
 import CustomerReturnCard from './procurement/CustomerReturnCard';
-import type { POStatus, ReturnStatus, WriteOffStatus, WriteOffReason, CustomerReturnStatus } from './procurement/types';
+import CreateStockCountForm from './procurement/CreateStockCountForm';
+import StockCountCard from './procurement/StockCountCard';
+import type { POStatus, ReturnStatus, WriteOffStatus, WriteOffReason, CustomerReturnStatus, StockCountStatus } from './procurement/types';
 
 type NoticeTone = 'success' | 'error';
-type DocTab = 'documents' | 'returns' | 'writeoffs' | 'customerReturns';
+type DocTab = 'documents' | 'returns' | 'writeoffs' | 'customerReturns' | 'stockCounts';
 
 const PO_TRANSITIONS: Record<POStatus, POStatus[]> = {
   DRAFT:      ['ORDERED', 'CANCELLED'],
@@ -110,6 +112,12 @@ export default function Procurement() {
   const [crNote, setCrNote] = useState('');
   const [crItems, setCrItems] = useState([{ productId: '', qty: 1, unitCost: 0 }]);
 
+  // Stock counts (inventarization)
+  const [stockCounts, setStockCounts] = useState<any[]>([]);
+  const [selectedStockCountId, setSelectedStockCountId] = useState<string | null>(null);
+  const [showCreateStockCount, setShowCreateStockCount] = useState(false);
+  const [scNote, setScNote] = useState('');
+
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
     setTimeout(() => setNotice(null), 3200);
@@ -118,7 +126,7 @@ export default function Procurement() {
   async function load() {
     setLoading(true);
     try {
-      const [poList, productList, supplierList, returnList, writeOffList, customerReturnList, counterpartyList] = await Promise.all([
+      const [poList, productList, supplierList, returnList, writeOffList, customerReturnList, counterpartyList, stockCountList] = await Promise.all([
         adminApi.getPurchaseOrders(),
         adminApi.getProducts('pageSize=500'),
         adminApi.getSuppliers().catch(() => []),
@@ -126,6 +134,7 @@ export default function Procurement() {
         adminApi.getStockWriteOffs().catch(() => []),
         adminApi.getCustomerReturns().catch(() => []),
         adminApi.getCounterparties().catch(() => []),
+        adminApi.getStockCounts().catch(() => []),
       ]);
       setPos(Array.isArray(poList?.items ?? poList) ? (poList?.items ?? poList) : []);
       setProducts(Array.isArray(productList?.items ?? productList) ? (productList?.items ?? productList) : []);
@@ -134,6 +143,7 @@ export default function Procurement() {
       setWriteOffs(Array.isArray(writeOffList?.items ?? writeOffList) ? (writeOffList?.items ?? writeOffList) : []);
       setCustomerReturns(Array.isArray(customerReturnList?.items ?? customerReturnList) ? (customerReturnList?.items ?? customerReturnList) : []);
       setCounterparties(Array.isArray(counterpartyList?.items ?? counterpartyList) ? (counterpartyList?.items ?? counterpartyList) : []);
+      setStockCounts(Array.isArray(stockCountList?.items ?? stockCountList) ? (stockCountList?.items ?? stockCountList) : []);
     } catch (err: any) {
       if (err?.message?.includes('402') || err?.message?.toLowerCase().includes('plan')) {
         setPlanBlocked(true);
@@ -803,6 +813,95 @@ export default function Procurement() {
     }
   }
 
+  // ─── Stock counts (inventarization) ────────────────────────────────────
+
+  const stockCountStatusLabel: Record<StockCountStatus, string> = {
+    DRAFT: tr('Черновик', 'Qoralama'),
+    CONFIRMED: tr('Подтверждён', 'Tasdiqlangan'),
+    CANCELLED: tr('Отменён', 'Bekor qilindi'),
+  };
+
+  function stockCountStatusBadgeVariant(status: StockCountStatus): BadgeVariant {
+    if (status === 'CONFIRMED') return 'success';
+    if (status === 'CANCELLED') return 'danger';
+    return 'neutral';
+  }
+
+  const selectedStockCount = stockCounts.find((c: any) => c.id === selectedStockCountId) ?? null;
+
+  const stockCountColumns: TableColumn<any>[] = [
+    {
+      key: 'sc',
+      header: 'SC#',
+      render: (c) => (
+        <span className="font-semibold text-neutral-800 inline-flex items-center gap-1.5">
+          <span className={`transition-transform ${c.id === selectedStockCountId ? 'rotate-90' : ''}`} aria-hidden="true">›</span>
+          SC-{c.countNumber}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: tr('Статус', 'Holat'),
+      render: (c) => <Badge variant={stockCountStatusBadgeVariant(c.status)}>{stockCountStatusLabel[c.status as StockCountStatus] || c.status}</Badge>,
+    },
+    { key: 'items', header: tr('Позиций', 'Pozitsiyalar'), render: (c) => (c.items || []).length },
+    { key: 'date', header: tr('Дата', 'Sana'), render: (c) => new Date(c.createdAt).toLocaleDateString(locale) },
+  ];
+
+  function resetCreateStockCountForm() {
+    setScNote('');
+    setShowCreateStockCount(false);
+  }
+
+  async function submitCreateStockCount() {
+    setSaving(true);
+    try {
+      await adminApi.createStockCount({ note: scNote.trim() || undefined });
+      resetCreateStockCountForm();
+      await load();
+      showNotice('success', tr('Инвентаризация начата', 'Inventarizatsiya boshlandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка создания', 'Yaratish xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function cancelStockCount(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.updateStockCount(id, { status: 'CANCELLED' });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmStockCount(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.confirmStockCount(id);
+      await load();
+      showNotice('success', tr('Инвентаризация подтверждена, расхождения применены', 'Inventarizatsiya tasdiqlandi, farqlar qo\'llanildi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка подтверждения', 'Tasdiqlash xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateStockCountItemOnServer(id: string, itemId: string, countedQty: number | null) {
+    try {
+      await adminApi.updateStockCountItem(id, itemId, { countedQty });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    }
+  }
+
   const noticeNode = notice ? (
     <div
       className={[
@@ -856,6 +955,7 @@ export default function Procurement() {
     returns: tr('Возвраты поставщику', "Ta'minotchiga qaytarishlar"),
     writeoffs: tr('Списания', 'Hisobdan chiqarishlar'),
     customerReturns: tr('Возвраты от клиента', "Mijozdan qaytarishlar"),
+    stockCounts: tr('Инвентаризация', 'Inventarizatsiya'),
   };
 
   const headerSubtitle: Record<DocTab, string> = {
@@ -863,6 +963,7 @@ export default function Procurement() {
     returns: tr('Товары, отправленные обратно поставщику: остатки и долг уменьшаются', "Ta'minotchiga qaytarilgan tovarlar: qoldiq va qarz kamayadi"),
     writeoffs: tr('Списание не по продаже: брак, порча, недостача, собственные нужды — только остатки, без денег', "Sotuvsiz hisobdan chiqarish: nuqsonli, shikastlangan, yetishmovchilik, o'z ehtiyoji — faqat qoldiq, pulsiz"),
     customerReturns: tr('Товары, возвращённые клиентом: остатки увеличиваются, а долг клиента (если он выбран) уменьшается', "Mijoz tomonidan qaytarilgan tovarlar: qoldiq ko'payadi, mijoz qarzi (tanlangan bo'lsa) kamayadi"),
+    stockCounts: tr('Снимок остатков на момент начала подсчёта — сверьте с фактом и подтвердите, расхождения применятся к остаткам', "Hisoblash boshlangan paytdagi qoldiqlar tasviri — faktik bilan solishtiring va tasdiqlang, farqlar qoldiqqa qo'llaniladi"),
   };
 
   const createButtonLabel: Record<DocTab, string> = {
@@ -870,19 +971,22 @@ export default function Procurement() {
     returns: tr('+ Новый возврат', '+ Yangi qaytarish'),
     writeoffs: tr('+ Новое списание', '+ Yangi hisobdan chiqarish'),
     customerReturns: tr('+ Новый возврат', '+ Yangi qaytarish'),
+    stockCounts: tr('+ Начать инвентаризацию', '+ Inventarizatsiyani boshlash'),
   };
 
   function onCreateClick() {
     if (tab === 'documents') setShowCreate(true);
     else if (tab === 'returns') setShowCreateReturn(true);
     else if (tab === 'writeoffs') setShowCreateWriteOff(true);
-    else setShowCreateCustomerReturn(true);
+    else if (tab === 'customerReturns') setShowCreateCustomerReturn(true);
+    else setShowCreateStockCount(true);
   }
 
   const createDisabled = tab === 'documents' ? showCreate
     : tab === 'returns' ? showCreateReturn
     : tab === 'writeoffs' ? showCreateWriteOff
-    : showCreateCustomerReturn;
+    : tab === 'customerReturns' ? showCreateCustomerReturn
+    : showCreateStockCount;
 
   return (
     <section className="flex flex-col gap-4">
@@ -910,6 +1014,9 @@ export default function Procurement() {
         </Button>
         <Button type="button" variant={tab === 'customerReturns' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('customerReturns')}>
           {tr('Возврат от клиента', 'Mijozdan qaytarish')}
+        </Button>
+        <Button type="button" variant={tab === 'stockCounts' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('stockCounts')}>
+          {tr('Инвентаризация', 'Inventarizatsiya')}
         </Button>
       </div>
 
@@ -1147,6 +1254,46 @@ export default function Procurement() {
               onAddItem={(data) => void addCustomerReturnItemToServer(selectedCustomerReturn.id, data)}
               onUpdateItem={(itemId, data) => void updateCustomerReturnItemOnServer(selectedCustomerReturn.id, itemId, data)}
               onRemoveItem={(itemId) => void removeCustomerReturnItemOnServer(selectedCustomerReturn.id, itemId)}
+            />
+          )}
+        </>
+      )}
+
+      {tab === 'stockCounts' && (
+        <>
+          {showCreateStockCount && (
+            <CreateStockCountForm
+              note={scNote}
+              setNote={setScNote}
+              productCount={products.length}
+              saving={saving}
+              onSubmit={() => void submitCreateStockCount()}
+              onCancel={resetCreateStockCountForm}
+            />
+          )}
+
+          {stockCounts.length === 0 && !showCreateStockCount ? (
+            <Card className="text-center py-10 px-4">
+              <p className="m-0 text-token-sm text-neutral-500">{tr('Инвентаризаций пока не было', "Hali inventarizatsiya bo'lmagan")}</p>
+            </Card>
+          ) : (
+            <Table
+              columns={stockCountColumns}
+              data={stockCounts}
+              rowKey={(c) => c.id}
+              onRowClick={(c) => setSelectedStockCountId((prev) => (prev === c.id ? null : c.id))}
+            />
+          )}
+
+          {selectedStockCount && (
+            <StockCountCard
+              key={selectedStockCount.id}
+              count={selectedStockCount}
+              saving={saving}
+              onCancel={cancelStockCount}
+              onConfirm={confirmStockCount}
+              canEdit={selectedStockCount.status === 'DRAFT'}
+              onUpdateItem={(itemId, countedQty) => void updateStockCountItemOnServer(selectedStockCount.id, itemId, countedQty)}
             />
           )}
         </>
