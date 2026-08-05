@@ -5,3 +5,4 @@ export type WriteOffReason = 'DEFECT' | 'DAMAGE' | 'SHORTAGE' | 'INTERNAL_USE' |
 export type CustomerReturnStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED';
 export type StockCountStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED';
 export type PriceRevisionStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED';
+export type ConsignmentSettlementStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED';

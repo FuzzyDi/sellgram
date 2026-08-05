@@ -20,7 +20,7 @@ function canTransitionPO(from: POStatus, to: POStatus): boolean {
   return PO_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
-const PO_PAYMENT_METHODS = ['CASH', 'NON_CASH', 'CREDIT'] as const;
+const PO_PAYMENT_METHODS = ['CASH', 'NON_CASH', 'CREDIT', 'CONSIGNMENT'] as const;
 
 const updatePOSchema = z.object({
   status: z.enum(PO_STATUS).optional(),
@@ -125,8 +125,8 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const body = createPOSchema.parse(request.body);
-      if (body.paymentMethod === 'CREDIT' && !body.supplierId) {
-        return reply.status(400).send({ success: false, error: 'Credit purchases must be linked to a saved supplier' });
+      if ((body.paymentMethod === 'CREDIT' || body.paymentMethod === 'CONSIGNMENT') && !body.supplierId) {
+        return reply.status(400).send({ success: false, error: 'Credit and consignment purchases must be linked to a saved supplier' });
       }
       const uniqueProductIds = [...new Set(body.items.map((item) => item.productId))];
       const ownedProducts = await prisma.product.findMany({
@@ -234,7 +234,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
           }
         }
 
-        if (paymentMethod === 'CREDIT' && !po.supplierId) {
+        if ((paymentMethod === 'CREDIT' || paymentMethod === 'CONSIGNMENT') && !po.supplierId) {
           throw new Error('CREDIT_REQUIRES_SUPPLIER');
         }
 
@@ -267,7 +267,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ success: false, error: 'You do not have permission to edit a received document' });
       }
       if (err.message === 'CREDIT_REQUIRES_SUPPLIER') {
-        return reply.status(400).send({ success: false, error: 'Credit purchases must be linked to a saved supplier' });
+        return reply.status(400).send({ success: false, error: 'Credit and consignment purchases must be linked to a saved supplier' });
       }
       if (err.message === 'CANNOT_RELATE_TO_SELF') {
         return reply.status(400).send({ success: false, error: 'A document cannot relate to itself' });

@@ -101,6 +101,11 @@ enum POPaymentMethod {
   CASH
   NON_CASH
   CREDIT
+  // "Под реализацию" — no debt is charged at /receive (unlike CREDIT).
+  // The tenant owes the supplier only for units actually resold, declared
+  // periodically via a ConsignmentSettlement document; see that model's
+  // comment.
+  CONSIGNMENT
 }
 
 enum ScheduledFrequency {
@@ -167,6 +172,7 @@ model Tenant {
   counterpartyLedger CounterpartyLedger[]
   supplierLedger     SupplierLedger[]
   supplierReturns    SupplierReturn[]
+  consignmentSettlements ConsignmentSettlement[]
   stockWriteOffs     StockWriteOff[]
   customerReturns    CustomerReturn[]
   stockCounts        StockCount[]
@@ -1090,6 +1096,7 @@ model PurchaseOrder {
   ledgerEntries SupplierLedger[]
   returns      SupplierReturn[]
   writeOffs    StockWriteOff[]
+  consignmentSettlements ConsignmentSettlement[]
 
   @@unique([tenantId, poNumber])
   @@index([tenantId])
@@ -1107,8 +1114,83 @@ model PurchaseOrderItem {
   totalCost       Decimal       @db.Decimal(12, 2)
   qtyReceived     Int           @default(0)
 
+  consignmentSettlementItems ConsignmentSettlementItem[]
+
   @@index([purchaseOrderId])
   @@map("purchase_order_items")
+}
+
+enum ConsignmentSettlementStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+// "Отчёт о реализации" — periodic declaration of how many units from one
+// CONSIGNMENT PurchaseOrder actually sold, since no debt was charged at
+// /receive for that payment method. Always scoped to exactly one PO
+// (real consignment accounting settles against a specific batch, not an
+// arbitrary product mix) — creating one auto-populates an item per
+// PurchaseOrderItem of that PO with qtySold starting at 0, rather than a
+// manual product picker like the other document types; a store's own
+// stock isn't lot-tracked, so there's no way to *derive* the sold qty —
+// a human enters it, same trust-the-input spirit as StockCountItem's
+// countedQty. Confirm converts the total (in the PO's currency) to UZS
+// via the PO's own fxRate — identical conversion to /receive's CREDIT
+// charge — and posts one SupplierLedger PURCHASE_CHARGE row; a
+// settlement where every item still has qtySold 0 confirms as a no-op
+// (no ledger row, matching the "skip no-op items" pattern PriceRevision
+// already uses).
+model ConsignmentSettlement {
+  id               String                       @id @default(cuid())
+  tenantId         String
+  tenant           Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  settlementNumber Int
+  status           ConsignmentSettlementStatus  @default(DRAFT)
+  note             String?
+
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+
+  // UZS amount actually posted to Supplier.currentDebt at confirm — 0
+  // until then. Same "foreign-currency line items, one UZS-normalized
+  // total" split as PurchaseOrder.totalCost/totalLanded.
+  totalDebtCharged Decimal   @default(0) @db.Decimal(12, 2)
+
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items         ConsignmentSettlementItem[]
+  ledgerEntries SupplierLedger[]
+
+  @@unique([tenantId, settlementNumber])
+  @@index([tenantId])
+  @@index([purchaseOrderId])
+  @@map("consignment_settlements")
+}
+
+model ConsignmentSettlementItem {
+  id                      String                @id @default(cuid())
+  consignmentSettlementId String
+  consignmentSettlement   ConsignmentSettlement @relation(fields: [consignmentSettlementId], references: [id], onDelete: Cascade)
+
+  purchaseOrderItemId String
+  purchaseOrderItem   PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
+
+  // Snapshot of PurchaseOrderItem.unitCost at settlement-creation time
+  // (already frozen on a RECEIVED PO, so this can never drift — kept as
+  // an explicit snapshot anyway, same convention as every other item
+  // model here).
+  unitCost    Decimal @db.Decimal(12, 2)
+  qtySold     Int     @default(0)
+  // qtySold * unitCost, in the PO's currency (pre-fxRate) — display only;
+  // the actual UZS debt charge is computed fresh from all items at
+  // confirm, not summed from this field.
+  debtCharged Decimal @default(0) @db.Decimal(12, 2)
+
+  @@index([consignmentSettlementId])
+  @@map("consignment_settlement_items")
 }
 
 enum ReturnStatus {
@@ -1426,6 +1508,16 @@ model SupplierLedger {
   // return doc" and conflating them would make either link ambiguous.
   supplierReturnId String?
   supplierReturn    SupplierReturn? @relation(fields: [supplierReturnId], references: [id], onDelete: SetNull)
+
+  // Only ever set for PURCHASE_CHARGE, same as purchaseOrderId above — a
+  // consignment settlement's charge is still conceptually a purchase
+  // charge, just staged over time instead of billed in full at /receive.
+  // Separate field rather than overloading purchaseOrderId (which stays
+  // set too, pointing at the originating CONSIGNMENT PO) so both "which
+  // purchase" and "which settlement event" are independently queryable —
+  // same reasoning as supplierReturnId being its own field.
+  consignmentSettlementId String?
+  consignmentSettlement   ConsignmentSettlement? @relation(fields: [consignmentSettlementId], references: [id], onDelete: SetNull)
 
   note      String?
   createdAt DateTime @default(now())

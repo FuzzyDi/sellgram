@@ -38,6 +38,7 @@ export default function PurchaseOrderCard({
     CASH: tr('Наличные', 'Naqd'),
     NON_CASH: tr('Безналичный', 'Naqd emas'),
     CREDIT: tr('В долг', 'Qarzga'),
+    CONSIGNMENT: tr('Под реализацию', 'Realizatsiyaga'),
   };
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -124,7 +125,7 @@ export default function PurchaseOrderCard({
             <span className="font-semibold text-token-base text-neutral-800">PO-{po.poNumber}</span>
             <Badge variant={statusBadgeVariant(status)}>{statusLabel[status] || status}</Badge>
             {po.paymentMethod && (
-              <Badge variant={po.paymentMethod === 'CREDIT' ? 'warning' : 'neutral'}>
+              <Badge variant={po.paymentMethod === 'CREDIT' ? 'warning' : po.paymentMethod === 'CONSIGNMENT' ? 'info' : 'neutral'}>
                 {paymentMethodLabel[po.paymentMethod] || po.paymentMethod}
               </Badge>
             )}

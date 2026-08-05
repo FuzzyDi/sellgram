@@ -19,8 +19,8 @@ interface CreatePurchaseOrderFormProps {
   setSupplierId: (value: string) => void;
   supplier: string;
   setSupplier: (value: string) => void;
-  paymentMethod: 'CASH' | 'NON_CASH' | 'CREDIT';
-  setPaymentMethod: (value: 'CASH' | 'NON_CASH' | 'CREDIT') => void;
+  paymentMethod: 'CASH' | 'NON_CASH' | 'CREDIT' | 'CONSIGNMENT';
+  setPaymentMethod: (value: 'CASH' | 'NON_CASH' | 'CREDIT' | 'CONSIGNMENT') => void;
   relatesToId: string;
   setRelatesToId: (value: string) => void;
   currency: string;
@@ -77,13 +77,19 @@ export default function CreatePurchaseOrderForm({
         </div>
         <div>
           <label className="block mb-1 text-token-xs text-neutral-500">{tr('Способ оплаты', "To'lov usuli")}</label>
-          <Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'NON_CASH' | 'CREDIT')}>
+          <Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'NON_CASH' | 'CREDIT' | 'CONSIGNMENT')}>
             <option value="CASH">{tr('Наличные', 'Naqd')}</option>
             <option value="NON_CASH">{tr('Безналичный', "Naqd emas")}</option>
             <option value="CREDIT">{tr('В долг', 'Qarzga')}</option>
+            <option value="CONSIGNMENT">{tr('Под реализацию', "Realizatsiyaga")}</option>
           </Select>
-          {paymentMethod === 'CREDIT' && !supplierId && (
+          {(paymentMethod === 'CREDIT' || paymentMethod === 'CONSIGNMENT') && !supplierId && (
             <p className="mt-1 text-token-xs text-warning">{tr('Нужен контрагент из списка, чтобы вести долг', "Qarzni yuritish uchun ro'yxatdan kontragent kerak")}</p>
+          )}
+          {paymentMethod === 'CONSIGNMENT' && (
+            <p className="mt-1 text-token-xs text-neutral-500">
+              {tr('Долг не начисляется при приёмке — он появится по отчётам о реализации, во вкладке «Реализация»', "Qabul qilishda qarz hisoblanmaydi — u «Realizatsiya» bo'limidagi hisobotlar orqali paydo bo'ladi")}
+            </p>
           )}
         </div>
         <div>

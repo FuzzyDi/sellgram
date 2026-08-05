@@ -388,6 +388,14 @@ export const adminApi = {
   deletePriceRevisionItem: (id: string, itemId: string) =>
     request<any>(`/price-revisions/${id}/items/${itemId}`, { method: 'DELETE' }),
 
+  getConsignmentSettlements: () => request<any>('/consignment-settlements'),
+  createConsignmentSettlement: (data: { purchaseOrderId: string; note?: string }) =>
+    request<any>('/consignment-settlements', { method: 'POST', body: JSON.stringify(data) }),
+  updateConsignmentSettlement: (id: string, data: any) => request<any>(`/consignment-settlements/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  confirmConsignmentSettlement: (id: string) => request<any>(`/consignment-settlements/${id}/confirm`, { method: 'POST' }),
+  updateConsignmentSettlementItem: (id: string, itemId: string, data: { qtySold: number }) =>
+    request<any>(`/consignment-settlements/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
   getDashboard: () => request<any>('/analytics/dashboard'),
   getAnalyticsSummary: (days?: number) => request<any>(`/analytics/summary?days=${days || 30}`),
   getTopProducts: (period?: number) => request<any>(`/analytics/top-products?period=${period || 30}`),

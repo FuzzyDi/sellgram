@@ -19,10 +19,12 @@ import CreateStockCountForm from './procurement/CreateStockCountForm';
 import StockCountCard from './procurement/StockCountCard';
 import CreatePriceRevisionForm, { type PriceRevisionItemDraft } from './procurement/CreatePriceRevisionForm';
 import PriceRevisionCard from './procurement/PriceRevisionCard';
-import type { POStatus, ReturnStatus, WriteOffStatus, WriteOffReason, CustomerReturnStatus, StockCountStatus, PriceRevisionStatus } from './procurement/types';
+import CreateConsignmentSettlementForm from './procurement/CreateConsignmentSettlementForm';
+import ConsignmentSettlementCard from './procurement/ConsignmentSettlementCard';
+import type { POStatus, ReturnStatus, WriteOffStatus, WriteOffReason, CustomerReturnStatus, StockCountStatus, PriceRevisionStatus, ConsignmentSettlementStatus } from './procurement/types';
 
 type NoticeTone = 'success' | 'error';
-type DocTab = 'documents' | 'returns' | 'writeoffs' | 'customerReturns' | 'stockCounts' | 'priceRevisions';
+type DocTab = 'documents' | 'returns' | 'writeoffs' | 'customerReturns' | 'stockCounts' | 'priceRevisions' | 'consignmentSettlements';
 
 const PO_TRANSITIONS: Record<POStatus, POStatus[]> = {
   DRAFT:      ['ORDERED', 'CANCELLED'],
@@ -44,6 +46,7 @@ const PAYMENT_METHOD_BADGE: Record<string, BadgeVariant> = {
   CASH: 'neutral',
   NON_CASH: 'neutral',
   CREDIT: 'warning',
+  CONSIGNMENT: 'info',
 };
 
 export default function Procurement() {
@@ -62,7 +65,7 @@ export default function Procurement() {
   // Create PO form
   const [showCreate, setShowCreate] = useState(false);
   const [supplier, setSupplier] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'NON_CASH' | 'CREDIT'>('CASH');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'NON_CASH' | 'CREDIT' | 'CONSIGNMENT'>('CASH');
   const [currency, setCurrency] = useState('USD');
   const [fxRate, setFxRate] = useState('');
   const [shippingCost, setShippingCost] = useState('0');
@@ -127,6 +130,13 @@ export default function Procurement() {
   const [prNote, setPrNote] = useState('');
   const [prItems, setPrItems] = useState<PriceRevisionItemDraft[]>([{ productId: '', newPrice: '', newPosPrice: '', newWholesalePrice: '' }]);
 
+  // Consignment settlements (отчёт о реализации)
+  const [consignmentSettlements, setConsignmentSettlements] = useState<any[]>([]);
+  const [selectedConsignmentSettlementId, setSelectedConsignmentSettlementId] = useState<string | null>(null);
+  const [showCreateConsignmentSettlement, setShowCreateConsignmentSettlement] = useState(false);
+  const [csPurchaseOrderId, setCsPurchaseOrderId] = useState('');
+  const [csNote, setCsNote] = useState('');
+
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
     setTimeout(() => setNotice(null), 3200);
@@ -135,7 +145,7 @@ export default function Procurement() {
   async function load() {
     setLoading(true);
     try {
-      const [poList, productList, supplierList, returnList, writeOffList, customerReturnList, counterpartyList, stockCountList, priceRevisionList] = await Promise.all([
+      const [poList, productList, supplierList, returnList, writeOffList, customerReturnList, counterpartyList, stockCountList, priceRevisionList, consignmentSettlementList] = await Promise.all([
         adminApi.getPurchaseOrders(),
         adminApi.getProducts('pageSize=500'),
         adminApi.getSuppliers().catch(() => []),
@@ -145,6 +155,7 @@ export default function Procurement() {
         adminApi.getCounterparties().catch(() => []),
         adminApi.getStockCounts().catch(() => []),
         adminApi.getPriceRevisions().catch(() => []),
+        adminApi.getConsignmentSettlements().catch(() => []),
       ]);
       setPos(Array.isArray(poList?.items ?? poList) ? (poList?.items ?? poList) : []);
       setProducts(Array.isArray(productList?.items ?? productList) ? (productList?.items ?? productList) : []);
@@ -155,6 +166,7 @@ export default function Procurement() {
       setCounterparties(Array.isArray(counterpartyList?.items ?? counterpartyList) ? (counterpartyList?.items ?? counterpartyList) : []);
       setStockCounts(Array.isArray(stockCountList?.items ?? stockCountList) ? (stockCountList?.items ?? stockCountList) : []);
       setPriceRevisions(Array.isArray(priceRevisionList?.items ?? priceRevisionList) ? (priceRevisionList?.items ?? priceRevisionList) : []);
+      setConsignmentSettlements(Array.isArray(consignmentSettlementList?.items ?? consignmentSettlementList) ? (consignmentSettlementList?.items ?? consignmentSettlementList) : []);
     } catch (err: any) {
       if (err?.message?.includes('402') || err?.message?.toLowerCase().includes('plan')) {
         setPlanBlocked(true);
@@ -186,6 +198,7 @@ export default function Procurement() {
     CASH: tr('Наличные', 'Naqd'),
     NON_CASH: tr('Безналичный', 'Naqd emas'),
     CREDIT: tr('В долг', 'Qarzga'),
+    CONSIGNMENT: tr('Под реализацию', 'Realizatsiyaga'),
   };
 
   const selectedPo = pos.find((po: any) => po.id === selectedPoId) ?? null;
@@ -249,8 +262,8 @@ export default function Procurement() {
       showNotice('error', tr('Заполните все обязательные поля', "Barcha maydonlarni to'ldiring"));
       return;
     }
-    if (paymentMethod === 'CREDIT' && !supplierId) {
-      showNotice('error', tr('Для покупки в долг выберите контрагента-поставщика из списка', "Qarzga xarid uchun ro'yxatdan yetkazib beruvchini tanlang"));
+    if ((paymentMethod === 'CREDIT' || paymentMethod === 'CONSIGNMENT') && !supplierId) {
+      showNotice('error', tr('Для покупки в долг или под реализацию выберите контрагента-поставщика из списка', "Qarzga yoki realizatsiyaga xarid uchun ro'yxatdan yetkazib beruvchini tanlang"));
       return;
     }
     setSaving(true);
@@ -1054,6 +1067,107 @@ export default function Procurement() {
     }
   }
 
+  // ─── Consignment settlements (отчёт о реализации) ──────────────────────
+
+  const consignmentSettlementStatusLabel: Record<ConsignmentSettlementStatus, string> = {
+    DRAFT: tr('Черновик', 'Qoralama'),
+    CONFIRMED: tr('Подтверждён', 'Tasdiqlangan'),
+    CANCELLED: tr('Отменён', 'Bekor qilindi'),
+  };
+
+  function consignmentSettlementStatusBadgeVariant(status: ConsignmentSettlementStatus): BadgeVariant {
+    if (status === 'CONFIRMED') return 'success';
+    if (status === 'CANCELLED') return 'danger';
+    return 'neutral';
+  }
+
+  const eligibleConsignmentPurchaseOrders = pos.filter((po: any) => po.paymentMethod === 'CONSIGNMENT' && po.status === 'RECEIVED');
+
+  const selectedConsignmentSettlement = consignmentSettlements.find((s: any) => s.id === selectedConsignmentSettlementId) ?? null;
+
+  const consignmentSettlementColumns: TableColumn<any>[] = [
+    {
+      key: 'cs',
+      header: 'CS#',
+      render: (s) => (
+        <span className="font-semibold text-neutral-800 inline-flex items-center gap-1.5">
+          <span className={`transition-transform ${s.id === selectedConsignmentSettlementId ? 'rotate-90' : ''}`} aria-hidden="true">›</span>
+          CS-{s.settlementNumber}
+        </span>
+      ),
+    },
+    { key: 'po', header: 'PO', render: (s) => s.purchaseOrder ? `PO-${s.purchaseOrder.poNumber}` : '—' },
+    { key: 'supplier', header: tr('Поставщик', 'Yetkazib beruvchi'), render: (s) => s.purchaseOrder?.supplierName || '—' },
+    {
+      key: 'status',
+      header: tr('Статус', 'Holat'),
+      render: (s) => <Badge variant={consignmentSettlementStatusBadgeVariant(s.status)}>{consignmentSettlementStatusLabel[s.status as ConsignmentSettlementStatus] || s.status}</Badge>,
+    },
+    {
+      key: 'debt',
+      header: tr('Долг (UZS)', 'Qarz (UZS)'),
+      render: (s) => <span className="font-semibold text-neutral-800">{Number(s.totalDebtCharged).toLocaleString(locale)}</span>,
+    },
+    { key: 'date', header: tr('Дата', 'Sana'), render: (s) => new Date(s.createdAt).toLocaleDateString(locale) },
+  ];
+
+  function resetCreateConsignmentSettlementForm() {
+    setCsPurchaseOrderId(''); setCsNote('');
+    setShowCreateConsignmentSettlement(false);
+  }
+
+  async function submitCreateConsignmentSettlement() {
+    if (!csPurchaseOrderId) {
+      showNotice('error', tr('Выберите приходный документ', 'Kirim hujjatini tanlang'));
+      return;
+    }
+    setSaving(true);
+    try {
+      await adminApi.createConsignmentSettlement({ purchaseOrderId: csPurchaseOrderId, note: csNote.trim() || undefined });
+      resetCreateConsignmentSettlementForm();
+      await load();
+      showNotice('success', tr('Отчёт создан', 'Hisobot yaratildi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка создания', 'Yaratish xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function cancelConsignmentSettlement(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.updateConsignmentSettlement(id, { status: 'CANCELLED' });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmConsignmentSettlement(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.confirmConsignmentSettlement(id);
+      await load();
+      showNotice('success', tr('Отчёт подтверждён, долг поставщику обновлён', "Hisobot tasdiqlandi, ta'minotchi qarzi yangilandi"));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка подтверждения', 'Tasdiqlash xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateConsignmentSettlementItemOnServer(id: string, itemId: string, qtySold: number) {
+    try {
+      await adminApi.updateConsignmentSettlementItem(id, itemId, { qtySold });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    }
+  }
+
   const noticeNode = notice ? (
     <div
       className={[
@@ -1109,6 +1223,7 @@ export default function Procurement() {
     customerReturns: tr('Возвраты от клиента', "Mijozdan qaytarishlar"),
     stockCounts: tr('Инвентаризация', 'Inventarizatsiya'),
     priceRevisions: tr('Переоценка', "Qayta baholash"),
+    consignmentSettlements: tr('Реализация', "Realizatsiya"),
   };
 
   const headerSubtitle: Record<DocTab, string> = {
@@ -1118,6 +1233,7 @@ export default function Procurement() {
     customerReturns: tr('Товары, возвращённые клиентом: остатки увеличиваются, а долг клиента (если он выбран) уменьшается', "Mijoz tomonidan qaytarilgan tovarlar: qoldiq ko'payadi, mijoz qarzi (tanlangan bo'lsa) kamayadi"),
     stockCounts: tr('Снимок остатков на момент начала подсчёта — сверьте с фактом и подтвердите, расхождения применятся к остаткам', "Hisoblash boshlangan paytdagi qoldiqlar tasviri — faktik bilan solishtiring va tasdiqlang, farqlar qoldiqqa qo'llaniladi"),
     priceRevisions: tr('Изменение розничных цен по каналам: Telegram, POS, опт — вручную выбранные товары', "Kanallar bo'yicha chakana narxlarni o'zgartirish: Telegram, POS, ulgurji — qo'lda tanlangan mahsulotlar"),
+    consignmentSettlements: tr('Отчёты о фактически проданном по документам «под реализацию» — долг поставщику начисляется только за реализованное', "«Realizatsiyaga» hujjatlar bo'yicha sotilgan haqida hisobotlar — ta'minotchi qarzi faqat sotilgani uchun hisoblanadi"),
   };
 
   const createButtonLabel: Record<DocTab, string> = {
@@ -1127,6 +1243,7 @@ export default function Procurement() {
     customerReturns: tr('+ Новый возврат', '+ Yangi qaytarish'),
     stockCounts: tr('+ Начать инвентаризацию', '+ Inventarizatsiyani boshlash'),
     priceRevisions: tr('+ Новая переоценка', "+ Yangi qayta baholash"),
+    consignmentSettlements: tr('+ Новый отчёт', "+ Yangi hisobot"),
   };
 
   function onCreateClick() {
@@ -1135,7 +1252,8 @@ export default function Procurement() {
     else if (tab === 'writeoffs') setShowCreateWriteOff(true);
     else if (tab === 'customerReturns') setShowCreateCustomerReturn(true);
     else if (tab === 'stockCounts') setShowCreateStockCount(true);
-    else setShowCreatePriceRevision(true);
+    else if (tab === 'priceRevisions') setShowCreatePriceRevision(true);
+    else setShowCreateConsignmentSettlement(true);
   }
 
   const createDisabled = tab === 'documents' ? showCreate
@@ -1143,7 +1261,8 @@ export default function Procurement() {
     : tab === 'writeoffs' ? showCreateWriteOff
     : tab === 'customerReturns' ? showCreateCustomerReturn
     : tab === 'stockCounts' ? showCreateStockCount
-    : showCreatePriceRevision;
+    : tab === 'priceRevisions' ? showCreatePriceRevision
+    : showCreateConsignmentSettlement;
 
   return (
     <section className="flex flex-col gap-4">
@@ -1177,6 +1296,9 @@ export default function Procurement() {
         </Button>
         <Button type="button" variant={tab === 'priceRevisions' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('priceRevisions')}>
           {tr('Переоценка', "Qayta baholash")}
+        </Button>
+        <Button type="button" variant={tab === 'consignmentSettlements' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('consignmentSettlements')}>
+          {tr('Реализация', "Realizatsiya")}
         </Button>
       </div>
 
@@ -1501,6 +1623,48 @@ export default function Procurement() {
               onAddItem={(data) => void addPriceRevisionItemToServer(selectedPriceRevision.id, data)}
               onUpdateItem={(itemId, data) => void updatePriceRevisionItemOnServer(selectedPriceRevision.id, itemId, data)}
               onRemoveItem={(itemId) => void removePriceRevisionItemOnServer(selectedPriceRevision.id, itemId)}
+            />
+          )}
+        </>
+      )}
+
+      {tab === 'consignmentSettlements' && (
+        <>
+          {showCreateConsignmentSettlement && (
+            <CreateConsignmentSettlementForm
+              eligiblePurchaseOrders={eligibleConsignmentPurchaseOrders}
+              purchaseOrderId={csPurchaseOrderId}
+              setPurchaseOrderId={setCsPurchaseOrderId}
+              note={csNote}
+              setNote={setCsNote}
+              saving={saving}
+              onSubmit={() => void submitCreateConsignmentSettlement()}
+              onCancel={resetCreateConsignmentSettlementForm}
+            />
+          )}
+
+          {consignmentSettlements.length === 0 && !showCreateConsignmentSettlement ? (
+            <Card className="text-center py-10 px-4">
+              <p className="m-0 text-token-sm text-neutral-500">{tr('Отчётов о реализации пока не было', "Hali realizatsiya hisobotlari bo'lmagan")}</p>
+            </Card>
+          ) : (
+            <Table
+              columns={consignmentSettlementColumns}
+              data={consignmentSettlements}
+              rowKey={(s) => s.id}
+              onRowClick={(s) => setSelectedConsignmentSettlementId((prev) => (prev === s.id ? null : s.id))}
+            />
+          )}
+
+          {selectedConsignmentSettlement && (
+            <ConsignmentSettlementCard
+              key={selectedConsignmentSettlement.id}
+              settlement={selectedConsignmentSettlement}
+              saving={saving}
+              onCancel={cancelConsignmentSettlement}
+              onConfirm={confirmConsignmentSettlement}
+              canEdit={selectedConsignmentSettlement.status === 'DRAFT'}
+              onUpdateItem={(itemId, qtySold) => void updateConsignmentSettlementItemOnServer(selectedConsignmentSettlement.id, itemId, qtySold)}
             />
           )}
         </>

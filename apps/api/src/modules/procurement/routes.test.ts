@@ -165,6 +165,55 @@ describe('procurement.routes', () => {
       );
       await app.close();
     });
+
+    it('rejects a CONSIGNMENT purchase with no linked supplier', async () => {
+      mocks.prisma.product.findMany.mockResolvedValue([{ id: 'p-1' }]);
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/purchase-orders',
+        payload: {
+          supplierName: 'Supplier A',
+          paymentMethod: 'CONSIGNMENT',
+          items: [{ productId: 'p-1', qty: 10, unitCost: 5000 }],
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/supplier/i);
+      await app.close();
+    });
+
+    it('accepts a CONSIGNMENT purchase with a linked supplier', async () => {
+      mocks.prisma.product.findMany.mockResolvedValue([{ id: 'p-1' }]);
+      const tx = {
+        $executeRaw: vi.fn().mockResolvedValue(1),
+        purchaseOrder: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue({ id: 'po-1', items: [] }),
+        },
+      };
+      mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/purchase-orders',
+        payload: {
+          supplierName: 'Supplier A',
+          supplierId: 'sup-1',
+          paymentMethod: 'CONSIGNMENT',
+          items: [{ productId: 'p-1', qty: 10, unitCost: 5000 }],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(tx.purchaseOrder.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ paymentMethod: 'CONSIGNMENT', supplierId: 'sup-1' }) })
+      );
+      await app.close();
+    });
   });
 
   // ─── PATCH PO: status validation ─────────────────────────────────────────
