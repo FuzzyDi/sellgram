@@ -98,6 +98,8 @@ export default function Products() {
         onCategoryChange={(v) => { list.setPage(1); list.setSelectedCategory(v); }}
         activeFilter={list.activeFilter}
         onActiveFilterChange={(v) => { list.setPage(1); list.setActiveFilter(v); }}
+        miniappFilter={list.miniappFilter}
+        onMiniappFilterChange={(v) => { list.setPage(1); list.setMiniappFilter(v); }}
         total={list.total}
       />
 
@@ -107,6 +109,8 @@ export default function Products() {
           bulking={list.bulking}
           onActivate={() => void list.handleBulkAction('activate')}
           onDeactivate={() => void list.handleBulkAction('deactivate')}
+          onShowInMiniapp={() => void list.handleBulkAction('showInMiniapp')}
+          onHideFromMiniapp={() => void list.handleBulkAction('hideFromMiniapp')}
           onCancel={() => list.setSelected(new Set())}
         />
       )}

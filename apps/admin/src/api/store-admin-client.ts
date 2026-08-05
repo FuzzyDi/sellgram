@@ -119,7 +119,7 @@ export const adminApi = {
   createProduct: (data: any) => request<any>('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (id: string, data: any) => request<any>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteProduct: (id: string) => request<any>(`/products/${id}`, { method: 'DELETE' }),
-  bulkUpdateProducts: (data: { ids: string[]; action: 'activate' | 'deactivate' }) =>
+  bulkUpdateProducts: (data: { ids: string[]; action: 'activate' | 'deactivate' | 'showInMiniapp' | 'hideFromMiniapp' }) =>
     request<any>('/products/bulk', { method: 'PATCH', body: JSON.stringify(data) }),
   adjustStock: (id: string, qty: number, opts?: { variantId?: string; mode?: 'set' | 'delta'; note?: string }) =>
     request<any>(`/products/${id}/stock`, { method: 'PATCH', body: JSON.stringify({ qty, ...opts }) }),

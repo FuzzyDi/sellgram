@@ -122,6 +122,15 @@ export default function ProductsTable({
       ),
     },
     {
+      key: 'miniapp',
+      header: tr('Telegram', 'Telegram'),
+      render: (product) => (
+        <Badge variant={product.showInMiniapp ? 'info' : 'neutral'}>
+          {product.showInMiniapp ? tr('Показан', "Ko'rsatiladi") : tr('Скрыт', 'Yashirin')}
+        </Badge>
+      ),
+    },
+    {
       key: 'actions',
       header: tr('Действия', 'Amallar'),
       render: (product) =>

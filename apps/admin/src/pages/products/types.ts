@@ -21,6 +21,7 @@ export interface Product {
   stockQty: number;
   lowStockAlert: number;
   isActive: boolean;
+  showInMiniapp: boolean;
   category?: { id: string; name: string };
   images?: { id: string; url: string }[];
 }
@@ -100,6 +101,7 @@ export interface FormData {
   pluCode: string;
   categoryId: string;
   isActive: boolean;
+  showInMiniapp: boolean;
   // '' = unassigned. Selecting a type only hints markType/unit at
   // selection time (useProductForm.ts's selectProductType) — it never
   // locks either field against further manual editing.
@@ -123,5 +125,6 @@ export const emptyForm: FormData = {
   pluCode: '',
   categoryId: '',
   isActive: true,
+  showInMiniapp: true,
   productTypeId: '',
 };

@@ -13,11 +13,14 @@ interface ProductsFiltersProps {
   onCategoryChange: (value: string) => void;
   activeFilter: 'all' | 'active' | 'hidden';
   onActiveFilterChange: (value: 'all' | 'active' | 'hidden') => void;
+  miniappFilter: 'all' | 'shown' | 'hidden';
+  onMiniappFilterChange: (value: 'all' | 'shown' | 'hidden') => void;
   total: number;
 }
 
 export default function ProductsFilters({
-  search, onSearchChange, categories, selectedCategory, onCategoryChange, activeFilter, onActiveFilterChange, total,
+  search, onSearchChange, categories, selectedCategory, onCategoryChange, activeFilter, onActiveFilterChange,
+  miniappFilter, onMiniappFilterChange, total,
 }: ProductsFiltersProps) {
   const { tr } = useAdminI18n();
 
@@ -47,6 +50,14 @@ export default function ProductsFilters({
           <option value="all">{tr('Любой статус', 'Har qanday holat')}</option>
           <option value="active">{tr('Только активные', 'Faqat faol')}</option>
           <option value="hidden">{tr('Только скрытые', 'Faqat yashirin')}</option>
+        </Select>
+      </div>
+
+      <div className="w-52">
+        <Select value={miniappFilter} onChange={(e) => onMiniappFilterChange(e.target.value as 'all' | 'shown' | 'hidden')}>
+          <option value="all">{tr('Telegram: любой', 'Telegram: har qanday')}</option>
+          <option value="shown">{tr('Показаны в Telegram', "Telegramda ko'rsatiladi")}</option>
+          <option value="hidden">{tr('Скрыты из Telegram', "Telegramdan yashirin")}</option>
         </Select>
       </div>
 

@@ -17,7 +17,7 @@ export async function createShopCheckoutOrder(input: {
 
   const productIds = [...new Set(cartItems.map((item) => item.productId))];
   const products = await prisma.product.findMany({
-    where: { id: { in: productIds }, tenantId, isActive: true },
+    where: { id: { in: productIds }, tenantId, isActive: true, showInMiniapp: true },
     include: { variants: true },
   });
   const productMap = new Map(products.map((p) => [p.id, p]));

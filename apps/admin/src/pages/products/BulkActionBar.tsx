@@ -8,14 +8,16 @@ interface BulkActionBarProps {
   bulking: boolean;
   onActivate: () => void;
   onDeactivate: () => void;
+  onShowInMiniapp: () => void;
+  onHideFromMiniapp: () => void;
   onCancel: () => void;
 }
 
-export default function BulkActionBar({ count, bulking, onActivate, onDeactivate, onCancel }: BulkActionBarProps) {
+export default function BulkActionBar({ count, bulking, onActivate, onDeactivate, onShowInMiniapp, onHideFromMiniapp, onCancel }: BulkActionBarProps) {
   const { tr } = useAdminI18n();
 
   return (
-    <Card className="flex items-center gap-2.5 bg-warning/10 border-warning/30">
+    <Card className="flex items-center gap-2.5 bg-warning/10 border-warning/30 flex-wrap">
       <span className="text-token-sm font-semibold text-warning">
         {tr(`Выбрано: ${count}`, `Tanlandi: ${count}`)}
       </span>
@@ -24,6 +26,12 @@ export default function BulkActionBar({ count, bulking, onActivate, onDeactivate
       </Button>
       <Button variant="ghost" size="sm" type="button" disabled={bulking} onClick={onDeactivate}>
         {tr('Скрыть', 'Yashirish')}
+      </Button>
+      <Button variant="ghost" size="sm" type="button" disabled={bulking} onClick={onShowInMiniapp}>
+        {tr('Показать в Telegram', "Telegramda ko'rsatish")}
+      </Button>
+      <Button variant="ghost" size="sm" type="button" disabled={bulking} onClick={onHideFromMiniapp}>
+        {tr('Скрыть из Telegram', "Telegramdan yashirish")}
       </Button>
       <button
         className="ml-auto bg-transparent border-none cursor-pointer text-token-xs text-neutral-400"

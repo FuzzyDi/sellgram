@@ -91,6 +91,7 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       pluCode: fullProduct.pluCode || '',
       categoryId: fullProduct.category?.id || '',
       isActive: fullProduct.isActive,
+      showInMiniapp: fullProduct.showInMiniapp ?? true,
       productTypeId: fullProduct.productTypeId || '',
     });
 
@@ -117,6 +118,7 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
         stockQty: parseInt(form.stockQty, 10) || 0,
         lowStockAlert: parseInt(form.lowStockAlert, 10) || 5,
         isActive: form.isActive,
+        showInMiniapp: form.showInMiniapp,
       };
 
       if (form.sku) payload.sku = form.sku;

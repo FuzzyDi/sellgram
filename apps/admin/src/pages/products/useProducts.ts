@@ -16,6 +16,7 @@ export function useProducts(showNotice: (tone: NoticeTone, message: string) => v
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'hidden'>('all');
+  const [miniappFilter, setMiniappFilter] = useState<'all' | 'shown' | 'hidden'>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -32,6 +33,8 @@ export function useProducts(showNotice: (tone: NoticeTone, message: string) => v
       if (selectedCategory) params.set('categoryId', selectedCategory);
       if (activeFilter === 'active') params.set('active', 'true');
       if (activeFilter === 'hidden') params.set('active', 'false');
+      if (miniappFilter === 'shown') params.set('miniapp', 'true');
+      if (miniappFilter === 'hidden') params.set('miniapp', 'false');
 
       const data = await adminApi.getProducts(params.toString());
       setProducts(data.items || []);
@@ -45,7 +48,7 @@ export function useProducts(showNotice: (tone: NoticeTone, message: string) => v
     } finally {
       setLoading(false);
     }
-  }, [search, selectedCategory, activeFilter, page]);
+  }, [search, selectedCategory, activeFilter, miniappFilter, page]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -78,7 +81,7 @@ export function useProducts(showNotice: (tone: NoticeTone, message: string) => v
   }, [loadProductTypes]);
 
   const handleBulkAction = useCallback(
-    async (action: 'activate' | 'deactivate') => {
+    async (action: 'activate' | 'deactivate' | 'showInMiniapp' | 'hideFromMiniapp') => {
       const ids = Array.from(selected);
       if (ids.length === 0) return;
       setBulking(true);
@@ -115,6 +118,7 @@ export function useProducts(showNotice: (tone: NoticeTone, message: string) => v
   return {
     products, categories, productTypes, total, loading, loadError,
     search, setSearch, selectedCategory, setSelectedCategory, activeFilter, setActiveFilter,
+    miniappFilter, setMiniappFilter,
     page, setPage, totalPages, selected, setSelected, bulking,
     loadProducts, loadCategories, loadProductTypes, handleBulkAction, toggleSelect, toggleSelectAll,
   };

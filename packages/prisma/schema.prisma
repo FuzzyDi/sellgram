@@ -358,6 +358,13 @@ model Product {
   stockQty      Int       @default(0)
   lowStockAlert Int       @default(5)
   isActive      Boolean   @default(true)
+  // Telegram Mini App storefront curation — a merchant with a large
+  // warehouse catalog (POS/wholesale) doesn't necessarily want all of it
+  // surfaced to Telegram shoppers. Distinct from isActive (which also
+  // gates POS/checkout availability): this only controls whether the
+  // bot/miniapp channel lists and serves the product. Defaults true so
+  // existing catalogs aren't emptied out by this field's introduction.
+  showInMiniapp Boolean   @default(true)
   sortOrder     Int       @default(0)
   // Soft-delete tombstone (docs/POS_SYNC_API.md §26 catalog delta sync).
   // null = active product. Non-null = soft-deleted; the row is kept so a
@@ -387,6 +394,9 @@ model Product {
   @@index([tenantId])
   @@index([tenantId, categoryId])
   @@index([tenantId, isActive])
+  // bot/shop.service.ts's miniapp catalog query filters on exactly this
+  // triple (tenantId + isActive + showInMiniapp).
+  @@index([tenantId, isActive, showInMiniapp])
   // docs/POS_SYNC_API.md §26 — GET /products, snapshot builder, and
   // product-search all filter deletedAt: null on top of tenantId.
   @@index([tenantId, deletedAt])

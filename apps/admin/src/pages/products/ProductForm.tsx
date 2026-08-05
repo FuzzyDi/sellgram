@@ -225,6 +225,11 @@ export default function ProductForm({
             {tr('Активен (виден покупателям)', "Faol (mijozlarga ko'rinadi)")}
           </label>
 
+          <label className="flex items-center gap-2 text-token-sm text-neutral-700">
+            <input type="checkbox" className="h-4 w-4 accent-accent-600" checked={form.showInMiniapp} onChange={updateForm('showInMiniapp')} />
+            {tr('Показывать в Telegram-магазине', "Telegram do'konida ko'rsatish")}
+          </label>
+
           {editingId && (
             <div>
               <label className="text-token-sm font-medium text-neutral-700 block mb-2">{tr('Фотографии', 'Rasmlar')}</label>

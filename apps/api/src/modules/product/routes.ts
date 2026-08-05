@@ -13,6 +13,7 @@ const listProductsQuerySchema = z.object({
   search: z.string().max(200).optional(),
   categoryId: z.string().optional(),
   active: z.enum(['true', 'false']).optional(),
+  miniapp: z.enum(['true', 'false']).optional(),
 });
 
 const createProductSchema = z.object({
@@ -68,6 +69,7 @@ const updateProductSchema = z.object({
   stockQty: z.number().int().min(0).optional(),
   lowStockAlert: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
+  showInMiniapp: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
 });
 
@@ -94,7 +96,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
-    const { page, pageSize, search, categoryId, active } = query;
+    const { page, pageSize, search, categoryId, active, miniapp } = query;
     const skip = (page - 1) * pageSize;
 
     const where: any = { tenantId: request.tenantId!, deletedAt: null };
@@ -107,6 +109,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     }
     if (categoryId) where.categoryId = categoryId;
     if (active !== undefined) where.isActive = active === 'true'; // active is 'true'|'false' from schema
+    if (miniapp !== undefined) where.showInMiniapp = miniapp === 'true';
 
     const [items, total] = await Promise.all([
       prisma.product.findMany({
@@ -214,7 +217,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
   // Bulk update products (activate / deactivate)
   const bulkProductSchema = z.object({
     ids: z.array(z.string().cuid()).min(1).max(200),
-    action: z.enum(['activate', 'deactivate']),
+    action: z.enum(['activate', 'deactivate', 'showInMiniapp', 'hideFromMiniapp']),
   });
 
   fastify.patch('/products/bulk', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
@@ -224,10 +227,14 @@ export default async function productRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
-    const isActive = body.action === 'activate';
+    const data: { isActive?: boolean; showInMiniapp?: boolean } =
+      body.action === 'activate' ? { isActive: true }
+      : body.action === 'deactivate' ? { isActive: false }
+      : body.action === 'showInMiniapp' ? { showInMiniapp: true }
+      : { showInMiniapp: false };
     const result = await prisma.product.updateMany({
       where: { id: { in: body.ids }, tenantId: request.tenantId! },
-      data: { isActive },
+      data,
     });
     await triggerCatalogRefresh(request.tenantId!);
     return { success: true, updated: result.count };

@@ -355,14 +355,14 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
       include: {
         product: {
           select: {
-            id: true, name: true, price: true, isActive: true,
+            id: true, name: true, price: true, isActive: true, showInMiniapp: true,
             images: { orderBy: { sortOrder: 'asc' }, take: 1 },
           },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
-    return { success: true, data: items.filter((i) => i.product.isActive) };
+    return { success: true, data: items.filter((i) => i.product.isActive && i.product.showInMiniapp) };
   });
 
   // O(1) existence check for a single product — Product.tsx used to fetch

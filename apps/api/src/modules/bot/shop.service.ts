@@ -23,13 +23,13 @@ export async function getShopCatalog(
     prisma.category.findMany({
       where: { tenantId, isActive: true },
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { products: { where: { isActive: true } } } } },
+      include: { _count: { select: { products: { where: { isActive: true, showInMiniapp: true } } } } },
     }),
     prisma.store.findUnique({ where: { id: storeId }, select: { botUsername: true, name: true } }),
     prisma.tenant.findUnique({ where: { id: tenantId }, select: { plan: true, planExpiresAt: true } }),
   ]);
 
-  const where: any = { tenantId, isActive: true };
+  const where: any = { tenantId, isActive: true, showInMiniapp: true };
   if (categoryId) where.categoryId = categoryId;
   if (q?.trim()) where.name = { contains: q.trim(), mode: 'insensitive' };
 
@@ -55,7 +55,7 @@ export async function getShopCatalog(
 
 export async function getShopProduct(tenantId: string, id: string) {
   const product = await prisma.product.findFirst({
-    where: { id, tenantId, isActive: true },
+    where: { id, tenantId, isActive: true, showInMiniapp: true },
     include: {
       images: { orderBy: { sortOrder: 'asc' } },
       variants: { where: { isActive: true } },

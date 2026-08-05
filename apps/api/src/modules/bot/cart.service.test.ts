@@ -34,6 +34,7 @@ describe('cart.service', () => {
       id: 'p-1',
       stockQty: 10,
       isActive: true,
+      showInMiniapp: true,
       variants: [],
     });
     mocks.prisma.cartItem.findFirst.mockResolvedValue(null);
@@ -56,6 +57,7 @@ describe('cart.service', () => {
       id: 'p-1',
       stockQty: 3,
       isActive: true,
+      showInMiniapp: true,
       variants: [],
     });
     mocks.prisma.cartItem.findFirst.mockResolvedValue({ id: 'ci-1', qty: 2 });
@@ -82,7 +84,7 @@ describe('cart.service', () => {
 
   it('updates item qty when stock is sufficient', async () => {
     mocks.prisma.cartItem.findFirst.mockResolvedValue({ id: 'ci-1', productId: 'p-1', variantId: null });
-    mocks.prisma.product.findFirst.mockResolvedValue({ id: 'p-1', stockQty: 10, isActive: true, variants: [] });
+    mocks.prisma.product.findFirst.mockResolvedValue({ id: 'p-1', stockQty: 10, isActive: true, showInMiniapp: true, variants: [] });
 
     const result = await updateCartItemQty({ customerId: 'c-1', tenantId: 't-1', itemId: 'ci-1', qty: 5 });
 

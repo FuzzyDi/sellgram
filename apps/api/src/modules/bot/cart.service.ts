@@ -30,7 +30,7 @@ export async function addCartItem(input: {
   }
 
   const product = await prisma.product.findFirst({
-    where: { id: productId, tenantId, isActive: true },
+    where: { id: productId, tenantId, isActive: true, showInMiniapp: true },
     include: { variants: true },
   });
   if (!product) {
@@ -98,10 +98,10 @@ export async function updateCartItemQty(input: {
   }
 
   const product = await prisma.product.findFirst({
-    where: { id: item.productId, tenantId, isActive: true },
+    where: { id: item.productId, tenantId, isActive: true, showInMiniapp: true },
     include: { variants: true },
   });
-  if (!product || !product.isActive) {
+  if (!product || !product.isActive || !product.showInMiniapp) {
     throw new CartServiceError('PRODUCT_NOT_FOUND', 'Product not found');
   }
 
