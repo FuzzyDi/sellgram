@@ -91,6 +91,18 @@ enum POStatus {
   CANCELLED
 }
 
+// How a purchase order is settled with the supplier. CASH/NON_CASH mean
+// paid in full at receipt — no SupplierLedger entry is created. CREDIT
+// means the goods are received before payment: receiving the PO charges
+// the supplier's running balance (Supplier.currentDebt via
+// SupplierLedger), same idea as CounterpartyLedger's ORDER_CHARGE but
+// for money the tenant owes outward instead of inward.
+enum POPaymentMethod {
+  CASH
+  NON_CASH
+  CREDIT
+}
+
 enum ScheduledFrequency {
   DAILY
   WEEKLY
@@ -153,6 +165,7 @@ model Tenant {
   cloudCommands      CloudCommand[]
   counterparties     Counterparty[]
   counterpartyLedger CounterpartyLedger[]
+  supplierLedger     SupplierLedger[]
   posOperators       PosOperator[]
   markingCodes       ProductMarkingCode[]
   barcodes           ProductBarcode[]
@@ -997,8 +1010,15 @@ model Supplier {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Running balance of what the tenant owes this supplier — positive
+  // means money is owed. Cached total kept in sync with SupplierLedger
+  // the same atomic increment-and-append-row way Counterparty.currentDebt
+  // is kept in sync with CounterpartyLedger.
+  currentDebt Decimal @default(0) @db.Decimal(12, 2)
+
   purchaseOrders PurchaseOrder[]
   counterparty   Counterparty?
+  ledger         SupplierLedger[]
 
   @@index([tenantId])
   @@map("suppliers")
@@ -1013,6 +1033,12 @@ model PurchaseOrder {
   poNumber     Int
   supplierName String
   status       POStatus  @default(DRAFT)
+  // CASH/NON_CASH assume the supplier is paid in full at receipt time;
+  // CREDIT defers payment and charges Supplier.currentDebt on receive
+  // (routes.ts's /receive handler) — see POPaymentMethod's own comment.
+  // Only meaningful once RECEIVED; DRAFT/ORDERED/IN_TRANSIT just record
+  // the agreed terms ahead of time.
+  paymentMethod POPaymentMethod @default(CASH)
   currency     String    @default("USD")
   fxRate       Decimal?  @db.Decimal(12, 6)
   shippingCost Decimal   @default(0) @db.Decimal(12, 2)
@@ -1027,6 +1053,7 @@ model PurchaseOrder {
 
   items        PurchaseOrderItem[]
   markingCodes ProductMarkingCode[]
+  ledgerEntries SupplierLedger[]
 
   @@unique([tenantId, poNumber])
   @@index([tenantId])
@@ -1046,6 +1073,41 @@ model PurchaseOrderItem {
 
   @@index([purchaseOrderId])
   @@map("purchase_order_items")
+}
+
+enum SupplierLedgerType {
+  PURCHASE_CHARGE
+  PAYMENT_MADE
+  ADJUSTMENT
+}
+
+// Payables ledger — money the tenant owes a Supplier. Deliberately its
+// own model rather than folded into CounterpartyLedger: Supplier and
+// Counterparty are kept as separate identities in this schema (a
+// supplier isn't required to also exist as a Counterparty), so the debt
+// this side owes needs its own home. Same shape/conventions as
+// CounterpartyLedger otherwise — signed delta (positive increases
+// currentDebt), append-only, cached total kept in sync in the same
+// transaction as each row (procurement/routes.ts's /receive,
+// supplier/routes.ts's /payments and /adjustments).
+model SupplierLedger {
+  id         String             @id @default(cuid())
+  tenantId   String
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier           @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  type       SupplierLedgerType
+  delta      Decimal            @db.Decimal(12, 2)
+
+  // Only ever set for PURCHASE_CHARGE — mirrors CounterpartyLedger.orderId.
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, supplierId, createdAt])
+  @@map("supplier_ledger")
 }
 
 // ============================================================

@@ -322,6 +322,9 @@ export const adminApi = {
   createSupplier: (data: any) => request<any>('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
   updateSupplier: (id: string, data: any) => request<any>(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   archiveSupplier: (id: string) => request<any>(`/suppliers/${id}`, { method: 'DELETE' }),
+  paySupplier: (id: string, data: { amount: number; note?: string }) => request<any>(`/suppliers/${id}/payments`, { method: 'POST', body: JSON.stringify(data) }),
+  adjustSupplierDebt: (id: string, data: { delta: number; note: string }) => request<any>(`/suppliers/${id}/adjustments`, { method: 'POST', body: JSON.stringify(data) }),
+  getSupplierLedger: (id: string, params?: string) => request<any>(`/suppliers/${id}/ledger${params ? '?' + params : ''}`),
 
   getPurchaseOrders: () => request<any>('/purchase-orders'),
   createPurchaseOrder: (data: any) => request<any>('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),

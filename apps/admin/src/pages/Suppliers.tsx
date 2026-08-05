@@ -5,10 +5,29 @@ import { useAdminI18n } from '../i18n';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
-import Badge from '../components/Badge';
+import Badge, { type BadgeVariant } from '../components/Badge';
 import Table, { type TableColumn } from '../components/Table';
 
 type NoticeTone = 'success' | 'error';
+type DetailTab = 'history' | 'ledger' | 'ops';
+
+// currentDebt > 0 = owed to the supplier (danger), < 0 = an advance/credit
+// in the tenant's favor (success), = 0 settled (neutral) — same sign
+// convention as SupplierLedger.delta itself. Kept local rather than
+// imported from the b2b module: Supplier and Counterparty are
+// deliberately separate identities in this schema, so their UI helpers
+// stay separate too.
+function debtClassName(debt: number): string {
+  if (debt > 0) return 'text-danger';
+  if (debt < 0) return 'text-success';
+  return 'text-neutral-500';
+}
+
+const SUPPLIER_LEDGER_BADGE: Record<string, BadgeVariant> = {
+  PURCHASE_CHARGE: 'danger',
+  PAYMENT_MADE: 'success',
+  ADJUSTMENT: 'warning',
+};
 
 export default function Suppliers() {
   const { tr, locale } = useAdminI18n();
@@ -29,10 +48,17 @@ export default function Suppliers() {
   const [formAddress, setFormAddress] = useState('');
   const [formNote, setFormNote] = useState('');
 
-  // PO history drill-down
+  // PO history / debt drill-down
   const [selectedSupplier, setSelectedSupplier] = useState<any | null>(null);
   const [supplierPos, setSupplierPos] = useState<any[]>([]);
   const [loadingPos, setLoadingPos] = useState(false);
+  const [detailTab, setDetailTab] = useState<DetailTab>('history');
+  const [ledger, setLedger] = useState<any[]>([]);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentNote, setPaymentNote] = useState('');
+  const [adjustmentDelta, setAdjustmentDelta] = useState('');
+  const [adjustmentNote, setAdjustmentNote] = useState('');
 
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
@@ -125,6 +151,7 @@ export default function Suppliers() {
   async function openHistory(s: any) {
     setSelectedSupplier(s);
     setShowForm(false);
+    setDetailTab('history');
     setLoadingPos(true);
     try {
       const data = await adminApi.getSupplier(s.id);
@@ -133,6 +160,66 @@ export default function Suppliers() {
       setSupplierPos([]);
     } finally {
       setLoadingPos(false);
+    }
+    void loadLedger(s.id);
+  }
+
+  async function loadLedger(supplierId: string) {
+    setLoadingLedger(true);
+    try {
+      const data = await adminApi.getSupplierLedger(supplierId, 'pageSize=100');
+      setLedger(Array.isArray(data?.items) ? data.items : []);
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Не удалось загрузить историю долга', "Qarz tarixini yuklab bo'lmadi"));
+    } finally {
+      setLoadingLedger(false);
+    }
+  }
+
+  async function refreshSelectedSupplier() {
+    if (!selectedSupplier) return;
+    try {
+      const data = await adminApi.getSupplier(selectedSupplier.id);
+      setSelectedSupplier(data);
+      setSuppliers((prev) => prev.map((s) => (s.id === data.id ? { ...s, currentDebt: data.currentDebt } : s)));
+    } catch { /* keep the stale value rather than blank the panel */ }
+  }
+
+  async function submitPayment() {
+    if (!selectedSupplier || !paymentAmount || Number(paymentAmount) <= 0) return;
+    setSaving(true);
+    try {
+      await adminApi.paySupplier(selectedSupplier.id, {
+        amount: Number(paymentAmount),
+        note: paymentNote.trim() || undefined,
+      });
+      setPaymentAmount('');
+      setPaymentNote('');
+      showNotice('success', tr('Платёж записан', "To'lov qayd etildi"));
+      await Promise.all([refreshSelectedSupplier(), loadLedger(selectedSupplier.id)]);
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка сохранения', 'Saqlashda xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitAdjustment() {
+    if (!selectedSupplier || !adjustmentDelta || Number(adjustmentDelta) === 0 || !adjustmentNote.trim()) return;
+    setSaving(true);
+    try {
+      await adminApi.adjustSupplierDebt(selectedSupplier.id, {
+        delta: Number(adjustmentDelta),
+        note: adjustmentNote.trim(),
+      });
+      setAdjustmentDelta('');
+      setAdjustmentNote('');
+      showNotice('success', tr('Корректировка сохранена', 'Tuzatish saqlandi'));
+      await Promise.all([refreshSelectedSupplier(), loadLedger(selectedSupplier.id)]);
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка сохранения', 'Saqlashda xato'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -171,6 +258,31 @@ export default function Suppliers() {
     },
     { key: 'total', header: tr('Сумма', 'Summa'), render: (po) => Number(po.totalCost).toLocaleString(locale) },
     { key: 'currency', header: tr('Валюта', 'Valyuta'), render: (po) => po.currency },
+  ];
+
+  const ledgerTypeLabel: Record<string, string> = {
+    PURCHASE_CHARGE: tr('Приход в долг', 'Qarzga kirim'),
+    PAYMENT_MADE: tr('Оплата', "To'lov"),
+    ADJUSTMENT: tr('Корректировка', 'Tuzatish'),
+  };
+
+  const ledgerColumns: TableColumn<any>[] = [
+    { key: 'date', header: tr('Дата', 'Sana'), render: (l) => new Date(l.createdAt).toLocaleString(locale) },
+    {
+      key: 'type',
+      header: tr('Тип', 'Turi'),
+      render: (l) => <Badge variant={SUPPLIER_LEDGER_BADGE[l.type] || 'neutral'}>{ledgerTypeLabel[l.type] || l.type}</Badge>,
+    },
+    {
+      key: 'delta',
+      header: tr('Сумма', 'Summa'),
+      render: (l) => (
+        <span className={`font-semibold ${debtClassName(Number(l.delta))}`}>
+          {Number(l.delta) > 0 ? '+' : ''}{Number(l.delta).toLocaleString(locale)}
+        </span>
+      ),
+    },
+    { key: 'note', header: tr('Заметка', 'Eslatma'), render: (l) => l.note || '—' },
   ];
 
   if (planBlocked) {
@@ -287,7 +399,14 @@ export default function Suppliers() {
           <Card key={s.id}>
             <div className="flex justify-between items-start gap-3 flex-wrap">
               <div>
-                <div className="font-semibold text-token-base text-neutral-800">{s.name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-token-base text-neutral-800">{s.name}</span>
+                  {Number(s.currentDebt) !== 0 && (
+                    <span className={`text-token-sm font-semibold ${debtClassName(Number(s.currentDebt))}`}>
+                      {tr('Долг', 'Qarz')}: {Number(s.currentDebt).toLocaleString(locale)}
+                    </span>
+                  )}
+                </div>
                 {(s.contactName || s.phone || s.email) && (
                   <p className="mt-1 mb-0 text-token-sm text-neutral-600">
                     {[s.contactName, s.phone, s.email].filter(Boolean).join(' · ')}
@@ -301,7 +420,7 @@ export default function Suppliers() {
               </div>
               <div className="flex gap-1.5 flex-wrap">
                 <Button variant="ghost" size="sm" type="button" disabled={saving} onClick={() => openHistory(s)}>
-                  {tr('История заказов', 'Buyurtmalar tarixi')}
+                  {tr('Документы и долг', 'Hujjatlar va qarz')}
                 </Button>
                 <Button variant="ghost" size="sm" type="button" disabled={saving} onClick={() => openEdit(s)}>
                   {tr('Изменить', 'Tahrirlash')}
@@ -315,24 +434,110 @@ export default function Suppliers() {
         ))
       )}
 
-      {/* PO history panel */}
+      {/* Documents / debt panel */}
       {selectedSupplier && (
-        <Card>
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="m-0 text-token-base font-semibold text-neutral-800">
-              {tr('История заказов', 'Buyurtmalar tarixi')}: {selectedSupplier.name}
-            </h3>
-            <Button variant="ghost" size="sm" type="button" onClick={() => setSelectedSupplier(null)}>✕</Button>
+        <>
+          <Card>
+            <div className="flex justify-between items-start gap-3 flex-wrap">
+              <div>
+                <h3 className="m-0 text-token-base font-semibold text-neutral-800">{selectedSupplier.name}</h3>
+                <p className="mt-1 mb-0 text-token-sm">
+                  <span className="text-neutral-500">{tr('Долг', 'Qarz')}: </span>
+                  <span className={`font-semibold ${debtClassName(Number(selectedSupplier.currentDebt))}`}>
+                    {Number(selectedSupplier.currentDebt).toLocaleString(locale)}
+                  </span>
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" type="button" onClick={() => setSelectedSupplier(null)}>✕</Button>
+            </div>
+          </Card>
+
+          <div className="flex gap-1">
+            <Button type="button" variant={detailTab === 'history' ? 'primary' : 'ghost'} size="sm" onClick={() => setDetailTab('history')}>
+              {tr('Приходные документы', 'Kirim hujjatlari')}
+            </Button>
+            <Button type="button" variant={detailTab === 'ledger' ? 'primary' : 'ghost'} size="sm" onClick={() => setDetailTab('ledger')}>
+              {tr('История долга', 'Qarz tarixi')}
+            </Button>
+            <Button type="button" variant={detailTab === 'ops' ? 'primary' : 'ghost'} size="sm" onClick={() => setDetailTab('ops')}>
+              {tr('Платёж / Корректировка', "To'lov / Tuzatish")}
+            </Button>
           </div>
 
-          {loadingPos ? (
-            <div className="h-20 rounded-token-md bg-neutral-100 animate-pulse" />
-          ) : supplierPos.length === 0 ? (
-            <p className="text-token-sm text-neutral-500">{tr('Заказов от этого поставщика пока нет', 'Bu yetkazib beruvchidan hali buyurtmalar yo\'q')}</p>
-          ) : (
-            <Table columns={poColumns} data={supplierPos} rowKey={(po) => po.id} />
+          {detailTab === 'history' && (
+            <Card>
+              {loadingPos ? (
+                <div className="h-20 rounded-token-md bg-neutral-100 animate-pulse" />
+              ) : supplierPos.length === 0 ? (
+                <p className="text-token-sm text-neutral-500">{tr('Документов от этого поставщика пока нет', 'Bu yetkazib beruvchidan hali hujjatlar yo\'q')}</p>
+              ) : (
+                <Table columns={poColumns} data={supplierPos} rowKey={(po) => po.id} />
+              )}
+            </Card>
           )}
-        </Card>
+
+          {detailTab === 'ledger' && (
+            <Table
+              columns={ledgerColumns}
+              data={ledger}
+              rowKey={(l) => l.id}
+              loading={loadingLedger}
+              emptyMessage={tr('Движений по долгу пока нет', "Hali qarz bo'yicha harakatlar yo'q")}
+            />
+          )}
+
+          {detailTab === 'ops' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Card>
+                <p className="m-0 mb-2.5 text-token-sm font-semibold text-neutral-800">{tr('Записать платёж', "To'lovni qayd etish")}</p>
+                <div className="flex flex-col gap-2.5">
+                  <Input
+                    label={tr('Сумма', 'Summa')}
+                    type="number"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                  />
+                  <Input
+                    label={tr('Заметка', 'Eslatma')}
+                    value={paymentNote}
+                    onChange={(e) => setPaymentNote(e.target.value)}
+                  />
+                  <Button
+                    variant="primary" size="md" type="button"
+                    onClick={submitPayment}
+                    disabled={saving || !paymentAmount || Number(paymentAmount) <= 0}
+                  >
+                    {tr('Записать платёж', "To'lovni qayd etish")}
+                  </Button>
+                </div>
+              </Card>
+
+              <Card>
+                <p className="m-0 mb-2.5 text-token-sm font-semibold text-neutral-800">{tr('Корректировка долга', 'Qarzni tuzatish')}</p>
+                <div className="flex flex-col gap-2.5">
+                  <Input
+                    label={tr('Сумма (+ увеличить, − уменьшить)', 'Summa (+ oshirish, − kamaytirish)')}
+                    type="number"
+                    value={adjustmentDelta}
+                    onChange={(e) => setAdjustmentDelta(e.target.value)}
+                  />
+                  <Input
+                    label={tr('Причина (обязательно)', 'Sabab (majburiy)')}
+                    value={adjustmentNote}
+                    onChange={(e) => setAdjustmentNote(e.target.value)}
+                  />
+                  <Button
+                    variant="primary" size="md" type="button"
+                    onClick={submitAdjustment}
+                    disabled={saving || !adjustmentDelta || Number(adjustmentDelta) === 0 || !adjustmentNote.trim()}
+                  >
+                    {tr('Сохранить корректировку', 'Tuzatishni saqlash')}
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

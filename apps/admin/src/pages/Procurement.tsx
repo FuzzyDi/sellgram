@@ -43,6 +43,7 @@ export default function Procurement() {
   // Create PO form
   const [showCreate, setShowCreate] = useState(false);
   const [supplier, setSupplier] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'NON_CASH' | 'CREDIT'>('CASH');
   const [currency, setCurrency] = useState('USD');
   const [fxRate, setFxRate] = useState('');
   const [shippingCost, setShippingCost] = useState('0');
@@ -92,7 +93,7 @@ export default function Procurement() {
   };
 
   function resetCreateForm() {
-    setSupplier(''); setSupplierId(''); setCurrency('USD'); setFxRate('');
+    setSupplier(''); setSupplierId(''); setPaymentMethod('CASH'); setCurrency('USD'); setFxRate('');
     setShippingCost('0'); setCustomsCost('0'); setNote('');
     setItems([{ productId: '', qty: 1, unitCost: 0 }]);
     setShowCreate(false);
@@ -120,6 +121,10 @@ export default function Procurement() {
       showNotice('error', tr('Заполните все обязательные поля', "Barcha maydonlarni to'ldiring"));
       return;
     }
+    if (paymentMethod === 'CREDIT' && !supplierId) {
+      showNotice('error', tr('Для покупки в долг выберите контрагента-поставщика из списка', "Qarzga xarid uchun ro'yxatdan yetkazib beruvchini tanlang"));
+      return;
+    }
     setSaving(true);
     try {
       const resolvedName = supplierId
@@ -128,6 +133,7 @@ export default function Procurement() {
       await adminApi.createPurchaseOrder({
         supplierId: supplierId || undefined,
         supplierName: resolvedName,
+        paymentMethod,
         currency,
         fxRate: fxRate ? Number(fxRate) : undefined,
         shippingCost: Number(shippingCost || 0),
@@ -168,12 +174,18 @@ export default function Procurement() {
     if (!receivePo) return;
     setSaving(true);
     try {
-      await adminApi.receivePurchaseOrder(receivePo.id, {
+      const result = await adminApi.receivePurchaseOrder(receivePo.id, {
         items: Object.entries(receiveItems).map(([itemId, qtyReceived]) => ({ itemId, qtyReceived })),
       });
       setReceivePo(null);
       await load();
-      showNotice('success', tr('Поставка принята, остатки обновлены', 'Yetkazib berish qabul qilindi, qoldiqlar yangilandi'));
+      const debtCharged = Number(result?.debtCharged ?? 0);
+      showNotice(
+        'success',
+        debtCharged > 0
+          ? tr(`Поставка принята, остатки обновлены. Долг поставщику: +${debtCharged.toLocaleString(locale)}`, `Yetkazib berish qabul qilindi. Yetkazib beruvchi qarzi: +${debtCharged.toLocaleString(locale)}`)
+          : tr('Поставка принята, остатки обновлены', 'Yetkazib berish qabul qilindi, qoldiqlar yangilandi')
+      );
     } catch (err: any) {
       showNotice('error', err?.message || tr('Ошибка приёмки', 'Qabul qilish xatosi'));
     } finally {
@@ -198,7 +210,7 @@ export default function Procurement() {
     return (
       <section className="flex flex-col gap-4">
         <header>
-          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Закупки', 'Yetkazib berish')}</h2>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Приходные документы', 'Kirim hujjatlari')}</h2>
         </header>
         <Card className="text-center py-8 px-4">
           <div className="text-token-2xl mb-3">🔒</div>
@@ -235,11 +247,11 @@ export default function Procurement() {
 
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Закупки', 'Yetkazib berish')}</h2>
-          <p className="mt-1 text-token-sm text-neutral-500">{tr('Управление поставками и складскими остатками', 'Yetkazib berish va ombor qoldiqlarini boshqarish')}</p>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Приходные документы', 'Kirim hujjatlari')}</h2>
+          <p className="mt-1 text-token-sm text-neutral-500">{tr('Документы от поставщиков: товары, количество, закупочные цены и способ оплаты', "Yetkazib beruvchilardan hujjatlar: mahsulotlar, miqdor, sotib olish narxi va to'lov usuli")}</p>
         </div>
         <Button variant="primary" size="md" type="button" onClick={() => setShowCreate(true)} disabled={showCreate}>
-          + {tr('Новый заказ', 'Yangi buyurtma')}
+          + {tr('Новый документ', 'Yangi hujjat')}
         </Button>
       </header>
 
@@ -251,6 +263,8 @@ export default function Procurement() {
           setSupplierId={setSupplierId}
           supplier={supplier}
           setSupplier={setSupplier}
+          paymentMethod={paymentMethod}
+          setPaymentMethod={setPaymentMethod}
           currency={currency}
           setCurrency={setCurrency}
           fxRate={fxRate}
@@ -274,7 +288,7 @@ export default function Procurement() {
 
       {pos.length === 0 && !showCreate ? (
         <Card className="text-center py-10 px-4">
-          <p className="m-0 text-token-sm text-neutral-500">{tr('Заказов поставщикам пока нет', "Hali yetkazib beruvchi buyurtmalari yo'q")}</p>
+          <p className="m-0 text-token-sm text-neutral-500">{tr('Приходных документов пока нет', "Hali kirim hujjatlari yo'q")}</p>
         </Card>
       ) : (
         pos.map((po: any) => {

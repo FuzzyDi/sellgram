@@ -19,8 +19,11 @@ function canTransitionPO(from: POStatus, to: POStatus): boolean {
   return PO_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+const PO_PAYMENT_METHODS = ['CASH', 'NON_CASH', 'CREDIT'] as const;
+
 const updatePOSchema = z.object({
   status: z.enum(PO_STATUS).optional(),
+  paymentMethod: z.enum(PO_PAYMENT_METHODS).optional(),
   fxRate: z.number().positive().optional(),
   shippingCost: z.number().min(0).optional(),
   customsCost: z.number().min(0).optional(),
@@ -39,6 +42,7 @@ const receivePOSchema = z.object({
 const createPOSchema = z.object({
   supplierName: z.string().min(1),
   supplierId: z.string().optional(),
+  paymentMethod: z.enum(PO_PAYMENT_METHODS).default('CASH'),
   currency: z.string().default('USD'),
   fxRate: z.number().positive().optional(),
   shippingCost: z.number().min(0).default(0),
@@ -95,6 +99,9 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const body = createPOSchema.parse(request.body);
+      if (body.paymentMethod === 'CREDIT' && !body.supplierId) {
+        return reply.status(400).send({ success: false, error: 'Credit purchases must be linked to a saved supplier' });
+      }
       const uniqueProductIds = [...new Set(body.items.map((item) => item.productId))];
       const ownedProducts = await prisma.product.findMany({
         where: { tenantId: request.tenantId!, id: { in: uniqueProductIds } },
@@ -120,6 +127,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
           poNumber,
           supplierId: body.supplierId ?? null,
           supplierName: body.supplierName,
+          paymentMethod: body.paymentMethod,
           currency: body.currency,
           fxRate: body.fxRate,
           shippingCost: body.shippingCost,
@@ -155,7 +163,7 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
     }
 
-    const { status, fxRate, shippingCost, customsCost, note } = body;
+    const { status, paymentMethod, fxRate, shippingCost, customsCost, note } = body;
 
     if (status === 'RECEIVED') {
       return reply.status(400).send({ success: false, error: 'Use POST /receive to mark PO as received' });
@@ -168,9 +176,19 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
         if (status !== undefined && !canTransitionPO(po.status as POStatus, status as POStatus)) {
           throw new Error(`INVALID_TRANSITION:${po.status}:${status}`);
         }
+        // paymentMethod only matters at receive time (SupplierLedger charge
+        // for CREDIT) — once RECEIVED, changing it would silently disagree
+        // with whatever ledger entry (or lack of one) already happened.
+        if (paymentMethod !== undefined && po.status === 'RECEIVED') {
+          throw new Error('CANNOT_CHANGE_PAYMENT_METHOD_AFTER_RECEIVED');
+        }
+        if (paymentMethod === 'CREDIT' && !po.supplierId) {
+          throw new Error('CREDIT_REQUIRES_SUPPLIER');
+        }
 
         const data: any = {};
         if (status !== undefined) data.status = status;
+        if (paymentMethod !== undefined) data.paymentMethod = paymentMethod;
         if (fxRate !== undefined) data.fxRate = fxRate;
         if (shippingCost !== undefined) data.shippingCost = shippingCost;
         if (customsCost !== undefined) data.customsCost = customsCost;
@@ -182,6 +200,12 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       if (err.message === 'PO_NOT_FOUND') {
         return reply.status(404).send({ success: false, error: 'PO not found' });
+      }
+      if (err.message === 'CANNOT_CHANGE_PAYMENT_METHOD_AFTER_RECEIVED') {
+        return reply.status(400).send({ success: false, error: 'Cannot change payment method after the PO has been received' });
+      }
+      if (err.message === 'CREDIT_REQUIRES_SUPPLIER') {
+        return reply.status(400).send({ success: false, error: 'Credit purchases must be linked to a saved supplier' });
       }
       if (err.message.startsWith('INVALID_TRANSITION:')) {
         const [, from, to] = err.message.split(':');
@@ -221,8 +245,16 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
 
     // Wrap all stock + status updates in a transaction so a mid-flight failure
     // cannot leave stock partially updated with PO still marked IN_TRANSIT.
+    let debtCharged = 0;
     try {
     await prisma.$transaction(async (tx: any) => {
+      // Local-currency cost of goods actually received in this call — the
+      // basis for the SupplierLedger charge below. Deliberately excludes
+      // shipping/customs (those aren't necessarily owed to this supplier)
+      // and is computed from qtyReceived, not the ordered qty, so a partial
+      // receive only charges for what actually arrived.
+      let receivedForeignCost = 0;
+
       for (const receivedItem of items) {
         const poItem = po.items.find((i: any) => i.id === receivedItem.itemId);
         if (!poItem) continue;
@@ -232,13 +264,53 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
           data: { qtyReceived: receivedItem.qtyReceived },
         });
 
-        const stockUpdate = await tx.product.updateMany({
+        const product = await tx.product.findFirst({
           where: { id: poItem.productId, tenantId },
-          data: { stockQty: { increment: receivedItem.qtyReceived } },
+          select: { stockQty: true },
         });
-        if (stockUpdate.count === 0) {
+        if (!product) {
           throw new Error('PRODUCT_TENANT_MISMATCH');
         }
+        const qtyBefore = product.stockQty;
+        const updatedProduct = await tx.product.update({
+          where: { id: poItem.productId },
+          data: { stockQty: { increment: receivedItem.qtyReceived } },
+          select: { stockQty: true },
+        });
+
+        // docs gap fixed here: receiving a PO previously moved stockQty
+        // directly with no StockLedgerEntry/StockMovement row, so it never
+        // showed up in the stock history POS/admin already show for every
+        // other stock change (pos-sync's applyStockDelta, checkout, admin
+        // stock-adjust). Same RESTOCK reason those already define but never
+        // had a writer for.
+        if (receivedItem.qtyReceived !== 0) {
+          await tx.stockLedgerEntry.create({
+            data: {
+              tenantId,
+              productId: poItem.productId,
+              variantId: null,
+              delta: receivedItem.qtyReceived,
+              reason: 'RESTOCK',
+              sourceType: 'PURCHASE_ORDER',
+              sourceId: po.id,
+            },
+          });
+          await tx.stockMovement.create({
+            data: {
+              tenantId,
+              productId: poItem.productId,
+              variantId: null,
+              delta: receivedItem.qtyReceived,
+              qtyBefore,
+              qtyAfter: updatedProduct.stockQty,
+              note: `PO #${po.poNumber} received`,
+              userId: request.user?.userId,
+            },
+          });
+        }
+
+        receivedForeignCost += receivedItem.qtyReceived * Number(poItem.unitCost);
 
         const itemShare = totalForeignCost > 0 ? Number(poItem.totalCost) / totalForeignCost : 0;
         const itemLandedCost = totalLanded * itemShare;
@@ -247,8 +319,8 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
           : 0;
 
         if (perUnitLanded > 0) {
-          await tx.product.updateMany({
-            where: { id: poItem.productId, tenantId },
+          await tx.product.update({
+            where: { id: poItem.productId },
             data: { costPrice: Math.round(perUnitLanded) },
           });
         }
@@ -258,6 +330,29 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
         where: { id },
         data: { status: 'RECEIVED', receivedAt: new Date(), totalLanded: Math.round(totalLanded) },
       });
+
+      // Payables charge — only for CREDIT POs, and only for a supplier
+      // actually on file (createPOSchema/updatePOSchema both already
+      // enforce CREDIT requires a linked supplierId, so po.supplierId is
+      // expected to be set here; the null-check is defense in depth, not
+      // a real gap).
+      if (po.paymentMethod === 'CREDIT' && po.supplierId && receivedForeignCost > 0) {
+        debtCharged = Math.round(receivedForeignCost * fxRate);
+        await tx.supplier.update({
+          where: { id: po.supplierId },
+          data: { currentDebt: { increment: debtCharged } },
+        });
+        await tx.supplierLedger.create({
+          data: {
+            tenantId,
+            supplierId: po.supplierId,
+            type: 'PURCHASE_CHARGE',
+            delta: debtCharged,
+            purchaseOrderId: po.id,
+            note: `PO #${po.poNumber} received on credit`,
+          },
+        });
+      }
     });
 
     } catch (err: any) {
@@ -267,6 +362,10 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ success: false, error: 'Failed to receive PO' });
     }
 
-    return { success: true, message: 'PO received, stock and cost prices updated', totalLanded: Math.round(totalLanded) };
+    return {
+      success: true,
+      message: 'PO received, stock and cost prices updated',
+      data: { totalLanded: Math.round(totalLanded), debtCharged },
+    };
   });
 }

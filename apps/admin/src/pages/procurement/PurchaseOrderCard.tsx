@@ -23,6 +23,12 @@ export default function PurchaseOrderCard({
   const { tr, locale } = useAdminI18n();
   const status = po.status as POStatus;
 
+  const paymentMethodLabel: Record<string, string> = {
+    CASH: tr('Наличные', 'Naqd'),
+    NON_CASH: tr('Безналичный', 'Naqd emas'),
+    CREDIT: tr('В долг', 'Qarzga'),
+  };
+
   const columns: TableColumn<any>[] = [
     { key: 'product', header: tr('Товар', 'Mahsulot'), render: (item) => item.product?.name || item.productId },
     { key: 'qty', header: tr('Заказ', 'Buyurtma'), render: (item) => item.qty },
@@ -38,6 +44,11 @@ export default function PurchaseOrderCard({
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-semibold text-token-base text-neutral-800">PO-{po.poNumber}</span>
             <Badge variant={statusBadgeVariant(status)}>{statusLabel[status] || status}</Badge>
+            {po.paymentMethod && (
+              <Badge variant={po.paymentMethod === 'CREDIT' ? 'warning' : 'neutral'}>
+                {paymentMethodLabel[po.paymentMethod] || po.paymentMethod}
+              </Badge>
+            )}
             <span className="text-token-xs text-neutral-500">{new Date(po.createdAt).toLocaleDateString(locale)}</span>
           </div>
           <p className="mt-1 mb-0 text-token-sm text-neutral-600">

@@ -18,6 +18,8 @@ interface CreatePurchaseOrderFormProps {
   setSupplierId: (value: string) => void;
   supplier: string;
   setSupplier: (value: string) => void;
+  paymentMethod: 'CASH' | 'NON_CASH' | 'CREDIT';
+  setPaymentMethod: (value: 'CASH' | 'NON_CASH' | 'CREDIT') => void;
   currency: string;
   setCurrency: (value: string) => void;
   fxRate: string;
@@ -40,6 +42,7 @@ interface CreatePurchaseOrderFormProps {
 
 export default function CreatePurchaseOrderForm({
   suppliers, products, supplierId, setSupplierId, supplier, setSupplier,
+  paymentMethod, setPaymentMethod,
   currency, setCurrency, fxRate, setFxRate, shippingCost, setShippingCost,
   customsCost, setCustomsCost, note, setNote, items, addItem, removeItem, updateItem,
   createTotal, saving, onSubmit, onCancel,
@@ -48,7 +51,7 @@ export default function CreatePurchaseOrderForm({
 
   return (
     <Card className="flex flex-col gap-3">
-      <h3 className="m-0 text-token-base font-semibold text-neutral-800">{tr('Новый заказ поставщику', 'Yangi yetkazib beruvchi buyurtmasi')}</h3>
+      <h3 className="m-0 text-token-base font-semibold text-neutral-800">{tr('Новый приходный документ', 'Yangi kirim hujjati')}</h3>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <div>
@@ -67,6 +70,17 @@ export default function CreatePurchaseOrderForm({
             </>
           ) : (
             <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder={tr('Название компании', 'Kompaniya nomi')} />
+          )}
+        </div>
+        <div>
+          <label className="block mb-1 text-token-xs text-neutral-500">{tr('Способ оплаты', "To'lov usuli")}</label>
+          <Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'NON_CASH' | 'CREDIT')}>
+            <option value="CASH">{tr('Наличные', 'Naqd')}</option>
+            <option value="NON_CASH">{tr('Безналичный', "Naqd emas")}</option>
+            <option value="CREDIT">{tr('В долг', 'Qarzga')}</option>
+          </Select>
+          {paymentMethod === 'CREDIT' && !supplierId && (
+            <p className="mt-1 text-token-xs text-warning">{tr('Нужен контрагент из списка, чтобы вести долг', "Qarzni yuritish uchun ro'yxatdan kontragent kerak")}</p>
           )}
         </div>
         <div>
