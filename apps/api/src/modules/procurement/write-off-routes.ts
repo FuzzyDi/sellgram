@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { planGuard } from '../../plugins/plan-guard.js';
 
 const WRITE_OFF_STATUS = ['DRAFT', 'CONFIRMED', 'CANCELLED'] as const;
 const WRITE_OFF_REASONS = ['DEFECT', 'DAMAGE', 'SHORTAGE', 'INTERNAL_USE', 'OTHER'] as const;
@@ -69,7 +70,7 @@ export default async function stockWriteOffRoutes(fastify: FastifyInstance) {
     return { success: true, data: wo };
   });
 
-  fastify.post('/stock-write-offs', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+  fastify.post('/stock-write-offs', { preHandler: [permissionGuard('manageCatalog'), planGuard('procurementEnabled')] }, async (request, reply) => {
     try {
       const body = createWriteOffSchema.parse(request.body);
       const tenantId = request.tenantId!;

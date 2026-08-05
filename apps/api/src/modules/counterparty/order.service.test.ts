@@ -159,6 +159,34 @@ describe('createB2BOrder', () => {
       expect(createCall.data.counterpartyId).toBe('cp-1');
       expect(createCall.data.customerId).toBeNull();
     });
+
+    it('falls back to Product.wholesalePrice when set and no CounterpartyPrice/variant price applies', async () => {
+      mocks.prisma.product.findMany.mockResolvedValue([
+        { id: 'prod-D', name: 'Product D', price: 1000, wholesalePrice: 700, stockQty: 10, variants: [] },
+      ]);
+      mocks.prisma.counterpartyPrice.findMany.mockResolvedValue([]);
+
+      const tx = makeTx({
+        product: {
+          findMany: vi.fn().mockResolvedValue([{ id: 'prod-D', stockQty: 10, variants: [] }]),
+          update: vi.fn().mockResolvedValue({ stockQty: 8 }),
+        },
+        productVariant: { update: vi.fn().mockResolvedValue({ stockQty: 4 }) },
+        order: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'order-1', orderNumber: 1, items: [] }) },
+      });
+      mocks.prisma.$transaction.mockImplementation((cb: any) => cb(tx));
+
+      await createB2BOrder({
+        ...baseInput,
+        deliveryType: 'PICKUP',
+        items: [{ productId: 'prod-D', qty: 2 }],
+      });
+
+      const createCall = tx.order.create.mock.calls[0][0];
+      expect(createCall.data.items.create).toEqual([
+        expect.objectContaining({ productId: 'prod-D', variantId: null, price: 700, qty: 2, total: 1400 }),
+      ]);
+    });
   });
 
   describe('stock', () => {

@@ -283,6 +283,7 @@ async function main() {
   const stockWriteOffRoutes = (await import('./modules/procurement/write-off-routes.js')).default;
   const customerReturnRoutes = (await import('./modules/procurement/customer-return-routes.js')).default;
   const stockCountRoutes = (await import('./modules/procurement/stock-count-routes.js')).default;
+  const priceRevisionRoutes = (await import('./modules/procurement/price-revision-routes.js')).default;
   const supplierRoutes = (await import('./modules/supplier/routes.js')).default;
   const analyticsRoutes = (await import('./modules/analytics/routes.js')).default;
   const subscriptionRoutes = (await import('./modules/subscription/routes.js')).default;
@@ -312,6 +313,7 @@ async function main() {
       await app.register(stockWriteOffRoutes);
       await app.register(customerReturnRoutes);
       await app.register(stockCountRoutes);
+      await app.register(priceRevisionRoutes);
       await app.register(supplierRoutes);
       await app.register(analyticsRoutes);
       await app.register(subscriptionRoutes);

@@ -377,6 +377,17 @@ export const adminApi = {
   updateStockCountItem: (id: string, itemId: string, data: { countedQty: number | null }) =>
     request<any>(`/stock-counts/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
+  getPriceRevisions: () => request<any>('/price-revisions'),
+  createPriceRevision: (data: any) => request<any>('/price-revisions', { method: 'POST', body: JSON.stringify(data) }),
+  updatePriceRevision: (id: string, data: any) => request<any>(`/price-revisions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  confirmPriceRevision: (id: string) => request<any>(`/price-revisions/${id}/confirm`, { method: 'POST' }),
+  addPriceRevisionItem: (id: string, data: { productId: string; newPrice?: number; newPosPrice?: number; newWholesalePrice?: number }) =>
+    request<any>(`/price-revisions/${id}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePriceRevisionItem: (id: string, itemId: string, data: { newPrice?: number | null; newPosPrice?: number | null; newWholesalePrice?: number | null }) =>
+    request<any>(`/price-revisions/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deletePriceRevisionItem: (id: string, itemId: string) =>
+    request<any>(`/price-revisions/${id}/items/${itemId}`, { method: 'DELETE' }),
+
   getDashboard: () => request<any>('/analytics/dashboard'),
   getAnalyticsSummary: (days?: number) => request<any>(`/analytics/summary?days=${days || 30}`),
   getTopProducts: (period?: number) => request<any>(`/analytics/top-products?period=${period || 30}`),

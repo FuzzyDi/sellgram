@@ -170,6 +170,7 @@ model Tenant {
   stockWriteOffs     StockWriteOff[]
   customerReturns    CustomerReturn[]
   stockCounts        StockCount[]
+  priceRevisions     PriceRevision[]
   posOperators       PosOperator[]
   markingCodes       ProductMarkingCode[]
   barcodes           ProductBarcode[]
@@ -319,6 +320,17 @@ model Product {
   description   String?
   price         Decimal   @db.Decimal(12, 2)
   costPrice     Decimal?  @db.Decimal(12, 2)
+  // Per-channel retail price overrides — null means "use price" (same
+  // "null falls back to the base field" convention as vatRate/
+  // pricePerKg). price itself doubles as the Telegram/miniapp price
+  // and the universal fallback. POS reads posPrice ?? price when
+  // building a CatalogSnapshot (pos-sync/product-type-rules.ts); B2B
+  // order pricing reads CounterpartyPrice → variant.price →
+  // wholesalePrice ?? price (counterparty/order.service.ts). Settable
+  // either directly here or via a PriceRevision ("Переоценка")
+  // document for an audited before/after trail.
+  posPrice        Decimal?  @db.Decimal(12, 2)
+  wholesalePrice  Decimal?  @db.Decimal(12, 2)
   currency      String    @default("UZS")
   sku           String?
   // Uzbekistan fiscal/marking codes (docs/POS_SYNC_API.md fiscal-events;
@@ -401,6 +413,7 @@ model Product {
   writeOffItems      StockWriteOffItem[]
   customerReturnItems CustomerReturnItem[]
   stockCountItems    StockCountItem[]
+  priceRevisionItems PriceRevisionItem[]
   wishlistItems      WishlistItem[]
   stockMovements     StockMovement[]
   stockLedgerEntries StockLedgerEntry[]
@@ -1319,6 +1332,62 @@ model StockCountItem {
 
   @@index([stockCountId])
   @@map("stock_count_items")
+}
+
+enum PriceRevisionStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+// "Переоценка" — a manually-picked batch of retail price changes across
+// up to three channels (Telegram/base, POS, wholesale/opt). Unlike
+// StockCount, items are hand-picked (not a full-catalog snapshot) —
+// repricing is normally targeted (a promo, a handful of SKUs), not
+// wholesale-recount-everything. Direct price edits on the product form
+// remain available (this document is a bulk/audited tool, not the only
+// path) — see Product.posPrice/wholesalePrice comment.
+model PriceRevision {
+  id             String              @id @default(cuid())
+  tenantId       String
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revisionNumber Int
+  status         PriceRevisionStatus @default(DRAFT)
+  note           String?
+
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items PriceRevisionItem[]
+
+  @@unique([tenantId, revisionNumber])
+  @@index([tenantId])
+  @@map("price_revisions")
+}
+
+model PriceRevisionItem {
+  id              String        @id @default(cuid())
+  priceRevisionId String
+  priceRevision   PriceRevision @relation(fields: [priceRevisionId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+
+  // old* is a snapshot of the *effective* price per channel at the time
+  // the item was added (price / posPrice ?? price / wholesalePrice ??
+  // price) — always resolvable, so not nullable. new* is null when this
+  // item doesn't touch that channel; an item where all three are null is
+  // a no-op and confirm skips it, same spirit as StockCountItem's
+  // uncounted rows.
+  oldPrice           Decimal  @db.Decimal(12, 2)
+  newPrice           Decimal? @db.Decimal(12, 2)
+  oldPosPrice        Decimal  @db.Decimal(12, 2)
+  newPosPrice        Decimal? @db.Decimal(12, 2)
+  oldWholesalePrice  Decimal  @db.Decimal(12, 2)
+  newWholesalePrice  Decimal? @db.Decimal(12, 2)
+
+  @@index([priceRevisionId])
+  @@map("price_revision_items")
 }
 
 enum SupplierLedgerType {

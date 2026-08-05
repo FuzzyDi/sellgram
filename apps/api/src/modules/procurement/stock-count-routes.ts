@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { planGuard } from '../../plugins/plan-guard.js';
 
 const STOCK_COUNT_STATUS = ['DRAFT', 'CONFIRMED', 'CANCELLED'] as const;
 
@@ -55,7 +56,7 @@ export default async function stockCountRoutes(fastify: FastifyInstance) {
   // Create — snapshots every non-deleted product's current stockQty as
   // expectedQty; countedQty starts null (uncounted). No item picker: the
   // whole point is a full-catalog snapshot taken at one instant.
-  fastify.post('/stock-counts', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+  fastify.post('/stock-counts', { preHandler: [permissionGuard('manageCatalog'), planGuard('procurementEnabled')] }, async (request, reply) => {
     try {
       const body = createStockCountSchema.parse(request.body);
       const tenantId = request.tenantId!;

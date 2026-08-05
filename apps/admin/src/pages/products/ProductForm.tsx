@@ -151,6 +151,30 @@ export default function ProductForm({
             </Select>
           </div>
 
+          <div>
+            <label className="text-token-sm font-medium text-neutral-700 block mb-2">
+              {tr('Цены по каналам', 'Kanallar bo\'yicha narxlar')}
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                type="number"
+                label={tr('Цена POS', 'POS narxi')}
+                value={form.posPrice}
+                onChange={updateForm('posPrice')}
+                placeholder={tr('как в Telegram', "Telegramdagidek")}
+                helpText={tr('Пусто — берётся базовая цена выше', "Bo'sh — yuqoridagi asosiy narx olinadi")}
+              />
+              <Input
+                type="number"
+                label={tr('Оптовая цена', 'Ulgurji narx')}
+                value={form.wholesalePrice}
+                onChange={updateForm('wholesalePrice')}
+                placeholder={tr('как в Telegram', "Telegramdagidek")}
+                helpText={tr('Пусто — берётся базовая цена выше', "Bo'sh — yuqoridagi asosiy narx olinadi")}
+              />
+            </div>
+          </div>
+
           <Select
             label={tr('Тип товара', 'Mahsulot turi')}
             value={form.productTypeId}

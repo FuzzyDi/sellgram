@@ -23,6 +23,10 @@ const createProductSchema = z.object({
   // 0 is valid — a draft/unfilled product, priced later by a manager.
   price: z.number().min(0),
   costPrice: z.number().positive().optional(),
+  // Per-channel overrides — omitted/null means "use price" (schema.prisma
+  // comment on Product.posPrice/wholesalePrice).
+  posPrice: z.number().min(0).nullable().optional(),
+  wholesalePrice: z.number().min(0).nullable().optional(),
   sku: z.string().optional(),
   mxikCode: z.string().optional(),
   packageCode: z.string().optional(),
@@ -53,6 +57,8 @@ const updateProductSchema = z.object({
   // 0 is valid — see createProductSchema's price comment above.
   price: z.number().min(0).optional(),
   costPrice: z.number().positive().nullable().optional(),
+  posPrice: z.number().min(0).nullable().optional(),
+  wholesalePrice: z.number().min(0).nullable().optional(),
   sku: z.string().nullable().optional(),
   mxikCode: z.string().nullable().optional(),
   packageCode: z.string().nullable().optional(),
@@ -187,6 +193,8 @@ export default async function productRoutes(fastify: FastifyInstance) {
           categoryId: body.categoryId,
           price: body.price,
           costPrice: body.costPrice,
+          posPrice: body.posPrice,
+          wholesalePrice: body.wholesalePrice,
           sku: body.sku,
           mxikCode: body.mxikCode,
           packageCode: body.packageCode,

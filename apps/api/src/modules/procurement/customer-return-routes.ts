@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { planGuard } from '../../plugins/plan-guard.js';
 
 const RETURN_STATUS = ['DRAFT', 'CONFIRMED', 'CANCELLED'] as const;
 
@@ -74,7 +75,7 @@ export default async function customerReturnRoutes(fastify: FastifyInstance) {
     return { success: true, data: ret };
   });
 
-  fastify.post('/customer-returns', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+  fastify.post('/customer-returns', { preHandler: [permissionGuard('manageCatalog'), planGuard('procurementEnabled')] }, async (request, reply) => {
     try {
       const body = createReturnSchema.parse(request.body);
       const tenantId = request.tenantId!;

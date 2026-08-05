@@ -116,9 +116,17 @@ export async function createB2BOrder(input: CreateB2BOrderInput) {
     if (variantId && !variant) throw new CounterpartyOrderError('VARIANT_NOT_FOUND', variantId);
 
     // §4: CounterpartyPrice for (counterpartyId, productId, variantId) →
-    // else the variant's own price (if it has one) → else Product.price.
+    // else the variant's own price (if it has one) → else
+    // Product.wholesalePrice (the "opt" channel override, Переоценка/
+    // direct edit) → else Product.price.
     const cpPrice = cpPriceMap.get(priceKey(item.productId, variantId));
-    const price = cpPrice ? Number(cpPrice.price) : variant?.price != null ? Number(variant.price) : Number(product.price);
+    const price = cpPrice
+      ? Number(cpPrice.price)
+      : variant?.price != null
+        ? Number(variant.price)
+        : product.wholesalePrice != null
+          ? Number(product.wholesalePrice)
+          : Number(product.price);
     const itemTotal = price * item.qty;
 
     orderItems.push({

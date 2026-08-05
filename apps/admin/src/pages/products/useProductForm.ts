@@ -84,6 +84,8 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
       description: fullProduct.description || '',
       price: String(fullProduct.price),
       costPrice: fullProduct.costPrice ? String(fullProduct.costPrice) : '',
+      posPrice: fullProduct.posPrice != null ? String(fullProduct.posPrice) : '',
+      wholesalePrice: fullProduct.wholesalePrice != null ? String(fullProduct.wholesalePrice) : '',
       stockQty: String(fullProduct.stockQty),
       lowStockAlert: String(fullProduct.lowStockAlert),
       unit: resolveUnit(fullProduct),
@@ -151,6 +153,11 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
 
       payload.description = form.description || null;
       if (form.costPrice) payload.costPrice = parseFloat(form.costPrice);
+      // Always sent (unlike costPrice above) — these are override fields
+      // where blank has its own meaning ("inherit price"), so clearing the
+      // input must actually clear it server-side, not just skip the write.
+      payload.posPrice = form.posPrice ? parseFloat(form.posPrice) : null;
+      payload.wholesalePrice = form.wholesalePrice ? parseFloat(form.wholesalePrice) : null;
       if (form.unit) payload.unit = form.unit;
 
       // isByWeight is derived from unit, not a separate checkbox —

@@ -67,6 +67,11 @@ export const CATALOG_PRODUCT_SELECT = {
   name: true,
   sku: true,
   price: true,
+  // Not exposed as-is — mapProductForCatalog folds this into `price`
+  // (posPrice ?? price) before the row leaves this module, so the
+  // documented docs/POS_SYNC_API.md §9 payload shape is unchanged; a POS
+  // till only ever sees one `price` field, already channel-resolved.
+  posPrice: true,
   currency: true,
   stockQty: true,
   categoryId: true,
@@ -129,9 +134,22 @@ export function deriveProductTypeFields(
 // call this on each row instead of repeating the same
 // destructure-and-spread inline.
 export function mapProductForCatalog<
-  T extends { productTypeId: string | null; isByWeight: boolean; isWeightedPiece: boolean; productType: ProductTypeSummary }
->(product: T, typesById: Map<string, ProductTypeForRules>): Omit<T, 'productType'> & ReturnType<typeof deriveProductTypeFields> {
-  const { productType, ...rest } = product;
-  return { ...rest, ...deriveProductTypeFields(product, productType, typesById) } as Omit<T, 'productType'> &
+  T extends {
+    productTypeId: string | null;
+    isByWeight: boolean;
+    isWeightedPiece: boolean;
+    productType: ProductTypeSummary;
+    price: unknown;
+    posPrice: unknown;
+  }
+>(
+  product: T,
+  typesById: Map<string, ProductTypeForRules>
+): Omit<T, 'productType' | 'posPrice'> & ReturnType<typeof deriveProductTypeFields> {
+  const { productType, posPrice, price, ...rest } = product;
+  return { ...rest, price: posPrice ?? price, ...deriveProductTypeFields(product, productType, typesById) } as Omit<
+    T,
+    'productType' | 'posPrice'
+  > &
     ReturnType<typeof deriveProductTypeFields>;
 }

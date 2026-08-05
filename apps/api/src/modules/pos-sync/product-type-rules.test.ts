@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 
-import { fetchProductTypesById, mergeProductTypeRules, deriveProductTypeFields } from './product-type-rules.js';
+import { fetchProductTypesById, mergeProductTypeRules, deriveProductTypeFields, mapProductForCatalog } from './product-type-rules.js';
 
 // docs/PRODUCT_TYPES.md §4/§6 — shared logic extracted from
 // admin-routes.ts's CatalogSnapshot builder so both it and
@@ -113,5 +113,26 @@ describe('deriveProductTypeFields', () => {
       typesById
     );
     expect(fields).toEqual({ productTypeCode: 'WEIGHT', productTypeRules: [], weightMode: 'WEIGHT', barcodePrefixes: ['22'] });
+  });
+});
+
+describe('mapProductForCatalog', () => {
+  const baseProduct = {
+    productTypeId: null,
+    isByWeight: false,
+    isWeightedPiece: false,
+    productType: null,
+  };
+
+  it('uses posPrice as the catalog price when set', () => {
+    const result = mapProductForCatalog({ ...baseProduct, price: 1000, posPrice: 1200 }, new Map());
+    expect(result.price).toBe(1200);
+    expect((result as any).posPrice).toBeUndefined();
+  });
+
+  it('falls back to price when posPrice is null', () => {
+    const result = mapProductForCatalog({ ...baseProduct, price: 1000, posPrice: null }, new Map());
+    expect(result.price).toBe(1000);
+    expect((result as any).posPrice).toBeUndefined();
   });
 });

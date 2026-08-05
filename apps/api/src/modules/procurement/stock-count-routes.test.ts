@@ -12,10 +12,12 @@ const mocks = vi.hoisted(() => ({
     $executeRaw: vi.fn(),
   },
   permissionGuard: vi.fn((_key: string) => async () => {}),
+  planGuard: vi.fn((_key: string) => async () => {}),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
 vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
+vi.mock('../../plugins/plan-guard.js', () => ({ planGuard: mocks.planGuard }));
 
 import stockCountRoutes from './stock-count-routes.js';
 

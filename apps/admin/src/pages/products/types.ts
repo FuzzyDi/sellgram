@@ -88,6 +88,12 @@ export interface FormData {
   description: string;
   price: string;
   costPrice: string;
+  // '' = inherit price (Product.posPrice/wholesalePrice comment) — kept
+  // as separate optional overrides rather than always-required fields so
+  // most products (which don't need channel-specific pricing) leave them
+  // blank.
+  posPrice: string;
+  wholesalePrice: string;
   stockQty: string;
   lowStockAlert: string;
   // unit alone now drives weighted-goods behavior — 'кг'/'г' means
@@ -118,6 +124,8 @@ export const emptyForm: FormData = {
   description: '',
   price: '',
   costPrice: '',
+  posPrice: '',
+  wholesalePrice: '',
   stockQty: '0',
   lowStockAlert: '5',
   unit: '',
