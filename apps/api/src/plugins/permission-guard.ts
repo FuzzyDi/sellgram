@@ -11,7 +11,14 @@ export type PermissionKey =
   | 'manageBilling'
   | 'manageUsers'
   | 'viewReports'
-  | 'manageB2B';
+  | 'manageB2B'
+  // Narrower than the others: doesn't unlock a whole feature area, just
+  // the one specific override of editing a RECEIVED purchase order's note
+  // after the fact (procurement/routes.ts) — everything else about a
+  // received document (items/qty/cost/paymentMethod) is permanently
+  // locked for everyone, no override, by design (see that route's
+  // comment) — corrections go through stock/debt adjustment instead.
+  | 'editReceivedDocuments';
 
 /**
  * Returns a Fastify preHandler that enforces RBAC.

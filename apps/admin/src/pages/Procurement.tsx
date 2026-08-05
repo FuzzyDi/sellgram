@@ -67,6 +67,10 @@ export default function Procurement() {
   // at once.
   const [selectedPoId, setSelectedPoId] = useState<string | null>(null);
 
+  // Whether the current user can edit a RECEIVED document's note — items/
+  // costs stay locked for everyone regardless (see procurement/routes.ts).
+  const [canEditReceived, setCanEditReceived] = useState(false);
+
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
     setTimeout(() => setNotice(null), 3200);
@@ -95,6 +99,12 @@ export default function Procurement() {
   }
 
   useEffect(() => { void load(); }, []);
+
+  useEffect(() => {
+    adminApi.me()
+      .then((me: any) => setCanEditReceived(Boolean(me?.effectivePermissions?.editReceivedDocuments)))
+      .catch(() => setCanEditReceived(false));
+  }, []);
 
   const statusLabel: Record<POStatus, string> = {
     DRAFT:      tr('Черновик', 'Qoralama'),
@@ -243,6 +253,55 @@ export default function Procurement() {
     }
   }
 
+  async function addPoItem(poId: string, data: { productId: string; qty: number; unitCost: number }) {
+    setSaving(true);
+    try {
+      await adminApi.addPurchaseOrderItem(poId, data);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updatePoItem(poId: string, itemId: string, data: { qty?: number; unitCost?: number }) {
+    setSaving(true);
+    try {
+      await adminApi.updatePurchaseOrderItem(poId, itemId, data);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removePoItem(poId: string, itemId: string) {
+    setSaving(true);
+    try {
+      await adminApi.deletePurchaseOrderItem(poId, itemId);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function savePoNote(poId: string, noteValue: string) {
+    setSaving(true);
+    try {
+      await adminApi.updatePurchaseOrder(poId, { note: noteValue });
+      await load();
+      showNotice('success', tr('Заметка сохранена', 'Eslatma saqlandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const noticeNode = notice ? (
     <div
       className={[
@@ -355,6 +414,7 @@ export default function Procurement() {
         const canReceive = status === 'IN_TRANSIT';
         return (
           <PurchaseOrderCard
+            key={selectedPo.id}
             po={selectedPo}
             transitions={transitions}
             canReceive={canReceive}
@@ -363,6 +423,13 @@ export default function Procurement() {
             saving={saving}
             onTransition={(poId, next) => void transition(poId, next)}
             onReceive={openReceive}
+            products={products}
+            canEditItems={status === 'DRAFT' || status === 'ORDERED' || status === 'IN_TRANSIT'}
+            onAddItem={(data) => void addPoItem(selectedPo.id, data)}
+            onUpdateItem={(itemId, data) => void updatePoItem(selectedPo.id, itemId, data)}
+            onRemoveItem={(itemId) => void removePoItem(selectedPo.id, itemId)}
+            canEditReceivedNote={canEditReceived}
+            onSaveNote={(noteValue) => void savePoNote(selectedPo.id, noteValue)}
           />
         );
       })()}

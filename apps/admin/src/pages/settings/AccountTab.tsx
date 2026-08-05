@@ -17,6 +17,8 @@ const PERM_LABELS: Record<string, { ru: string; uz: string }> = {
   manageBilling:   { ru: 'Биллинг',   uz: 'Billing' },
   manageUsers:     { ru: 'Команда',   uz: 'Jamoa' },
   viewReports:     { ru: 'Отчёты',    uz: 'Hisobotlar' },
+  manageB2B:       { ru: 'B2B/Опт',   uz: 'B2B/Opt' },
+  editReceivedDocuments: { ru: 'Правка проведённых приходов', uz: "O'tkazilgan kirimlarni tahrirlash" },
 };
 
 export default function AccountTab({ onNotice }: TabProps) {
@@ -46,6 +48,8 @@ export default function AccountTab({ onNotice }: TabProps) {
       manageBilling: false,
       manageUsers: false,
       viewReports: true,
+      manageB2B: false,
+      editReceivedDocuments: false,
     },
   });
 

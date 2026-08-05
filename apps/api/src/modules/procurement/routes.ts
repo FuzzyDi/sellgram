@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
 import { planGuard } from '../../plugins/plan-guard.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
+import { getEffectivePermissions } from '../auth/service.js';
 
 const PO_STATUS = ['DRAFT', 'ORDERED', 'IN_TRANSIT', 'RECEIVED', 'CANCELLED'] as const;
 type POStatus = typeof PO_STATUS[number];
@@ -28,6 +29,17 @@ const updatePOSchema = z.object({
   shippingCost: z.number().min(0).optional(),
   customsCost: z.number().min(0).optional(),
   note: z.string().optional(),
+});
+
+const createItemSchema = z.object({
+  productId: z.string(),
+  qty: z.number().int().positive(),
+  unitCost: z.number().positive(),
+});
+
+const updateItemSchema = z.object({
+  qty: z.number().int().positive().optional(),
+  unitCost: z.number().positive().optional(),
 });
 
 const receiveItemSchema = z.object({
@@ -176,12 +188,30 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
         if (status !== undefined && !canTransitionPO(po.status as POStatus, status as POStatus)) {
           throw new Error(`INVALID_TRANSITION:${po.status}:${status}`);
         }
-        // paymentMethod only matters at receive time (SupplierLedger charge
-        // for CREDIT) — once RECEIVED, changing it would silently disagree
-        // with whatever ledger entry (or lack of one) already happened.
-        if (paymentMethod !== undefined && po.status === 'RECEIVED') {
-          throw new Error('CANNOT_CHANGE_PAYMENT_METHOD_AFTER_RECEIVED');
+        // Once a document is RECEIVED, everything that fed into the
+        // stock/cost/debt figures already applied elsewhere (items, fxRate,
+        // shipping/customs, paymentMethod) is permanently locked — for
+        // everyone, no permission override. Those figures are now history;
+        // editing them here wouldn't retroactively fix the StockLedgerEntry/
+        // StockMovement/SupplierLedger rows already written from the old
+        // values (see /receive above), so it would just create a second,
+        // silent discrepancy instead of a first, visible one. A genuine
+        // correction goes through the dedicated stock-adjust and
+        // supplier-debt-adjust endpoints instead, both already audited.
+        // note is the one exception — pure annotation, no downstream
+        // effect — and even that needs editReceivedDocuments unless the
+        // actor is OWNER/MANAGER (same bypass permissionGuard itself uses).
+        if (po.status === 'RECEIVED') {
+          if (paymentMethod !== undefined || fxRate !== undefined || shippingCost !== undefined || customsCost !== undefined) {
+            throw new Error('DOCUMENT_LOCKED');
+          }
+          if (note !== undefined && request.user!.role !== 'OWNER' && request.user!.role !== 'MANAGER') {
+            const dbUser = await tx.user.findUnique({ where: { id: request.user!.userId }, select: { role: true, permissions: true } });
+            const perms = getEffectivePermissions(dbUser!);
+            if (!perms.editReceivedDocuments) throw new Error('FORBIDDEN_NOTE_EDIT');
+          }
         }
+
         if (paymentMethod === 'CREDIT' && !po.supplierId) {
           throw new Error('CREDIT_REQUIRES_SUPPLIER');
         }
@@ -201,8 +231,11 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
       if (err.message === 'PO_NOT_FOUND') {
         return reply.status(404).send({ success: false, error: 'PO not found' });
       }
-      if (err.message === 'CANNOT_CHANGE_PAYMENT_METHOD_AFTER_RECEIVED') {
-        return reply.status(400).send({ success: false, error: 'Cannot change payment method after the PO has been received' });
+      if (err.message === 'DOCUMENT_LOCKED') {
+        return reply.status(400).send({ success: false, error: 'This document has been received and its items/costs/payment method can no longer be changed' });
+      }
+      if (err.message === 'FORBIDDEN_NOTE_EDIT') {
+        return reply.status(403).send({ success: false, error: 'You do not have permission to edit a received document' });
       }
       if (err.message === 'CREDIT_REQUIRES_SUPPLIER') {
         return reply.status(400).send({ success: false, error: 'Credit purchases must be linked to a saved supplier' });
@@ -367,5 +400,117 @@ export default async function procurementRoutes(fastify: FastifyInstance) {
       message: 'PO received, stock and cost prices updated',
       data: { totalLanded: Math.round(totalLanded), debtCharged },
     };
+  });
+
+  // Line-item CRUD — deliberately only reachable while a document is
+  // still DRAFT/ORDERED/IN_TRANSIT ("до фиксации можно редактировать").
+  // No permission override for RECEIVED/CANCELLED here at all, unlike
+  // PATCH /purchase-orders/:id's note field — see that handler's comment
+  // for why items specifically stay locked forever once received.
+  async function assertEditableItems(tx: any, id: string, tenantId: string) {
+    const po = await tx.purchaseOrder.findFirst({ where: { id, tenantId }, include: { items: true } });
+    if (!po) throw new Error('PO_NOT_FOUND');
+    if (po.status === 'RECEIVED' || po.status === 'CANCELLED') throw new Error('DOCUMENT_LOCKED');
+    return po;
+  }
+
+  function itemCrudErrorReply(reply: any, err: any) {
+    if (err.message === 'PO_NOT_FOUND') return reply.status(404).send({ success: false, error: 'PO not found' });
+    if (err.message === 'DOCUMENT_LOCKED') return reply.status(400).send({ success: false, error: 'This document has been received or cancelled and its items can no longer be changed' });
+    if (err.message === 'ITEM_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Item not found' });
+    if (err.message === 'INVALID_PRODUCT') return reply.status(400).send({ success: false, error: 'Invalid product for tenant' });
+    if (err.message === 'LAST_ITEM') return reply.status(400).send({ success: false, error: 'A document must have at least one item' });
+    return reply.status(400).send({ success: false, error: err.message });
+  }
+
+  // Add a line item
+  fastify.post('/purchase-orders/:id/items', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const tenantId = request.tenantId!;
+    let body: z.infer<typeof createItemSchema>;
+    try {
+      body = createItemSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    try {
+      const result = await prisma.$transaction(async (tx: any) => {
+        await assertEditableItems(tx, id, tenantId);
+        const product = await tx.product.findFirst({ where: { id: body.productId, tenantId }, select: { id: true } });
+        if (!product) throw new Error('INVALID_PRODUCT');
+
+        const item = await tx.purchaseOrderItem.create({
+          data: { purchaseOrderId: id, productId: body.productId, qty: body.qty, unitCost: body.unitCost, totalCost: body.qty * body.unitCost },
+          include: { product: { select: { id: true, name: true } } },
+        });
+        const items = await tx.purchaseOrderItem.findMany({ where: { purchaseOrderId: id }, select: { totalCost: true } });
+        const totalCost = items.reduce((sum: number, i: any) => sum + Number(i.totalCost), 0);
+        await tx.purchaseOrder.update({ where: { id }, data: { totalCost } });
+        return { item, totalCost };
+      });
+      return reply.status(201).send({ success: true, data: result });
+    } catch (err: any) {
+      return itemCrudErrorReply(reply, err);
+    }
+  });
+
+  // Edit a line item's qty/unitCost
+  fastify.patch('/purchase-orders/:id/items/:itemId', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id, itemId } = request.params as { id: string; itemId: string };
+    const tenantId = request.tenantId!;
+    let body: z.infer<typeof updateItemSchema>;
+    try {
+      body = updateItemSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    try {
+      const result = await prisma.$transaction(async (tx: any) => {
+        const po = await assertEditableItems(tx, id, tenantId);
+        const existing = po.items.find((i: any) => i.id === itemId);
+        if (!existing) throw new Error('ITEM_NOT_FOUND');
+
+        const qty = body.qty ?? existing.qty;
+        const unitCost = body.unitCost ?? Number(existing.unitCost);
+        const item = await tx.purchaseOrderItem.update({
+          where: { id: itemId },
+          data: { qty, unitCost, totalCost: qty * unitCost },
+          include: { product: { select: { id: true, name: true } } },
+        });
+        const items = await tx.purchaseOrderItem.findMany({ where: { purchaseOrderId: id }, select: { totalCost: true } });
+        const totalCost = items.reduce((sum: number, i: any) => sum + Number(i.totalCost), 0);
+        await tx.purchaseOrder.update({ where: { id }, data: { totalCost } });
+        return { item, totalCost };
+      });
+      return { success: true, data: result };
+    } catch (err: any) {
+      return itemCrudErrorReply(reply, err);
+    }
+  });
+
+  // Remove a line item
+  fastify.delete('/purchase-orders/:id/items/:itemId', { preHandler: [permissionGuard('manageCatalog')] }, async (request, reply) => {
+    const { id, itemId } = request.params as { id: string; itemId: string };
+    const tenantId = request.tenantId!;
+
+    try {
+      const result = await prisma.$transaction(async (tx: any) => {
+        const po = await assertEditableItems(tx, id, tenantId);
+        const existing = po.items.find((i: any) => i.id === itemId);
+        if (!existing) throw new Error('ITEM_NOT_FOUND');
+        if (po.items.length <= 1) throw new Error('LAST_ITEM');
+
+        await tx.purchaseOrderItem.delete({ where: { id: itemId } });
+        const items = await tx.purchaseOrderItem.findMany({ where: { purchaseOrderId: id }, select: { totalCost: true } });
+        const totalCost = items.reduce((sum: number, i: any) => sum + Number(i.totalCost), 0);
+        await tx.purchaseOrder.update({ where: { id }, data: { totalCost } });
+        return { totalCost };
+      });
+      return { success: true, data: result };
+    } catch (err: any) {
+      return itemCrudErrorReply(reply, err);
+    }
   });
 }

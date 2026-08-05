@@ -329,6 +329,12 @@ export const adminApi = {
   getPurchaseOrders: () => request<any>('/purchase-orders'),
   createPurchaseOrder: (data: any) => request<any>('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
   updatePurchaseOrder: (id: string, data: any) => request<any>(`/purchase-orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  addPurchaseOrderItem: (id: string, data: { productId: string; qty: number; unitCost: number }) =>
+    request<any>(`/purchase-orders/${id}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePurchaseOrderItem: (id: string, itemId: string, data: { qty?: number; unitCost?: number }) =>
+    request<any>(`/purchase-orders/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deletePurchaseOrderItem: (id: string, itemId: string) =>
+    request<any>(`/purchase-orders/${id}/items/${itemId}`, { method: 'DELETE' }),
   receivePurchaseOrder: (id: string, data: any) => request<any>(`/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
 
   getDashboard: () => request<any>('/analytics/dashboard'),

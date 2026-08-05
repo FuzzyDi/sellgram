@@ -4,31 +4,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     purchaseOrder: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-    purchaseOrderItem: { update: vi.fn() },
+    purchaseOrderItem: { update: vi.fn(), create: vi.fn(), delete: vi.fn(), findMany: vi.fn() },
     product: { findMany: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
     stockLedgerEntry: { create: vi.fn() },
     stockMovement: { create: vi.fn() },
     supplier: { update: vi.fn() },
     supplierLedger: { create: vi.fn() },
+    user: { findUnique: vi.fn() },
     $transaction: vi.fn(),
     $executeRaw: vi.fn(),
   },
   planGuard: vi.fn((_key: string) => async () => {}),
   permissionGuard: vi.fn((_key: string) => async () => {}),
+  getEffectivePermissions: vi.fn(() => ({ editReceivedDocuments: false })),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({ default: mocks.prisma }));
+vi.mock('../auth/service.js', () => ({ getEffectivePermissions: mocks.getEffectivePermissions }));
 vi.mock('../../plugins/plan-guard.js', () => ({ planGuard: mocks.planGuard }));
 vi.mock('../../plugins/permission-guard.js', () => ({ permissionGuard: mocks.permissionGuard }));
 
 import procurementRoutes from './routes.js';
 
-async function buildApp() {
+async function buildApp(role: string = 'OPERATOR') {
   const app = Fastify();
   app.decorate('authenticate', async () => {});
   app.addHook('preHandler', async (request) => {
     (request as any).tenantId = 'tenant-1';
-    (request as any).user = { userId: 'user-1' };
+    (request as any).user = { userId: 'user-1', role };
   });
   await app.register(procurementRoutes);
   return app;
@@ -171,6 +174,9 @@ describe('procurement.routes', () => {
       purchaseOrder: {
         findFirst: vi.fn().mockResolvedValue(po),
         update: vi.fn().mockResolvedValue({}),
+      },
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ role: 'OPERATOR', permissions: {} }),
       },
     };
     mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
@@ -333,6 +339,230 @@ describe('procurement.routes', () => {
       expect(tx.purchaseOrder.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ paymentMethod: 'CREDIT' }) })
       );
+      await app.close();
+    });
+
+    it.each(['fxRate', 'shippingCost', 'customsCost'])('rejects changing %s once the PO is RECEIVED', async (field) => {
+      makePatchTx({ id: 'po-1', status: 'RECEIVED' });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1',
+        payload: { [field]: field === 'fxRate' ? 12000 : 500 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/received/i);
+      await app.close();
+    });
+
+    it('rejects a note edit on a RECEIVED PO from an OPERATOR without editReceivedDocuments', async () => {
+      makePatchTx({ id: 'po-1', status: 'RECEIVED' });
+      mocks.getEffectivePermissions.mockReturnValueOnce({ editReceivedDocuments: false });
+
+      const app = await buildApp('OPERATOR');
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1',
+        payload: { note: 'corrected note' },
+      });
+
+      expect(response.statusCode).toBe(403);
+      await app.close();
+    });
+
+    it('allows a note edit on a RECEIVED PO from an OPERATOR with editReceivedDocuments', async () => {
+      const tx = makePatchTx({ id: 'po-1', status: 'RECEIVED' });
+      mocks.getEffectivePermissions.mockReturnValueOnce({ editReceivedDocuments: true });
+
+      const app = await buildApp('OPERATOR');
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1',
+        payload: { note: 'corrected note' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(tx.purchaseOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ note: 'corrected note' }) })
+      );
+      await app.close();
+    });
+
+    it('allows a note edit on a RECEIVED PO from an OWNER without checking permissions', async () => {
+      const tx = makePatchTx({ id: 'po-1', status: 'RECEIVED' });
+
+      const app = await buildApp('OWNER');
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1',
+        payload: { note: 'corrected note' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(tx.user.findUnique).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  // ─── Line-item CRUD: only while not RECEIVED/CANCELLED ───────────────────
+
+  describe('POST /purchase-orders/:id/items', () => {
+    function makeItemTx(po: any, overrides: any = {}) {
+      const tx = {
+        purchaseOrder: { findFirst: vi.fn().mockResolvedValue(po), update: vi.fn().mockResolvedValue({}) },
+        product: { findFirst: vi.fn().mockResolvedValue({ id: 'p-2' }) },
+        purchaseOrderItem: {
+          create: vi.fn().mockResolvedValue({ id: 'poi-new', productId: 'p-2', qty: 3, unitCost: 100, totalCost: 300 }),
+          findMany: vi.fn().mockResolvedValue([{ totalCost: 50000 }, { totalCost: 300 }]),
+        },
+        ...overrides,
+      };
+      mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+      return tx;
+    }
+
+    it('adds an item and recomputes totalCost while the PO is DRAFT', async () => {
+      const tx = makeItemTx({ id: 'po-1', status: 'DRAFT', items: [] });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/purchase-orders/po-1/items',
+        payload: { productId: 'p-2', qty: 3, unitCost: 100 },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.totalCost).toBe(50300);
+      expect(tx.purchaseOrder.update).toHaveBeenCalledWith({ where: { id: 'po-1' }, data: { totalCost: 50300 } });
+      await app.close();
+    });
+
+    it('rejects adding an item to a RECEIVED PO', async () => {
+      makeItemTx({ id: 'po-1', status: 'RECEIVED', items: [] });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/purchase-orders/po-1/items',
+        payload: { productId: 'p-2', qty: 3, unitCost: 100 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('rejects a product that does not belong to the tenant', async () => {
+      makeItemTx({ id: 'po-1', status: 'DRAFT', items: [] }, { product: { findFirst: vi.fn().mockResolvedValue(null) } });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/purchase-orders/po-1/items',
+        payload: { productId: 'p-foreign', qty: 3, unitCost: 100 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+  });
+
+  describe('PATCH /purchase-orders/:id/items/:itemId', () => {
+    it('updates qty/unitCost and recomputes totalCost', async () => {
+      const existing = { id: 'poi-1', productId: 'p-1', qty: 5, unitCost: 1000 };
+      const tx = {
+        purchaseOrder: { findFirst: vi.fn().mockResolvedValue({ id: 'po-1', status: 'DRAFT', items: [existing] }), update: vi.fn().mockResolvedValue({}) },
+        purchaseOrderItem: {
+          update: vi.fn().mockResolvedValue({ id: 'poi-1', qty: 8, unitCost: 1000, totalCost: 8000 }),
+          findMany: vi.fn().mockResolvedValue([{ totalCost: 8000 }]),
+        },
+      };
+      mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1/items/poi-1',
+        payload: { qty: 8 },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(tx.purchaseOrderItem.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'poi-1' }, data: { qty: 8, unitCost: 1000, totalCost: 8000 } })
+      );
+      await app.close();
+    });
+
+    it('rejects editing an item on an already-RECEIVED PO', async () => {
+      const existing = { id: 'poi-1', productId: 'p-1', qty: 5, unitCost: 1000 };
+      const tx = {
+        purchaseOrder: { findFirst: vi.fn().mockResolvedValue({ id: 'po-1', status: 'RECEIVED', items: [existing] }) },
+      };
+      mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1/items/poi-1',
+        payload: { qty: 8 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('returns 404 for an item that does not belong to the PO', async () => {
+      const tx = {
+        purchaseOrder: { findFirst: vi.fn().mockResolvedValue({ id: 'po-1', status: 'DRAFT', items: [] }) },
+      };
+      mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/purchase-orders/po-1/items/poi-missing',
+        payload: { qty: 8 },
+      });
+
+      expect(response.statusCode).toBe(404);
+      await app.close();
+    });
+  });
+
+  describe('DELETE /purchase-orders/:id/items/:itemId', () => {
+    it('removes an item and recomputes totalCost', async () => {
+      const items = [{ id: 'poi-1', totalCost: 1000 }, { id: 'poi-2', totalCost: 2000 }];
+      const tx = {
+        purchaseOrder: { findFirst: vi.fn().mockResolvedValue({ id: 'po-1', status: 'DRAFT', items }), update: vi.fn().mockResolvedValue({}) },
+        purchaseOrderItem: {
+          delete: vi.fn().mockResolvedValue({}),
+          findMany: vi.fn().mockResolvedValue([{ totalCost: 2000 }]),
+        },
+      };
+      mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'DELETE', url: '/purchase-orders/po-1/items/poi-1' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.totalCost).toBe(2000);
+      await app.close();
+    });
+
+    it('refuses to delete the last remaining item', async () => {
+      const items = [{ id: 'poi-1', totalCost: 1000 }];
+      const tx = {
+        purchaseOrder: { findFirst: vi.fn().mockResolvedValue({ id: 'po-1', status: 'DRAFT', items }) },
+        purchaseOrderItem: { delete: vi.fn() },
+      };
+      mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(tx));
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'DELETE', url: '/purchase-orders/po-1/items/poi-1' });
+
+      expect(response.statusCode).toBe(400);
+      expect(tx.purchaseOrderItem.delete).not.toHaveBeenCalled();
       await app.close();
     });
   });
