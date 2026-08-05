@@ -76,8 +76,11 @@ export default async function stockWriteOffRoutes(fastify: FastifyInstance) {
       const tenantId = request.tenantId!;
 
       if (body.purchaseOrderId) {
-        const po = await prisma.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId }, select: { id: true } });
+        const po = await prisma.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId }, select: { id: true, status: true } });
         if (!po) return reply.status(400).send({ success: false, error: 'Invalid purchase order for tenant' });
+        // Same reasoning as SupplierReturn — "these arrived damaged, see
+        // PO-X" only makes sense once the shipment has actually arrived.
+        if (po.status !== 'RECEIVED') return reply.status(400).send({ success: false, error: 'Can only link a write-off to a received purchase order' });
       }
 
       const uniqueProductIds = [...new Set(body.items.map((item) => item.productId))];
@@ -140,8 +143,9 @@ export default async function stockWriteOffRoutes(fastify: FastifyInstance) {
         if (wo.status !== 'DRAFT') throw new Error('WRITE_OFF_LOCKED');
 
         if (body.purchaseOrderId) {
-          const po = await tx.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId }, select: { id: true } });
+          const po = await tx.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId }, select: { id: true, status: true } });
           if (!po) throw new Error('INVALID_PURCHASE_ORDER');
+          if (po.status !== 'RECEIVED') throw new Error('PURCHASE_ORDER_NOT_RECEIVED');
         }
 
         const data: any = {};
@@ -156,6 +160,7 @@ export default async function stockWriteOffRoutes(fastify: FastifyInstance) {
       if (err.message === 'WRITE_OFF_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Write-off not found' });
       if (err.message === 'WRITE_OFF_LOCKED') return reply.status(400).send({ success: false, error: 'This write-off has already been confirmed or cancelled' });
       if (err.message === 'INVALID_PURCHASE_ORDER') return reply.status(400).send({ success: false, error: 'Invalid purchase order for tenant' });
+      if (err.message === 'PURCHASE_ORDER_NOT_RECEIVED') return reply.status(400).send({ success: false, error: 'Can only link a write-off to a received purchase order' });
       return reply.status(400).send({ success: false, error: err.message });
     }
 

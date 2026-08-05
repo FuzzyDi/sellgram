@@ -96,8 +96,12 @@ export default async function supplierReturnRoutes(fastify: FastifyInstance) {
       if (!supplier) return reply.status(400).send({ success: false, error: 'Invalid supplier for tenant' });
 
       if (body.purchaseOrderId) {
-        const po = await prisma.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId }, select: { id: true } });
+        const po = await prisma.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId }, select: { id: true, status: true } });
         if (!po) return reply.status(400).send({ success: false, error: 'Invalid purchase order for tenant' });
+        // Goods can only be sent back once they've actually arrived —
+        // linking a return to a not-yet-received PO would be a return of
+        // something that was never on the shelf.
+        if (po.status !== 'RECEIVED') return reply.status(400).send({ success: false, error: 'Can only link a return to a received purchase order' });
       }
 
       const uniqueProductIds = [...new Set(body.items.map((item) => item.productId))];
@@ -166,8 +170,9 @@ export default async function supplierReturnRoutes(fastify: FastifyInstance) {
         if (ret.status !== 'DRAFT') throw new Error('RETURN_LOCKED');
 
         if (body.purchaseOrderId) {
-          const po = await tx.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId }, select: { id: true } });
+          const po = await tx.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId }, select: { id: true, status: true } });
           if (!po) throw new Error('INVALID_PURCHASE_ORDER');
+          if (po.status !== 'RECEIVED') throw new Error('PURCHASE_ORDER_NOT_RECEIVED');
         }
 
         const data: any = {};
@@ -182,6 +187,7 @@ export default async function supplierReturnRoutes(fastify: FastifyInstance) {
       if (err.message === 'RETURN_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Return not found' });
       if (err.message === 'RETURN_LOCKED') return reply.status(400).send({ success: false, error: 'This return has already been confirmed or cancelled' });
       if (err.message === 'INVALID_PURCHASE_ORDER') return reply.status(400).send({ success: false, error: 'Invalid purchase order for tenant' });
+      if (err.message === 'PURCHASE_ORDER_NOT_RECEIVED') return reply.status(400).send({ success: false, error: 'Can only link a return to a received purchase order' });
       return reply.status(400).send({ success: false, error: err.message });
     }
 

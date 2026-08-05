@@ -109,6 +109,12 @@ export default function Procurement() {
   const priceRevisionsHook = usePriceRevisions({ priceRevisions, saving, setSaving, showNotice, load });
   const consignmentHook = useConsignmentSettlements({ pos, consignmentSettlements, saving, setSaving, showNotice, load });
 
+  // Supplier returns and write-offs may optionally link back to a
+  // purchase order for traceability ("these arrived damaged, see PO-X")
+  // — only meaningful once the shipment has actually arrived, so the
+  // picker only offers RECEIVED documents (server enforces this too).
+  const receivedPos = pos.filter((po: any) => po.status === 'RECEIVED');
+
   const noticeNode = notice ? (
     <div
       className={[
@@ -326,7 +332,7 @@ export default function Procurement() {
             <CreateReturnForm
               suppliers={suppliers}
               products={products}
-              purchaseOrders={pos}
+              purchaseOrders={receivedPos}
               supplierId={returnsHook.returnSupplierId}
               setSupplierId={returnsHook.setReturnSupplierId}
               purchaseOrderId={returnsHook.returnPurchaseOrderId}
@@ -383,7 +389,7 @@ export default function Procurement() {
           {writeOffsHook.showCreateWriteOff && (
             <CreateWriteOffForm
               products={products}
-              purchaseOrders={pos}
+              purchaseOrders={receivedPos}
               reason={writeOffsHook.woReason}
               setReason={writeOffsHook.setWoReason}
               purchaseOrderId={writeOffsHook.woPurchaseOrderId}

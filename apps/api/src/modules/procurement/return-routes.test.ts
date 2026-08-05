@@ -96,6 +96,22 @@ describe('supplier-return.routes', () => {
       await app.close();
     });
 
+    it('rejects a linked purchase order that has not been received yet', async () => {
+      mocks.prisma.supplier.findFirst.mockResolvedValue({ id: 'sup-1' });
+      mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po-1', status: 'IN_TRANSIT' });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/supplier-returns',
+        payload: { supplierId: 'sup-1', purchaseOrderId: 'po-1', items: [{ productId: 'p-1', qty: 2, unitCost: 1000 }] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/received/i);
+      await app.close();
+    });
+
     it('rejects a product not belonging to the tenant', async () => {
       mocks.prisma.supplier.findFirst.mockResolvedValue({ id: 'sup-1' });
       mocks.prisma.product.findMany.mockResolvedValue([]);
@@ -141,6 +157,16 @@ describe('supplier-return.routes', () => {
       const app = await buildApp();
       const response = await app.inject({ method: 'PATCH', url: '/supplier-returns/ret-1', payload: { note: 'oops' } });
       expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it('rejects linking to a purchase order that has not been received yet', async () => {
+      const tx = makePatchTx({ id: 'ret-1', status: 'DRAFT' });
+      (tx as any).purchaseOrder = { findFirst: vi.fn().mockResolvedValue({ id: 'po-1', status: 'ORDERED' }) };
+      const app = await buildApp();
+      const response = await app.inject({ method: 'PATCH', url: '/supplier-returns/ret-1', payload: { purchaseOrderId: 'po-1' } });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/received/i);
       await app.close();
     });
   });

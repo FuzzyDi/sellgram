@@ -102,6 +102,21 @@ describe('stock-write-off.routes', () => {
       await app.close();
     });
 
+    it('rejects a linked purchase order that has not been received yet', async () => {
+      mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po-1', status: 'ORDERED' });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/stock-write-offs',
+        payload: { purchaseOrderId: 'po-1', items: [{ productId: 'p-1', qty: 2, unitCost: 1000 }] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/received/i);
+      await app.close();
+    });
+
     it('rejects a product not belonging to the tenant', async () => {
       mocks.prisma.product.findMany.mockResolvedValue([]);
 
