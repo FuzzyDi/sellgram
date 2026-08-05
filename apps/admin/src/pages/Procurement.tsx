@@ -11,9 +11,14 @@ import PurchaseOrderCard from './procurement/PurchaseOrderCard';
 import ReceivePurchaseOrderModal from './procurement/ReceivePurchaseOrderModal';
 import CreateReturnForm from './procurement/CreateReturnForm';
 import ReturnCard from './procurement/ReturnCard';
-import type { POStatus, ReturnStatus } from './procurement/types';
+import CreateWriteOffForm from './procurement/CreateWriteOffForm';
+import WriteOffCard from './procurement/WriteOffCard';
+import CreateCustomerReturnForm from './procurement/CreateCustomerReturnForm';
+import CustomerReturnCard from './procurement/CustomerReturnCard';
+import type { POStatus, ReturnStatus, WriteOffStatus, WriteOffReason, CustomerReturnStatus } from './procurement/types';
 
 type NoticeTone = 'success' | 'error';
+type DocTab = 'documents' | 'returns' | 'writeoffs' | 'customerReturns';
 
 const PO_TRANSITIONS: Record<POStatus, POStatus[]> = {
   DRAFT:      ['ORDERED', 'CANCELLED'],
@@ -43,6 +48,7 @@ export default function Procurement() {
   const [pos, setPos] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [counterparties, setCounterparties] = useState<any[]>([]);
   const [supplierId, setSupplierId] = useState('');
   const [loading, setLoading] = useState(true);
   const [planBlocked, setPlanBlocked] = useState(false);
@@ -74,7 +80,7 @@ export default function Procurement() {
   // costs stay locked for everyone regardless (see procurement/routes.ts).
   const [canEditReceived, setCanEditReceived] = useState(false);
 
-  const [tab, setTab] = useState<'documents' | 'returns'>('documents');
+  const [tab, setTab] = useState<DocTab>('documents');
 
   // Returns to supplier
   const [returns, setReturns] = useState<any[]>([]);
@@ -87,6 +93,23 @@ export default function Procurement() {
   const [returnNote, setReturnNote] = useState('');
   const [returnItems, setReturnItems] = useState([{ productId: '', qty: 1, unitCost: 0 }]);
 
+  // Write-offs (stock leaving the warehouse for a reason other than a sale)
+  const [writeOffs, setWriteOffs] = useState<any[]>([]);
+  const [selectedWriteOffId, setSelectedWriteOffId] = useState<string | null>(null);
+  const [showCreateWriteOff, setShowCreateWriteOff] = useState(false);
+  const [woReason, setWoReason] = useState<WriteOffReason>('OTHER');
+  const [woPurchaseOrderId, setWoPurchaseOrderId] = useState('');
+  const [woNote, setWoNote] = useState('');
+  const [woItems, setWoItems] = useState([{ productId: '', qty: 1, unitCost: 0 }]);
+
+  // Returns from a customer (возврат нам)
+  const [customerReturns, setCustomerReturns] = useState<any[]>([]);
+  const [selectedCustomerReturnId, setSelectedCustomerReturnId] = useState<string | null>(null);
+  const [showCreateCustomerReturn, setShowCreateCustomerReturn] = useState(false);
+  const [crCounterpartyId, setCrCounterpartyId] = useState('');
+  const [crNote, setCrNote] = useState('');
+  const [crItems, setCrItems] = useState([{ productId: '', qty: 1, unitCost: 0 }]);
+
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
     setTimeout(() => setNotice(null), 3200);
@@ -95,16 +118,22 @@ export default function Procurement() {
   async function load() {
     setLoading(true);
     try {
-      const [poList, productList, supplierList, returnList] = await Promise.all([
+      const [poList, productList, supplierList, returnList, writeOffList, customerReturnList, counterpartyList] = await Promise.all([
         adminApi.getPurchaseOrders(),
         adminApi.getProducts('pageSize=500'),
         adminApi.getSuppliers().catch(() => []),
         adminApi.getSupplierReturns().catch(() => []),
+        adminApi.getStockWriteOffs().catch(() => []),
+        adminApi.getCustomerReturns().catch(() => []),
+        adminApi.getCounterparties().catch(() => []),
       ]);
       setPos(Array.isArray(poList?.items ?? poList) ? (poList?.items ?? poList) : []);
       setProducts(Array.isArray(productList?.items ?? productList) ? (productList?.items ?? productList) : []);
       setSuppliers(Array.isArray(supplierList) ? supplierList : []);
       setReturns(Array.isArray(returnList?.items ?? returnList) ? (returnList?.items ?? returnList) : []);
+      setWriteOffs(Array.isArray(writeOffList?.items ?? writeOffList) ? (writeOffList?.items ?? writeOffList) : []);
+      setCustomerReturns(Array.isArray(customerReturnList?.items ?? customerReturnList) ? (customerReturnList?.items ?? customerReturnList) : []);
+      setCounterparties(Array.isArray(counterpartyList?.items ?? counterpartyList) ? (counterpartyList?.items ?? counterpartyList) : []);
     } catch (err: any) {
       if (err?.message?.includes('402') || err?.message?.toLowerCase().includes('plan')) {
         setPlanBlocked(true);
@@ -471,6 +500,309 @@ export default function Procurement() {
     }
   }
 
+  // ─── Write-offs ────────────────────────────────────────────────────────
+
+  const writeOffStatusLabel: Record<WriteOffStatus, string> = {
+    DRAFT: tr('Черновик', 'Qoralama'),
+    CONFIRMED: tr('Подтверждён', 'Tasdiqlangan'),
+    CANCELLED: tr('Отменён', 'Bekor qilindi'),
+  };
+
+  const writeOffReasonLabel: Record<WriteOffReason, string> = {
+    DEFECT: tr('Брак', 'Nuqsonli'),
+    DAMAGE: tr('Порча', 'Shikastlangan'),
+    SHORTAGE: tr('Недостача', 'Yetishmovchilik'),
+    INTERNAL_USE: tr('Собственные нужды', "O'z ehtiyoji"),
+    OTHER: tr('Другое', 'Boshqa'),
+  };
+
+  function writeOffStatusBadgeVariant(status: WriteOffStatus): BadgeVariant {
+    if (status === 'CONFIRMED') return 'success';
+    if (status === 'CANCELLED') return 'danger';
+    return 'neutral';
+  }
+
+  const selectedWriteOff = writeOffs.find((w: any) => w.id === selectedWriteOffId) ?? null;
+
+  const writeOffColumns: TableColumn<any>[] = [
+    {
+      key: 'wo',
+      header: 'WO#',
+      render: (w) => (
+        <span className="font-semibold text-neutral-800 inline-flex items-center gap-1.5">
+          <span className={`transition-transform ${w.id === selectedWriteOffId ? 'rotate-90' : ''}`} aria-hidden="true">›</span>
+          WO-{w.writeOffNumber}
+        </span>
+      ),
+    },
+    { key: 'reason', header: tr('Причина', 'Sababi'), render: (w) => writeOffReasonLabel[w.reason as WriteOffReason] || w.reason },
+    {
+      key: 'status',
+      header: tr('Статус', 'Holat'),
+      render: (w) => <Badge variant={writeOffStatusBadgeVariant(w.status)}>{writeOffStatusLabel[w.status as WriteOffStatus] || w.status}</Badge>,
+    },
+    {
+      key: 'total',
+      header: tr('Сумма', 'Summa'),
+      render: (w) => <span className="font-semibold text-neutral-800">{Number(w.totalCost).toLocaleString(locale)}</span>,
+    },
+    { key: 'date', header: tr('Дата', 'Sana'), render: (w) => new Date(w.createdAt).toLocaleDateString(locale) },
+  ];
+
+  function resetCreateWriteOffForm() {
+    setWoReason('OTHER'); setWoPurchaseOrderId(''); setWoNote('');
+    setWoItems([{ productId: '', qty: 1, unitCost: 0 }]);
+    setShowCreateWriteOff(false);
+  }
+
+  function addWriteOffItem() {
+    setWoItems((prev) => [...prev, { productId: '', qty: 1, unitCost: 0 }]);
+  }
+
+  function removeWriteOffItem(idx: number) {
+    setWoItems((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateWriteOffItem(idx: number, field: string, value: string | number) {
+    setWoItems((prev) => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }
+
+  const writeOffCreateTotal = useMemo(
+    () => woItems.reduce((sum, item) => sum + (item.qty || 0) * (item.unitCost || 0), 0),
+    [woItems]
+  );
+
+  async function submitCreateWriteOff() {
+    if (woItems.some((i) => !i.productId || !i.qty)) {
+      showNotice('error', tr('Заполните все обязательные поля', "Barcha maydonlarni to'ldiring"));
+      return;
+    }
+    setSaving(true);
+    try {
+      await adminApi.createStockWriteOff({
+        reason: woReason,
+        purchaseOrderId: woPurchaseOrderId || undefined,
+        note: woNote.trim() || undefined,
+        items: woItems.map((i) => ({ productId: i.productId, qty: Number(i.qty), unitCost: Number(i.unitCost) })),
+      });
+      resetCreateWriteOffForm();
+      await load();
+      showNotice('success', tr('Списание создано', 'Hisobdan chiqarish yaratildi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка создания', 'Yaratish xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function cancelWriteOff(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.updateStockWriteOff(id, { status: 'CANCELLED' });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmWriteOff(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.confirmStockWriteOff(id);
+      await load();
+      showNotice('success', tr('Списание подтверждено, остатки обновлены', 'Hisobdan chiqarish tasdiqlandi, qoldiqlar yangilandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка подтверждения', 'Tasdiqlash xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addWriteOffItemToServer(id: string, data: { productId: string; qty: number; unitCost: number }) {
+    setSaving(true);
+    try {
+      await adminApi.addStockWriteOffItem(id, data);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateWriteOffItemOnServer(id: string, itemId: string, data: { qty?: number; unitCost?: number }) {
+    setSaving(true);
+    try {
+      await adminApi.updateStockWriteOffItem(id, itemId, data);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeWriteOffItemOnServer(id: string, itemId: string) {
+    setSaving(true);
+    try {
+      await adminApi.deleteStockWriteOffItem(id, itemId);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ─── Returns from customer ─────────────────────────────────────────────
+
+  const customerReturnStatusLabel: Record<CustomerReturnStatus, string> = {
+    DRAFT: tr('Черновик', 'Qoralama'),
+    CONFIRMED: tr('Подтверждён', 'Tasdiqlangan'),
+    CANCELLED: tr('Отменён', 'Bekor qilindi'),
+  };
+
+  function customerReturnStatusBadgeVariant(status: CustomerReturnStatus): BadgeVariant {
+    if (status === 'CONFIRMED') return 'success';
+    if (status === 'CANCELLED') return 'danger';
+    return 'neutral';
+  }
+
+  const selectedCustomerReturn = customerReturns.find((r: any) => r.id === selectedCustomerReturnId) ?? null;
+
+  const customerReturnColumns: TableColumn<any>[] = [
+    {
+      key: 'cr',
+      header: 'CR#',
+      render: (r) => (
+        <span className="font-semibold text-neutral-800 inline-flex items-center gap-1.5">
+          <span className={`transition-transform ${r.id === selectedCustomerReturnId ? 'rotate-90' : ''}`} aria-hidden="true">›</span>
+          CR-{r.returnNumber}
+        </span>
+      ),
+    },
+    { key: 'counterparty', header: tr('Клиент', 'Mijoz'), render: (r) => r.counterparty?.name || tr('— без привязки —', "— bog'lanmagan —") },
+    {
+      key: 'status',
+      header: tr('Статус', 'Holat'),
+      render: (r) => <Badge variant={customerReturnStatusBadgeVariant(r.status)}>{customerReturnStatusLabel[r.status as CustomerReturnStatus] || r.status}</Badge>,
+    },
+    {
+      key: 'total',
+      header: tr('Сумма', 'Summa'),
+      render: (r) => <span className="font-semibold text-neutral-800">{Number(r.totalCost).toLocaleString(locale)}</span>,
+    },
+    { key: 'date', header: tr('Дата', 'Sana'), render: (r) => new Date(r.createdAt).toLocaleDateString(locale) },
+  ];
+
+  function resetCreateCustomerReturnForm() {
+    setCrCounterpartyId(''); setCrNote('');
+    setCrItems([{ productId: '', qty: 1, unitCost: 0 }]);
+    setShowCreateCustomerReturn(false);
+  }
+
+  function addCustomerReturnItem() {
+    setCrItems((prev) => [...prev, { productId: '', qty: 1, unitCost: 0 }]);
+  }
+
+  function removeCustomerReturnItem(idx: number) {
+    setCrItems((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateCustomerReturnItem(idx: number, field: string, value: string | number) {
+    setCrItems((prev) => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }
+
+  const customerReturnCreateTotal = useMemo(
+    () => crItems.reduce((sum, item) => sum + (item.qty || 0) * (item.unitCost || 0), 0),
+    [crItems]
+  );
+
+  async function submitCreateCustomerReturn() {
+    if (crItems.some((i) => !i.productId || !i.qty)) {
+      showNotice('error', tr('Заполните все обязательные поля', "Barcha maydonlarni to'ldiring"));
+      return;
+    }
+    setSaving(true);
+    try {
+      await adminApi.createCustomerReturn({
+        counterpartyId: crCounterpartyId || undefined,
+        note: crNote.trim() || undefined,
+        items: crItems.map((i) => ({ productId: i.productId, qty: Number(i.qty), unitCost: Number(i.unitCost) })),
+      });
+      resetCreateCustomerReturnForm();
+      await load();
+      showNotice('success', tr('Возврат создан', 'Qaytarish yaratildi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка создания', 'Yaratish xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function cancelCustomerReturn(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.updateCustomerReturn(id, { status: 'CANCELLED' });
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmCustomerReturn(id: string) {
+    setSaving(true);
+    try {
+      await adminApi.confirmCustomerReturn(id);
+      await load();
+      showNotice('success', tr('Возврат подтверждён, остатки обновлены', 'Qaytarish tasdiqlandi, qoldiqlar yangilandi'));
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка подтверждения', 'Tasdiqlash xatosi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addCustomerReturnItemToServer(id: string, data: { productId: string; qty: number; unitCost: number }) {
+    setSaving(true);
+    try {
+      await adminApi.addCustomerReturnItem(id, data);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateCustomerReturnItemOnServer(id: string, itemId: string, data: { qty?: number; unitCost?: number }) {
+    setSaving(true);
+    try {
+      await adminApi.updateCustomerReturnItem(id, itemId, data);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeCustomerReturnItemOnServer(id: string, itemId: string) {
+    setSaving(true);
+    try {
+      await adminApi.deleteCustomerReturnItem(id, itemId);
+      await load();
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Ошибка', 'Xato'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const noticeNode = notice ? (
     <div
       className={[
@@ -488,7 +820,7 @@ export default function Procurement() {
     return (
       <section className="flex flex-col gap-4">
         <header>
-          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Приходные документы', 'Kirim hujjatlari')}</h2>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Документы', 'Hujjatlar')}</h2>
         </header>
         <Card className="text-center py-8 px-4">
           <div className="text-token-2xl mb-3">🔒</div>
@@ -519,42 +851,69 @@ export default function Procurement() {
     );
   }
 
+  const headerTitle: Record<DocTab, string> = {
+    documents: tr('Приходные документы', 'Kirim hujjatlari'),
+    returns: tr('Возвраты поставщику', "Ta'minotchiga qaytarishlar"),
+    writeoffs: tr('Списания', 'Hisobdan chiqarishlar'),
+    customerReturns: tr('Возвраты от клиента', "Mijozdan qaytarishlar"),
+  };
+
+  const headerSubtitle: Record<DocTab, string> = {
+    documents: tr('Документы от поставщиков: товары, количество, закупочные цены и способ оплаты', "Yetkazib beruvchilardan hujjatlar: mahsulotlar, miqdor, sotib olish narxi va to'lov usuli"),
+    returns: tr('Товары, отправленные обратно поставщику: остатки и долг уменьшаются', "Ta'minotchiga qaytarilgan tovarlar: qoldiq va qarz kamayadi"),
+    writeoffs: tr('Списание не по продаже: брак, порча, недостача, собственные нужды — только остатки, без денег', "Sotuvsiz hisobdan chiqarish: nuqsonli, shikastlangan, yetishmovchilik, o'z ehtiyoji — faqat qoldiq, pulsiz"),
+    customerReturns: tr('Товары, возвращённые клиентом: остатки увеличиваются, а долг клиента (если он выбран) уменьшается', "Mijoz tomonidan qaytarilgan tovarlar: qoldiq ko'payadi, mijoz qarzi (tanlangan bo'lsa) kamayadi"),
+  };
+
+  const createButtonLabel: Record<DocTab, string> = {
+    documents: tr('+ Новый документ', '+ Yangi hujjat'),
+    returns: tr('+ Новый возврат', '+ Yangi qaytarish'),
+    writeoffs: tr('+ Новое списание', '+ Yangi hisobdan chiqarish'),
+    customerReturns: tr('+ Новый возврат', '+ Yangi qaytarish'),
+  };
+
+  function onCreateClick() {
+    if (tab === 'documents') setShowCreate(true);
+    else if (tab === 'returns') setShowCreateReturn(true);
+    else if (tab === 'writeoffs') setShowCreateWriteOff(true);
+    else setShowCreateCustomerReturn(true);
+  }
+
+  const createDisabled = tab === 'documents' ? showCreate
+    : tab === 'returns' ? showCreateReturn
+    : tab === 'writeoffs' ? showCreateWriteOff
+    : showCreateCustomerReturn;
+
   return (
     <section className="flex flex-col gap-4">
       {noticeNode}
 
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-token-2xl font-semibold text-neutral-800">
-            {tab === 'documents' ? tr('Приходные документы', 'Kirim hujjatlari') : tr('Возвраты поставщику', "Ta'minotchiga qaytarishlar")}
-          </h2>
-          <p className="mt-1 text-token-sm text-neutral-500">
-            {tab === 'documents'
-              ? tr('Документы от поставщиков: товары, количество, закупочные цены и способ оплаты', "Yetkazib beruvchilardan hujjatlar: mahsulotlar, miqdor, sotib olish narxi va to'lov usuli")
-              : tr('Товары, отправленные обратно поставщику: остатки и долг уменьшаются', "Ta'minotchiga qaytarilgan tovarlar: qoldiq va qarz kamayadi")}
-          </p>
+          <h2 className="text-token-2xl font-semibold text-neutral-800">{headerTitle[tab]}</h2>
+          <p className="mt-1 text-token-sm text-neutral-500">{headerSubtitle[tab]}</p>
         </div>
-        {tab === 'documents' ? (
-          <Button variant="primary" size="md" type="button" onClick={() => setShowCreate(true)} disabled={showCreate}>
-            + {tr('Новый документ', 'Yangi hujjat')}
-          </Button>
-        ) : (
-          <Button variant="primary" size="md" type="button" onClick={() => setShowCreateReturn(true)} disabled={showCreateReturn}>
-            + {tr('Новый возврат', 'Yangi qaytarish')}
-          </Button>
-        )}
+        <Button variant="primary" size="md" type="button" onClick={onCreateClick} disabled={createDisabled}>
+          {createButtonLabel[tab]}
+        </Button>
       </header>
 
-      <div className="flex gap-1">
+      <div className="flex gap-1 flex-wrap">
         <Button type="button" variant={tab === 'documents' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('documents')}>
-          {tr('Приходные документы', 'Kirim hujjatlari')}
+          {tr('Приходные', 'Kirim')}
+        </Button>
+        <Button type="button" variant={tab === 'writeoffs' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('writeoffs')}>
+          {tr('Списания', 'Hisobdan chiqarish')}
         </Button>
         <Button type="button" variant={tab === 'returns' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('returns')}>
-          {tr('Возвраты поставщику', "Ta'minotchiga qaytarishlar")}
+          {tr('Возврат поставщику', "Ta'minotchiga qaytarish")}
+        </Button>
+        <Button type="button" variant={tab === 'customerReturns' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('customerReturns')}>
+          {tr('Возврат от клиента', 'Mijozdan qaytarish')}
         </Button>
       </div>
 
-      {tab === 'documents' ? (
+      {tab === 'documents' && (
         <>
           {showCreate && (
             <CreatePurchaseOrderForm
@@ -629,7 +988,9 @@ export default function Procurement() {
             );
           })()}
         </>
-      ) : (
+      )}
+
+      {tab === 'returns' && (
         <>
           {showCreateReturn && (
             <CreateReturnForm
@@ -682,6 +1043,110 @@ export default function Procurement() {
               onAddItem={(data) => void addReturnItemToServer(selectedReturn.id, data)}
               onUpdateItem={(itemId, data) => void updateReturnItemOnServer(selectedReturn.id, itemId, data)}
               onRemoveItem={(itemId) => void removeReturnItemOnServer(selectedReturn.id, itemId)}
+            />
+          )}
+        </>
+      )}
+
+      {tab === 'writeoffs' && (
+        <>
+          {showCreateWriteOff && (
+            <CreateWriteOffForm
+              products={products}
+              purchaseOrders={pos}
+              reason={woReason}
+              setReason={setWoReason}
+              purchaseOrderId={woPurchaseOrderId}
+              setPurchaseOrderId={setWoPurchaseOrderId}
+              note={woNote}
+              setNote={setWoNote}
+              items={woItems}
+              addItem={addWriteOffItem}
+              removeItem={removeWriteOffItem}
+              updateItem={updateWriteOffItem}
+              createTotal={writeOffCreateTotal}
+              saving={saving}
+              onSubmit={() => void submitCreateWriteOff()}
+              onCancel={resetCreateWriteOffForm}
+            />
+          )}
+
+          {writeOffs.length === 0 && !showCreateWriteOff ? (
+            <Card className="text-center py-10 px-4">
+              <p className="m-0 text-token-sm text-neutral-500">{tr('Списаний пока нет', "Hali hisobdan chiqarishlar yo'q")}</p>
+            </Card>
+          ) : (
+            <Table
+              columns={writeOffColumns}
+              data={writeOffs}
+              rowKey={(w) => w.id}
+              onRowClick={(w) => setSelectedWriteOffId((prev) => (prev === w.id ? null : w.id))}
+            />
+          )}
+
+          {selectedWriteOff && (
+            <WriteOffCard
+              key={selectedWriteOff.id}
+              wo={selectedWriteOff}
+              saving={saving}
+              onCancel={cancelWriteOff}
+              onConfirm={confirmWriteOff}
+              products={products}
+              canEditItems={selectedWriteOff.status === 'DRAFT'}
+              onAddItem={(data) => void addWriteOffItemToServer(selectedWriteOff.id, data)}
+              onUpdateItem={(itemId, data) => void updateWriteOffItemOnServer(selectedWriteOff.id, itemId, data)}
+              onRemoveItem={(itemId) => void removeWriteOffItemOnServer(selectedWriteOff.id, itemId)}
+            />
+          )}
+        </>
+      )}
+
+      {tab === 'customerReturns' && (
+        <>
+          {showCreateCustomerReturn && (
+            <CreateCustomerReturnForm
+              products={products}
+              counterparties={counterparties}
+              counterpartyId={crCounterpartyId}
+              setCounterpartyId={setCrCounterpartyId}
+              note={crNote}
+              setNote={setCrNote}
+              items={crItems}
+              addItem={addCustomerReturnItem}
+              removeItem={removeCustomerReturnItem}
+              updateItem={updateCustomerReturnItem}
+              createTotal={customerReturnCreateTotal}
+              saving={saving}
+              onSubmit={() => void submitCreateCustomerReturn()}
+              onCancel={resetCreateCustomerReturnForm}
+            />
+          )}
+
+          {customerReturns.length === 0 && !showCreateCustomerReturn ? (
+            <Card className="text-center py-10 px-4">
+              <p className="m-0 text-token-sm text-neutral-500">{tr('Возвратов пока нет', "Hali qaytarishlar yo'q")}</p>
+            </Card>
+          ) : (
+            <Table
+              columns={customerReturnColumns}
+              data={customerReturns}
+              rowKey={(r) => r.id}
+              onRowClick={(r) => setSelectedCustomerReturnId((prev) => (prev === r.id ? null : r.id))}
+            />
+          )}
+
+          {selectedCustomerReturn && (
+            <CustomerReturnCard
+              key={selectedCustomerReturn.id}
+              ret={selectedCustomerReturn}
+              saving={saving}
+              onCancel={cancelCustomerReturn}
+              onConfirm={confirmCustomerReturn}
+              products={products}
+              canEditItems={selectedCustomerReturn.status === 'DRAFT'}
+              onAddItem={(data) => void addCustomerReturnItemToServer(selectedCustomerReturn.id, data)}
+              onUpdateItem={(itemId, data) => void updateCustomerReturnItemOnServer(selectedCustomerReturn.id, itemId, data)}
+              onRemoveItem={(itemId) => void removeCustomerReturnItemOnServer(selectedCustomerReturn.id, itemId)}
             />
           )}
         </>

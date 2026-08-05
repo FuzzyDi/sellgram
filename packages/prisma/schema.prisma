@@ -167,6 +167,8 @@ model Tenant {
   counterpartyLedger CounterpartyLedger[]
   supplierLedger     SupplierLedger[]
   supplierReturns    SupplierReturn[]
+  stockWriteOffs     StockWriteOff[]
+  customerReturns    CustomerReturn[]
   posOperators       PosOperator[]
   markingCodes       ProductMarkingCode[]
   barcodes           ProductBarcode[]
@@ -395,6 +397,8 @@ model Product {
   orderItems         OrderItem[]
   poItems            PurchaseOrderItem[]
   returnItems        SupplierReturnItem[]
+  writeOffItems      StockWriteOffItem[]
+  customerReturnItems CustomerReturnItem[]
   wishlistItems      WishlistItem[]
   stockMovements     StockMovement[]
   stockLedgerEntries StockLedgerEntry[]
@@ -790,6 +794,7 @@ model Order {
   statusHistory             OrderStatusLog[]
   review                    OrderReview?
   counterpartyLedgerEntries CounterpartyLedger[]
+  customerReturns           CustomerReturn[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
@@ -1069,6 +1074,7 @@ model PurchaseOrder {
   markingCodes ProductMarkingCode[]
   ledgerEntries SupplierLedger[]
   returns      SupplierReturn[]
+  writeOffs    StockWriteOff[]
 
   @@unique([tenantId, poNumber])
   @@index([tenantId])
@@ -1147,6 +1153,123 @@ model SupplierReturnItem {
 
   @@index([supplierReturnId])
   @@map("supplier_return_items")
+}
+
+enum WriteOffStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+enum WriteOffReason {
+  DEFECT
+  DAMAGE
+  SHORTAGE
+  INTERNAL_USE
+  OTHER
+}
+
+// Stock leaving the warehouse for a reason other than a tracked sale
+// (POS/online/B2B all already decrement stock themselves on checkout) —
+// breakage, spoilage, a stock-count shortfall, internal use. Purely a
+// stock movement: no supplier/counterparty, no money. unitCost is a
+// valuation snapshot (defaults to the product's costPrice at write-off
+// time) for reporting only — it doesn't post anywhere financial.
+model StockWriteOff {
+  id             String         @id @default(cuid())
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  writeOffNumber Int
+  status         WriteOffStatus @default(DRAFT)
+  reason         WriteOffReason @default(OTHER)
+  totalCost      Decimal        @default(0) @db.Decimal(12, 2)
+  note           String?
+
+  // Optional traceability, same spirit as PurchaseOrder.relatesToId — e.g.
+  // "these arrived damaged, see PO-X".
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items StockWriteOffItem[]
+
+  @@unique([tenantId, writeOffNumber])
+  @@index([tenantId])
+  @@map("stock_write_offs")
+}
+
+model StockWriteOffItem {
+  id              String        @id @default(cuid())
+  stockWriteOffId String
+  stockWriteOff   StockWriteOff @relation(fields: [stockWriteOffId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  qty             Int
+  unitCost        Decimal       @db.Decimal(12, 2)
+  totalCost       Decimal       @db.Decimal(12, 2)
+
+  @@index([stockWriteOffId])
+  @@map("stock_write_off_items")
+}
+
+enum CustomerReturnStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+// Goods coming back from a customer — the receiving-side mirror of
+// SupplierReturn. counterpartyId is optional (unlike SupplierReturn's
+// required supplierId): a B2B counterparty's return decreases what they
+// owe (CounterpartyLedger RETURN row); a regular retail customer has no
+// debt ledger to touch at all, so it's just a stock increase with no
+// money movement here — any actual refund is handled outside this
+// document (cash/card refund, loyalty adjustment, etc.), same "this
+// isn't a payments system" boundary Order/Counterparty already draw.
+model CustomerReturn {
+  id           String               @id @default(cuid())
+  tenantId     String
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  returnNumber Int
+  status       CustomerReturnStatus @default(DRAFT)
+  totalCost    Decimal              @default(0) @db.Decimal(12, 2)
+  note         String?
+
+  counterpartyId String?
+  counterparty   Counterparty? @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
+
+  // Optional traceability to the original sale, same spirit as
+  // SupplierReturn.purchaseOrderId.
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items         CustomerReturnItem[]
+  ledgerEntries CounterpartyLedger[]
+
+  @@unique([tenantId, returnNumber])
+  @@index([tenantId])
+  @@map("customer_returns")
+}
+
+model CustomerReturnItem {
+  id               String         @id @default(cuid())
+  customerReturnId String
+  customerReturn   CustomerReturn @relation(fields: [customerReturnId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  qty              Int
+  unitCost         Decimal        @db.Decimal(12, 2)
+  totalCost        Decimal        @db.Decimal(12, 2)
+
+  @@index([customerReturnId])
+  @@map("customer_return_items")
 }
 
 enum SupplierLedgerType {
@@ -1241,6 +1364,7 @@ model Counterparty {
   prices CounterpartyPrice[]
   ledger CounterpartyLedger[]
   orders Order[]
+  customerReturns CustomerReturn[]
 
   @@index([tenantId])
   @@map("counterparties")
@@ -1275,6 +1399,7 @@ enum CounterpartyLedgerType {
   ORDER_CHARGE
   PAYMENT_RECEIVED
   ADJUSTMENT
+  RETURN
 }
 
 model CounterpartyLedger {
@@ -1295,6 +1420,13 @@ model CounterpartyLedger {
   // (docs/B2B_COUNTERPARTIES.md §7).
   orderId String?
   order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  // Only ever set for RETURN — mirrors SupplierLedger.supplierReturnId's
+  // reasoning (a separate field rather than overloading orderId, since a
+  // return's own optional link to the original order is a different
+  // relationship than "this ledger row came from a return doc").
+  customerReturnId String?
+  customerReturn   CustomerReturn? @relation(fields: [customerReturnId], references: [id], onDelete: SetNull)
 
   // ORDER_CHARGE only. originalDueDate is written once at creation and
   // never changes. dueDate starts equal to originalDueDate and is the one
@@ -1522,6 +1654,8 @@ enum StockLedgerReason {
   POS_ADJUSTMENT
   RESTOCK
   SUPPLIER_RETURN
+  WRITE_OFF
+  CUSTOMER_RETURN
   OTHER
 }
 

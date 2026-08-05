@@ -280,6 +280,8 @@ async function main() {
   const loyaltyRoutes = (await import('./modules/loyalty/routes.js')).default;
   const procurementRoutes = (await import('./modules/procurement/routes.js')).default;
   const supplierReturnRoutes = (await import('./modules/procurement/return-routes.js')).default;
+  const stockWriteOffRoutes = (await import('./modules/procurement/write-off-routes.js')).default;
+  const customerReturnRoutes = (await import('./modules/procurement/customer-return-routes.js')).default;
   const supplierRoutes = (await import('./modules/supplier/routes.js')).default;
   const analyticsRoutes = (await import('./modules/analytics/routes.js')).default;
   const subscriptionRoutes = (await import('./modules/subscription/routes.js')).default;
@@ -306,6 +308,8 @@ async function main() {
       await app.register(loyaltyRoutes);
       await app.register(procurementRoutes);
       await app.register(supplierReturnRoutes);
+      await app.register(stockWriteOffRoutes);
+      await app.register(customerReturnRoutes);
       await app.register(supplierRoutes);
       await app.register(analyticsRoutes);
       await app.register(subscriptionRoutes);

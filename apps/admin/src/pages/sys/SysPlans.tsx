@@ -11,7 +11,7 @@ const LIMIT_LABELS: Record<string, string> = {
   maxOrdersPerMonth: 'Заказов/мес',
   maxDeliveryZones: 'Зон доставки',
   loyaltyEnabled: 'Программа лояльности',
-  procurementEnabled: 'Приходные документы',
+  procurementEnabled: 'Документы (приход, списание, возврат)',
   webhooksEnabled: 'Webhooks',
   maxScheduledReports: 'Расписан. отчётов',
 };

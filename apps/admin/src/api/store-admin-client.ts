@@ -348,6 +348,28 @@ export const adminApi = {
   deleteSupplierReturnItem: (id: string, itemId: string) =>
     request<any>(`/supplier-returns/${id}/items/${itemId}`, { method: 'DELETE' }),
 
+  getStockWriteOffs: () => request<any>('/stock-write-offs'),
+  createStockWriteOff: (data: any) => request<any>('/stock-write-offs', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockWriteOff: (id: string, data: any) => request<any>(`/stock-write-offs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  confirmStockWriteOff: (id: string) => request<any>(`/stock-write-offs/${id}/confirm`, { method: 'POST' }),
+  addStockWriteOffItem: (id: string, data: { productId: string; qty: number; unitCost: number }) =>
+    request<any>(`/stock-write-offs/${id}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  updateStockWriteOffItem: (id: string, itemId: string, data: { qty?: number; unitCost?: number }) =>
+    request<any>(`/stock-write-offs/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteStockWriteOffItem: (id: string, itemId: string) =>
+    request<any>(`/stock-write-offs/${id}/items/${itemId}`, { method: 'DELETE' }),
+
+  getCustomerReturns: () => request<any>('/customer-returns'),
+  createCustomerReturn: (data: any) => request<any>('/customer-returns', { method: 'POST', body: JSON.stringify(data) }),
+  updateCustomerReturn: (id: string, data: any) => request<any>(`/customer-returns/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  confirmCustomerReturn: (id: string) => request<any>(`/customer-returns/${id}/confirm`, { method: 'POST' }),
+  addCustomerReturnItem: (id: string, data: { productId: string; qty: number; unitCost: number }) =>
+    request<any>(`/customer-returns/${id}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  updateCustomerReturnItem: (id: string, itemId: string, data: { qty?: number; unitCost?: number }) =>
+    request<any>(`/customer-returns/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteCustomerReturnItem: (id: string, itemId: string) =>
+    request<any>(`/customer-returns/${id}/items/${itemId}`, { method: 'DELETE' }),
+
   getDashboard: () => request<any>('/analytics/dashboard'),
   getAnalyticsSummary: (days?: number) => request<any>(`/analytics/summary?days=${days || 30}`),
   getTopProducts: (period?: number) => request<any>(`/analytics/top-products?period=${period || 30}`),

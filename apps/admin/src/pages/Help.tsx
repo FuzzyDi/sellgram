@@ -80,7 +80,7 @@ const PLAN_ROWS: PlanRow[] = [
   { featureRu: 'Программа лояльности', featureUz: 'Loyallik dasturi',    free: '—',       pro: '✓',       business: '✓' },
   { featureRu: 'Промокоды',            featureUz: 'Promokodlar',         free: '—',       pro: '✓',       business: '✓' },
   { featureRu: 'Вебхуки / API',        featureUz: 'Webhook / API',       free: '—',       pro: '✓',       business: '✓' },
-  { featureRu: 'Приходные документы',   featureUz: 'Kirim hujjatlari',    free: '—',       pro: '✓',       business: '✓' },
+  { featureRu: 'Документы (приход, списание, возврат)', featureUz: 'Hujjatlar (kirim, hisobdan chiqarish, qaytarish)', free: '—', pro: '✓', business: '✓' },
   { featureRu: 'Отчёты по расписанию', featureUz: 'Jadval hisobotlari',  free: '—',       pro: 'до 3',    business: '∞' },
   { featureRu: 'Поддержка',            featureUz: "Qo'llab-quvvatlash",  free: 'базовая', pro: 'приоритет', business: 'VIP' },
 ];
@@ -336,14 +336,14 @@ const FAQ_SECTIONS: FaqSection[] = [
   {
     id: 'procurement',
     icon: ClipboardList,
-    titleRu: 'Приходные документы',
-    titleUz: 'Kirim hujjatlari',
+    titleRu: 'Документы',
+    titleUz: 'Hujjatlar',
     items: [
       {
-        qRu: 'Зачем нужен раздел «Приходные документы»?',
-        qUz: 'Kirim hujjatlari bo\'limi nima uchun kerak?',
-        aRu: 'Для учёта поставок от контрагентов: товары, количество, закупочные цены и способ оплаты. Создайте поставщика → создайте документ с позициями. При приёмке остатки и себестоимость пополняются автоматически, а движение по складу фиксируется в истории.',
-        aUz: "Kontragentlardan kirimlarni hisobga olish uchun: mahsulotlar, miqdor, sotib olish narxi va to'lov usuli. Ta'minotchi yarating → pozitsiyalar bilan hujjat yarating. Qabul qilinganda qoldiqlar va tannarx avtomatik to'ldiriladi, ombor harakati tarixda qayd etiladi.",
+        qRu: 'Зачем нужен раздел «Документы»?',
+        qUz: 'Hujjatlar bo\'limi nima uchun kerak?',
+        aRu: 'Для учёта всех движений склада, не связанных с обычной продажей: приход от поставщика, списание (брак, порча, недостача, собственные нужды) и возвраты — от нас поставщику или нам от клиента. Каждый документ — отдельная запись с товарами, количеством и суммой; остатки и себестоимость пополняются только после подтверждения, а движение фиксируется в истории склада.',
+        aUz: "Oddiy sotuv bilan bog'liq bo'lmagan barcha ombor harakatlarini hisobga olish uchun: ta'minotchidan kirim, hisobdan chiqarish (nuqsonli, shikastlangan, yetishmovchilik, o'z ehtiyoji) va qaytarishlar — bizdan ta'minotchiga yoki mijozdan bizga. Har bir hujjat — mahsulotlar, miqdor va summa bilan alohida yozuv; qoldiq va tannarx faqat tasdiqlangandan keyin to'ldiriladi, harakat ombor tarixida qayd etiladi.",
       },
       {
         qRu: 'Какие статусы у приходного документа?',
