@@ -35,8 +35,13 @@ const mocks = vi.hoisted(() => ({
       findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({ stockQty: 0 }),
     },
-    stockLedgerEntry: { createMany: vi.fn().mockResolvedValue({ count: 0 }), create: vi.fn().mockResolvedValue({}) },
+    stockLedgerEntry: {
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      create: vi.fn().mockResolvedValue({}),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     stockMovement: { create: vi.fn().mockResolvedValue({}) },
+    productBarcode: { findFirst: vi.fn().mockResolvedValue(null) },
     fiscalEvent: { create: vi.fn().mockResolvedValue({}), findUnique: vi.fn().mockResolvedValue(null), findFirst: vi.fn().mockResolvedValue(null) },
     shiftEvent: { create: vi.fn().mockResolvedValue({}) },
     posOperatorEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
@@ -3192,6 +3197,161 @@ describe('pos-sync.routes', () => {
         expect(mocks.prisma.customer.update).toHaveBeenCalledWith(
           expect.objectContaining({ data: { loyaltyPoints: { decrement: 12 } } })
         );
+        await app.close();
+      });
+    });
+
+    describe('stock derivation (docs/POS_SYNC_API.md §12 — the real till only ever calls this endpoint, never /sale-events)', () => {
+      beforeEach(() => {
+        // Explicit reset for the same reason as the outer block's own
+        // beforeEach comment — mockResolvedValue survives clearAllMocks,
+        // so a truthy override from the replay test below must not leak
+        // into a later test in this block.
+        mocks.prisma.stockLedgerEntry.findFirst.mockResolvedValue(null);
+        mocks.prisma.productBarcode.findFirst.mockResolvedValue(null);
+      });
+
+      it('decrements stock for a SALE receipt resolved via ProductBarcode', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-stock-1', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'SUCCESS',
+          receiptNumber: '20260704-0001-0001',
+          items: [{ name: 'Marked water', barcode: '0123456789012', qty: 2000, price: 12500 }],
+        });
+        mocks.prisma.productBarcode.findFirst.mockResolvedValue({ productId: 'prod-1', variantId: null, unitQty: null });
+        mocks.prisma.product.update.mockResolvedValue({ stockQty: 8 });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: validFiscalEvent,
+        });
+
+        expect(response.statusCode).toBe(201);
+        // qty 2000 (milli-units) / 1000 = 2, unitQty null -> 1, sign -1 for SALE.
+        expect(mocks.prisma.product.update).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { id: 'prod-1' }, data: { stockQty: { increment: -2 } } })
+        );
+        expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              productId: 'prod-1', variantId: null, delta: -2, reason: 'POS_SALE',
+              sourceType: 'FiscalEvent', sourceId: 'fisc-stock-1',
+            }),
+          })
+        );
+        await app.close();
+      });
+
+      it('increments stock for a REFUND receipt', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-stock-2', eventType: 'FISCAL_SUCCESS', receiptType: 'REFUND', fiscalStatus: 'SUCCESS',
+          receiptNumber: '2',
+          items: [{ name: 'Marked water', barcode: '0123456789012', qty: 1000, price: 12500 }],
+        });
+        mocks.prisma.productBarcode.findFirst.mockResolvedValue({ productId: 'prod-1', variantId: null, unitQty: null });
+        mocks.prisma.product.update.mockResolvedValue({ stockQty: 10 });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, receiptType: 'REFUND', eventId: 'fisc-stock-2' },
+        });
+
+        expect(mocks.prisma.product.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { stockQty: { increment: 1 } } })
+        );
+        expect(mocks.prisma.stockLedgerEntry.create).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ delta: 1, reason: 'POS_REFUND' }) })
+        );
+        await app.close();
+      });
+
+      it('multiplies by ProductBarcode.unitQty for a case/block barcode', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-stock-3', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'SUCCESS',
+          receiptNumber: '3',
+          items: [{ name: 'Case of water', barcode: '9999999999999', qty: 1000, price: 60000 }],
+        });
+        mocks.prisma.productBarcode.findFirst.mockResolvedValue({ productId: 'prod-1', variantId: null, unitQty: 6 });
+        mocks.prisma.product.update.mockResolvedValue({ stockQty: 94 });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, eventId: 'fisc-stock-3' },
+        });
+
+        expect(mocks.prisma.product.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { stockQty: { increment: -6 } } })
+        );
+        await app.close();
+      });
+
+      it('skips an item with an unknown barcode — no stock movement, no crash', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-stock-4', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'SUCCESS',
+          receiptNumber: '4',
+          items: [{ name: 'Mystery item', barcode: 'unknown-barcode', qty: 1000, price: 1000 }],
+        });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, eventId: 'fisc-stock-4' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.product.update).not.toHaveBeenCalled();
+        expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('skips stock derivation on a replay of an already-processed fiscal event', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-stock-5', eventType: 'FISCAL_SUCCESS', receiptType: 'SALE', fiscalStatus: 'SUCCESS',
+          receiptNumber: '5',
+          items: [{ name: 'Marked water', barcode: '0123456789012', qty: 1000, price: 12500 }],
+        });
+        mocks.prisma.stockLedgerEntry.findFirst.mockResolvedValue({ id: 'existing-ledger-row' });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, eventId: 'fisc-stock-5' },
+        });
+
+        expect(mocks.prisma.productBarcode.findFirst).not.toHaveBeenCalled();
+        expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it('does not derive stock for FISCAL_FAILED', async () => {
+        mocks.prisma.fiscalEvent.create.mockResolvedValue({
+          id: 'fisc-stock-6', eventType: 'FISCAL_FAILED', receiptType: 'SALE', fiscalStatus: 'FAILED',
+          receiptNumber: '6',
+          items: [{ name: 'Marked water', barcode: '0123456789012', qty: 1000, price: 12500 }],
+        });
+
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, eventId: 'fisc-stock-6', eventType: 'FISCAL_FAILED', fiscalStatus: 'FAILED' },
+        });
+
+        expect(mocks.prisma.stockLedgerEntry.findFirst).not.toHaveBeenCalled();
+        expect(mocks.prisma.stockLedgerEntry.create).not.toHaveBeenCalled();
         await app.close();
       });
     });

@@ -1861,6 +1861,11 @@ enum DeviceActivationStatus {
 
 enum StockLedgerReason {
   POS_SALE
+  // A POS terminal's own refund/void on a fiscalized receipt (routes.ts's
+  // POST /pos/v1/fiscal-events, receiptType: REFUND) — distinct from
+  // CUSTOMER_RETURN, which is a formal Документы-flow return document,
+  // not a till-side receipt refund.
+  POS_REFUND
   POS_ADJUSTMENT
   RESTOCK
   SUPPLIER_RETURN

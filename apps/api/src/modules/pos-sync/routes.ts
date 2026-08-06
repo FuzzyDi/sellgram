@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, randomBytes } from 'crypto';
 import { z } from 'zod';
 import prisma from '../../lib/prisma.js';
@@ -255,7 +255,7 @@ async function applyStockDelta(
   tx: any,
   input: StockApplication & {
     tenantId: string;
-    reason: 'POS_SALE' | 'POS_ADJUSTMENT' | 'RESTOCK' | 'OTHER';
+    reason: 'POS_SALE' | 'POS_REFUND' | 'POS_ADJUSTMENT' | 'RESTOCK' | 'OTHER';
     sourceType: string;
     sourceId: string;
     note: string;
@@ -730,6 +730,108 @@ async function reverseFiscalLoyaltyForRefund(fiscalEvent: FiscalLoyaltySource, t
         description: `Loyalty points reversed for POS refund #${fiscalEvent.receiptNumber ?? '?'}`,
       },
     });
+  });
+}
+
+type FiscalStockSource = {
+  id: string;
+  eventType: string;
+  receiptType: string | null;
+  fiscalStatus: string;
+  items: unknown;
+  receiptNumber: string | null;
+};
+
+// Derives StockLedgerEntry/StockMovement rows from a fiscalized receipt.
+// /fiscal-events is the ONLY ingestion path the real Android till (LANDI,
+// SbgHardwareCoreService) actually calls — §12's "decoupled from
+// /sale-events" note means /sale-events' own stock derivation (above,
+// applyStockDelta's other call site) never runs for it. Before this
+// function existed, a real POS sale never moved stock through Cloud at
+// all. Only FISCAL_SUCCESS with a real SALE/REFUND receiptType counts —
+// STARTED/FAILED/UNKNOWN never move stock, mirroring accrueFiscalLoyalty's
+// own status gate above.
+//
+// Unlike /sale-events' items (which carry a direct productId), the real
+// fiscal contract identifies a line by barcode (routes.test.ts's
+// validFiscalEvent: {name, barcode, qty, price}, qty in milli-units, same
+// convention PosReceipts.tsx already assumed for display) — resolved here
+// via ProductBarcode(tenantId, barcode), multiplied by that barcode's
+// unitQty (a case/block barcode represents more than one stock unit).
+// Product.stockQty/StockLedgerEntry.delta are both Int — a resolved delta
+// that isn't a whole number (a weighed item) is skipped with a logged
+// warning rather than rounded or truncated, the same discipline
+// /sale-events already applies to a non-integer quantity. Warnings are
+// logged, not persisted — FiscalEvent has no warnings column (unlike
+// SaleEvent) and adding one is out of scope here.
+//
+// Isolated in its own try/catch at the call site, same reasoning as
+// accrueFiscalLoyalty: a stock-derivation failure must never turn an
+// already-stored fiscal event into an error response to the till.
+async function applyFiscalEventStock(fiscalEvent: FiscalStockSource, tenantId: string, requestLog: FastifyBaseLogger): Promise<void> {
+  if (fiscalEvent.eventType !== 'FISCAL_SUCCESS' || fiscalEvent.fiscalStatus !== 'SUCCESS') return;
+  if (fiscalEvent.receiptType !== 'SALE' && fiscalEvent.receiptType !== 'REFUND') return;
+
+  // Whole-event idempotency guard, same pattern as accrueFiscalLoyalty's
+  // sourceType/sourceId check — a replay of this fiscal event (P2002 retry
+  // after the original request crashed between fiscalEvent.create and
+  // here) must not re-derive stock a second time. Checked once for the
+  // whole receipt, not per line item.
+  const alreadyApplied = await prisma.stockLedgerEntry.findFirst({
+    where: { sourceType: 'FiscalEvent', sourceId: fiscalEvent.id },
+    select: { id: true },
+  });
+  if (alreadyApplied) return;
+
+  const items = Array.isArray(fiscalEvent.items) ? fiscalEvent.items : [];
+  if (items.length === 0) return;
+  const sign = fiscalEvent.receiptType === 'REFUND' ? 1 : -1;
+
+  await prisma.$transaction(async (tx) => {
+    for (const raw of items) {
+      const item = (raw ?? {}) as Record<string, unknown>;
+      const barcode = typeof item.barcode === 'string' ? item.barcode : null;
+      const qtyRaw = typeof item.qty === 'number' ? item.qty : typeof item.quantity === 'number' ? item.quantity : null;
+      if (!barcode || qtyRaw === null) {
+        requestLog.warn(
+          { fiscalEventId: fiscalEvent.id, item },
+          'pos-sync: fiscal item missing barcode/qty — no stock ledger entry derived'
+        );
+        continue;
+      }
+
+      const matched = await tx.productBarcode.findFirst({
+        where: { tenantId, barcode },
+        select: { productId: true, variantId: true, unitQty: true },
+      });
+      if (!matched) {
+        requestLog.warn(
+          { fiscalEventId: fiscalEvent.id, barcode },
+          'pos-sync: unknown barcode — no stock ledger entry derived'
+        );
+        continue;
+      }
+
+      const units = (qtyRaw / 1000) * Number(matched.unitQty ?? 1);
+      if (!Number.isInteger(units)) {
+        requestLog.warn(
+          { fiscalEventId: fiscalEvent.id, barcode, units },
+          'pos-sync: non-integer stock delta (weighed item) — no stock ledger entry derived'
+        );
+        continue;
+      }
+
+      await applyStockDelta(tx, {
+        productId: matched.productId,
+        variantId: matched.variantId,
+        delta: sign * units,
+        tenantId,
+        reason: fiscalEvent.receiptType === 'REFUND' ? 'POS_REFUND' : 'POS_SALE',
+        sourceType: 'FiscalEvent',
+        sourceId: fiscalEvent.id,
+        note: `Фискальный чек №${fiscalEvent.receiptNumber ?? fiscalEvent.id}`,
+      });
+    }
   });
 }
 
@@ -2040,6 +2142,15 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
         request.log.error(
           { err, fiscalEventId: savedEvent.id, tenantId: device.tenantId },
           'pos-sync: loyalty accrual/reversal failed for fiscal event'
+        );
+      }
+
+      try {
+        await applyFiscalEventStock(savedEvent, device.tenantId, request.log);
+      } catch (err: any) {
+        request.log.error(
+          { err, fiscalEventId: savedEvent.id, tenantId: device.tenantId },
+          'pos-sync: stock derivation failed for fiscal event'
         );
       }
     }
