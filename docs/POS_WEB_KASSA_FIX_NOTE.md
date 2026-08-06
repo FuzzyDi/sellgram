@@ -11,25 +11,106 @@
 
 ## Что нужно сделать
 
-Заменить вызов `POST /api/pos/v1/sale-events` на **`POST /api/pos/v1/fiscal-events`** — один вызов на чек, ничего разбивать не нужно (см. `docs/POS_DEVICE_SETUP_GUIDE.md`, шаг 6, для полной схемы запроса/ответа).
+Заменить вызов `POST /api/pos/v1/sale-events` на **`POST /api/pos/v1/fiscal-events`** — один вызов на чек, ничего разбивать не нужно.
 
-### Ключевое отличие форм `items`
+> ⚠️ **Самая частая ошибка при переносе на этот контракт**: единицы измерения суммы разные на разных уровнях одного и того же чека. `totalAmount` (верхний уровень) — **тийины** (1/100 сума). `price` внутри каждого `items[]` — **сумы**. Ни разу не тийины внутри позиций. Проверяйте это в первую очередь, если суммы в чеке "не бьются" в 100 раз.
+
+### Полное описание API — `POST /api/pos/v1/fiscal-events`
+
+```
+POST /api/pos/v1/fiscal-events
+Authorization: Bearer <accessToken>
+X-Device-Code: <deviceCode>
+Content-Type: application/json
+```
+
+Те же заголовки, что и раньше у `/sale-events` — `accessToken` получаете по обычному флоу активации/логина устройства, `deviceCode` — публичный идентификатор кассы (проверяется на совпадение, но не является секретом).
+
+**Полный пример тела запроса** (продажа, все поля, которые реально понимает сервер — лишние поля не страшны, сервер их просто отбросит, а отсутствие обязательного поля из списка ниже вернёт `400 VALIDATION_ERROR`):
+
+```json
+{
+  "eventId": "evt-b7e4b6b0-8e2a-4b7a-9c1a-2f6e6c1a9d10",
+  "eventType": "FISCAL_SUCCESS",
+  "aggregateType": "fiscal",
+  "aggregateId": "web_kassa:receipt:20260807-0001",
+  "schemaVersion": 1,
+  "shiftNumber": 3,
+  "localReceiptId": "20260807-0001",
+  "idempotencyKey": "web_kassa:fiscal:20260807-0001:FISCAL_SUCCESS",
+  "receiptNumber": "20260807-0001",
+  "receiptType": "SALE",
+  "totalAmount": 950000,
+  "currency": "UZS",
+  "customerId": null,
+  "operatorId": "op-1",
+  "operatorName": "Иван Кассир",
+  "operatorRole": "CASHIER",
+  "payments": [
+    { "type": "CASH", "sum": 950000 }
+  ],
+  "items": [
+    { "name": "Корм для кошек Kitekat 400г", "barcode": "1111111111111", "qty": 1000, "price": 9500 }
+  ],
+  "createdAtMs": 1786000000000,
+  "fiscalizedAtMs": 1786000000500,
+  "fiscalStatus": "SUCCESS",
+  "printStatus": "PRINTED",
+  "fiscalReceiptNumber": "20260807-0001",
+  "fiscalSign": "9312",
+  "fiscalQr": "https://ofd.uz/check/...",
+  "ofdStatus": "SENT",
+  "rawDaemonResponse": {},
+  "policiesVersion": 0,
+  "triggeredRuleIds": []
+}
+```
+
+**Обязательные поля** (без них — `400 VALIDATION_ERROR`): `eventId`, `eventType`, `aggregateType`, `aggregateId`, `schemaVersion`, `shiftNumber`, `localReceiptId`, `idempotencyKey`, `totalAmount`, `currency`, `payments` (массив), `items` (массив), `createdAtMs`, `fiscalStatus`, `printStatus`, `rawDaemonResponse` (объект, можно `{}`), `policiesVersion`, `triggeredRuleIds` (массив, можно `[]`).
+
+Необязательные: `daemonJournalId`, `receiptNumber`, `receiptType`, `originalLocalReceiptId`, `originalReceiptNumber` (для возвратов), `customerId`, `operatorId`/`operatorName`/`operatorRole`, `fiscalizedAtMs`, `fiscalReceiptNumber`, `fiscalSign`, `fiscalQr`, `ofdStatus`, `errorCode`, `errorMessage`, `rawFiscalPayload`, `managerOverride`.
+
+**Ответ** — намеренно плоский, без `data`:
+```json
+{ "success": true, "requestId": "cloud-request-id" }
+```
+Ошибка (валидация/дубликат ключа идемпотентности с другим payload) — обычный `4xx` с `{ "success": false, "error": { "code": "...", "message": "..." } }`.
+
+### Форма `items` (позиции чека)
 
 `/sale-events` (старое, что сейчас шлёт "WEB касса"):
 ```json
 { "productId": "...", "quantity": 1, "unitPrice": 9500, "lineTotal": 9500 }
 ```
 
-`/fiscal-events` (правильное, реальный контракт):
+`/fiscal-events` (правильное, реальный контракт — **обязательно `name`, `barcode`, `qty`, `price` в каждой позиции**):
 ```json
 { "name": "Корм для кошек Kitekat...", "barcode": "1111111111111", "qty": 1000, "price": 9500 }
 ```
 
-- **Идентификация товара — по штрихкоду (`barcode`), не по `productId`.** Сервер сам резолвит штрихкод в товар через таблицу `product_barcodes`. Если штрихкода нет или он не найден — позиция просто не спишет остаток (без ошибки, но и без движения склада).
-- **`qty` — в тысячных долях**, не в штуках напрямую: `1000` = 1 шт, `1500` = 1.5 (для весового товара). Та же конвенция, что уже используется в реальном контракте.
-- Обязательные поля события верхнего уровня: `eventId`, `eventType` (`FISCAL_SUCCESS`/`FISCAL_STARTED`/`FISCAL_FAILED`/`FISCAL_UNKNOWN`), `aggregateType`, `aggregateId`, `schemaVersion`, `shiftNumber`, `localReceiptId`, `idempotencyKey`, `receiptType` (`SALE`/`REFUND`), `totalAmount` (в тийинах, 1/100 сума), `currency`, `payments`, `items`, `createdAtMs`, `fiscalStatus`, `printStatus`, `rawDaemonResponse`, `policiesVersion`, `triggeredRuleIds`.
-- Только `eventType: "FISCAL_SUCCESS"` двигает остаток и лояльность — `STARTED`/`FAILED`/`UNKNOWN` просто сохраняются, без побочных эффектов.
-- Заголовки те же, что и раньше: `Authorization: Bearer <accessToken>` + `X-Device-Code: <deviceCode>`.
+- **Идентификация товара — по штрихкоду (`barcode`), не по `productId`.** Сервер сам резолвит штрихкод в товар через таблицу `product_barcodes`. Если штрихкода нет или он не найден — позиция просто не спишет остаток (без ошибки в ответе, но и без движения склада; в логах сервера это видно как warning).
+- **`qty` — в тысячных долях**, не в штуках напрямую: `1000` = 1 шт, `1500` = 1.5 (для весового товара). Если после деления на 1000 и умножения на "штук в упаковке" (для штрихкода блока/упаковки) получается не целое число — списание остатка тоже не происходит (это ограничение только для позиций с весовым товаром без целочисленного пересчёта).
+- `price` — цена за единицу, в **сумах** (не в тийинах — в отличие от `totalAmount` на верхнем уровне чека).
+
+### Форма `payments` (способы оплаты)
+
+Каждый элемент массива — произвольный объект, но чтобы тип оплаты корректно отображался в админке ("Операционный день" → вкладка "Чеки"), нужно одно из полей `type`/`method`/`paymentType` (строка вида `CASH`/`CARD`/`UZQR`/…) и одно из `sum`/`amount`/`total` (число, в тех же единицах, что и `totalAmount` — тийины).
+
+### `totalAmount` — в тийинах, не в сумах
+
+`totalAmount` на верхнем уровне чека — **1/100 сума** (как в реальном фискальном контракте), а `price` внутри `items` — в сумах. Не перепутать: `totalAmount: 950000` = 9 500 сум.
+
+### Прочее
+
+- Только `eventType: "FISCAL_SUCCESS"` + `fiscalStatus: "SUCCESS"` + `receiptType: "SALE"` или `"REFUND"` двигает остаток и лояльность — `STARTED`/`FAILED`/`UNKNOWN` просто сохраняются, без побочных эффектов.
+- Идемпотентность — по `eventId` (не по `idempotencyKey`, как у других событий): повтор с тем же `eventId` не обрабатывается повторно (ни склад, ни лояльность не задвоятся), просто отдаётся тот же ответ.
+- Для возврата (`receiptType: "REFUND"`) обязательно укажите `originalLocalReceiptId` или `originalReceiptNumber`, ссылающийся на исходный чек — иначе возврат не свяжется с продажей в отчётах.
+
+## Ответы на вопросы после ревью
+
+**`receiptNumber` — формат не важен, у вас всё правильно.** В примере в этом документе `"20260806-0001-0001"` — не спецификация, а просто иллюстрация. Проверил по коду: `receiptNumber` в облаке — чисто отображаемый лейбл (`admin-routes.ts:1216`, `PosShifts.tsx:352/578` рендерят `receiptNumber || localReceiptId` как есть, без парсинга), сортировка чеков идёт по `createdAtMs` (`admin-routes.ts:1233`), не по `receiptNumber`. Ничего в облаке не ожидает конкретный формат и не разбирает его на части — ваш плоский целочисленный счётчик из `localReceiptId` полностью подходит, `receiptNumber` можно передавать тем же значением, что и `localReceiptId`, если отдельного фискального номера от ОФД пока нет.
+
+**`printStatus` — шлите `PENDING` (ваш вариант 2), не блокируйте склад на печати.** Проверил по коду: `printStatus` только сохраняется (`routes.ts:2078`), нигде не читается — ни в отчётности, ни в каком-либо условии для склада/лояльности (это подтверждает и сам контракт: `POS_SYNC_API.md` прямо называет `printStatus` "free-form string, not a closed enum"). Единственное, что двигает склад и лояльность — `eventType: FISCAL_SUCCESS` + `fiscalStatus: SUCCESS`, `printStatus` в этой цепочке не участвует вообще. Печатать до отправки (ваш вариант 1) я бы тоже не советовал — то же рассуждение, что и у вас: списание остатка не должно зависеть от того, когда кассир закроет диалог печати. Досылку статуса печати отдельным событием (вариант 3) сейчас строить не нужно — сегодня в облаке нет ни одного потребителя этого поля, добавлять эндпоинт под данные, которые никто не читает, преждевременно. Если появится реальный сценарий (например, поддержка захочет видеть "чек фискализирован, но не распечатан" отдельным флагом в отчёте) — тогда и добавим, отдельной задачей.
 
 ## Что заработает после переключения
 
