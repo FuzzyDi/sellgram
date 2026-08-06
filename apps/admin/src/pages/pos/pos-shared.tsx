@@ -78,7 +78,7 @@ const POS_TABS: { to: string; ru: string; uz: string }[] = [
   { to: '/pos/analytics', ru: 'Аналитика', uz: 'Analitika' },
   { to: '/pos/devices', ru: 'Устройства', uz: 'Qurilmalar' },
   { to: '/pos/operators', ru: 'Кассиры', uz: 'Kassirlar' },
-  { to: '/pos/shifts', ru: 'Смены', uz: 'Smenalar' },
+  { to: '/pos/shifts', ru: 'Операционный день', uz: 'Ish kuni' },
   { to: '/pos/operator-events', ru: 'События', uz: 'Hodisalar' },
   { to: '/pos/payment-terminals', ru: 'Оплата', uz: "To'lov" },
   { to: '/pos/payment-events', ru: 'Платежи', uz: "To'lovlar tarixi" },

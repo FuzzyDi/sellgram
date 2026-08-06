@@ -1089,7 +1089,63 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
 
       const nextCursor = shifts.length === query.data.limit ? shifts[shifts.length - 1]!.id : null;
 
-      return reply.status(200).send({ success: true, data: { items: shifts, nextCursor } });
+      // "Операционный день" (docs) — the currently open shift per device,
+      // so a shift is visible (and its receipts reachable) before it ever
+      // closes, not just after. Only on the first page (no cursor) — a
+      // "load more" page of already-closed shifts must not re-prepend
+      // these every time, or the admin UI's accumulated list would show
+      // duplicates. Unpaginated on purpose: at most one open shift per
+      // active device at a store, never enough rows to need a cursor.
+      let openShifts: {
+        id: string;
+        shiftNumber: number;
+        openedAtMs: Date | null;
+        closedAtMs: Date | null;
+        zReportStatus: string | null;
+        deviceId: string;
+        device: { name: string };
+      }[] = [];
+      if (!query.data.cursor) {
+        const latestPerDevice = await prisma.shiftEvent.findMany({
+          where: {
+            tenantId,
+            storeId: store.id,
+            ...(query.data.deviceId ? { deviceId: query.data.deviceId } : {}),
+          },
+          distinct: ['deviceId'],
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            shiftNumber: true,
+            openedAtMs: true,
+            eventType: true,
+            deviceId: true,
+            device: { select: { name: true } },
+          },
+        });
+        // A device's most recent shift event is SHIFT_OPENED with no
+        // matching SHIFT_CLOSED yet -> that device is currently mid-shift.
+        // If it's SHIFT_CLOSED instead, the device has no open shift right
+        // now and contributes nothing here.
+        openShifts = latestPerDevice
+          .filter((s) => s.eventType === 'SHIFT_OPENED')
+          .map((s) => ({
+            id: s.id,
+            shiftNumber: s.shiftNumber,
+            openedAtMs: s.openedAtMs,
+            closedAtMs: null,
+            zReportStatus: null,
+            deviceId: s.deviceId,
+            device: s.device,
+          }));
+      }
+
+      const items = [
+        ...openShifts.map((s) => ({ ...s, isOpen: true })),
+        ...shifts.map((s) => ({ ...s, isOpen: false })),
+      ];
+
+      return reply.status(200).send({ success: true, data: { items, nextCursor } });
     }
   );
 

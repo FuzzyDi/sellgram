@@ -1309,6 +1309,60 @@ describe('pos-sync.admin-routes', () => {
       expect(response.statusCode).toBe(400);
       await app.close();
     });
+
+    describe('"Операционный день" — the currently open shift per device', () => {
+      it('prepends a device whose latest shift event is SHIFT_OPENED, with isOpen true and no closedAtMs/zReportStatus', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.shiftEvent.findMany
+          .mockResolvedValueOnce([]) // closed shifts
+          .mockResolvedValueOnce([
+            { id: 'sh-open-1', shiftNumber: 3, openedAtMs: new Date(), eventType: 'SHIFT_OPENED', deviceId: 'dev-1', device: { name: 'Front till' } },
+          ]);
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-1' });
+
+        expect(response.statusCode).toBe(200);
+        const items = response.json().data.items;
+        expect(items).toHaveLength(1);
+        expect(items[0]).toMatchObject({
+          id: 'sh-open-1', shiftNumber: 3, closedAtMs: null, zReportStatus: null, isOpen: true, deviceId: 'dev-1',
+        });
+        await app.close();
+      });
+
+      it('does not surface a device whose latest shift event is already SHIFT_CLOSED', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.shiftEvent.findMany
+          .mockResolvedValueOnce([
+            { id: 'sh-1', shiftNumber: 2, openedAtMs: new Date(), closedAtMs: new Date(), zReportStatus: 'OK', deviceId: 'dev-1', device: { name: 'Front till' } },
+          ])
+          .mockResolvedValueOnce([
+            { id: 'sh-1', shiftNumber: 2, openedAtMs: new Date(), eventType: 'SHIFT_CLOSED', deviceId: 'dev-1', device: { name: 'Front till' } },
+          ]);
+
+        const app = await buildApp();
+        const response = await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-1' });
+
+        const items = response.json().data.items;
+        expect(items).toHaveLength(1);
+        expect(items[0]).toMatchObject({ id: 'sh-1', isOpen: false });
+        await app.close();
+      });
+
+      it('does not fetch open shifts when paginating past the first page (cursor present)', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.shiftEvent.findMany.mockResolvedValue([]);
+
+        const app = await buildApp();
+        await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-1&cursor=sh-prev' });
+
+        // Only the paginated closed-shifts query runs — the unpaginated
+        // "latest per device" lookup is skipped entirely past page 1.
+        expect(mocks.prisma.shiftEvent.findMany).toHaveBeenCalledTimes(1);
+        await app.close();
+      });
+    });
   });
 
   describe('GET /pos-receipts', () => {
