@@ -9,3 +9,4 @@ deploy/production/.monitor/
 deploy/production/.env.prod
 packages/prisma/import-*.ts
 packages/prisma/update-*.ts
+.claude/settings.local.json
