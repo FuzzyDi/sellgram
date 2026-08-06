@@ -1363,6 +1363,53 @@ describe('pos-sync.admin-routes', () => {
         await app.close();
       });
     });
+
+    describe('dateFrom/dateTo/sortOrder', () => {
+      it('filters closed shifts by closedAtMs range', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.shiftEvent.findMany.mockResolvedValue([]);
+
+        const app = await buildApp();
+        await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-1&dateFrom=2026-08-01&dateTo=2026-08-06' });
+
+        expect(mocks.prisma.shiftEvent.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              closedAtMs: { gte: new Date('2026-08-01'), lte: new Date('2026-08-06T23:59:59.999') },
+            }),
+          })
+        );
+        await app.close();
+      });
+
+      it('does not date-filter the open-shift lookup', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.shiftEvent.findMany.mockResolvedValue([]);
+
+        const app = await buildApp();
+        await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-1&dateFrom=2026-01-01&dateTo=2026-01-01' });
+
+        // Second call is the unpaginated "latest per device" lookup — must
+        // not carry closedAtMs (an open shift has none to filter on, and
+        // it's deliberately always shown regardless of the date filter).
+        const secondCallArgs = mocks.prisma.shiftEvent.findMany.mock.calls[1][0];
+        expect(secondCallArgs.where.closedAtMs).toBeUndefined();
+        await app.close();
+      });
+
+      it('passes sortOrder through to orderBy, defaulting to desc', async () => {
+        mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        mocks.prisma.shiftEvent.findMany.mockResolvedValue([]);
+
+        const app = await buildApp();
+        await app.inject({ method: 'GET', url: '/pos-shifts?storeId=store-1&sortOrder=asc' });
+
+        expect(mocks.prisma.shiftEvent.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ orderBy: { closedAtMs: 'asc' } })
+        );
+        await app.close();
+      });
+    });
   });
 
   describe('GET /pos-receipts', () => {
@@ -1420,6 +1467,36 @@ describe('pos-sync.admin-routes', () => {
       const response = await app.inject({ method: 'GET', url: '/pos-receipts?storeId=store-foreign' });
       expect(response.statusCode).toBe(404);
       expect(mocks.prisma.fiscalEvent.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('filters by createdAtMs range via dateFrom/dateTo', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.fiscalEvent.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/pos-receipts?storeId=store-1&dateFrom=2026-08-06&dateTo=2026-08-06' });
+
+      expect(mocks.prisma.fiscalEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdAtMs: { gte: new Date('2026-08-06'), lte: new Date('2026-08-06T23:59:59.999') },
+          }),
+        })
+      );
+      await app.close();
+    });
+
+    it('passes sortOrder through to orderBy, defaulting to desc', async () => {
+      mocks.prisma.store.findFirst.mockResolvedValue({ id: 'store-1' });
+      mocks.prisma.fiscalEvent.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      await app.inject({ method: 'GET', url: '/pos-receipts?storeId=store-1&sortOrder=asc' });
+
+      expect(mocks.prisma.fiscalEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { createdAtMs: 'asc' } })
+      );
       await app.close();
     });
   });

@@ -5,6 +5,7 @@ import { adminApi } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
+import Input from '../../components/Input';
 import Badge, { type BadgeVariant } from '../../components/Badge';
 import Table, { type TableColumn } from '../../components/Table';
 import {
@@ -70,12 +71,31 @@ function paymentTypeSummary(payments: any[] | undefined): string {
   return types.join(', ');
 }
 
+// Local calendar date (not UTC) — "today" for a Tashkent (UTC+5) user
+// past 19:00 local isn't "today" in UTC yet, so toISOString().slice(0,10)
+// would default the filter to yesterday right when today's shift is the
+// one actually being worked.
+function todayLocalDateString(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export default function PosShifts() {
   const { tr, locale } = useAdminI18n();
   const [searchParams] = useSearchParams();
   const { stores, storeId, selectStore, loading: storesLoading, loadError: storesError } = usePosStores();
 
   const [activeTab, setActiveTab] = useState<DayTab>('shifts');
+
+  // Default to today (local calendar date) — "Операционный день" is about
+  // the current business day by default; widen dateFrom/dateTo to review
+  // other days.
+  const [dateFrom, setDateFrom] = useState(todayLocalDateString());
+  const [dateTo, setDateTo] = useState(todayLocalDateString());
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const [shifts, setShifts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +135,7 @@ export default function PosShifts() {
     if (!targetStoreId) return;
     if (!silent) setLoading(true);
     try {
-      const result = await adminApi.getPosShifts({ storeId: targetStoreId, limit: PAGE_SIZE });
+      const result = await adminApi.getPosShifts({ storeId: targetStoreId, dateFrom, dateTo, sortOrder, limit: PAGE_SIZE });
       setShifts(Array.isArray(result?.items) ? result.items : []);
       setCursor(result?.nextCursor ?? null);
       setPlanBlocked(false);
@@ -132,7 +152,7 @@ export default function PosShifts() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [tr]);
+  }, [tr, dateFrom, dateTo, sortOrder]);
 
   useEffect(() => {
     if (storeId) void loadShifts(storeId);
@@ -142,7 +162,7 @@ export default function PosShifts() {
     if (!targetStoreId) return;
     if (!silent) setReceiptsFeedLoading(true);
     try {
-      const result = await adminApi.getPosReceipts({ storeId: targetStoreId, limit: RECEIPT_PAGE_SIZE });
+      const result = await adminApi.getPosReceipts({ storeId: targetStoreId, dateFrom, dateTo, sortOrder, limit: RECEIPT_PAGE_SIZE });
       setReceiptsFeed(Array.isArray(result?.items) ? result.items : []);
       setReceiptsFeedCursor(result?.nextCursor ?? null);
       setPlanBlocked(false);
@@ -159,7 +179,7 @@ export default function PosShifts() {
     } finally {
       if (!silent) setReceiptsFeedLoading(false);
     }
-  }, [tr]);
+  }, [tr, dateFrom, dateTo, sortOrder]);
 
   useEffect(() => {
     if (storeId && activeTab === 'receipts') void loadReceiptsFeed(storeId);
@@ -196,7 +216,7 @@ export default function PosShifts() {
     if (!storeId || !cursor) return;
     setLoadingMore(true);
     try {
-      const result = await adminApi.getPosShifts({ storeId, limit: PAGE_SIZE, cursor });
+      const result = await adminApi.getPosShifts({ storeId, dateFrom, dateTo, sortOrder, limit: PAGE_SIZE, cursor });
       setShifts((prev) => [...prev, ...(Array.isArray(result?.items) ? result.items : [])]);
       setCursor(result?.nextCursor ?? null);
     } catch (err: any) {
@@ -210,7 +230,7 @@ export default function PosShifts() {
     if (!storeId || !receiptsFeedCursor) return;
     setReceiptsFeedLoadingMore(true);
     try {
-      const result = await adminApi.getPosReceipts({ storeId, limit: RECEIPT_PAGE_SIZE, cursor: receiptsFeedCursor });
+      const result = await adminApi.getPosReceipts({ storeId, dateFrom, dateTo, sortOrder, limit: RECEIPT_PAGE_SIZE, cursor: receiptsFeedCursor });
       setReceiptsFeed((prev) => [...prev, ...(Array.isArray(result?.items) ? result.items : [])]);
       setReceiptsFeedCursor(result?.nextCursor ?? null);
     } catch (err: any) {
@@ -410,6 +430,29 @@ export default function PosShifts() {
         <PosPlanBlocked />
       ) : (
         <>
+          <Card>
+            <div className="flex items-end gap-3 flex-wrap">
+              <Input
+                type="date"
+                label={tr('Дата с', 'Dan sana')}
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+              <Input
+                type="date"
+                label={tr('Дата по', 'Gacha sana')}
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+              <Button
+                variant="ghost" size="md" type="button"
+                onClick={() => setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+              >
+                {sortOrder === 'desc' ? tr('Сначала новые', 'Avval yangilari') : tr('Сначала старые', 'Avval eskilari')}
+              </Button>
+            </div>
+          </Card>
+
           <div className="flex gap-2 border-b border-neutral-200">
             <button
               type="button"

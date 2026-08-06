@@ -70,6 +70,22 @@ export async function invalidatePosSettingsCacheGlobally(): Promise<void> {
   await invalidatePosSettingsCache(devices.map((d) => d.id));
 }
 
+// Same gte(dateFrom)/lte(end-of-day dateTo) convention as
+// order/routes.ts's listOrdersQuerySchema handling — shared here since
+// /pos-shifts (closedAtMs) and /pos-receipts (createdAtMs) both need it
+// on a different field.
+function dateRangeFilter(dateFrom?: string, dateTo?: string): { gte?: Date; lte?: Date } | undefined {
+  if (!dateFrom && !dateTo) return undefined;
+  const range: { gte?: Date; lte?: Date } = {};
+  if (dateFrom) range.gte = new Date(dateFrom);
+  if (dateTo) {
+    const end = new Date(dateTo);
+    end.setHours(23, 59, 59, 999);
+    range.lte = end;
+  }
+  return range;
+}
+
 function generateActivationCode(): string {
   let code = '';
   for (let i = 0; i < 8; i++) {
@@ -192,9 +208,15 @@ const deviceSettingsSchema = z.object({
   display: z.record(z.unknown()).nullable().optional(),
 });
 
+// dateFrom/dateTo follow the same convention as order/routes.ts's
+// listOrdersQuerySchema — plain YYYY-MM-DD strings, gte(dateFrom) /
+// lte(end-of-day for dateTo), not a fancier date-time shape.
 const listShiftsQuerySchema = z.object({
   storeId: z.string().min(1),
   deviceId: z.string().min(1).optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   cursor: z.string().min(1).optional(),
 });
@@ -203,6 +225,9 @@ const listReceiptsQuerySchema = z.object({
   storeId: z.string().min(1),
   deviceId: z.string().min(1).optional(),
   shiftNumber: z.coerce.number().int().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   cursor: z.string().min(1).optional(),
 });
@@ -1066,12 +1091,14 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
       if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
 
+      const closedDateRange = dateRangeFilter(query.data.dateFrom, query.data.dateTo);
       const shifts = await prisma.shiftEvent.findMany({
         where: {
           tenantId,
           storeId: store.id,
           eventType: 'SHIFT_CLOSED',
           ...(query.data.deviceId ? { deviceId: query.data.deviceId } : {}),
+          ...(closedDateRange ? { closedAtMs: closedDateRange } : {}),
         },
         select: {
           id: true,
@@ -1082,13 +1109,19 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           deviceId: true,
           device: { select: { name: true } },
         },
-        orderBy: { closedAtMs: 'desc' },
+        orderBy: { closedAtMs: query.data.sortOrder },
         take: query.data.limit,
         ...(query.data.cursor ? { cursor: { id: query.data.cursor }, skip: 1 } : {}),
       });
 
       const nextCursor = shifts.length === query.data.limit ? shifts[shifts.length - 1]!.id : null;
 
+      // Deliberately NOT date-filtered — an open shift is live/current
+      // state, not a historical record to browse by date. Browsing a past
+      // date still surfaces "there's also a shift open right now" rather
+      // than hiding it, which is the more useful default (see the "Операционный
+      // день" plan note this block already carries below).
+      //
       // "Операционный день" (docs) — the currently open shift per device,
       // so a shift is visible (and its receipts reachable) before it ever
       // closes, not just after. Only on the first page (no cursor) — a
@@ -1167,6 +1200,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
       const store = await prisma.store.findFirst({ where: { id: query.data.storeId, tenantId }, select: { id: true } });
       if (!store) return reply.status(404).send({ success: false, error: 'Store not found' });
 
+      const receiptsDateRange = dateRangeFilter(query.data.dateFrom, query.data.dateTo);
       const receipts = await prisma.fiscalEvent.findMany({
         where: {
           tenantId,
@@ -1174,6 +1208,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           eventType: 'FISCAL_SUCCESS',
           ...(query.data.deviceId ? { deviceId: query.data.deviceId } : {}),
           ...(query.data.shiftNumber !== undefined ? { shiftNumber: query.data.shiftNumber } : {}),
+          ...(receiptsDateRange ? { createdAtMs: receiptsDateRange } : {}),
         },
         select: {
           id: true,
@@ -1195,7 +1230,7 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
           operatorName: true,
           operatorRole: true,
         },
-        orderBy: { createdAtMs: 'desc' },
+        orderBy: { createdAtMs: query.data.sortOrder },
         take: query.data.limit,
         ...(query.data.cursor ? { cursor: { id: query.data.cursor }, skip: 1 } : {}),
       });

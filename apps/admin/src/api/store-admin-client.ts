@@ -499,17 +499,23 @@ export const adminApi = {
   updatePosDeviceSettings: (deviceId: string, data: { printer?: Record<string, unknown> | null; scanner?: Record<string, unknown> | null; pinPad?: Record<string, unknown> | null; scale?: Record<string, unknown> | null; display?: Record<string, unknown> | null }) =>
     request<any>(`/pos-devices/${deviceId}/settings`, { method: 'PUT', body: JSON.stringify(data) }),
 
-  getPosShifts: (params: { storeId: string; deviceId?: string; limit?: number; cursor?: string }) => {
+  getPosShifts: (params: { storeId: string; deviceId?: string; dateFrom?: string; dateTo?: string; sortOrder?: 'asc' | 'desc'; limit?: number; cursor?: string }) => {
     const qs = new URLSearchParams({ storeId: params.storeId });
     if (params.deviceId) qs.set('deviceId', params.deviceId);
+    if (params.dateFrom) qs.set('dateFrom', params.dateFrom);
+    if (params.dateTo) qs.set('dateTo', params.dateTo);
+    if (params.sortOrder) qs.set('sortOrder', params.sortOrder);
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.cursor) qs.set('cursor', params.cursor);
     return request<any>(`/pos-shifts?${qs.toString()}`);
   },
-  getPosReceipts: (params: { storeId: string; deviceId?: string; shiftNumber?: number; limit?: number; cursor?: string }) => {
+  getPosReceipts: (params: { storeId: string; deviceId?: string; shiftNumber?: number; dateFrom?: string; dateTo?: string; sortOrder?: 'asc' | 'desc'; limit?: number; cursor?: string }) => {
     const qs = new URLSearchParams({ storeId: params.storeId });
     if (params.deviceId) qs.set('deviceId', params.deviceId);
     if (params.shiftNumber !== undefined) qs.set('shiftNumber', String(params.shiftNumber));
+    if (params.dateFrom) qs.set('dateFrom', params.dateFrom);
+    if (params.dateTo) qs.set('dateTo', params.dateTo);
+    if (params.sortOrder) qs.set('sortOrder', params.sortOrder);
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.cursor) qs.set('cursor', params.cursor);
     return request<any>(`/pos-receipts?${qs.toString()}`);
