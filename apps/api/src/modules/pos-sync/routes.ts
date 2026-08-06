@@ -764,6 +764,17 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
       return sendError(reply, 400, 'ACTIVATION_CODE_EXPIRED', 'Activation code has expired', request);
     }
 
+    // EXPIRED is checked as its own case, not folded into the generic
+    // "anything but PENDING" branch below — a retry against a code that
+    // expired on a previous attempt (the branch above already flipped it
+    // to EXPIRED and returned this same error) must keep returning
+    // ACTIVATION_CODE_EXPIRED, not the misleading ACTIVATION_CODE_ALREADY_USED
+    // (which should mean "someone already completed activation with this
+    // code" — i.e. status is CONFIRMED, not EXPIRED).
+    if (activation.status === 'EXPIRED') {
+      return sendError(reply, 400, 'ACTIVATION_CODE_EXPIRED', 'Activation code has expired', request);
+    }
+
     if (activation.status !== 'PENDING') {
       return sendError(
         reply,

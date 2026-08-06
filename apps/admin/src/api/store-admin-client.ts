@@ -464,6 +464,9 @@ export const adminApi = {
   getPosDevices: (storeId: string) => request<any>(`/pos-devices?storeId=${encodeURIComponent(storeId)}`),
   createPosDevice: (data: { storeId: string; name: string; deviceType?: string }) =>
     request<any>('/pos-devices', { method: 'POST', body: JSON.stringify(data) }),
+  reissuePosDeviceActivationCode: (deviceId: string) =>
+    request<any>(`/pos-devices/${deviceId}/activation-code`, { method: 'POST' }),
+  deletePosDevice: (deviceId: string) => request<any>(`/pos-devices/${deviceId}`, { method: 'DELETE' }),
   createCatalogSnapshot: (storeId: string) =>
     request<any>('/pos-devices/catalog-snapshot', { method: 'POST', body: JSON.stringify({ storeId }) }),
   // docs/POS_SYNC_API.md §15 — manual, admin-triggered command send for

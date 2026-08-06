@@ -277,6 +277,29 @@ describe('pos-sync.routes', () => {
       await app.close();
     });
 
+    it('returns 400 ACTIVATION_CODE_EXPIRED (not ALREADY_USED) on a retry against a code already flipped to EXPIRED', async () => {
+      mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
+        id: 'act-2',
+        deviceId: 'dev-2',
+        status: 'EXPIRED',
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/pos/v1/activate',
+        payload: { ...validActivatePayload, activationCode: 'EXPI-RED0' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('ACTIVATION_CODE_EXPIRED');
+      // Already EXPIRED going in — no redundant update needed this time.
+      expect(mocks.prisma.deviceActivation.update).not.toHaveBeenCalled();
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+      await app.close();
+    });
+
     it('returns 400 ACTIVATION_CODE_ALREADY_USED for an already-confirmed activation code', async () => {
       mocks.prisma.deviceActivation.findUnique.mockResolvedValue({
         id: 'act-3',

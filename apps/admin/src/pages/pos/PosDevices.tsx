@@ -40,8 +40,10 @@ export default function PosDevices() {
   const [formName, setFormName] = useState('');
   const [formStoreId, setFormStoreId] = useState('');
   const [saving, setSaving] = useState(false);
-  const [activation, setActivation] = useState<{ code: string; expiresAt: string; deviceName: string } | null>(null);
+  const [activation, setActivation] = useState<{ code: string; expiresAt: string; deviceName: string; isNew: boolean } | null>(null);
   const [refreshingCatalog, setRefreshingCatalog] = useState(false);
+  const [reissuingId, setReissuingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
@@ -96,6 +98,7 @@ export default function PosDevices() {
         code: result.activationCode,
         expiresAt: result.expiresAt,
         deviceName: result.device?.name || formName.trim(),
+        isNew: true,
       });
       setFormOpen(false);
       if (formStoreId === storeId) await loadDevices(storeId);
@@ -122,6 +125,43 @@ export default function PosDevices() {
       showNotice('error', err?.message || tr('Не удалось обновить каталог', "Katalogni yangilab bo'lmadi"));
     } finally {
       setRefreshingCatalog(false);
+    }
+  }
+
+  // Only ever offered for PENDING devices (see columns below) — a device
+  // stuck with a dead/expired code had no recovery path before this
+  // besides creating a whole new device and leaving the old row dead.
+  async function reissueCode(device: any) {
+    setReissuingId(device.id);
+    try {
+      const result = await adminApi.reissuePosDeviceActivationCode(device.id);
+      setActivation({
+        code: result.activationCode,
+        expiresAt: result.expiresAt,
+        deviceName: device.name,
+        isNew: false,
+      });
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Не удалось перевыпустить код', "Kodni qayta chiqarib bo'lmadi"));
+    } finally {
+      setReissuingId(null);
+    }
+  }
+
+  async function deleteDevice(device: any) {
+    const ok = window.confirm(
+      tr(`Удалить устройство «${device.name}»? Это действие необратимо.`, `«${device.name}» qurilmasini o'chirish? Bu amalni bekor qilib bo'lmaydi.`)
+    );
+    if (!ok) return;
+    setDeletingId(device.id);
+    try {
+      await adminApi.deletePosDevice(device.id);
+      showNotice('success', tr('Устройство удалено', "Qurilma o'chirildi"));
+      if (storeId) await loadDevices(storeId);
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Не удалось удалить устройство', "Qurilmani o'chirib bo'lmadi"));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -171,6 +211,31 @@ export default function PosDevices() {
           ? <Badge variant="warning">{d.pendingCommandsCount}</Badge>
           : <span className="text-token-xs text-neutral-400">—</span>
       ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (d) => {
+        if (d.status !== 'PENDING') return null;
+        return (
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="ghost" size="sm" type="button"
+              onClick={(e) => { e?.stopPropagation(); void reissueCode(d); }}
+              disabled={reissuingId === d.id}
+            >
+              {reissuingId === d.id ? tr('...', '...') : tr('Перевыпустить код', 'Kodni qayta chiqarish')}
+            </Button>
+            <Button
+              variant="ghost" size="sm" type="button"
+              onClick={(e) => { e?.stopPropagation(); void deleteDevice(d); }}
+              disabled={deletingId === d.id}
+            >
+              {deletingId === d.id ? tr('...', '...') : tr('Удалить', "O'chirish")}
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -278,7 +343,9 @@ export default function PosDevices() {
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4" onClick={() => setActivation(null)}>
           <Card className="w-full max-w-[420px]" onClick={(e) => e.stopPropagation()}>
             <h3 className="m-0 mb-2 text-token-base font-semibold text-neutral-800">
-              {tr('Устройство создано', 'Qurilma yaratildi')}: {activation.deviceName}
+              {activation.isNew
+                ? `${tr('Устройство создано', 'Qurilma yaratildi')}: ${activation.deviceName}`
+                : `${tr('Новый код активации', "Yangi faollashtirish kodi")}: ${activation.deviceName}`}
             </h3>
             <p className="text-token-sm text-neutral-600 mb-3">
               {tr(

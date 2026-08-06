@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     store: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-    posDevice: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-    deviceActivation: { create: vi.fn() },
+    posDevice: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), delete: vi.fn() },
+    deviceActivation: { create: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     product: { findMany: vi.fn().mockResolvedValue([]) },
     category: { findMany: vi.fn().mockResolvedValue([]) },
     productType: { findMany: vi.fn().mockResolvedValue([]) },
@@ -137,6 +137,84 @@ describe('pos-sync.admin-routes', () => {
       });
 
       expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+  });
+
+  describe('POST /pos-devices/:id/activation-code', () => {
+    it('reissues a code for a PENDING device and expires prior pending codes', async () => {
+      mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1', status: 'PENDING' });
+      mocks.prisma.deviceActivation.create.mockResolvedValue({
+        activationCode: 'NEWC-0DE1', expiresAt: new Date(Date.now() + 86_400_000),
+      });
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'POST', url: '/pos-devices/dev-1/activation-code' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.activationCode).toBe('NEWC-0DE1');
+      expect(mocks.prisma.deviceActivation.updateMany).toHaveBeenCalledWith({
+        where: { deviceId: 'dev-1', status: 'PENDING' },
+        data: { status: 'EXPIRED' },
+      });
+      await app.close();
+    });
+
+    it('returns 404 for a device outside the tenant', async () => {
+      mocks.prisma.posDevice.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'POST', url: '/pos-devices/foreign/activation-code' });
+
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.deviceActivation.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 400 for a device that is already ACTIVE', async () => {
+      mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1', status: 'ACTIVE' });
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'POST', url: '/pos-devices/dev-1/activation-code' });
+
+      expect(response.statusCode).toBe(400);
+      expect(mocks.prisma.deviceActivation.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  describe('DELETE /pos-devices/:id', () => {
+    it('deletes a PENDING device', async () => {
+      mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1', status: 'PENDING' });
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'DELETE', url: '/pos-devices/dev-1' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.id).toBe('dev-1');
+      expect(mocks.prisma.posDevice.delete).toHaveBeenCalledWith({ where: { id: 'dev-1' } });
+      await app.close();
+    });
+
+    it('returns 404 for a device outside the tenant', async () => {
+      mocks.prisma.posDevice.findFirst.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'DELETE', url: '/pos-devices/foreign' });
+
+      expect(response.statusCode).toBe(404);
+      expect(mocks.prisma.posDevice.delete).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('returns 409 for a device that is already ACTIVE', async () => {
+      mocks.prisma.posDevice.findFirst.mockResolvedValue({ id: 'dev-1', status: 'ACTIVE' });
+
+      const app = await buildApp();
+      const response = await app.inject({ method: 'DELETE', url: '/pos-devices/dev-1' });
+
+      expect(response.statusCode).toBe(409);
+      expect(mocks.prisma.posDevice.delete).not.toHaveBeenCalled();
       await app.close();
     });
   });

@@ -9,7 +9,12 @@ import { encrypt, decrypt } from '../../lib/encrypt.js';
 import { fetchProductTypesById, mapProductForCatalog, CATALOG_PRODUCT_SELECT } from './product-type-rules.js';
 
 const ACTIVATION_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
-const ACTIVATION_CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+// Was 15 minutes — too short for a real physical till setup (unboxing,
+// network config, app install can easily exceed that), and a device
+// stuck with an expired code had no recovery path before the reissue
+// endpoint below existed. The /activate rate limit (5/min/IP, routes.ts)
+// is what actually guards against brute-forcing a short code, not TTL.
+const ACTIVATION_CODE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // docs/POS_SYNC_API.md §10 — must match pos-sync/routes.ts's
 // POS_SETTINGS_CACHE_PREFIX exactly; that file's GET /pos/v1/settings
@@ -72,6 +77,29 @@ function generateActivationCode(): string {
     code += ACTIVATION_CODE_ALPHABET[randomInt(ACTIVATION_CODE_ALPHABET.length)];
   }
   return code;
+}
+
+// Shared by device creation and the reissue endpoint below — activationCode
+// is @unique, so retry on the (very unlikely) collision rather than fail
+// the whole request over it.
+async function createActivationCode(deviceId: string): Promise<{ activationCode: string; expiresAt: Date }> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await prisma.deviceActivation.create({
+        data: {
+          deviceId,
+          activationCode: generateActivationCode(),
+          expiresAt: new Date(Date.now() + ACTIVATION_CODE_TTL_MS),
+        },
+        select: { activationCode: true, expiresAt: true },
+      });
+    } catch (err: any) {
+      if (err?.code !== 'P2002' || attempt === 4) throw err;
+    }
+  }
+  // Unreachable — the loop above always returns or throws — but keeps
+  // TypeScript satisfied that every path returns.
+  throw new Error('Failed to generate a unique activation code');
 }
 
 const createDeviceSchema = z.object({
@@ -671,32 +699,75 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
         select: { id: true, name: true, deviceType: true, status: true, storeId: true, createdAt: true },
       });
 
-      // activationCode is @unique — retry on the (very unlikely) collision.
-      let activation;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        try {
-          activation = await prisma.deviceActivation.create({
-            data: {
-              deviceId: device.id,
-              activationCode: generateActivationCode(),
-              expiresAt: new Date(Date.now() + ACTIVATION_CODE_TTL_MS),
-            },
-            select: { activationCode: true, expiresAt: true },
-          });
-          break;
-        } catch (err: any) {
-          if (err?.code !== 'P2002' || attempt === 4) throw err;
-        }
-      }
+      const activation = await createActivationCode(device.id);
 
       return reply.status(201).send({
         success: true,
         data: {
           device,
-          activationCode: activation!.activationCode,
-          expiresAt: activation!.expiresAt,
+          activationCode: activation.activationCode,
+          expiresAt: activation.expiresAt,
         },
       });
+    }
+  );
+
+  // Reissue a fresh activation code for a device stuck in PENDING (e.g. its
+  // original code expired before anyone typed it in at the till) — the
+  // only recovery path before this endpoint was creating an entirely new
+  // device and leaving the old PENDING row dead forever. Any other still-
+  // PENDING DeviceActivation rows for this device are expired first so at
+  // most one code is ever valid at a time (DeviceActivation is one-to-many
+  // per device — nothing at the schema level otherwise prevents two live
+  // codes coexisting).
+  fastify.post(
+    '/pos-devices/:id/activation-code',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { id } = request.params as { id: string };
+
+      const device = await prisma.posDevice.findFirst({ where: { id, tenantId }, select: { id: true, status: true } });
+      if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
+      if (device.status !== 'PENDING') {
+        return reply.status(400).send({ success: false, error: 'Only pending devices can have their activation code reissued' });
+      }
+
+      await prisma.deviceActivation.updateMany({
+        where: { deviceId: device.id, status: 'PENDING' },
+        data: { status: 'EXPIRED' },
+      });
+
+      const activation = await createActivationCode(device.id);
+
+      return reply.status(200).send({
+        success: true,
+        data: { activationCode: activation.activationCode, expiresAt: activation.expiresAt },
+      });
+    }
+  );
+
+  // Delete a device that never got past activation — restricted to PENDING
+  // only (not just at the UI layer): every event model's deviceId relation
+  // cascades (SaleEvent/FiscalEvent/ShiftEvent/CloudCommand, schema.prisma),
+  // so deleting a device that was ever ACTIVE would silently erase real
+  // sales history. A PENDING device has none of that to lose.
+  fastify.delete(
+    '/pos-devices/:id',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { id } = request.params as { id: string };
+
+      const device = await prisma.posDevice.findFirst({ where: { id, tenantId }, select: { id: true, status: true } });
+      if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
+      if (device.status !== 'PENDING') {
+        return reply.status(409).send({ success: false, error: 'Only pending devices can be deleted' });
+      }
+
+      await prisma.posDevice.delete({ where: { id: device.id } });
+
+      return reply.status(200).send({ success: true, data: { id: device.id } });
     }
   );
 
