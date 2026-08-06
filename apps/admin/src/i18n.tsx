@@ -8,6 +8,7 @@ const dict = {
   ru: {
     dashboard: '\u0414\u0430\u0448\u0431\u043e\u0440\u0434',
     orders: '\u0417\u0430\u043a\u0430\u0437\u044b',
+    sales: '\u041f\u0440\u043e\u0434\u0430\u0436\u0438',
     products: '\u0422\u043e\u0432\u0430\u0440\u044b',
     categories: '\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438',
     customers: '\u041a\u043b\u0438\u0435\u043d\u0442\u044b',
@@ -41,6 +42,7 @@ const dict = {
   uz: {
     dashboard: 'Boshqaruv paneli',
     orders: 'Buyurtmalar',
+    sales: 'Sotuvlar',
     products: 'Mahsulotlar',
     categories: 'Toifalar',
     customers: 'Mijozlar',

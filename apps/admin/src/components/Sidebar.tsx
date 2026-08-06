@@ -56,6 +56,7 @@ const WORKSPACE_LINKS: NavLink[] = [
 // the actual registered route for PaymentMethods.tsx.
 const SELLGRAM_LINKS: { to: string; label: Key }[] = [
   { to: '/orders', label: 'orders' },
+  { to: '/sales', label: 'sales' },
   { to: '/promo-codes', label: 'promo_codes' },
   { to: '/banners', label: 'banners' },
   { to: '/broadcasts', label: 'broadcasts' },

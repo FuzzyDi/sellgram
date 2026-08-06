@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
 import {
-  BrowserRouter, Routes, Route, useLocation,
+  BrowserRouter, Routes, Route, useLocation, useSearchParams, Navigate,
 } from 'react-router-dom';
 import { adminApi, clearTokens, setTokens } from './api/store-admin-client';
 import { useAdminI18n } from './i18n';
@@ -15,6 +15,7 @@ const Categories    = lazy(() => import('./pages/Categories'));
 const Customers     = lazy(() => import('./pages/Customers'));
 const Help          = lazy(() => import('./pages/Help'));
 const Orders        = lazy(() => import('./pages/Orders'));
+const Sales         = lazy(() => import('./pages/Sales'));
 const PaymentMethods = lazy(() => import('./pages/PaymentMethods'));
 const Products      = lazy(() => import('./pages/Products'));
 const Procurement   = lazy(() => import('./pages/Procurement'));
@@ -30,7 +31,6 @@ const PosAnalytics  = lazy(() => import('./pages/pos/PosAnalytics'));
 const PosDevices    = lazy(() => import('./pages/pos/PosDevices'));
 const PosOperators  = lazy(() => import('./pages/pos/PosOperators'));
 const PosShifts     = lazy(() => import('./pages/pos/PosShifts'));
-const PosReceipts   = lazy(() => import('./pages/pos/PosReceipts'));
 const PosOperatorEvents = lazy(() => import('./pages/pos/PosOperatorEvents'));
 const PosPaymentTerminals = lazy(() => import('./pages/pos/PosPaymentTerminals'));
 const PosPaymentEvents = lazy(() => import('./pages/pos/PosPaymentEvents'));
@@ -42,6 +42,15 @@ const B2bOrders             = lazy(() => import('./pages/b2b/B2bOrders'));
 const SysLayout     = lazy(() => import('./pages/sys/SysLayout'));
 
 interface AuthState { user: any; tenant: any; }
+
+// /pos/receipts was merged into /pos/shifts (the shifts list now expands
+// inline to show a shift's receipts, reusing the same storeId/shiftNumber
+// query params PosReceipts used to read) — redirect old links/bookmarks
+// instead of a hard 404.
+function PosReceiptsRedirect() {
+  const [searchParams] = useSearchParams();
+  return <Navigate to={`/pos/shifts?${searchParams.toString()}`} replace />;
+}
 
 // Explicit "no access" state, replacing the old silent fallback to
 // <Dashboard/> when a permission is missing (docs/ADMIN_REDESIGN.md §6/§8
@@ -171,6 +180,7 @@ function TenantApp() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/orders" element={<ProtectedRoute perms={perms} requires="manageOrders"><Orders /></ProtectedRoute>} />
+            <Route path="/sales" element={<ProtectedRoute perms={perms} requires="manageOrders"><Sales /></ProtectedRoute>} />
             <Route path="/products" element={<ProtectedRoute perms={perms} requires="manageCatalog"><Products /></ProtectedRoute>} />
             <Route path="/categories" element={<ProtectedRoute perms={perms} requires="manageCatalog"><Categories /></ProtectedRoute>} />
             <Route path="/procurement" element={<ProtectedRoute perms={perms} requires="manageCatalog"><Procurement /></ProtectedRoute>} />
@@ -188,7 +198,7 @@ function TenantApp() {
             <Route path="/pos/devices" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosDevices /></ProtectedRoute>} />
             <Route path="/pos/operators" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosOperators /></ProtectedRoute>} />
             <Route path="/pos/shifts" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosShifts /></ProtectedRoute>} />
-            <Route path="/pos/receipts" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosReceipts /></ProtectedRoute>} />
+            <Route path="/pos/receipts" element={<PosReceiptsRedirect />} />
             <Route path="/pos/operator-events" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosOperatorEvents /></ProtectedRoute>} />
             <Route path="/pos/payment-terminals" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosPaymentTerminals /></ProtectedRoute>} />
             <Route path="/pos/payment-events" element={<ProtectedRoute perms={perms} requires="manageSettings"><PosPaymentEvents /></ProtectedRoute>} />
