@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     posSettings: { findUnique: vi.fn().mockResolvedValue(null) },
     platformPolicy: { findMany: vi.fn().mockResolvedValue([]) },
     platformPolicyVersion: { findFirst: vi.fn().mockResolvedValue({ version: 1 }) },
-    posOperator: { findMany: vi.fn().mockResolvedValue([]) },
+    posOperator: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     tenant: { findUnique: vi.fn().mockResolvedValue({ planExpiresAt: null, blockedAt: null }) },
     saleEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
     customer: {
@@ -2623,6 +2623,7 @@ describe('pos-sync.routes', () => {
       mocks.prisma.customer.findFirst.mockResolvedValue(null);
       mocks.prisma.customer.update.mockResolvedValue({});
       mocks.prisma.loyaltyTransaction.findFirst.mockResolvedValue(null);
+      mocks.prisma.posOperator.findFirst.mockResolvedValue(null);
     });
 
     it('ingests a FISCAL_SUCCESS event with the simplified ack envelope', async () => {
@@ -2838,6 +2839,90 @@ describe('pos-sync.routes', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json().error.code).toBe('VALIDATION_ERROR');
       await app.close();
+    });
+
+    // A fiscal receipt is legally significant and must never be dropped
+    // over a stale operatorId/customerId (till out of sync with the
+    // roster) — operatorId/customerId are raw FKs with no tolerance for
+    // "doesn't exist", so this endpoint resolves both before create() and
+    // downgrades an unresolvable one to null instead of letting the P2003
+    // foreign-key violation turn into a 500 that loses the whole receipt.
+    describe('operatorId/customerId resolution (accept-do-not-reject on unknown ids)', () => {
+      it('stores the receipt with operatorId null (still 201) when operatorId matches no PosOperator', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, operatorId: 'op-unknown' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.posOperator.findFirst).toHaveBeenCalledWith({
+          where: { id: 'op-unknown', tenantId: 't-1', storeId: 's-1' },
+          select: { id: true },
+        });
+        expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ operatorId: null }),
+        });
+        await app.close();
+      });
+
+      it('keeps operatorId when it matches a real PosOperator for this tenant/store', async () => {
+        mocks.prisma.posOperator.findFirst.mockResolvedValue({ id: 'op-1' });
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, operatorId: 'op-1' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ operatorId: 'op-1' }),
+        });
+        await app.close();
+      });
+
+      it('stores the receipt with customerId null (still 201) when customerId matches no Customer', async () => {
+        mocks.prisma.customer.findFirst.mockResolvedValue(null);
+
+        const app = await buildApp();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: { ...validFiscalEvent, customerId: 'cust-unknown' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        expect(mocks.prisma.customer.findFirst).toHaveBeenCalledWith({
+          where: { id: 'cust-unknown', tenantId: 't-1' },
+          select: { id: true },
+        });
+        expect(mocks.prisma.fiscalEvent.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ customerId: null }),
+        });
+        await app.close();
+      });
+
+      it('does not look up operatorId/customerId when neither is present on the payload', async () => {
+        const app = await buildApp();
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/v1/fiscal-events',
+          headers: { authorization: 'Bearer pos_validkey', 'x-device-code': 'code-1' },
+          payload: validFiscalEvent,
+        });
+
+        expect(mocks.prisma.posOperator.findFirst).not.toHaveBeenCalled();
+        expect(mocks.prisma.customer.findFirst).not.toHaveBeenCalled();
+        await app.close();
+      });
     });
 
     // docs/CUSTOMER_LOYALTY.md §7 (revised) — accrual moved here from

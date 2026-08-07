@@ -2044,6 +2044,46 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
     }
 
     const payloadHash = checksumOf(body.data);
+
+    // Accept-don't-reject (docs/POS_SYNC_API.md §18), same discipline as
+    // barcode resolution in applyFiscalEventStock below: a fiscal receipt
+    // is legally significant and must never be dropped over a stale/wrong
+    // reference id (operator roster or customer out of sync with what the
+    // till last pulled). fiscalEvent.operatorId/customerId are raw FKs
+    // with no ON DELETE-style tolerance for "doesn't exist at all", so an
+    // unresolvable id is downgraded to null here instead of reaching
+    // prisma.fiscalEvent.create() and failing the whole request with
+    // P2003 (operatorName/operatorRole are free-text snapshots already,
+    // unaffected either way).
+    let operatorId = body.data.operatorId ?? null;
+    if (operatorId) {
+      const operator = await prisma.posOperator.findFirst({
+        where: { id: operatorId, tenantId: device.tenantId, storeId: device.storeId },
+        select: { id: true },
+      });
+      if (!operator) {
+        request.log.warn(
+          { deviceId: device.id, operatorId },
+          'pos-sync: fiscal event operatorId not found — storing receipt with operatorId null'
+        );
+        operatorId = null;
+      }
+    }
+    let customerId = body.data.customerId ?? null;
+    if (customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, tenantId: device.tenantId },
+        select: { id: true },
+      });
+      if (!customer) {
+        request.log.warn(
+          { deviceId: device.id, customerId },
+          'pos-sync: fiscal event customerId not found — storing receipt with customerId null'
+        );
+        customerId = null;
+      }
+    }
+
     // Captured across both branches below (fresh create vs. P2002 replay)
     // so loyalty accrual (further down) always has a real row to work
     // from, whichever path produced it.
@@ -2093,11 +2133,11 @@ export default async function posSyncRoutes(fastify: FastifyInstance) {
           managerOverride: (body.data.managerOverride ?? null) as any,
           // docs/CUSTOMER_LOYALTY.md §7 (revised) — the Prisma-create side
           // of the customerId field; see the Zod schema comment above for
-          // why both sides must land together.
-          customerId: body.data.customerId ?? null,
+          // why both sides must land together. Resolved/nulled above.
+          customerId,
           // docs/POS_POLICY_ENGINE.md §14.1 — same both-sides-together
-          // reasoning as customerId just above.
-          operatorId: body.data.operatorId ?? null,
+          // reasoning as customerId just above. Resolved/nulled above.
+          operatorId,
           operatorName: body.data.operatorName ?? null,
           operatorRole: body.data.operatorRole ?? null,
         },
