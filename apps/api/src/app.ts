@@ -97,6 +97,10 @@ async function main() {
       'https://miniapp.sellgram.uz',
       'https://api.sellgram.uz',
       'https://admin.sellgram.uz',
+      'https://sbgcloud.uz',
+      'https://app.sbgcloud.uz',
+      'https://miniapp.sbgcloud.uz',
+      'https://api.sbgcloud.uz',
     ],
     credentials: true,
   });
