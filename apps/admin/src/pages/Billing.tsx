@@ -289,10 +289,10 @@ export default function Billing() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3.5">
           {[
-            { key: 'stores', label: tr('Stores', "Do'konlar") },
-            { key: 'products', label: tr('Products', 'Mahsulotlar') },
-            { key: 'ordersThisMonth', label: tr('Orders (month)', 'Buyurtmalar (oy)') },
-            { key: 'deliveryZones', label: tr('Delivery zones', 'Hududlar') },
+            { key: 'stores', label: tr('Магазины', "Do'konlar") },
+            { key: 'products', label: tr('Товары', 'Mahsulotlar') },
+            { key: 'ordersThisMonth', label: tr('Заказов в месяц', 'Buyurtmalar (oy)') },
+            { key: 'deliveryZones', label: tr('Зоны доставки', 'Hududlar') },
           ].map((item) => {
             const u = usage[item.key];
             if (!u) return null;
@@ -331,14 +331,14 @@ export default function Billing() {
             const price = Number(plan?.price ?? plan?.priceMonthly ?? 0);
 
             const features = [
-              `${tr('Stores', "Do'konlar")}: ${limits.maxStores === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxStores ?? '-'}`,
-              `${tr('Products', 'Mahsulotlar')}: ${limits.maxProducts === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxProducts ?? '-'}`,
-              `${tr('Orders / month', 'Buyurtma / oy')}: ${limits.maxOrdersPerMonth === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxOrdersPerMonth ?? '-'}`,
-              `${tr('Delivery zones', 'Hududlar')}: ${limits.maxDeliveryZones === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxDeliveryZones ?? '-'}`,
-              `${tr('Reports', 'Hisobotlar')}: ${reportLevelLabel(reportsLevel)}`,
-              `${tr('History', 'Tarix')}: ${reportsHistoryDays} ${tr('days', 'kun')}`,
-              `${tr('Export', 'Eksport')}: ${allowReportExport ? tr('Да', 'Ha') : tr('Нет', "Yo'q")}`,
-              `${tr('Scheduled reports', 'Avto-hisobotlar')}: ${maxScheduledReports === -1 ? tr('без лимита', 'cheklanmagan') : maxScheduledReports}`,
+              `${tr('Магазины', "Do'konlar")}: ${limits.maxStores === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxStores ?? '-'}`,
+              `${tr('Товары', 'Mahsulotlar')}: ${limits.maxProducts === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxProducts ?? '-'}`,
+              `${tr('Заказов в месяц', 'Buyurtma / oy')}: ${limits.maxOrdersPerMonth === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxOrdersPerMonth ?? '-'}`,
+              `${tr('Зоны доставки', 'Hududlar')}: ${limits.maxDeliveryZones === -1 ? tr('без лимита', 'cheklanmagan') : limits.maxDeliveryZones ?? '-'}`,
+              `${tr('Отчёты', 'Hisobotlar')}: ${reportLevelLabel(reportsLevel)}`,
+              `${tr('История', 'Tarix')}: ${reportsHistoryDays} ${tr('дней', 'kun')}`,
+              `${tr('Экспорт', 'Eksport')}: ${allowReportExport ? tr('Да', 'Ha') : tr('Нет', "Yo'q")}`,
+              `${tr('Авто-отчёты', 'Avto-hisobotlar')}: ${maxScheduledReports === -1 ? tr('без лимита', 'cheklanmagan') : maxScheduledReports}`,
             ];
 
             const isPopular = code === 'PRO';

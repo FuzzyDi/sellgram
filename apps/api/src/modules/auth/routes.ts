@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
+import { ZodError } from 'zod';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 import {
   registerSchema,
@@ -17,6 +18,17 @@ import { writeAuditLog } from '../../lib/audit.js';
 import prisma from '../../lib/prisma.js';
 
 function mapAuthError(err: unknown) {
+  // A raw ZodError's .message is a JSON-stringified issue array — letting
+  // it fall through to the generic Error branch below means the frontend
+  // shows that JSON to the user verbatim instead of a readable message.
+  if (err instanceof ZodError) {
+    const issue = err.issues[0];
+    if (issue?.path?.[0] === 'tenantSlug') {
+      return { status: 400, error: 'Tenant slug contains invalid characters' };
+    }
+    return { status: 400, error: 'Проверьте правильность заполнения полей формы' };
+  }
+
   if (err instanceof AuthServiceError) {
     if (err.code === 'EMAIL_ALREADY_REGISTERED') return { status: 400, error: 'Email already registered' };
     if (err.code === 'TENANT_SLUG_TAKEN') return { status: 400, error: 'Tenant slug already taken' };

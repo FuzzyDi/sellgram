@@ -207,7 +207,16 @@ export default function ProductForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input type="number" label={tr('Остаток', 'Qoldiq')} value={form.stockQty} onChange={updateForm('stockQty')} />
-            <Input type="number" label={tr('Мин. остаток', 'Min. qoldiq')} value={form.lowStockAlert} onChange={updateForm('lowStockAlert')} />
+            <Input
+              type="number"
+              label={tr('Мин. остаток', 'Min. qoldiq')}
+              value={form.lowStockAlert}
+              onChange={updateForm('lowStockAlert')}
+              helpText={tr(
+                'При достижении этого количества вы получите уведомление о низком остатке',
+                'Ushbu miqdorga yetganda kam qoldiq haqida bildirishnoma olasiz'
+              )}
+            />
             <Select label={tr('Категория', 'Toifa')} value={form.categoryId} onChange={updateForm('categoryId')}>
               <option value="">{tr('Без категории', 'Toifasiz')}</option>
               {hierarchicalCategories.map((category) => (

@@ -22,9 +22,18 @@ export default function Login({ onLogin, onRegister, initialMode = 'login' }: Pr
   const [newPassword, setNewPassword] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  const CYRILLIC_MAP: Record<string, string> = {
+    а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'zh', з: 'z',
+    и: 'i', й: 'j', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r',
+    с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch',
+    ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
+  };
+
+  const transliterate = (s: string) =>
+    s.toLowerCase().split('').map((c) => CYRILLIC_MAP[c] ?? c).join('');
+
   const slugify = (s: string) =>
-    s
-      .toLowerCase()
+    transliterate(s)
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
 
@@ -55,10 +64,19 @@ export default function Login({ onLogin, onRegister, initialMode = 'login' }: Pr
         setNewPassword('');
       }
     } catch (err: any) {
+      const msg = String(err?.message || '');
       if (err.message === 'NO_TELEGRAM') {
         setError(tr('Telegram не привязан к аккаунту. Обратитесь в поддержку.', 'Telegram akkauntga bog\'lanmagan. Qo\'llab-quvvatlash xizmatiga murojaat qiling.'));
       } else if (err.message === 'Invalid credentials') {
         setError(tr('Неверный код или он истёк', 'Noto\'g\'ri kod yoki muddati o\'tgan'));
+      } else if (mode === 'register' && (msg.includes('tenantSlug') || msg.includes('Tenant slug') || /^[[{]/.test(msg.trim()))) {
+        // Raw zod-validation JSON leaking through from the API (or any
+        // tenantSlug-specific error) is not something a merchant can act
+        // on — swap it for a plain-language nudge instead.
+        setError(tr(
+          'Название магазина содержит недопустимые символы. Используйте латинские буквы или кириллицу.',
+          "Do'kon nomida ruxsat etilmagan belgilar bor. Lotin yoki kirill harflaridan foydalaning."
+        ));
       } else {
         setError(err.message || tr('Ошибка', 'Xatolik'));
       }

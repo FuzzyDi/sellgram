@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../api/store-admin-client';
 import { useAdminI18n } from '../../i18n';
 import Card from '../../components/Card';
@@ -69,6 +70,7 @@ function defaultValue(isArray?: boolean) {
 
 export default function PosSettings() {
   const { tr, locale } = useAdminI18n();
+  const navigate = useNavigate();
   const { stores, storeId, selectStore, loading: storesLoading, loadError: storesError } = usePosStores();
 
   const [loadingSettings, setLoadingSettings] = useState(true);
@@ -190,6 +192,9 @@ export default function PosSettings() {
           <p className="text-token-sm text-neutral-500">
             {tr('Сначала создайте магазин в настройках.', "Avval sozlamalarda do'kon yarating.")}
           </p>
+          <Button variant="primary" size="md" type="button" className="mt-3.5" onClick={() => navigate('/settings')}>
+            {tr('Перейти в настройки →', "Sozlamalarga o'tish →")}
+          </Button>
         </Card>
       </section>
     );

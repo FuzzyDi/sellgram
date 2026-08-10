@@ -118,7 +118,7 @@ export function useProductForm({ loadProducts, loadCategories, showNotice, onEdi
         name: form.name.trim(),
         price: parseFloat(form.price),
         stockQty: parseInt(form.stockQty, 10) || 0,
-        lowStockAlert: parseInt(form.lowStockAlert, 10) || 5,
+        lowStockAlert: parseInt(form.lowStockAlert, 10) || 0,
         isActive: form.isActive,
         showInMiniapp: form.showInMiniapp,
       };
