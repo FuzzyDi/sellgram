@@ -127,16 +127,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post('/onboarding/complete', {
-    preHandler: [fastify.authenticate],
-  }, async (request) => {
-    await prisma.tenant.update({
-      where: { id: request.tenantId! },
-      data: { onboardingCompletedAt: new Date() },
-    });
-    return { success: true };
-  });
-
   fastify.post('/auth/me/change-password', {
     preHandler: [fastify.authenticate],
   }, async (request, reply) => {

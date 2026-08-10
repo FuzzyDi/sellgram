@@ -15,6 +15,7 @@ import {
   updateTenantStore,
 } from './service.js';
 import { sendWelcomeMessage } from '../../bot/bot-manager.js';
+import prisma from '../../lib/prisma.js';
 
 function mapStoreError(err: unknown) {
   if (err instanceof StoreServiceError) {
@@ -102,6 +103,10 @@ export default async function storeRoutes(fastify: FastifyInstance) {
 
   fastify.post('/onboarding/complete', async (request, reply) => {
     sendWelcomeMessage(request.tenantId!).catch(() => {/* non-fatal */});
+    await prisma.tenant.update({
+      where: { id: request.tenantId! },
+      data: { onboardingCompletedAt: new Date() },
+    });
     return { success: true };
   });
 
