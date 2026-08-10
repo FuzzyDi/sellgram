@@ -120,7 +120,7 @@ export default function ImportModal({ onClose, onImported }: { onClose: () => vo
               )}
             </div>
 
-            <div className="max-h-80 overflow-y-auto rounded-token-md border border-neutral-200">
+            <div className="max-h-80 overflow-auto rounded-token-md border border-neutral-200">
               <table className="w-full border-collapse text-token-xs">
                 <thead>
                   <tr className="border-b border-neutral-200">

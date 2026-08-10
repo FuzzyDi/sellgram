@@ -292,7 +292,7 @@ export default function PosDevices() {
         <PosPlanBlocked />
       ) : (
         <>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 flex-wrap">
             <Button variant="ghost" size="md" type="button" onClick={() => void refreshCatalog()} disabled={refreshingCatalog}>
               {refreshingCatalog ? tr('Обновление...', 'Yangilanmoqda...') : tr('Обновить каталог', 'Katalogni yangilash')}
             </Button>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Package, Boxes, Users, BarChart2, Settings as SettingsIcon, CreditCard, Briefcase, ChevronDown, ChevronUp, ShoppingCart, Truck, Tag, FileText, HelpCircle, type LucideIcon,
+  LayoutDashboard, Package, Boxes, Users, BarChart2, Settings as SettingsIcon, CreditCard, Briefcase, ChevronDown, ChevronUp, ShoppingCart, Truck, Tag, FileText, HelpCircle, X, type LucideIcon,
 } from 'lucide-react';
 import { useAdminI18n, type Key } from '../i18n';
 
@@ -124,9 +124,22 @@ export default function Sidebar({ tenantName, permissions, mobileOpen, onCloseMo
       ].join(' ')}
     >
       {/* Branding */}
-      <div className="px-3.5 pt-4 pb-3 border-b border-neutral-200">
-        <span className="text-token-lg font-semibold text-neutral-800 tracking-tight">SBGCloud</span>
-        <p className="mt-1 text-token-xs font-semibold text-neutral-500 truncate">{tenantName || '—'}</p>
+      <div className="px-3.5 pt-4 pb-3 border-b border-neutral-200 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <span className="text-token-lg font-semibold text-neutral-800 tracking-tight">SBGCloud</span>
+          <p className="mt-1 text-token-xs font-semibold text-neutral-500 truncate">{tenantName || '—'}</p>
+        </div>
+        {/* Mobile-only explicit close — overlay click and route navigation
+            already close the drawer, but a visible × inside it is still
+            the expected affordance on a touch device. */}
+        <button
+          type="button"
+          onClick={onCloseMobile}
+          className="sg-sidebar-close shrink-0 hidden text-neutral-400 hover:text-neutral-700 p-1 -m-1 rounded-token-sm"
+          aria-label="Close menu"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Workspace */}

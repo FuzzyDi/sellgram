@@ -408,7 +408,7 @@ export default function Stock() {
     <section className="flex flex-col gap-4">
       {noticeNode}
 
-      <header className="flex justify-between items-start">
+      <header className="flex justify-between items-start flex-wrap gap-3">
         <div>
           <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Остатки на складе', 'Ombor qoldiqlari')}</h2>
           <p className="mt-1 text-token-sm text-neutral-500">{tr('Управление складскими остатками товаров', 'Mahsulotlar ombor qoldiqlarini boshqarish')}</p>

@@ -75,7 +75,7 @@ export default function Products() {
   return (
     <section className="flex flex-col gap-4">
       {noticeNode}
-      <header className="flex items-center justify-between gap-3">
+      <header className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-token-2xl font-semibold text-neutral-800">{tr('Товары', 'Mahsulotlar')}</h2>
           <p className="mt-1 text-token-sm text-neutral-500">{tr('Каталог магазина и остатки', "Do'kon katalogi va ombor qoldiqlari")}</p>

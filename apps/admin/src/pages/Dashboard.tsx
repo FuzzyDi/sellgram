@@ -139,7 +139,7 @@ export default function Dashboard() {
           <div className="h-7 w-2/5 rounded-token-sm bg-neutral-100 animate-pulse" />
           <div className="h-3.5 w-3/5 rounded-token-sm bg-neutral-100 animate-pulse mt-2" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[1, 2, 3].map((i) => (
             <Card key={i}>
               <div className="h-4 w-2/5 rounded-token-sm bg-neutral-100 animate-pulse" />
@@ -235,7 +235,7 @@ export default function Dashboard() {
       )}
 
       {/* Three channel cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card className="border-t-2" style={{ borderTopColor: '#059669' }}>
           <div className="flex items-center gap-2 mb-3">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-channel-sellgram" aria-hidden="true" />
@@ -294,7 +294,7 @@ export default function Dashboard() {
       )}
 
       {/* Bottom: top products + POS status */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Card>
           <h3 className="m-0 text-token-lg font-semibold text-neutral-800">{tr('Топ товаров', 'Top mahsulotlar')}</h3>
           <p className="mt-1 mb-2.5 text-token-sm text-neutral-500">{tr('По всем каналам', 'Barcha kanallar bo\'yicha')}</p>

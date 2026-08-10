@@ -164,7 +164,7 @@ export default function SysAnalytics() {
         </div>
       </Card>
 
-      <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="overflow-hidden" style={{ padding: 0 }}>
           <div className="px-4 py-3.5 border-b border-neutral-100 font-bold text-token-base">Топ-10 по выручке (месяц)</div>
           <table className="w-full border-collapse text-token-sm">

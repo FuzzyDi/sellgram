@@ -293,6 +293,7 @@ textarea:focus-visible {
      visible below the same 768px breakpoint the rest of this file
      already uses for the mobile drawer. */
   .sg-topbar-burger { display: flex !important; }
+  .sg-sidebar-close { display: flex !important; }
 
   .sg-sidebar {
     position: fixed !important;

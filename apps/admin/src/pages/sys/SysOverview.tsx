@@ -106,7 +106,7 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
         <Kpi label="Инвойсов pending" value={pendingInvoices.length} colorClass={pendingInvoices.length > 0 ? 'text-warning' : undefined} />
       </div>
 
-      <div className="grid gap-4" style={{ gridTemplateColumns: '2fr 1fr' }}>
+      <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-4">
         <Card style={{ padding: '20px 20px 12px' }}>
           <div className="font-bold text-token-base mb-4 text-neutral-900">Выручка по месяцам (инвойсы PAID)</div>
           <div className="flex items-end gap-1.5" style={{ height: 110 }}>

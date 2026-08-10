@@ -208,6 +208,7 @@ export default function Categories() {
         </Card>
       ) : (
         <Card style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="overflow-x-auto">
           <table className="w-full text-token-sm">
             <thead>
               <tr>
@@ -320,6 +321,7 @@ export default function Categories() {
               )}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
 

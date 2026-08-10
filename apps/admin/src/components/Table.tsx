@@ -55,6 +55,7 @@ export default function Table<T,>({
 
   return (
     <div className="border border-neutral-200 rounded-token-lg overflow-hidden">
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr className="border-b border-neutral-200">
@@ -112,6 +113,7 @@ export default function Table<T,>({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
