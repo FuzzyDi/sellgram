@@ -102,6 +102,10 @@ export default function OnboardingWizard({ onFinish }: Props) {
   const [storeName, setStoreName] = useState('');
   const [botToken, setBotToken] = useState('');
   const [createdStoreId, setCreatedStoreId] = useState<string | null>(null);
+  // True when an existing store's bot is already connected on mount — the
+  // wizard should skip the "store" step entirely instead of asking the
+  // user to re-enter a name/bot token for a store that already has one.
+  const [storeAlreadyConnected, setStoreAlreadyConnected] = useState(false);
 
   // Step: delivery
   const [deliveryType, setDeliveryType] = useState<'zone' | 'pickup'>('zone');
@@ -109,12 +113,25 @@ export default function OnboardingWizard({ onFinish }: Props) {
   const [zonePrice, setZonePrice] = useState('0');
 
   // The wizard can reopen on a later login for a tenant that already has a
-  // store row but never got its bot connected (App.tsx re-triggers it in
-  // that case now). Reuse that store instead of blindly creating another
-  // one every time the user retries from a fresh page load.
+  // store row (App.tsx re-triggers it whenever Tenant.onboardingCompletedAt
+  // isn't set yet — see App.tsx). Two distinct resume cases:
+  //  - bot never connected: reuse that store row instead of creating
+  //    another one when the user retries the "store" step.
+  //  - bot already connected: the "store" step has nothing left to do for
+  //    this tenant, so re-showing it (with empty name/token fields) was a
+  //    dead end — the user had no working values to submit and could never
+  //    reach "delivery", which is why templates/categories and delivery
+  //    zones stayed empty even though the store+bot themselves were fine.
   useEffect(() => {
     adminApi.getStores().then((stores: any) => {
       const list = Array.isArray(stores) ? stores : stores?.items || [];
+      const connected = list.find((s: any) => s.botUsername);
+      if (connected) {
+        setCreatedStoreId(connected.id);
+        setStoreName(connected.name || '');
+        setStoreAlreadyConnected(true);
+        return;
+      }
       const unconnected = list.find((s: any) => !s.botUsername);
       if (unconnected) {
         setCreatedStoreId(unconnected.id);
@@ -381,7 +398,7 @@ export default function OnboardingWizard({ onFinish }: Props) {
               variant="primary"
               size="md"
               style={{ width: '100%', padding: '13px 0', fontSize: 15 }}
-              onClick={() => setStep('store')}
+              onClick={() => setStep(storeAlreadyConnected ? 'delivery' : 'store')}
             >
               {tr('Продолжить', 'Davom etish')} →
             </Button>

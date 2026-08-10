@@ -71,6 +71,15 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       });
       return { success: true, data: category };
     } catch (err: any) {
+      // Idempotent by (tenantId, slug): a retry after a partial failure
+      // (e.g. the onboarding wizard's category batch re-running after the
+      // user re-enters it) should return the existing row instead of a
+      // duplicate-slug error, not create a second category.
+      if (err.code === 'P2002') {
+        const slug = (request.body as any)?.slug || slugify((request.body as any)?.name || '');
+        const existing = await prisma.category.findFirst({ where: { tenantId: request.tenantId!, slug } });
+        if (existing) return { success: true, data: existing };
+      }
       return reply.status(400).send({ success: false, error: err.message });
     }
   });
