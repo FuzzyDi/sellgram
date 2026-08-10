@@ -143,7 +143,27 @@ export default function OnboardingWizard({ onFinish }: Props) {
   const stepIndex = STEPS.indexOf(step);
   const totalSteps = STEPS.length - 1; // exclude 'done'
 
-  function skip() {
+  // Shared by saveDelivery() and skip() — categories only ever depend on
+  // the selected template (Category has no storeId in the schema, so no
+  // store needs to exist yet), which is why this can run even when the
+  // user bails out before ever creating a store.
+  async function createTemplateCategories() {
+    const tpl = TEMPLATES.find((t) => t.id === selectedTemplate);
+    if (tpl && tpl.categoriesRu.length > 0) {
+      const names = lang === 'uz' ? tpl.categoriesUz : tpl.categoriesRu;
+      await Promise.all(names.map((name, i) => adminApi.createCategory({ name, sortOrder: i })));
+    }
+  }
+
+  // "Пропустить" only shows past the 'template' step (see the header
+  // button below), so reaching here with step 'store' or 'delivery' means
+  // the user already confirmed a template — apply it before bailing out,
+  // instead of silently discarding that choice. Skipping from 'template'
+  // itself means no template was confirmed, so nothing to create.
+  async function skip() {
+    if (step !== 'template') {
+      await createTemplateCategories().catch(() => {/* best-effort — don't block leaving */});
+    }
     markOnboardingDone();
     onFinish();
   }
@@ -227,11 +247,7 @@ export default function OnboardingWizard({ onFinish }: Props) {
       // ordering dependency between them) — parallelizing directly cuts
       // the latency of this step instead of paying for up to 4 round trips
       // back to back.
-      const tpl = TEMPLATES.find((t) => t.id === selectedTemplate);
-      if (tpl && tpl.categoriesRu.length > 0) {
-        const names = lang === 'uz' ? tpl.categoriesUz : tpl.categoriesRu;
-        await Promise.all(names.map((name, i) => adminApi.createCategory({ name, sortOrder: i })));
-      }
+      await createTemplateCategories();
       adminApi.completeOnboarding().catch(() => {/* non-fatal */});
       setStep('done');
     } catch (e: any) {
