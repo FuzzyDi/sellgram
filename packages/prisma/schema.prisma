@@ -137,6 +137,12 @@ model Tenant {
   // enforced via planGuard()). Any tenant on any plan can turn this on
   // (docs/B2B_COUNTERPARTIES.md §9).
   b2bEnabled    Boolean   @default(false)
+  // Set once by POST /onboarding/complete when the OnboardingWizard
+  // reaches its "delivery" step. The admin app used to infer this from
+  // Store.botUsername being set, which falsely marked the wizard done as
+  // soon as the bot connected — even if delivery/products were never
+  // configured — so abandoned signups never saw the wizard again.
+  onboardingCompletedAt DateTime?
 
   users              User[]
   stores             Store[]

@@ -96,17 +96,15 @@ function TenantApp() {
     adminApi.me()
       .then((user: any) => {
         setAuth({ user, tenant: user.tenant });
-        // Show onboarding only for OWNER role and if not dismissed
-        if (!isOnboardingDone() && ['OWNER'].includes(user.role)) {
-          adminApi.getStores().then((stores: any) => {
-            const list = Array.isArray(stores) ? stores : stores?.items || [];
-            // A store row can exist with its bot never activated (invalid
-            // token, abandoned mid-wizard) — only botUsername being set
-            // means the bot actually connected, so re-check that instead
-            // of just "does a store row exist".
-            const hasConnectedBot = list.some((s: any) => s.botUsername);
-            if (!hasConnectedBot) setShowOnboarding(true);
-          }).catch(() => {});
+        // Show onboarding only for OWNER role and if not dismissed/completed.
+        // Source of truth is Tenant.onboardingCompletedAt (set by the wizard's
+        // last step via POST /onboarding/complete) — not Store.botUsername,
+        // which used to falsely mark the wizard "done" as soon as the bot
+        // connected, even if delivery/products were never configured, so a
+        // tenant who abandoned the wizard right after that step never saw it
+        // again.
+        if (!isOnboardingDone() && !user.tenant?.onboardingCompletedAt && ['OWNER'].includes(user.role)) {
+          setShowOnboarding(true);
         }
       })
       .catch(() => clearTokens())

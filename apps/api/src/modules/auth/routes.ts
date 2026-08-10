@@ -102,7 +102,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         permissions: true,
         isActive: true,
         tenant: {
-          select: { id: true, name: true, slug: true, plan: true, b2bEnabled: true },
+          select: { id: true, name: true, slug: true, plan: true, b2bEnabled: true, onboardingCompletedAt: true },
         },
       },
     });
@@ -125,6 +125,16 @@ export default async function authRoutes(fastify: FastifyInstance) {
       const mapped = mapAuthError(err);
       return reply.status(mapped.status).send({ success: false, error: mapped.error });
     }
+  });
+
+  fastify.post('/onboarding/complete', {
+    preHandler: [fastify.authenticate],
+  }, async (request) => {
+    await prisma.tenant.update({
+      where: { id: request.tenantId! },
+      data: { onboardingCompletedAt: new Date() },
+    });
+    return { success: true };
   });
 
   fastify.post('/auth/me/change-password', {
