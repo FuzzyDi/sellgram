@@ -209,12 +209,6 @@ export default function OnboardingWizard({ onFinish }: Props) {
       }
       if (!storeId) throw new Error(tr('Не удалось создать магазин', 'Do\'kon yaratilmadi'));
 
-      const check = await adminApi.checkStoreBot(storeId);
-      if (!check?.ok) {
-        setError(friendlyBotError(check?.error));
-        return;
-      }
-
       await adminApi.activateStore(storeId);
       setStep('delivery');
     } catch (e: any) {
