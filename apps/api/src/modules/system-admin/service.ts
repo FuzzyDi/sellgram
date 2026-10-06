@@ -1101,6 +1101,9 @@ export async function getStalledOnboarding(hours = 24) {
     orderBy: { createdAt: 'asc' },
   });
 
+  const noProductsFollowUpState = normalizeNoProductsFollowUpState((
+    await prisma.systemSetting.findUnique({ where: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY } })
+  )?.value);
   const now = Date.now();
   return tenants.map((t) => {
     const owner = t.users[0];
@@ -1125,6 +1128,7 @@ export async function getStalledOnboarding(hours = 24) {
       productsCount: t._count.products,
       ordersCount: t._count.orders,
       deliveryZonesCount: t._count.deliveryZones,
+      followUpSentAt: noProductsFollowUpState.sent[t.id] ?? null,
       ownerName: owner?.name ?? null,
       ownerEmail: owner?.email ?? null,
       ownerHasTelegram: Boolean(owner?.adminTelegramId),
@@ -1182,9 +1186,62 @@ function normalizeNoProductsFollowUpState(value: unknown): { sent: Record<string
   return { sent: sent && typeof sent === 'object' && !Array.isArray(sent) ? sent : {} };
 }
 
-export async function sendNoProductsFollowUps(hours = 1, maxAgeHours = 24 * 7): Promise<{ checked: number; sent: number; skipped: number; failed: number }> {
+async function persistNoProductsFollowUpState(state: { sent: Record<string, string> }) {
+  await prisma.systemSetting.upsert({
+    where: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY },
+    create: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY, value: state as any },
+    update: { value: state as any },
+  });
+}
+
+export async function sendFirstProductFollowUp(tenantId: string, force = false): Promise<{ sent: boolean; skipped?: boolean; reason?: string; sentAt?: string }> {
   const stateRow = await prisma.systemSetting.findUnique({ where: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY } });
   const state = normalizeNoProductsFollowUpState(stateRow?.value);
+  if (!force && state.sent[tenantId]) return { sent: false, skipped: true, reason: 'ALREADY_SENT', sentAt: state.sent[tenantId] };
+
+  const tenant = await prisma.tenant.findFirst({
+    where: { id: tenantId, deletedAt: null },
+    select: {
+      id: true,
+      name: true,
+      users: { where: { role: 'OWNER', isActive: true }, select: { email: true, name: true }, take: 1 },
+      stores: { where: { botUsername: { not: null } }, select: { name: true, botUsername: true }, take: 1 },
+      _count: { select: { products: true } },
+    },
+  });
+  if (!tenant) throw new Error('TENANT_NOT_FOUND');
+  if (!tenant.stores[0]) return { sent: false, skipped: true, reason: 'BOT_NOT_CONNECTED' };
+  if (tenant._count.products > 0) return { sent: false, skipped: true, reason: 'HAS_PRODUCTS' };
+
+  const owner = tenant.users[0];
+  if (!owner?.email) return { sent: false, skipped: true, reason: 'NO_OWNER_EMAIL' };
+
+  const { sendEmail, tplFirstProductReminder } = await import('../../lib/mailer.js');
+  const { ADMIN_URL } = getConfig();
+  const store = tenant.stores[0];
+  const tpl = tplFirstProductReminder({
+    name: owner.name || tenant.name,
+    tenantName: tenant.name,
+    storeName: store.name || tenant.name,
+    botUsername: store.botUsername,
+    adminUrl: ADMIN_URL,
+  });
+  const emailSent = await sendEmail({ to: owner.email, ...tpl });
+  if (!emailSent) return { sent: false, reason: 'EMAIL_SEND_FAILED' };
+
+  const sentAt = new Date().toISOString();
+  state.sent[tenant.id] = sentAt;
+  await persistNoProductsFollowUpState(state);
+  await sendMonitorNotification(
+    `📦 <b>Follow-up отправлен</b>\n\n` +
+    `Магазин: <b>${tenant.name}</b>\n` +
+    `Причина: каталог пуст, бот подключён${store.botUsername ? ` (@${store.botUsername})` : ''}\n` +
+    `Email: ${owner.email}`,
+  );
+  return { sent: true, sentAt };
+}
+
+export async function sendNoProductsFollowUps(hours = 1, maxAgeHours = 24 * 7): Promise<{ checked: number; sent: number; skipped: number; failed: number }> {
   const candidates = (await getStalledOnboarding(hours)).filter((t) => (
     t.stage === 'READY_NO_PRODUCTS' && t.hoursSinceRegistration <= maxAgeHours
   ));
@@ -1193,46 +1250,14 @@ export async function sendNoProductsFollowUps(hours = 1, maxAgeHours = 24 * 7): 
   let failed = 0;
 
   for (const tenant of candidates) {
-    if (state.sent[tenant.id]) {
-      skipped += 1;
-      continue;
-    }
-    if (!tenant.ownerEmail) {
+    try {
+      const result = await sendFirstProductFollowUp(tenant.id);
+      if (result.sent) sent += 1;
+      else if (result.skipped) skipped += 1;
+      else failed += 1;
+    } catch {
       failed += 1;
-      continue;
     }
-
-    const { sendEmail, tplFirstProductReminder } = await import('../../lib/mailer.js');
-    const { ADMIN_URL } = getConfig();
-    const tpl = tplFirstProductReminder({
-      name: tenant.ownerName || tenant.name,
-      tenantName: tenant.name,
-      storeName: tenant.storeName || tenant.name,
-      botUsername: tenant.botUsername,
-      adminUrl: ADMIN_URL,
-    });
-    const emailSent = await sendEmail({ to: tenant.ownerEmail, ...tpl });
-    if (!emailSent) {
-      failed += 1;
-      continue;
-    }
-
-    state.sent[tenant.id] = new Date().toISOString();
-    sent += 1;
-    await sendMonitorNotification(
-      `📦 <b>Follow-up отправлен</b>\n\n` +
-      `Магазин: <b>${tenant.name}</b>\n` +
-      `Причина: каталог пуст, бот подключён${tenant.botUsername ? ` (@${tenant.botUsername})` : ''}\n` +
-      `Email: ${tenant.ownerEmail}`,
-    );
-  }
-
-  if (sent > 0) {
-    await prisma.systemSetting.upsert({
-      where: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY },
-      create: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY, value: state as any },
-      update: { value: state as any },
-    });
   }
 
   return { checked: candidates.length, sent, skipped, failed };

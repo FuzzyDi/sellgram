@@ -54,6 +54,7 @@ import {
   getExpiringTenants,
   getStalledOnboarding,
   sendReminderToTenant,
+  sendFirstProductFollowUp,
   getMonitorSettings,
   updateMonitorSettings,
   getSystemGrowth,
@@ -375,6 +376,18 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
     try {
       const { id } = systemAdminIdParamSchema.parse(request.params);
       const data = await sendReminderToTenant(id);
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+  fastify.post('/tenants/:id/send-first-product-followup', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { id } = systemAdminIdParamSchema.parse(request.params);
+      const force = Boolean((request.body as any)?.force);
+      const data = await sendFirstProductFollowUp(id, force);
       return { success: true, data };
     } catch (err: any) {
       if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });

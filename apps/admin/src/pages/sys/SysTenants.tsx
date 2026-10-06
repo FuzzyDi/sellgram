@@ -42,6 +42,33 @@ function ReminderButton({ tenantId }: { tenantId: string }) {
   );
 }
 
+
+function FirstProductFollowUpButton({ tenant, onSent }: { tenant: any; onSent: (sentAt: string) => void }) {
+  const [state, setState] = useState<'idle' | 'loading' | 'sent' | 'error'>('idle');
+  async function send(e: React.MouseEvent) {
+    e.stopPropagation();
+    setState('loading');
+    try {
+      const result = await systemApi.sendFirstProductFollowUp(tenant.id, Boolean(tenant.followUpSentAt));
+      const sentAt = result?.sentAt || result?.data?.sentAt || new Date().toISOString();
+      onSent(sentAt);
+      setState('sent');
+      setTimeout(() => setState('idle'), 3000);
+    } catch {
+      setState('error');
+      setTimeout(() => setState('idle'), 3000);
+    }
+  }
+  const label = state === 'loading' ? '...' : state === 'sent' ? '✓ Отправлено' : state === 'error' ? '✗ Ошибка' : tenant.followUpSentAt ? 'Повторить письмо' : 'Напомнить о товарах';
+  const cls = state === 'sent' ? 'bg-success/15 text-success' : state === 'error' ? 'bg-danger/15 text-danger' : 'bg-accent-50 text-accent-700';
+  return (
+    <button disabled={state === 'loading'} onClick={send}
+      className={`border-none rounded-token-sm px-2.5 py-1 text-token-xs font-bold transition-colors ${state === 'loading' ? 'cursor-default' : 'cursor-pointer'} ${cls}`}>
+      {label}
+    </button>
+  );
+}
+
 function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: () => void; onRefresh: () => void }) {
   const navigate = useNavigate();
   const [detail, setDetail] = useState<any>(null);
@@ -315,6 +342,10 @@ function StalledOnboardingPanel({ onSelect }: { onSelect: (t: any) => void }) {
     systemApi.stalledOnboarding().then(setItems).catch(() => setItems([]));
   }, []);
 
+  const markFollowUpSent = (id: string, sentAt: string) => {
+    setItems((current) => current?.map((item) => item.id === id ? { ...item, followUpSentAt: sentAt } : item) ?? current);
+  };
+
   if (!items || items.length === 0) return null;
 
   const stageLabel = (stage: string) => {
@@ -343,6 +374,10 @@ function StalledOnboardingPanel({ onSelect }: { onSelect: (t: any) => void }) {
             {t.storeName && <span className="text-neutral-500 text-token-xs">{t.storeName}</span>}
             {t.botUsername && <span className="text-success text-token-xs">@{t.botUsername}</span>}
             <span className="text-neutral-500">{t.hoursSinceRegistration ?? 0} ч. с регистрации</span>
+            {t.followUpSentAt && <span className="text-success text-token-xs">письмо отправлено</span>}
+            {t.stage === 'READY_NO_PRODUCTS' && t.ownerEmail && (
+              <FirstProductFollowUpButton tenant={t} onSent={(sentAt) => markFollowUpSent(t.id, sentAt)} />
+            )}
             {t.ownerEmail && (
               <a href={`mailto:${t.ownerEmail}`} onClick={(e) => e.stopPropagation()} className="ml-auto text-accent-600 text-token-xs">
                 ✉ {t.ownerEmail}
