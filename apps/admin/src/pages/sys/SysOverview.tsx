@@ -49,6 +49,7 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
   const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
   const [bots, setBots] = useState<any[]>([]);
   const [stalledOnboarding, setStalledOnboarding] = useState<any[]>([]);
+  const [growth, setGrowth] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -61,6 +62,7 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
       systemApi.pendingInvoices().then(setPendingInvoices),
       systemApi.bots().then(setBots),
       systemApi.stalledOnboarding().then(setStalledOnboarding),
+      systemApi.growth().then(setGrowth),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -82,6 +84,7 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
   if (alerts.length === 0) alerts.push({ text: 'Всё работает штатно', severity: 'info' });
 
   const maxRevenue = Math.max(...trend.map((d: any) => d.revenue || 0), 1);
+  const onboardingFunnel = growth?.onboardingFunnel || [];
 
   if (loading) return (
     <div className="p-7">
@@ -109,6 +112,42 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
         <Kpi label="Активных магазинов" value={dash?.activeStores ?? '—'} />
         <Kpi label="Инвойсов pending" value={pendingInvoices.length} colorClass={pendingInvoices.length > 0 ? 'text-warning' : undefined} />
       </div>
+
+      {onboardingFunnel.length > 0 && (
+        <Card style={{ padding: '20px' }}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="font-bold text-token-base text-neutral-900">Воронка onboarding</div>
+              <div className="text-token-xs text-neutral-400 mt-0.5">От регистрации до первого заказа</div>
+            </div>
+            <button onClick={() => onNavigate('tenants')} className="border-none bg-accent-50 text-accent-700 rounded-token-sm px-3 py-1.5 text-token-xs font-bold cursor-pointer">
+              Разобрать зависшие
+            </button>
+          </div>
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+            {onboardingFunnel.map((step: any, index: number) => {
+              const pct = Math.max(0, Math.min(step.conversionFromStart || 0, 100));
+              return (
+                <div key={step.key} className="rounded-token-md border border-neutral-100 bg-neutral-50 px-3 py-3">
+                  <div className="text-token-xs font-bold text-neutral-700 min-h-[32px]">{step.label}</div>
+                  <div className="flex items-end gap-1.5 mt-1">
+                    <span className="text-[24px] leading-none font-extrabold text-neutral-900">{step.count}</span>
+                    <span className="text-token-xs text-neutral-400 mb-0.5">{pct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-neutral-200 rounded-full overflow-hidden mt-2">
+                    <div className="h-full bg-accent-600 rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                  {index > 0 && (
+                    <div className={`text-[11px] mt-1.5 ${step.dropFromPrevious > 0 ? 'text-warning' : 'text-neutral-400'}`}>
+                      Потеря: {step.dropFromPrevious} · переход {step.conversionFromPrevious}%
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-4">
         <Card style={{ padding: '20px 20px 12px' }}>

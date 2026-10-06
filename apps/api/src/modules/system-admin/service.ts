@@ -1411,12 +1411,32 @@ export async function getSystemGrowth() {
   }));
 
   // Conversion funnel
-  const [total, withStores, withOrders, paid] = await Promise.all([
-    prisma.tenant.count(),
-    prisma.tenant.count({ where: { stores: { some: {} } } }),
-    prisma.tenant.count({ where: { orders: { some: {} } } }),
-    prisma.tenant.count({ where: { plan: { in: ['PRO', 'BUSINESS'] } } }),
+  const [total, withStores, withOrders, paid, botConnected, onboardingCompleted, withProducts] = await Promise.all([
+    prisma.tenant.count({ where: { deletedAt: null } }),
+    prisma.tenant.count({ where: { deletedAt: null, stores: { some: {} } } }),
+    prisma.tenant.count({ where: { deletedAt: null, orders: { some: {} } } }),
+    prisma.tenant.count({ where: { deletedAt: null, plan: { in: ['PRO', 'BUSINESS'] } } }),
+    prisma.tenant.count({ where: { deletedAt: null, stores: { some: { botUsername: { not: null } } } } }),
+    prisma.tenant.count({ where: { deletedAt: null, OR: [{ onboardingCompletedAt: { not: null } }, { products: { some: { deletedAt: null } } }, { orders: { some: {} } }] } }),
+    prisma.tenant.count({ where: { deletedAt: null, products: { some: { deletedAt: null } } } }),
   ]);
+
+  const onboardingFunnel = [
+    { key: 'registered', label: 'Зарегистрировались', count: total },
+    { key: 'store_created', label: 'Создали магазин', count: withStores },
+    { key: 'bot_connected', label: 'Подключили Telegram-бота', count: botConnected },
+    { key: 'onboarding_completed', label: 'Завершили onboarding', count: onboardingCompleted },
+    { key: 'first_product', label: 'Добавили товар', count: withProducts },
+    { key: 'first_order', label: 'Получили заказ', count: withOrders },
+  ].map((step, index, steps) => {
+    const previous = index === 0 ? step.count : steps[index - 1].count;
+    return {
+      ...step,
+      conversionFromStart: total > 0 ? Math.round((step.count / total) * 100) : 0,
+      conversionFromPrevious: previous > 0 ? Math.round((step.count / previous) * 100) : 0,
+      dropFromPrevious: index === 0 ? 0 : Math.max(previous - step.count, 0),
+    };
+  });
 
   // Inactive tenants — have a store but no orders in last 14 days
   const fourteenDaysAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 14));
@@ -1449,5 +1469,5 @@ export async function getSystemGrowth() {
       createdAt: t.createdAt,
     }));
 
-  return { registrations, funnel: { total, withStores, withOrders, paid }, inactive };
+  return { registrations, funnel: { total, withStores, botConnected, onboardingCompleted, withProducts, withOrders, paid }, onboardingFunnel, inactive };
 }
