@@ -158,6 +158,8 @@ export default function Catalog() {
   }, [debouncedQuery, selected, page, retryKey]);
 
   const filtered = products;
+  const hasCatalogFilters = Boolean(debouncedQuery || selected);
+  const isEmptyCatalog = !loading && filtered.length === 0 && !hasCatalogFilters;
 
   return (
     <div style={{ paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
@@ -208,9 +210,33 @@ export default function Catalog() {
           </div>
 
           {!loading && filtered.length === 0 && (
-            <div className="anim-scale" style={{ textAlign: 'center', padding: '64px 16px' }}>
-              <p style={{ fontSize: 44, marginBottom: 8 }}>🔎</p>
-              <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--hint)' }}>{tr('Товары не найдены', 'Mahsulotlar topilmadi')}</p>
+            <div className={`anim-scale ${isEmptyCatalog ? 'empty-state miniapp-owner-empty' : ''}`} style={!isEmptyCatalog ? { textAlign: 'center', padding: '64px 16px' } : undefined}>
+              {isEmptyCatalog ? (
+                <>
+                  <div className="empty-icon">✅</div>
+                  <p className="empty-title">{tr('Магазин готов', 'Do‘kon tayyor')}</p>
+                  <p className="empty-sub">
+                    {tr(
+                      'Telegram-бот подключен. Осталось добавить первые товары, чтобы покупатели могли сделать заказ.',
+                      'Telegram-bot ulangan. Xaridorlar buyurtma berishi uchun birinchi mahsulotlarni qo‘shing.'
+                    )}
+                  </p>
+                  <a className="btn primary pill owner-empty-cta" href="https://app.sbgcloud.uz/products" target="_blank" rel="noreferrer">
+                    {tr('Добавить товары', 'Mahsulot qo‘shish')}
+                  </a>
+                  <p className="owner-empty-hint">
+                    {tr(
+                      'Откроется кабинет SBGCloud: раздел “Товары”.',
+                      'SBGCloud kabineti ochiladi: “Tovarlar” bo‘limi.'
+                    )}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 44, marginBottom: 8 }}>🔎</p>
+                  <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--hint)' }}>{tr('Товары не найдены', 'Mahsulotlar topilmadi')}</p>
+                </>
+              )}
             </div>
           )}
 

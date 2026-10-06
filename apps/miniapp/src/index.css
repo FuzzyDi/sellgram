@@ -352,6 +352,24 @@ img { display: block; max-width: 100%; }
 .empty-icon  { font-size: 56px; margin-bottom: 12px; }
 .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
 .empty-sub   { font-size: 14px; color: var(--hint); margin-bottom: 20px; }
+.miniapp-owner-empty {
+  max-width: 360px;
+  margin: 0 auto;
+}
+.owner-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 180px;
+  text-decoration: none;
+}
+.owner-empty-hint {
+  max-width: 280px;
+  margin: 12px auto 0;
+  color: var(--hint);
+  font-size: 12px;
+  line-height: 1.4;
+}
 
 .row-card {
   display: flex;
