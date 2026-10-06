@@ -519,6 +519,22 @@ async function main() {
     }
   }, 24 * 60 * 60 * 1000);
 
+
+  // Onboarding follow-up: stores with connected bot but empty catalog
+  const runNoProductsFollowUp = async () => {
+    try {
+      const { sendNoProductsFollowUps } = await import('./modules/system-admin/service.js');
+      const result = await sendNoProductsFollowUps(1);
+      if (result.sent > 0 || result.failed > 0) {
+        fastify.log.info(`No-products follow-up checked=${result.checked} sent=${result.sent} skipped=${result.skipped} failed=${result.failed}`);
+      }
+    } catch (err: any) {
+      fastify.log.error(`No-products follow-up job failed: ${err.message}`);
+    }
+  };
+  setTimeout(runNoProductsFollowUp, 2 * 60 * 1000);
+  setInterval(runNoProductsFollowUp, 60 * 60 * 1000);
+
   // Nightly cleanup: hard-delete tenants 30+ days after deletion request
   setInterval(async () => {
     try {

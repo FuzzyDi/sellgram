@@ -196,6 +196,39 @@ export function tplPlanExpiring(opts: {
   };
 }
 
+
+export function tplFirstProductReminder(opts: {
+  name: string;
+  tenantName: string;
+  storeName: string;
+  botUsername?: string | null;
+  adminUrl: string;
+}): { subject: string; html: string } {
+  const productsUrl = `${opts.adminUrl}/products`;
+  const botLine = opts.botUsername ? `@${opts.botUsername}` : opts.storeName;
+  return {
+    subject: `Ваш магазин ${opts.tenantName} готов — добавьте первый товар`,
+    html: layout(`
+      <div style="text-align:center;font-size:40px;margin-bottom:8px;">🛍️</div>
+      ${heading(bilingual('Магазин готов к продажам', 'Do\'kon savdoga tayyor'))}
+      ${para(bilingual(
+        `Здравствуйте, <strong>${opts.name}</strong>! Ваш магазин <strong>${opts.storeName}</strong> и Telegram-бот <strong>${botLine}</strong> уже подключены.`,
+        `Salom, <strong>${opts.name}</strong>! <strong>${opts.storeName}</strong> do\'koningiz va Telegram bot <strong>${botLine}</strong> allaqachon ulangan.`,
+      ))}
+      ${para(bilingual(
+        'Остался последний шаг: добавьте первый товар, чтобы покупатели увидели каталог и смогли оформить заказ.',
+        'Oxirgi qadam qoldi: xaridorlar katalogni ko\'rishi va buyurtma berishi uchun birinchi mahsulotni qo\'shing.',
+      ))}
+      ${btn('Добавить товар / Mahsulot qo\'shish', productsUrl)}
+      ${divider()}
+      ${para(bilingual(
+        'Если нужна помощь с настройкой каталога, просто ответьте на это письмо — мы подскажем.',
+        'Katalogni sozlashda yordam kerak bo\'lsa, ushbu xatga javob yozing — yordam beramiz.',
+      ), true)}
+    `),
+  };
+}
+
 export function tplPasswordReset(opts: { code: string }): { subject: string; html: string } {
   return {
     subject: 'Сброс пароля SellGram',

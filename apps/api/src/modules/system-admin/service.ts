@@ -1171,6 +1171,73 @@ export async function sendReminderToTenant(tenantId: string): Promise<{ sent: bo
   return { sent: telegramSent || !!owner };
 }
 
+
+const NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY = 'no_products_followup_sent';
+
+type NoProductsFollowUpState = { sent?: Record<string, string> };
+
+function normalizeNoProductsFollowUpState(value: unknown): { sent: Record<string, string> } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { sent: {} };
+  const sent = (value as NoProductsFollowUpState).sent;
+  return { sent: sent && typeof sent === 'object' && !Array.isArray(sent) ? sent : {} };
+}
+
+export async function sendNoProductsFollowUps(hours = 1, maxAgeHours = 24 * 7): Promise<{ checked: number; sent: number; skipped: number; failed: number }> {
+  const stateRow = await prisma.systemSetting.findUnique({ where: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY } });
+  const state = normalizeNoProductsFollowUpState(stateRow?.value);
+  const candidates = (await getStalledOnboarding(hours)).filter((t) => (
+    t.stage === 'READY_NO_PRODUCTS' && t.hoursSinceRegistration <= maxAgeHours
+  ));
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const tenant of candidates) {
+    if (state.sent[tenant.id]) {
+      skipped += 1;
+      continue;
+    }
+    if (!tenant.ownerEmail) {
+      failed += 1;
+      continue;
+    }
+
+    const { sendEmail, tplFirstProductReminder } = await import('../../lib/mailer.js');
+    const { ADMIN_URL } = getConfig();
+    const tpl = tplFirstProductReminder({
+      name: tenant.ownerName || tenant.name,
+      tenantName: tenant.name,
+      storeName: tenant.storeName || tenant.name,
+      botUsername: tenant.botUsername,
+      adminUrl: ADMIN_URL,
+    });
+    const emailSent = await sendEmail({ to: tenant.ownerEmail, ...tpl });
+    if (!emailSent) {
+      failed += 1;
+      continue;
+    }
+
+    state.sent[tenant.id] = new Date().toISOString();
+    sent += 1;
+    await sendMonitorNotification(
+      `📦 <b>Follow-up отправлен</b>\n\n` +
+      `Магазин: <b>${tenant.name}</b>\n` +
+      `Причина: каталог пуст, бот подключён${tenant.botUsername ? ` (@${tenant.botUsername})` : ''}\n` +
+      `Email: ${tenant.ownerEmail}`,
+    );
+  }
+
+  if (sent > 0) {
+    await prisma.systemSetting.upsert({
+      where: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY },
+      create: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY, value: state as any },
+      update: { value: state as any },
+    });
+  }
+
+  return { checked: candidates.length, sent, skipped, failed };
+}
+
 // ─── Billing Payment Settings ─────────────────────────────────────────────────
 
 const BILLING_SETTINGS_KEY = 'billing_payment_settings';
