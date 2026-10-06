@@ -1438,6 +1438,69 @@ export async function getSystemGrowth() {
     };
   });
 
+  const onboardingTenants = await prisma.tenant.findMany({
+    where: { deletedAt: null },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      createdAt: true,
+      onboardingCompletedAt: true,
+      stores: { select: { name: true, botUsername: true }, take: 1 },
+      users: { where: { role: 'OWNER' }, select: { email: true, name: true }, take: 1 },
+      _count: { select: { products: true, orders: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const tenantSummary = (t: typeof onboardingTenants[number]) => ({
+    id: t.id,
+    name: t.name,
+    slug: t.slug,
+    createdAt: t.createdAt,
+    ownerEmail: t.users[0]?.email ?? null,
+    storeName: t.stores[0]?.name ?? null,
+    botUsername: t.stores[0]?.botUsername ?? null,
+    productsCount: t._count.products,
+    ordersCount: t._count.orders,
+  });
+  const hasStore = (t: typeof onboardingTenants[number]) => t.stores.length > 0;
+  const hasBot = (t: typeof onboardingTenants[number]) => t.stores.some((s) => Boolean(s.botUsername));
+  const hasProductsOrOrders = (t: typeof onboardingTenants[number]) => t._count.products > 0 || t._count.orders > 0;
+  const setupDone = (t: typeof onboardingTenants[number]) => Boolean(t.onboardingCompletedAt) || hasProductsOrOrders(t);
+
+  const onboardingDropOffs = [
+    {
+      key: 'no_store',
+      label: 'Нет магазина',
+      items: onboardingTenants.filter((t) => !hasStore(t)).map(tenantSummary),
+    },
+    {
+      key: 'bot_not_connected',
+      label: 'Бот не подключён',
+      items: onboardingTenants.filter((t) => hasStore(t) && !hasBot(t)).map(tenantSummary),
+    },
+    {
+      key: 'setup_not_completed',
+      label: 'Setup не завершён',
+      items: onboardingTenants.filter((t) => hasBot(t) && !setupDone(t)).map(tenantSummary),
+    },
+    {
+      key: 'no_products',
+      label: 'Нет товаров',
+      items: onboardingTenants.filter((t) => hasBot(t) && setupDone(t) && t._count.products === 0).map(tenantSummary),
+    },
+    {
+      key: 'no_orders',
+      label: 'Нет заказов',
+      items: onboardingTenants.filter((t) => t._count.products > 0 && t._count.orders === 0).map(tenantSummary),
+    },
+  ].filter((group) => group.items.length > 0).map((group) => ({
+    ...group,
+    count: group.items.length,
+    items: group.items.slice(0, 5),
+  }));
+
   // Inactive tenants — have a store but no orders in last 14 days
   const fourteenDaysAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 14));
   const activeTenantIds = await prisma.order.findMany({
@@ -1469,5 +1532,5 @@ export async function getSystemGrowth() {
       createdAt: t.createdAt,
     }));
 
-  return { registrations, funnel: { total, withStores, botConnected, onboardingCompleted, withProducts, withOrders, paid }, onboardingFunnel, inactive };
+  return { registrations, funnel: { total, withStores, botConnected, onboardingCompleted, withProducts, withOrders, paid }, onboardingFunnel, onboardingDropOffs, inactive };
 }

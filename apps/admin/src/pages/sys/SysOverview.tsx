@@ -85,6 +85,7 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
 
   const maxRevenue = Math.max(...trend.map((d: any) => d.revenue || 0), 1);
   const onboardingFunnel = growth?.onboardingFunnel || [];
+  const onboardingDropOffs = growth?.onboardingDropOffs || [];
 
   if (loading) return (
     <div className="p-7">
@@ -145,6 +146,35 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
                 </div>
               );
             })}
+          </div>
+        </Card>
+      )}
+
+      {onboardingDropOffs.length > 0 && (
+        <Card style={{ padding: '20px' }}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="font-bold text-token-base text-neutral-900">Где остановились пользователи</div>
+              <div className="text-token-xs text-neutral-400 mt-0.5">Первые кандидаты для ручной обработки</div>
+            </div>
+          </div>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            {onboardingDropOffs.map((group: any) => (
+              <div key={group.key} className="rounded-token-md border border-neutral-100 bg-white px-3 py-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="font-bold text-token-sm text-neutral-800">{group.label}</div>
+                  <span className="text-token-xs font-bold text-warning bg-warning/10 rounded-token-sm px-2 py-0.5">{group.count}</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {group.items.map((tenant: any) => (
+                    <button key={tenant.id} onClick={() => onNavigate('tenants')} className="text-left border-none bg-neutral-50 hover:bg-accent-50 rounded-token-sm px-2 py-1.5 cursor-pointer">
+                      <div className="text-token-xs font-bold text-neutral-800 truncate">{tenant.name}</div>
+                      <div className="text-[11px] text-neutral-400 truncate">{tenant.ownerEmail || tenant.slug}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}
