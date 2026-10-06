@@ -1,4 +1,4 @@
-FROM node:20-bullseye-slim AS builder
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -23,7 +23,7 @@ COPY apps/landing/ /landing/
 # Generate Prisma client from workspace root
 RUN pnpm -w exec prisma generate --schema packages/prisma/schema.prisma
 
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*

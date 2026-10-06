@@ -70,7 +70,11 @@ export default function SysOverview({ onNavigate }: { onNavigate: (p: SysPage) =
     alerts.push({ text: `${dash.expiringPlans} план(ов) истекает в течение 7 дней`, severity: 'warn', page: 'tenants' });
   }
   if (stalledOnboarding.length > 0) {
-    alerts.push({ text: `${stalledOnboarding.length} регистраци(й) зависли без подключённого бота`, severity: 'warn', page: 'tenants' });
+    const noProducts = stalledOnboarding.filter((t: any) => t.stage === 'READY_NO_PRODUCTS').length;
+    const label = noProducts > 0
+      ? `${stalledOnboarding.length} регистраци(й) требуют действия, ${noProducts} без товаров`
+      : `${stalledOnboarding.length} регистраци(й) зависли до запуска`;
+    alerts.push({ text: label, severity: 'warn', page: 'tenants' });
   }
   const failedBots = bots.filter((b) => !b.isActive);
   if (failedBots.length > 0) alerts.push({ text: `${failedBots.length} бот(ов) неактивны`, severity: 'error', page: 'monitoring' });

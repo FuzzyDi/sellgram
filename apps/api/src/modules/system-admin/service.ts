@@ -1062,10 +1062,12 @@ export async function getExpiringTenants(days = 7) {
 
 // ─── Stalled Onboarding ─────────────────────────────────────────────────────
 
-// Tenants that registered but never got a bot connected — no store at all,
-// or a store row that exists but its bot check/activate never succeeded
-// (botUsername stays null). Mirrors the check the admin frontend itself
-// uses to decide whether to reopen the onboarding wizard (App.tsx).
+// Tenants that need onboarding follow-up:
+// - no store yet;
+// - store exists but bot activation never succeeded;
+// - bot/onboarding succeeded, but the tenant still has no products.
+// The last case catches users who technically completed setup but have not
+// reached the first real business value: a sellable catalog.
 export async function getStalledOnboarding(hours = 24) {
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
 
@@ -1073,7 +1075,13 @@ export async function getStalledOnboarding(hours = 24) {
     where: {
       deletedAt: null,
       createdAt: { lte: cutoff },
-      stores: { none: { botUsername: { not: null } } },
+      OR: [
+        { stores: { none: { botUsername: { not: null } } } },
+        {
+          stores: { some: { botUsername: { not: null } } },
+          products: { none: { deletedAt: null } },
+        },
+      ],
     },
     select: {
       id: true,
@@ -1081,7 +1089,9 @@ export async function getStalledOnboarding(hours = 24) {
       slug: true,
       plan: true,
       createdAt: true,
-      stores: { select: { id: true, name: true, createdAt: true } },
+      onboardingCompletedAt: true,
+      stores: { select: { id: true, name: true, botUsername: true, createdAt: true } },
+      _count: { select: { products: true, orders: true, deliveryZones: true } },
       users: {
         where: { role: 'OWNER' },
         select: { email: true, name: true, adminTelegramId: true },
@@ -1094,15 +1104,27 @@ export async function getStalledOnboarding(hours = 24) {
   const now = Date.now();
   return tenants.map((t) => {
     const owner = t.users[0];
+    const connectedStore = t.stores.find((s) => s.botUsername);
+    const stage = t.stores.length === 0
+      ? 'NO_STORE'
+      : connectedStore
+        ? 'READY_NO_PRODUCTS'
+        : 'STORE_NOT_CONNECTED';
     return {
       id: t.id,
       name: t.name,
       slug: t.slug,
       plan: t.plan,
       createdAt: t.createdAt,
+      onboardingCompletedAt: t.onboardingCompletedAt,
       daysSinceRegistration: Math.floor((now - t.createdAt.getTime()) / (24 * 60 * 60 * 1000)),
-      stage: t.stores.length === 0 ? 'NO_STORE' : 'STORE_NOT_CONNECTED',
-      storeName: t.stores[0]?.name ?? null,
+      hoursSinceRegistration: Math.floor((now - t.createdAt.getTime()) / (60 * 60 * 1000)),
+      stage,
+      storeName: connectedStore?.name ?? t.stores[0]?.name ?? null,
+      botUsername: connectedStore?.botUsername ?? null,
+      productsCount: t._count.products,
+      ordersCount: t._count.orders,
+      deliveryZonesCount: t._count.deliveryZones,
       ownerName: owner?.name ?? null,
       ownerEmail: owner?.email ?? null,
       ownerHasTelegram: Boolean(owner?.adminTelegramId),

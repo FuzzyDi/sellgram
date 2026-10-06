@@ -317,10 +317,21 @@ function StalledOnboardingPanel({ onSelect }: { onSelect: (t: any) => void }) {
 
   if (!items || items.length === 0) return null;
 
+  const stageLabel = (stage: string) => {
+    if (stage === 'NO_STORE') return 'магазин не создан';
+    if (stage === 'READY_NO_PRODUCTS') return 'нет товаров';
+    return 'бот не подключён';
+  };
+  const stageVariant = (stage: string): BadgeVariant => {
+    if (stage === 'NO_STORE') return 'danger';
+    if (stage === 'READY_NO_PRODUCTS') return 'info';
+    return 'warning';
+  };
+
   return (
     <Card className="mb-4" style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: '14px 16px' }}>
       <div className="font-bold text-token-sm text-warning mb-2.5">
-        ⚠️ Зависшие регистрации ({items.length}) — магазин создан, бот так и не подключён (или магазина ещё нет)
+        ⚠️ Регистрации требуют действия ({items.length}) — нет магазина, бот не подключён или каталог пуст
       </div>
       <div className="flex flex-col gap-1.5">
         {items.map((t) => (
@@ -328,10 +339,10 @@ function StalledOnboardingPanel({ onSelect }: { onSelect: (t: any) => void }) {
             className="flex items-center gap-2.5 bg-white rounded-token-md px-2.5 py-2 cursor-pointer text-token-sm">
             <span className="font-bold">{t.name}</span>
             <span className="text-neutral-400 text-token-xs">{t.slug}</span>
-            <Badge variant={t.stage === 'NO_STORE' ? 'danger' : 'warning'}>
-              {t.stage === 'NO_STORE' ? 'магазин не создан' : 'бот не подключён'}
-            </Badge>
-            <span className="text-neutral-500">{t.daysSinceRegistration} дн. с регистрации</span>
+            <Badge variant={stageVariant(t.stage)}>{stageLabel(t.stage)}</Badge>
+            {t.storeName && <span className="text-neutral-500 text-token-xs">{t.storeName}</span>}
+            {t.botUsername && <span className="text-success text-token-xs">@{t.botUsername}</span>}
+            <span className="text-neutral-500">{t.hoursSinceRegistration ?? 0} ч. с регистрации</span>
             {t.ownerEmail && (
               <a href={`mailto:${t.ownerEmail}`} onClick={(e) => e.stopPropagation()} className="ml-auto text-accent-600 text-token-xs">
                 ✉ {t.ownerEmail}
