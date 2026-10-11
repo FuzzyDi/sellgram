@@ -58,6 +58,7 @@ import {
   getMonitorSettings,
   updateMonitorSettings,
   getSystemGrowth,
+  activateSystemTenantStore,
 } from './service.js';
 declare module 'fastify' {
   interface FastifyRequest {
@@ -379,6 +380,20 @@ export default async function systemAdminRoutes(fastify: FastifyInstance) {
       return { success: true, data };
     } catch (err: any) {
       if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      return reply.status(400).send({ success: false, error: err.message });
+    }
+  });
+
+
+  fastify.post('/tenants/:id/stores/:storeId/activate', { preHandler: [authenticateSystem] }, async (request, reply) => {
+    try {
+      const { id } = systemAdminIdParamSchema.parse(request.params);
+      const { storeId } = request.params as { storeId: string };
+      const data = await activateSystemTenantStore(id, storeId);
+      return { success: true, data };
+    } catch (err: any) {
+      if (err.message === 'TENANT_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      if (err.message === 'STORE_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Store not found' });
       return reply.status(400).send({ success: false, error: err.message });
     }
   });

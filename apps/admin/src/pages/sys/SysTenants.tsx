@@ -87,6 +87,7 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
   const [showExtend, setShowExtend] = useState(false);
   const [extendForm, setExtendForm] = useState({ plan: tenant.plan, months: '1', amount: '', note: '' });
   const [extending, setExtending] = useState(false);
+  const [activatingStoreId, setActivatingStoreId] = useState<string | null>(null);
 
   useEffect(() => {
     systemApi.tenantDetail(tenant.id).then(setDetail).catch(() => showNotice('❌ Не удалось загрузить детали тенанта')).finally(() => setLoading(false));
@@ -138,6 +139,19 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
       setResetPwd(null);
       setNewPwd('');
     } catch (e: any) { showNotice('❌ ' + e.message); }
+  }
+
+
+  async function activateStore(storeId: string) {
+    setActivatingStoreId(storeId);
+    try {
+      await systemApi.activateTenantStore(tenant.id, storeId);
+      showNotice('✅ Бот активирован');
+      const fresh = await systemApi.tenantDetail(tenant.id);
+      setDetail(fresh);
+      onRefresh();
+    } catch (e: any) { showNotice('❌ ' + e.message); }
+    finally { setActivatingStoreId(null); }
   }
 
   async function submitExtend() {
@@ -305,7 +319,16 @@ function TenantDrawer({ tenant, onClose, onRefresh }: { tenant: any; onClose: ()
                 <span className={`w-2 h-2 rounded-full inline-block ${s.isActive ? 'bg-success' : 'bg-danger'}`} />
                 <span className="font-semibold text-token-sm">{s.name}</span>
                 {s.botUsername && <span className="text-token-xs text-neutral-400">@{s.botUsername}</span>}
-                <span className="text-token-xs text-neutral-400 ml-auto">{s.isActive ? 'Активен' : 'Откл.'}</span>
+                {!s.botUsername && (
+                  <button
+                    onClick={() => activateStore(s.id)}
+                    disabled={activatingStoreId === s.id}
+                    className="ml-auto border-none bg-accent-50 text-accent-700 rounded-token-sm px-2 py-0.5 text-token-xs font-bold cursor-pointer disabled:opacity-60"
+                  >
+                    {activatingStoreId === s.id ? '...' : 'Активировать бота'}
+                  </button>
+                )}
+                <span className={`text-token-xs text-neutral-400 ${s.botUsername ? 'ml-auto' : ''}`}>{s.isActive ? 'Активен' : 'Откл.'}</span>
               </div>
             ))}
           </div>

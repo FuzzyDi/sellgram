@@ -118,6 +118,7 @@ export const systemApi = {
   expiringTenants: (days = 7) => systemRequest<any[]>(`/tenants/expiring?days=${days}`),
   sendReminder: (id: string) => systemRequest<any>(`/tenants/${id}/send-reminder`, { method: 'POST' }),
   sendFirstProductFollowUp: (id: string, force = false) => systemRequest<any>(`/tenants/${id}/send-first-product-followup`, { method: 'POST', body: JSON.stringify({ force }) }),
+  activateTenantStore: (tenantId: string, storeId: string) => systemRequest<any>(`/tenants/${tenantId}/stores/${storeId}/activate`, { method: 'POST' }),
 
   // Tenants needing onboarding follow-up: no store, no connected bot, or no products after setup.
   stalledOnboarding: (hours = 1) => systemRequest<any[]>(`/tenants/stalled-onboarding?hours=${hours}`),

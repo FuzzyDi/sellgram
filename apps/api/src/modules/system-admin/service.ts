@@ -9,6 +9,7 @@ import { getErrors } from '../../lib/error-buffer.js';
 import { getBotStatuses, sendMessageToOwner } from '../../bot/bot-manager.js';
 import { getS3, ensureBucket } from '../../lib/s3.js';
 import { getAllPlanConfigs, updatePlanConfig, type PlanLimitsOverride } from '../../lib/plan-config.js';
+import { activateTenantStoreBot } from '../store/service.js';
 const SUBSCRIPTION_REMINDER_SETTINGS_KEY = 'subscription_reminders';
 const MONITOR_SETTINGS_KEY = 'monitor_settings';
 function getMonthKey(date = new Date()) {
@@ -797,7 +798,7 @@ export async function getSystemTenantDetail(id: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { id },
     include: {
-      stores: { select: { id: true, name: true, isActive: true } },
+      stores: { select: { id: true, name: true, botUsername: true, miniAppUrl: true, isActive: true } },
       users: { select: { id: true, name: true, email: true, role: true, isActive: true } },
       _count: { select: { orders: true, products: true, customers: true } },
     },
@@ -883,6 +884,16 @@ export async function createSystemInvoice(input: {
   }
 
   return invoice;
+}
+
+
+export async function activateSystemTenantStore(tenantId: string, storeId: string) {
+  const store = await prisma.store.findFirst({
+    where: { id: storeId, tenantId },
+    select: { id: true },
+  });
+  if (!store) throw new Error('STORE_NOT_FOUND');
+  return activateTenantStoreBot(tenantId, storeId);
 }
 
 export async function impersonateTenantOwner(tenantId: string) {
