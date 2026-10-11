@@ -467,6 +467,7 @@ export const adminApi = {
   reissuePosDeviceActivationCode: (deviceId: string) =>
     request<any>(`/pos-devices/${deviceId}/activation-code`, { method: 'POST' }),
   deletePosDevice: (deviceId: string) => request<any>(`/pos-devices/${deviceId}`, { method: 'DELETE' }),
+  revokePosDevice: (deviceId: string) => request<any>(`/pos-devices/${deviceId}/revoke`, { method: 'POST' }),
   createCatalogSnapshot: (storeId: string) =>
     request<any>('/pos-devices/catalog-snapshot', { method: 'POST', body: JSON.stringify({ storeId }) }),
   // docs/POS_SYNC_API.md §15 — manual, admin-triggered command send for

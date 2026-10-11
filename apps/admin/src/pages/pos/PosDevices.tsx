@@ -46,6 +46,7 @@ export default function PosDevices() {
   const [refreshingCatalog, setRefreshingCatalog] = useState(false);
   const [reissuingId, setReissuingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
   function showNotice(tone: NoticeTone, message: string) {
     setNotice({ tone, message });
@@ -150,6 +151,23 @@ export default function PosDevices() {
     }
   }
 
+  async function revokeDevice(device: any) {
+    const ok = window.confirm(
+      tr(`Отключить устройство «${device.name}»? Оно больше не сможет синхронизироваться. История продаж сохранится.`, `«${device.name}» qurilmasini uzish? U endi sinxronlasha olmaydi. Savdo tarixi saqlanadi.`)
+    );
+    if (!ok) return;
+    setRevokingId(device.id);
+    try {
+      await adminApi.revokePosDevice(device.id);
+      showNotice('success', tr('Устройство отключено', 'Qurilma uzildi'));
+      if (storeId) await loadDevices(storeId);
+    } catch (err: any) {
+      showNotice('error', err?.message || tr('Не удалось отключить устройство', "Qurilmani uzib bo'lmadi"));
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
   async function deleteDevice(device: any) {
     const ok = window.confirm(
       tr(`Удалить устройство «${device.name}»? Это действие необратимо.`, `«${device.name}» qurilmasini o'chirish? Bu amalni bekor qilib bo'lmaydi.`)
@@ -218,23 +236,38 @@ export default function PosDevices() {
       key: 'actions',
       header: '',
       render: (d) => {
-        if (d.status !== 'PENDING') return null;
+        const isPending = d.status === 'PENDING';
+        const canRevoke = d.status === 'ACTIVE' || d.status === 'SUSPENDED';
+        if (!isPending && !canRevoke) return null;
         return (
           <div className="flex gap-2 justify-end">
-            <Button
-              variant="ghost" size="sm" type="button"
-              onClick={(e) => { e?.stopPropagation(); void reissueCode(d); }}
-              disabled={reissuingId === d.id}
-            >
-              {reissuingId === d.id ? tr('...', '...') : tr('Перевыпустить код', 'Kodni qayta chiqarish')}
-            </Button>
-            <Button
-              variant="ghost" size="sm" type="button"
-              onClick={(e) => { e?.stopPropagation(); void deleteDevice(d); }}
-              disabled={deletingId === d.id}
-            >
-              {deletingId === d.id ? tr('...', '...') : tr('Удалить', "O'chirish")}
-            </Button>
+            {isPending && (
+              <Button
+                variant="ghost" size="sm" type="button"
+                onClick={(e) => { e?.stopPropagation(); void reissueCode(d); }}
+                disabled={reissuingId === d.id}
+              >
+                {reissuingId === d.id ? tr('...', '...') : tr('Перевыпустить код', 'Kodni qayta chiqarish')}
+              </Button>
+            )}
+            {canRevoke && (
+              <Button
+                variant="ghost" size="sm" type="button"
+                onClick={(e) => { e?.stopPropagation(); void revokeDevice(d); }}
+                disabled={revokingId === d.id}
+              >
+                {revokingId === d.id ? tr('...', '...') : tr('Отключить', 'Uzish')}
+              </Button>
+            )}
+            {isPending && (
+              <Button
+                variant="ghost" size="sm" type="button"
+                onClick={(e) => { e?.stopPropagation(); void deleteDevice(d); }}
+                disabled={deletingId === d.id}
+              >
+                {deletingId === d.id ? tr('...', '...') : tr('Удалить', "O'chirish")}
+              </Button>
+            )}
           </div>
         );
       },

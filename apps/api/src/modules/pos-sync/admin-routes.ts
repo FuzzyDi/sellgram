@@ -772,6 +772,41 @@ export default async function posDeviceAdminRoutes(fastify: FastifyInstance) {
     }
   );
 
+
+  // Revoke an activated POS device without deleting historical events.
+  // Authentication already requires status ACTIVE (device-auth.ts), so moving
+  // the device to REVOKED immediately blocks further sync calls while keeping
+  // sales/fiscal history attached to the device row.
+  fastify.post(
+    '/pos-devices/:id/revoke',
+    { preHandler: [planGuard('posEnabled'), permissionGuard('manageSettings')] },
+    async (request, reply) => {
+      const tenantId = request.tenantId!;
+      const { id } = request.params as { id: string };
+
+      const device = await prisma.posDevice.findFirst({ where: { id, tenantId }, select: { id: true, status: true } });
+      if (!device) return reply.status(404).send({ success: false, error: 'Device not found' });
+      if (device.status === 'REVOKED') return reply.status(200).send({ success: true, data: { id: device.id, status: 'REVOKED' } });
+      if (device.status === 'PENDING') {
+        return reply.status(409).send({ success: false, error: 'Pending devices should be deleted, not revoked' });
+      }
+
+      await prisma.posDevice.update({
+        where: { id: device.id },
+        data: {
+          status: 'REVOKED',
+          apiKeyHash: null,
+          apiKeyPrefix: null,
+          refreshTokenHash: null,
+          refreshTokenPrefix: null,
+        },
+      });
+      await prisma.cloudCommand.deleteMany({ where: { deviceId: device.id, status: 'PENDING' } });
+
+      return reply.status(200).send({ success: true, data: { id: device.id, status: 'REVOKED' } });
+    }
+  );
+
   // Delete a device that never got past activation — restricted to PENDING
   // only (not just at the UI layer): every event model's deviceId relation
   // cascades (SaleEvent/FiscalEvent/ShiftEvent/CloudCommand, schema.prisma),
