@@ -112,7 +112,7 @@ function OwnerFirstProductForm({ onCreated }: { onCreated: (product: Product) =>
   const { tr } = useMiniI18n();
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
-  const [stockQty, setStockQty] = useState('');
+  const [stockQty, setStockQty] = useState('1');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -130,12 +130,12 @@ function OwnerFirstProductForm({ onCreated }: { onCreated: (product: Product) =>
       const product = await api.createFirstProduct({
         name: cleanName,
         price: parsedPrice,
-        stockQty: Number(stockQty) > 0 ? Math.floor(Number(stockQty)) : 0,
+        stockQty: Number(stockQty) > 0 ? Math.floor(Number(stockQty)) : 1,
       });
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       setName('');
       setPrice('');
-      setStockQty('');
+      setStockQty('1');
       onCreated(product);
     } catch (err: any) {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
@@ -150,8 +150,8 @@ function OwnerFirstProductForm({ onCreated }: { onCreated: (product: Product) =>
       {error && <div className="owner-quick-error">{error}</div>}
       <input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder={tr('Название товара', 'Mahsulot nomi')} />
       <div className="owner-quick-grid">
-        <input className="field" type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={tr('Цена', 'Narx')} />
-        <input className="field" type="number" value={stockQty} onChange={(e) => setStockQty(e.target.value)} placeholder={tr('Остаток', 'Qoldiq')} />
+        <input className="field" type="number" inputMode="decimal" min="0" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={tr('Цена', 'Narx')} />
+        <input className="field" type="number" inputMode="numeric" min="1" value={stockQty} onChange={(e) => setStockQty(e.target.value)} placeholder={tr('Остаток', 'Qoldiq')} />
       </div>
       <button className="btn primary pill" type="submit" disabled={saving}>
         {saving ? '...' : tr('Опубликовать товар', 'Mahsulotni chiqarish')}
@@ -299,17 +299,21 @@ export default function Catalog() {
                     <OwnerFirstProductForm onCreated={handleOwnerProductCreated} />
                   ) : (
                     <>
-                      <a className="btn primary pill owner-empty-cta" href="https://app.sbgcloud.uz/settings" target="_blank" rel="noreferrer">
-                        {tr('Привязать Telegram владельца', 'Egasi Telegramini ulash')}
-                      </a>
-                      <p className="owner-empty-hint">
-                        {ownerStatusLoaded
-                          ? tr(
-                            'Чтобы добавлять товары прямо здесь, один раз привяжите Telegram в кабинете. Покупатели этот режим не увидят.',
-                            'Mahsulotni shu yerda qo‘shish uchun kabinetda Telegramni bir marta ulang. Xaridorlar bu rejimni ko‘rmaydi.'
-                          )
-                          : tr('Проверяем доступ владельца...', 'Egasi ruxsati tekshirilmoqda...')}
-                      </p>
+                      {ownerStatusLoaded ? (
+                        <>
+                          <a className="btn primary pill owner-empty-cta" href="https://app.sbgcloud.uz/settings" target="_blank" rel="noreferrer">
+                            {tr('Привязать Telegram владельца', 'Egasi Telegramini ulash')}
+                          </a>
+                          <p className="owner-empty-hint">
+                            {tr(
+                              'После привязки откройте магазин снова: здесь появится форма первого товара. Покупатели этот режим не увидят.',
+                              'Ulagandan keyin do‘konni qayta oching: birinchi mahsulot formasi shu yerda chiqadi. Xaridorlar bu rejimni ko‘rmaydi.'
+                            )}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="owner-empty-hint">{tr('Проверяем доступ владельца...', 'Egasi ruxsati tekshirilmoqda...')}</p>
+                      )}
                     </>
                   )}
                 </>

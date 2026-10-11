@@ -80,7 +80,7 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
   const firstProductSchema = z.object({
     name: z.string().trim().min(1).max(160),
     price: z.coerce.number().min(0),
-    stockQty: z.coerce.number().int().min(0).default(0),
+    stockQty: z.coerce.number().int().min(1).default(1),
   });
 
   fastify.post('/shop/owner/first-product', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
