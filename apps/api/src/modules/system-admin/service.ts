@@ -1104,6 +1104,15 @@ export async function getStalledOnboarding(hours = 24) {
   const noProductsFollowUpState = normalizeNoProductsFollowUpState((
     await prisma.systemSetting.findUnique({ where: { key: NO_PRODUCTS_FOLLOWUP_SETTINGS_KEY } })
   )?.value);
+  const catalogViews = await prisma.tenantAuditLog.findMany({
+    where: { tenantId: { in: tenants.map((t) => t.id) }, action: 'product.catalog.empty_view' },
+    select: { tenantId: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const catalogViewedAtByTenant = new Map<string, Date>();
+  for (const view of catalogViews) {
+    if (!catalogViewedAtByTenant.has(view.tenantId)) catalogViewedAtByTenant.set(view.tenantId, view.createdAt);
+  }
   const now = Date.now();
   return tenants.map((t) => {
     const owner = t.users[0];
@@ -1129,6 +1138,7 @@ export async function getStalledOnboarding(hours = 24) {
       ordersCount: t._count.orders,
       deliveryZonesCount: t._count.deliveryZones,
       followUpSentAt: noProductsFollowUpState.sent[t.id] ?? null,
+      catalogViewedAt: catalogViewedAtByTenant.get(t.id) ?? null,
       ownerName: owner?.name ?? null,
       ownerEmail: owner?.email ?? null,
       ownerHasTelegram: Boolean(owner?.adminTelegramId),
@@ -1453,6 +1463,16 @@ export async function getSystemGrowth() {
     orderBy: { createdAt: 'desc' },
   });
 
+  const catalogViews = await prisma.tenantAuditLog.findMany({
+    where: { tenantId: { in: onboardingTenants.map((t) => t.id) }, action: 'product.catalog.empty_view' },
+    select: { tenantId: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const catalogViewedAtByTenant = new Map<string, Date>();
+  for (const view of catalogViews) {
+    if (!catalogViewedAtByTenant.has(view.tenantId)) catalogViewedAtByTenant.set(view.tenantId, view.createdAt);
+  }
+
   const tenantSummary = (t: typeof onboardingTenants[number]) => ({
     id: t.id,
     name: t.name,
@@ -1463,6 +1483,7 @@ export async function getSystemGrowth() {
     botUsername: t.stores[0]?.botUsername ?? null,
     productsCount: t._count.products,
     ordersCount: t._count.orders,
+    catalogViewedAt: catalogViewedAtByTenant.get(t.id) ?? null,
   });
   const hasStore = (t: typeof onboardingTenants[number]) => t.stores.length > 0;
   const hasBot = (t: typeof onboardingTenants[number]) => t.stores.some((s) => Boolean(s.botUsername));
@@ -1487,7 +1508,7 @@ export async function getSystemGrowth() {
     },
     {
       key: 'no_products',
-      label: 'Нет товаров',
+      label: 'Дошли до каталога, но нет товаров',
       items: onboardingTenants.filter((t) => hasBot(t) && setupDone(t) && t._count.products === 0).map(tenantSummary),
     },
     {

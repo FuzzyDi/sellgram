@@ -5,6 +5,7 @@ import { planGuard } from '../../plugins/plan-guard.js';
 import { permissionGuard } from '../../plugins/permission-guard.js';
 import { uploadFile, ensureBucket, resolveBucketAndObjectPath, buildProductImageObjectPath } from '../../lib/s3.js';
 import { triggerCatalogRefresh } from '../pos-sync/admin-routes.js';
+import { writeAuditLog } from '../../lib/audit.js';
 import crypto from 'node:crypto';
 
 const listProductsQuerySchema = z.object({
@@ -132,6 +133,15 @@ export default async function productRoutes(fastify: FastifyInstance) {
       }),
       prisma.product.count({ where }),
     ]);
+
+    if (total === 0 && !search && !categoryId && active === undefined && miniapp === undefined) {
+      writeAuditLog({
+        tenantId: request.tenantId!,
+        actorId: request.user?.userId,
+        action: 'product.catalog.empty_view',
+        details: { page, pageSize },
+      });
+    }
 
     return {
       success: true,

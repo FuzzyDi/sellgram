@@ -374,6 +374,7 @@ function StalledOnboardingPanel({ onSelect }: { onSelect: (t: any) => void }) {
             {t.storeName && <span className="text-neutral-500 text-token-xs">{t.storeName}</span>}
             {t.botUsername && <span className="text-success text-token-xs">@{t.botUsername}</span>}
             <span className="text-neutral-500">{t.hoursSinceRegistration ?? 0} ч. с регистрации</span>
+            {t.catalogViewedAt && <span className="text-accent-600 text-token-xs">каталог открыт</span>}
             {t.followUpSentAt && <span className="text-success text-token-xs">письмо отправлено</span>}
             {t.stage === 'READY_NO_PRODUCTS' && t.ownerEmail && (
               <FirstProductFollowUpButton tenant={t} onSent={(sentAt) => markFollowUpSent(t.id, sentAt)} />

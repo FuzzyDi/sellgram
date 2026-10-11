@@ -20,6 +20,7 @@ interface ProductsTableProps {
   onCancelDelete: () => void;
   onConfirmDelete: (id: string) => void;
   onEdit: (product: Product) => void;
+  emptyMessage?: React.ReactNode;
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -27,7 +28,7 @@ interface ProductsTableProps {
 
 export default function ProductsTable({
   products, loading, loadError, onRetry, selected, onToggleSelect, onToggleSelectAll,
-  pendingDelete, onRequestDelete, onCancelDelete, onConfirmDelete, onEdit, page, totalPages, onPageChange,
+  pendingDelete, onRequestDelete, onCancelDelete, onConfirmDelete, onEdit, emptyMessage, page, totalPages, onPageChange,
 }: ProductsTableProps) {
   const { tr } = useAdminI18n();
 
@@ -164,7 +165,7 @@ export default function ProductsTable({
         data={products}
         rowKey={(product) => product.id}
         loading={loading}
-        emptyMessage={tr('Товаров нет', "Mahsulotlar yo'q")}
+        emptyMessage={emptyMessage ?? tr('Товаров нет', "Mahsulotlar yo'q")}
       />
       {!loading && totalPages > 1 && (
         <div className="px-3.5 py-3 border-t border-neutral-200 flex items-center justify-between">
