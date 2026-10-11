@@ -106,6 +106,9 @@ export default function OnboardingWizard({ onFinish }: Props) {
   // wizard should skip the "store" step entirely instead of asking the
   // user to re-enter a name/bot token for a store that already has one.
   const [storeAlreadyConnected, setStoreAlreadyConnected] = useState(false);
+  const [botUsername, setBotUsername] = useState<string | null>(null);
+  const [telegramLinkData, setTelegramLinkData] = useState<any | null>(null);
+  const [telegramLinkLoading, setTelegramLinkLoading] = useState(false);
 
   // Step: delivery
   const [deliveryType, setDeliveryType] = useState<'zone' | 'pickup'>('zone');
@@ -129,6 +132,7 @@ export default function OnboardingWizard({ onFinish }: Props) {
       if (connected) {
         setCreatedStoreId(connected.id);
         setStoreName(connected.name || '');
+        setBotUsername(connected.botUsername || null);
         setStoreAlreadyConnected(true);
         return;
       }
@@ -210,11 +214,28 @@ export default function OnboardingWizard({ onFinish }: Props) {
       if (!storeId) throw new Error(tr('Не удалось создать магазин', 'Do\'kon yaratilmadi'));
 
       await adminApi.activateStore(storeId);
+      adminApi.getStores().then((stores: any) => {
+        const list = Array.isArray(stores) ? stores : stores?.items || [];
+        const current = list.find((s: any) => s.id === storeId) || list.find((s: any) => s.botUsername);
+        if (current?.botUsername) setBotUsername(current.botUsername);
+      }).catch(() => {});
       setStep('delivery');
     } catch (e: any) {
       setError(e.message === 'Invalid bot token' ? friendlyBotError('401') : e.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function generateTelegramLinkCode() {
+    setTelegramLinkLoading(true);
+    try {
+      const data = await adminApi.createTelegramLinkCode();
+      setTelegramLinkData(data);
+    } catch {
+      setError(tr('Не удалось создать код Telegram', 'Telegram kodi yaratilmadi'));
+    } finally {
+      setTelegramLinkLoading(false);
     }
   }
 
@@ -243,6 +264,7 @@ export default function OnboardingWizard({ onFinish }: Props) {
       // back to back.
       await createTemplateCategories();
       adminApi.completeOnboarding().catch(() => {/* non-fatal */});
+      generateTelegramLinkCode().catch(() => {});
       setStep('done');
     } catch (e: any) {
       setError(e.message);
@@ -559,11 +581,43 @@ export default function OnboardingWizard({ onFinish }: Props) {
               </h2>
               <p style={{ margin: '10px 0 0', color: '#6b7280', fontSize: 15, lineHeight: 1.6 }}>
                 {tr(
-                  'Осталось добавить товары — и можно принимать заказы.',
-                  'Endi mahsulotlar qo\'shish va buyurtmalarni qabul qilish mumkin.'
+                  'Осталось привязать ваш Telegram и добавить первый товар. После этого можно работать прямо из Telegram.',
+                  'Telegramingizni ulab, birinchi mahsulotni qo\'shish qoldi. Shundan keyin Telegram ichida ishlash mumkin.'
                 )}
               </p>
             </div>
+
+            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 12, padding: 14 }}>
+              <p style={{ margin: 0, fontWeight: 800, color: '#1d4ed8' }}>
+                {tr('1. Привяжите Telegram владельца', '1. Egasi Telegramini ulang')}
+              </p>
+              <p style={{ margin: '6px 0 10px', fontSize: 13, color: '#31537a', lineHeight: 1.5 }}>
+                {tr(
+                  'Это нужно один раз: после привязки miniapp узнает вас как владельца и даст добавить первый товар прямо в Telegram.',
+                  'Bu bir marta kerak: ulangandan keyin miniapp sizni egasi sifatida taniydi va birinchi mahsulotni Telegram ichida qo\'shishga ruxsat beradi.'
+                )}
+              </p>
+              {telegramLinkData ? (
+                <>
+                  <div style={{ background: '#fff', borderRadius: 10, padding: '10px 12px', fontFamily: 'monospace', fontWeight: 800, color: '#0f172a', wordBreak: 'break-all' }}>
+                    {telegramLinkData.command}
+                  </div>
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>
+                    {tr('Отправьте эту команду вашему Telegram-боту.', 'Ushbu komandani Telegram botingizga yuboring.')}
+                  </p>
+                  {botUsername && (
+                    <a href={`https://t.me/${botUsername}`} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', marginTop: 10, color: '#1d4ed8', fontWeight: 800, textDecoration: 'none' }}>
+                      {tr('Открыть бота в Telegram →', 'Botni Telegramda ochish →')}
+                    </a>
+                  )}
+                </>
+              ) : (
+                <Button variant="ghost" size="md" style={{ width: '100%' }} disabled={telegramLinkLoading} onClick={generateTelegramLinkCode}>
+                  {telegramLinkLoading ? tr('Генерируется...', 'Yaratilmoqda...') : tr('Создать команду привязки', 'Ulash komandasini yaratish')}
+                </Button>
+              )}
+            </div>
+
             <div style={{ display: 'grid', gap: 10 }}>
               <Button
                 variant="primary"
@@ -572,10 +626,11 @@ export default function OnboardingWizard({ onFinish }: Props) {
                 onClick={() => {
                   markOnboardingDone();
                   onFinish();
-                  navigate('/products');
+                  if (botUsername) window.open(`https://t.me/${botUsername}`, '_blank');
+                  else navigate('/products');
                 }}
               >
-                {tr('Добавить товары →', 'Mahsulotlar qo\'shish →')}
+                {tr('2. Добавить первый товар →', '2. Birinchi mahsulotni qo\'shish →')}
               </Button>
               <Button
                 variant="ghost"
