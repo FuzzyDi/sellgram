@@ -105,6 +105,9 @@ export const api = {
     return data;
   },
   getProduct: async (id: string) => normalizeProduct(await request<any>(`/shop/products/${id}`)),
+  getOwnerStatus: () => request<any>('/shop/owner/status'),
+  createFirstProduct: async (data: { name: string; price: number; stockQty?: number }) =>
+    normalizeProduct(await request<any>('/shop/owner/first-product', { method: 'POST', body: JSON.stringify(data) })),
   getProductReviews: (id: string) => request<any>(`/shop/products/${id}/reviews`),
   getCart: async () => normalizeCart(await request<any>('/shop/cart')),
   addToCart: (productId: string, variantId?: string, qty = 1) =>

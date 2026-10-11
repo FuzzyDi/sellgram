@@ -107,6 +107,62 @@ function BannerCarousel({ banners }: { banners: Banner[] }) {
   );
 }
 
+
+function OwnerFirstProductForm({ onCreated }: { onCreated: (product: Product) => void }) {
+  const { tr } = useMiniI18n();
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+  const [stockQty, setStockQty] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const cleanName = name.trim();
+    const parsedPrice = Number(price);
+    if (!cleanName || !Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      setError(tr('Введите название и цену', 'Nomi va narxini kiriting'));
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const product = await api.createFirstProduct({
+        name: cleanName,
+        price: parsedPrice,
+        stockQty: Number(stockQty) > 0 ? Math.floor(Number(stockQty)) : 0,
+      });
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+      setName('');
+      setPrice('');
+      setStockQty('');
+      onCreated(product);
+    } catch (err: any) {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+      setError(err?.message || tr('Не удалось создать товар', 'Mahsulot yaratib bo‘lmadi'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="owner-quick-product">
+      {error && <div className="owner-quick-error">{error}</div>}
+      <input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder={tr('Название товара', 'Mahsulot nomi')} />
+      <div className="owner-quick-grid">
+        <input className="field" type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={tr('Цена', 'Narx')} />
+        <input className="field" type="number" value={stockQty} onChange={(e) => setStockQty(e.target.value)} placeholder={tr('Остаток', 'Qoldiq')} />
+      </div>
+      <button className="btn primary pill" type="submit" disabled={saving}>
+        {saving ? '...' : tr('Опубликовать товар', 'Mahsulotni chiqarish')}
+      </button>
+      <p className="owner-empty-hint">
+        {tr('Фото и подробности можно добавить позже в кабинете.', 'Rasm va tafsilotlarni keyin kabinetda qo‘shish mumkin.')}
+      </p>
+    </form>
+  );
+}
+
 export default function Catalog() {
   const { tr } = useMiniI18n();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -122,6 +178,8 @@ export default function Catalog() {
   const [error, setError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const [brandingWatermark, setBrandingWatermark] = useState(false);
+  const [ownerStatus, setOwnerStatus] = useState<{ isOwner: boolean } | null>(null);
+  const [ownerStatusLoaded, setOwnerStatusLoaded] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounce search input 350ms
@@ -133,6 +191,15 @@ export default function Catalog() {
 
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [debouncedQuery, selected]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getOwnerStatus()
+      .then((status) => { if (!cancelled) setOwnerStatus(status); })
+      .catch(() => { if (!cancelled) setOwnerStatus({ isOwner: false }); })
+      .finally(() => { if (!cancelled) setOwnerStatusLoaded(true); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Load products from server
   useEffect(() => {
@@ -160,6 +227,13 @@ export default function Catalog() {
   const filtered = products;
   const hasCatalogFilters = Boolean(debouncedQuery || selected);
   const isEmptyCatalog = !loading && filtered.length === 0 && !hasCatalogFilters;
+  const isOwner = Boolean(ownerStatus?.isOwner);
+
+  const handleOwnerProductCreated = (product: Product) => {
+    setProducts([product]);
+    setTotalPages(1);
+    setRetryKey((k) => k + 1);
+  };
 
   return (
     <div style={{ paddingBottom: 'calc(var(--nav-h) + 12px)' }}>
@@ -221,15 +295,23 @@ export default function Catalog() {
                       'Telegram-bot ulangan. Xaridorlar buyurtma berishi uchun birinchi mahsulotlarni qo‘shing.'
                     )}
                   </p>
-                  <a className="btn primary pill owner-empty-cta" href="https://app.sbgcloud.uz/products" target="_blank" rel="noreferrer">
-                    {tr('Добавить товары', 'Mahsulot qo‘shish')}
-                  </a>
-                  <p className="owner-empty-hint">
-                    {tr(
-                      'Откроется кабинет SBGCloud: раздел “Товары”.',
-                      'SBGCloud kabineti ochiladi: “Tovarlar” bo‘limi.'
-                    )}
-                  </p>
+                  {isOwner ? (
+                    <OwnerFirstProductForm onCreated={handleOwnerProductCreated} />
+                  ) : (
+                    <>
+                      <a className="btn primary pill owner-empty-cta" href="https://app.sbgcloud.uz/settings" target="_blank" rel="noreferrer">
+                        {tr('Привязать Telegram владельца', 'Egasi Telegramini ulash')}
+                      </a>
+                      <p className="owner-empty-hint">
+                        {ownerStatusLoaded
+                          ? tr(
+                            'Чтобы добавлять товары прямо здесь, один раз привяжите Telegram в кабинете. Покупатели этот режим не увидят.',
+                            'Mahsulotni shu yerda qo‘shish uchun kabinetda Telegramni bir marta ulang. Xaridorlar bu rejimni ko‘rmaydi.'
+                          )
+                          : tr('Проверяем доступ владельца...', 'Egasi ruxsati tekshirilmoqda...')}
+                      </p>
+                    </>
+                  )}
                 </>
               ) : (
                 <>

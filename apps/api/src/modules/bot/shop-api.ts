@@ -26,6 +26,8 @@ import { telegramShopAuth } from './shop-auth.js';
 import { sendCodedError } from './http-errors.js';
 import { CART_ERROR_STATUS, ORDER_ACTION_ERROR_STATUS, SHOP_READ_ERROR_STATUS } from './errors.js';
 import { dispatchWebhook } from '../../lib/webhook-dispatcher.js';
+import { triggerCatalogRefresh } from '../pos-sync/admin-routes.js';
+import { writeAuditLog } from '../../lib/audit.js';
 
 
 export default async function shopApiRoutes(fastify: FastifyInstance) {
@@ -54,6 +56,67 @@ export default async function shopApiRoutes(fastify: FastifyInstance) {
       }),
     ]);
     return { success: true, data: { ...data, banners } };
+  });
+
+
+  async function getOwnerUser(request: any) {
+    if (!request.telegramUser?.id || !request.customer?.tenantId) return null;
+    return prisma.user.findFirst({
+      where: {
+        tenantId: request.customer.tenantId,
+        role: 'OWNER',
+        isActive: true,
+        adminTelegramId: BigInt(request.telegramUser.id),
+      },
+      select: { id: true, name: true, email: true },
+    });
+  }
+
+  fastify.get('/shop/owner/status', async (request) => {
+    const owner = await getOwnerUser(request);
+    return { success: true, data: { isOwner: Boolean(owner), owner: owner ? { name: owner.name, email: owner.email } : null } };
+  });
+
+  const firstProductSchema = z.object({
+    name: z.string().trim().min(1).max(160),
+    price: z.coerce.number().min(0),
+    stockQty: z.coerce.number().int().min(0).default(0),
+  });
+
+  fastify.post('/shop/owner/first-product', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const owner = await getOwnerUser(request);
+    if (!owner) return reply.status(403).send({ success: false, error: 'Owner access required' });
+
+    let body: z.infer<typeof firstProductSchema>;
+    try {
+      body = firstProductSchema.parse(request.body);
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.errors?.[0]?.message ?? err.message });
+    }
+
+    const product = await prisma.product.create({
+      data: {
+        tenantId: request.customer!.tenantId,
+        name: body.name,
+        price: body.price,
+        stockQty: body.stockQty,
+        lowStockAlert: 0,
+        unit: 'шт',
+        isActive: true,
+        showInMiniapp: true,
+      },
+      include: { images: { orderBy: { sortOrder: 'asc' }, take: 1 }, category: { select: { id: true, name: true } } },
+    });
+    await triggerCatalogRefresh(request.customer!.tenantId);
+    writeAuditLog({
+      tenantId: request.customer!.tenantId,
+      actorId: owner.id,
+      action: 'product.first_created_from_miniapp',
+      targetId: product.id,
+      details: { storeId: request.storeId, telegramId: request.telegramUser?.id },
+    });
+
+    return { success: true, data: product };
   });
 
   fastify.get('/shop/products/:id', async (request, reply) => {
